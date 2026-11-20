@@ -773,6 +773,12 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		if existing.PaymentStatus == req.PaymentStatus {
 			return nil
 		}
+		if existing.PaymentStatus == types.PaymentStatusSucceeded {
+			return ierr.NewError("a succeeded payment attempt cannot change status").
+				WithHintf("Attempt %s already succeeded at the gateway", req.GatewayAttemptID).
+				WithReportableDetails(map[string]any{"attempt_id": existing.ID, "requested_status": req.PaymentStatus}).
+				Mark(ierr.ErrValidation)
+		}
 		existing.PaymentStatus = req.PaymentStatus
 		details := lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details)
 		existing.Metadata = lo.Assign(existing.Metadata, req.Metadata, details.ToMetadata())

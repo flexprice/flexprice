@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -119,6 +120,17 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 				"session_id", session.ID,
 				"gateway_attempt_id", id)
 		}
+	}
+
+	// An auto-charge has no link to retry on, so its decline ends the session, as the payment.failed webhook does.
+	if state.Status == types.PaymentStatusFailed && dto.ToCheckoutSessionResponse(session).IsAutoCharge() {
+		if err := s.CleanupCheckoutSession(ctx, session.ID, errors.New("Payment failed")); err != nil {
+			s.Logger.Error(ctx, "failed to end checkout session after polled auto-charge decline",
+				"error", err,
+				"session_id", session.ID)
+			return reconcileResult{stale: true}
+		}
+		return reconcileResult{completed: true}
 	}
 
 	// Success transitions only. A declined payment is deliberately left PENDING — the

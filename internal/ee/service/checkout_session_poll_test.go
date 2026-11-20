@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -329,6 +330,11 @@ func (s *CheckoutPollSuite) seedSession(
 		ExpiresAt:     time.Now().UTC().Add(20 * time.Minute),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if strings.HasPrefix(trackingID, "plink_") {
+		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+			NextAction: &types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: "https://rzp.io/test"},
+		})
 	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
 	return session
@@ -671,6 +677,55 @@ func (s *CheckoutPollSuite) TestGet_ExpandsInvoiceAndPaymentWithPolledAttempts()
 	s.Require().Len(listed.Items, 1)
 	s.Equal(*session.CheckoutInvoiceID, listed.Items[0].CheckoutInvoice.ID)
 	s.Equal(p.ID, listed.Items[0].CheckoutPayment.ID)
+}
+
+func (s *CheckoutPollSuite) TestSearch_ExpandsArchivedInvoiceAndPayment() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusExpired, "plink_001", "")
+	s.Require().NoError(s.GetStores().InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID))
+	s.Require().NoError(s.GetStores().PaymentRepo.Delete(ctx, *session.CheckoutPaymentID))
+
+	listed, err := s.svc.List(ctx, &types.CheckoutSessionFilter{
+		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(10), Offset: lo.ToPtr(0), Expand: lo.ToPtr("invoice,payment")},
+		CustomerIDs: []string{session.CustomerID},
+	})
+	s.Require().NoError(err)
+	s.Require().Len(listed.Items, 1)
+	s.Require().NotNil(listed.Items[0].CheckoutInvoice)
+	s.Equal(*session.CheckoutInvoiceID, listed.Items[0].CheckoutInvoice.ID)
+	s.Require().NotNil(listed.Items[0].CheckoutPayment)
+	s.Equal(*session.CheckoutPaymentID, listed.Items[0].CheckoutPayment.ID)
+}
+
+// The webhook and the poll share HandleDecline, so a polled auto-charge decline ends the session like the webhook does.
+func (s *CheckoutPollSuite) TestGet_AutoChargeDeclineEndsSession() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "pay_rzp_auto", "")
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.TrackAttempts = true
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusFailed, GatewayPaymentID: "pay_rzp_auto"}
+
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+
+	s.Equal(types.CheckoutStatusFailed, resp.CheckoutStatus)
+	s.True(resp.Terminal)
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+	s.Require().NoError(err)
+	s.Require().Len(attempts, 1)
+	s.Equal(types.PaymentStatusFailed, attempts[0].PaymentStatus)
+}
+
+// A declined payment on a link session leaves the session open for the customer to retry.
+func (s *CheckoutPollSuite) TestGet_LinkDeclineKeepsSessionOpen() {
+	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
+	s.provider.state = &interfaces.PaymentState{FailedGatewayPaymentIDs: []string{"pay_rzp_declined"}}
+
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusPending, resp.CheckoutStatus)
 }
 
 // A read that could not be checked against the gateway must say so, and must keep

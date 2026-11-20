@@ -1111,6 +1111,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
 		trackAttempts bool
 		requests      []dto.RecordAttemptRequest
 		wantStatuses  []types.PaymentStatus
+		wantErr       bool
 	}{
 		{
 			name:          "new attempt",
@@ -1135,6 +1136,16 @@ func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
 				{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_a"},
 			},
 			wantStatuses: []types.PaymentStatus{types.PaymentStatusSucceeded},
+		},
+		{
+			name:          "a succeeded attempt keeps its status",
+			trackAttempts: true,
+			requests: []dto.RecordAttemptRequest{
+				{PaymentStatus: types.PaymentStatusSucceeded, GatewayAttemptID: "pay_a"},
+				{PaymentStatus: types.PaymentStatusFailed, GatewayAttemptID: "pay_a"},
+			},
+			wantStatuses: []types.PaymentStatus{types.PaymentStatusSucceeded},
+			wantErr:      true,
 		},
 		{
 			name:          "distinct gateway ids add attempts",
@@ -1178,8 +1189,13 @@ func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
 			}
 			s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
 
-			for _, req := range tt.requests {
-				s.NoError(s.service.RecordAttempt(ctx, p.ID, req))
+			for i, req := range tt.requests {
+				err := s.service.RecordAttempt(ctx, p.ID, req)
+				if tt.wantErr && i == len(tt.requests)-1 {
+					s.True(ierr.IsValidation(err))
+					continue
+				}
+				s.NoError(err)
 			}
 
 			attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)

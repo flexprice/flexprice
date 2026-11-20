@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -73,8 +74,11 @@ func (s *attemptTestPaymentService) GetAttempt(_ context.Context, id string) (*d
 		Error:         &dto.PaymentAttemptError{Reason: "incorrect_card_details"}}, nil
 }
 
-func (s *attemptTestPaymentService) ListPayments(_ context.Context, _ *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
-	return &dto.ListPaymentsResponse{Items: s.payments}, nil
+func (s *attemptTestPaymentService) GetPayment(_ context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
+	if len(s.payments) == 0 || !req.SkipGatewaySync {
+		return nil, ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
+	}
+	return s.payments[0], nil
 }
 
 type attemptTestCheckoutService struct {

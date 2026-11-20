@@ -680,7 +680,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, a.ID)
+	r.DeleteCache(ctx, a.PaymentID)
 	return nil
 }
 
