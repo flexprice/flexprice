@@ -239,11 +239,19 @@ func (s *billingService) adjustMeterUsageGrants(
 		res.Overage = decimal.Max(overage, decimal.Zero)
 	}
 
+	// No grant covers usage outside every window, so it bills in full next to the overage. It is
+	// measured in units for both measures and priced once at this line's price.
+	outside, err := s.usageOutsideGrants(ctx, grants, window, m, sub, extCustomerIDs)
+	if err != nil {
+		return adjustMeterUsageGrantsResult{}, false, err
+	}
+
 	switch measure {
 	case types.EntitlementGrantMeasureQuantity:
-		matchingCharge.SetQuantityDecimal(res.Overage)
+		billable := res.Overage.Add(outside)
+		matchingCharge.SetQuantityDecimal(billable)
 		if matchingCharge.Price != nil {
-			cost := priceService.CalculateCost(ctx, matchingCharge.Price, res.Overage)
+			cost := priceService.CalculateCost(ctx, matchingCharge.Price, billable)
 			matchingCharge.SetAmountWithCurrencyPrecision(cost, matchingCharge.Price.Currency)
 		} else {
 			matchingCharge.SetAmountDecimal(decimal.Zero)
@@ -251,7 +259,11 @@ func (s *billingService) adjustMeterUsageGrants(
 	case types.EntitlementGrantMeasureAmount:
 		// Already money — zero the qty so aggregation doesn't double-count.
 		if matchingCharge.Price != nil {
-			matchingCharge.SetAmountWithCurrencyPrecision(res.Overage, matchingCharge.Price.Currency)
+			billable := res.Overage
+			if outside.IsPositive() {
+				billable = billable.Add(priceService.CalculateCost(ctx, matchingCharge.Price, outside))
+			}
+			matchingCharge.SetAmountWithCurrencyPrecision(billable, matchingCharge.Price.Currency)
 		} else {
 			matchingCharge.SetAmountDecimal(res.Overage)
 		}
@@ -297,6 +309,42 @@ func (s *billingService) mergedOverage(
 		billableRanges = append(billableRanges, events.TimeRange{Start: w.Start, End: w.End})
 	}
 	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, measure, billableRanges)
+}
+
+// usageOutsideGrants is the line window's usage, in units, that falls in no grant window: before a grant
+// starts, after one ends, or between windows. Zero, with no query, when the grants cover the whole line window.
+func (s *billingService) usageOutsideGrants(
+	ctx context.Context,
+	grants []*entitlementgrant.EntitlementGrant,
+	window TimeInterval,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+) (decimal.Decimal, error) {
+	covered := make([]TimeInterval, 0, len(grants))
+	for _, g := range grants {
+		if g != nil {
+			covered = append(covered, TimeInterval{Start: g.ValidFrom, End: g.ValidTo})
+		}
+	}
+	var gaps []events.TimeRange
+	cursor := window.Start
+	for _, c := range MergeIntervals(covered) {
+		if c.Start.After(cursor) {
+			gaps = append(gaps, events.TimeRange{Start: cursor, End: types.EarliestOf(c.Start, window.End)})
+		}
+		cursor = types.LatestOf(cursor, c.End)
+		if !cursor.Before(window.End) {
+			break
+		}
+	}
+	if cursor.Before(window.End) {
+		gaps = append(gaps, events.TimeRange{Start: cursor, End: window.End})
+	}
+	if len(gaps) == 0 {
+		return decimal.Zero, nil
+	}
+	return NewMeterUsageService(s.ServiceParams).GetGrantUsage(ctx, sub, m, extCustomerIDs, types.EntitlementGrantMeasureQuantity, gaps)
 }
 
 // grantOverageInWindow is the part of the grant's overage reached inside window:
