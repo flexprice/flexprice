@@ -766,9 +766,6 @@ e2eprobe:
   secretKeys:
     apiKey: api-key
     slackWebhookUrl: slack-webhook-url
-    # Optional shared secret the probe's webhook inbox requires; configure the
-    # same value as the X-E2EProbe-Token header on the tenant's webhook endpoint.
-    webhookToken: webhook-token
   # Signup bootstrap, for airgapped deployments with no way to pre-provision an
   # API key. The probe signs up, mints a key, and patches it into secretName.
   #
@@ -791,11 +788,6 @@ e2eprobe:
     emailKey: email
     passwordKey: password
   env: {}                 # E2EPROBE_* non-secret vars, set per region
-  # Suite file for this region: personas, scenarios, tenant expectations and
-  # alert thresholds. Empty runs the suite embedded in the image; see
-  # cmd/e2eprobe/suite.example.yaml for every key. Rendered into a ConfigMap
-  # mounted at /etc/e2eprobe/suite.yaml.
-  suite: {}
   service: {port: 8765}
   resources:
     requests: {cpu: 100m, memory: 128Mi}

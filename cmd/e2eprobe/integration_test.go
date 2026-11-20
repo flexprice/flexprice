@@ -8,15 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/suite"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/world"
+	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
-// Provisions the default suite against a live API. Requires:
+// Runs against local `make dev-setup`. Requires:
 //
 //	E2EPROBE_API_HOST  (e.g. http://localhost:8080/v1)
-//	E2EPROBE_API_KEY   (a key in the probe tenant)
+//	E2EPROBE_API_KEY   (a key in the local e2eprobe tenant)
 //	go test -tags e2eprobe_integration ./cmd/e2eprobe/
 func TestE2EProbe_LocalSmoke(t *testing.T) {
 	if os.Getenv("E2EPROBE_API_HOST") == "" || os.Getenv("E2EPROBE_API_KEY") == "" {
@@ -26,19 +28,19 @@ func TestE2EProbe_LocalSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	cat := newCatalog()
-	s, err := loadSuite(cfg.SuiteFile, cat)
+	lg, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevelInfo}})
 	if err != nil {
-		t.Fatalf("suite: %v", err)
+		t.Fatalf("NewLogger: %v", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	client := e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	reg := e2eprobe.NewRegistry()
+	rep := e2eprobe.NewLogReporter(lg)
+	runner := e2eprobe.NewRunner(rep, lg, "integration-smoke")
+
+	seed := checks_pkg.NewSeedEnsure(client, reg, "integration-smoke", lg)
+	runner.Add(seed, e2eprobe.NewOneShotScheduler(seed))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	w := world.New(e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey), s, "integration-smoke", nil)
-	if err := w.Provision(ctx); err != nil {
-		t.Fatalf("provision: %v", err)
-	}
-	for _, p := range w.Personas() {
-		t.Logf("persona %s ready=%v gaps=%v", p.Name(), p.Ready(), p.Gaps())
-	}
-	_ = suite.Default()
+	runner.Start(ctx)
 }

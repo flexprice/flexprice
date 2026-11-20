@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,21 +12,21 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/billingmatrix"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/inbox"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/incident"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/ledger"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenario"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenarios"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/suite"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/world"
+	checks_pkg "github.com/flexprice/flexprice/internal/ee/e2eprobe/checks"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// buildLoggingConfig wires OTLP log export from the standard OTEL env vars so
-// the probe's logs land in the same pipeline as the app's. Traces are wired
-// separately in internal/ee/e2eprobe/otel.go.
+// buildLoggingConfig assembles the LoggingConfig used by logger.NewLogger.
+// It wires OTLP log export from the standard OTEL env vars so that
+// e2eprobe's structured logs land in the same SigNoz/Grafana pipeline as
+// the app's — auth via OTEL_EXPORTER_OTLP_HEADERS (single "name=value" pair).
+//
+// Traces already flow through internal/ee/e2eprobe/otel.go, which uses the
+// SDK's implicit env var handling for endpoint/headers. This function
+// only wires LOGS, which take an explicit config path.
 func buildLoggingConfig(cfg *e2eprobe.Config) config.LoggingConfig {
 	lc := config.LoggingConfig{
 		Level: types.LogLevel(cfg.LogLevel),
@@ -51,8 +49,10 @@ func buildLoggingConfig(cfg *e2eprobe.Config) config.LoggingConfig {
 	return lc
 }
 
-// parseFirstOTLPHeader extracts the first "name=value" pair from the OTLP
-// headers env var; the logger supports a single auth header.
+// parseFirstOTLPHeader extracts the first "name=value" pair from the
+// standard OTLP headers env var (which allows comma-separated pairs).
+// The logger's LoggingConfig only supports a single auth header, which is
+// enough for common SigNoz / Grafana Cloud / Datadog access-token setups.
 func parseFirstOTLPHeader(raw string) (string, string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -74,9 +74,12 @@ func parseFirstOTLPHeader(raw string) (string, string, bool) {
 // mintFunc provisions a fresh credential. Injected so tests need no network.
 type mintFunc func() (*bootstrap.Credentials, error)
 
-// resolveAPIKey returns the API key the probe should run with. A stored key
-// always wins: env vars resolve at container start, so a restart inside the
-// same pod would otherwise mint a new key on every crash loop.
+// resolveAPIKey returns the API key the probe should run with.
+//
+// The stored key always wins. Environment variables resolve at container
+// start, so a container restart inside the same pod re-reads the original
+// empty value; without this read the probe would mint a new key on every
+// crash loop and leak them, since nothing revokes them.
 func resolveAPIKey(ctx context.Context, cfg *e2eprobe.Config, store bootstrap.SecretStore, inCluster bool, mint mintFunc) (string, error) {
 	if inCluster && store != nil {
 		stored, _, err := store.Read(ctx, cfg.PodNamespace, cfg.BootstrapSecretName, cfg.BootstrapSecretKey)
@@ -106,237 +109,263 @@ func resolveAPIKey(ctx context.Context, cfg *e2eprobe.Config, store bootstrap.Se
 	return creds.APIKey(), nil
 }
 
-// bootstrapIfNeeded mints and persists an API key when none is configured.
-func bootstrapIfNeeded(ctx context.Context, cfg *e2eprobe.Config, lg *logger.Logger, runID string) error {
-	if !cfg.NeedsBootstrap() {
-		return nil
-	}
-	store, inCluster, err := bootstrap.NewK8sStore()
-	if err != nil {
-		return fmt.Errorf("bootstrap: kubernetes client unavailable: %w", err)
-	}
-	key, err := resolveAPIKey(ctx, cfg, store, inCluster, func() (*bootstrap.Credentials, error) {
-		return bootstrap.Run(ctx, http.DefaultClient, cfg.APIHost, cfg.Email, cfg.Password, "e2eprobe-"+runID)
-	})
-	if err != nil {
-		return fmt.Errorf("bootstrap failed: %w", err)
-	}
-	cfg.APIKey = key
-	if !inCluster {
-		// No Secret exists outside a cluster, so hand the operator the
-		// credential they would otherwise have no way to keep.
-		lg.Info(ctx, "bootstrap complete (not in-cluster): store this key as E2EPROBE_API_KEY to skip bootstrap next run",
-			"api_key", cfg.APIKey, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
-		return nil
-	}
-	lg.Info(ctx, "bootstrap complete: credential written to secret",
-		"secret", cfg.BootstrapSecretName, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
-	return nil
-}
-
-// newCatalog is every scenario this binary ships.
-func newCatalog() *scenario.Catalog {
-	cat := scenario.NewCatalog()
-	scenarios.Register(cat)
-	return cat
-}
-
-// loadSuite reads and validates the suite the probe will run.
-func loadSuite(path string, cat *scenario.Catalog) (*suite.Suite, error) {
-	s, err := suite.Load(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := suite.Validate(s, cat); err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-func validateSuite(path string, cat *scenario.Catalog, out io.Writer) error {
-	s, err := loadSuite(path, cat)
-	if err != nil {
-		return err
-	}
-	bindings, err := s.Bindings(cat)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "suite ok: %d personas, %d bindings, %d events/day\n", len(s.Personas), len(bindings), s.EventsPerDay(cat))
-	return nil
-}
-
-func describeSuite(path string, cat *scenario.Catalog, out io.Writer) error {
-	s, err := loadSuite(path, cat)
-	if err != nil {
-		return err
-	}
-	return suite.Describe(out, s, cat)
-}
-
 func main() {
-	command, args := "run", os.Args[1:]
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		command, args = args[0], args[1:]
-	}
-	fs := flag.NewFlagSet(command, flag.ExitOnError)
-	suitePath := fs.String("suite", os.Getenv("E2EPROBE_SUITE_FILE"), "suite file; empty uses the embedded default")
-	_ = fs.Parse(args)
-
-	cat := newCatalog()
-	switch command {
-	case "validate":
-		if err := validateSuite(*suitePath, cat, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-	case "describe":
-		if err := describeSuite(*suitePath, cat, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-	case "run":
-		if err := run(cat, *suitePath); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q (run | validate | describe)\n", command)
-		os.Exit(2)
-	}
-}
-
-func run(cat *scenario.Catalog, suitePath string) error {
 	cfg, err := e2eprobe.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("config: %w", err)
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		os.Exit(1)
 	}
 	if !cfg.Enabled {
 		fmt.Println("E2EPROBE_ENABLED=false; nothing to do")
-		return nil
-	}
-	if suitePath == "" {
-		suitePath = cfg.SuiteFile
-	}
-	s, err := loadSuite(suitePath, cat)
-	if err != nil {
-		return err
-	}
-	bindings, err := s.Bindings(cat)
-	if err != nil {
-		return err
+		return
 	}
 
 	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
 	if err != nil {
-		return fmt.Errorf("logger: %w", err)
+		fmt.Fprintf(os.Stderr, "logger: %v\n", err)
+		os.Exit(1)
 	}
+	// Drain any config warnings (malformed env vars that fell back to defaults)
+	// into the structured logger now that it exists.
 	for _, w := range cfg.Warnings {
 		lg.Warn(context.Background(), "e2eprobe config warning", "warning", w)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
 	runID := fmt.Sprintf("e2eprobe-%d", time.Now().Unix())
-	if err := bootstrapIfNeeded(ctx, cfg, lg, runID); err != nil {
-		return err
-	}
 
 	tp, shutdownTracer, err := e2eprobe.NewTracerProvider(ctx, cfg.OTEL, "e2eprobe")
 	if err != nil {
 		lg.Error(ctx, "tracer init failed; continuing without OTEL", "error", err)
 	}
 	defer func() {
+		shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelShut()
 		if shutdownTracer != nil {
-			shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancelShut()
 			_ = shutdownTracer(shutCtx)
 		}
 	}()
 
+	reporters := []e2eprobe.Reporter{e2eprobe.NewLogReporter(lg)}
+	if cfg.Slack.BotToken != "" {
+		reporters = append(reporters, e2eprobe.NewSlackBotReporter(cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	} else if cfg.Slack.WebhookURL != "" {
+		reporters = append(reporters, e2eprobe.NewSlackReporter(cfg.Slack.WebhookURL, cfg.Slack.Channel, nil, lg))
+	}
+	if tp != nil {
+		reporters = append(reporters, e2eprobe.NewOTELReporter(tp.Tracer("e2eprobe")))
+	}
+	reporter := e2eprobe.NewCompositeReporter(reporters...)
+
+	globalAttrs := map[string]string{}
+	if cfg.TenantID != "" {
+		globalAttrs["tenant_id"] = cfg.TenantID
+	}
+	if cfg.EnvironmentID != "" {
+		globalAttrs["environment_id"] = cfg.EnvironmentID
+	}
+	runner := e2eprobe.NewRunner(reporter, lg, runID, globalAttrs)
+	runner.SetHeartbeatInterval(cfg.HeartbeatInterval)
+
+	if cfg.NeedsBootstrap() {
+		store, inCluster, err := bootstrap.NewK8sStore()
+		if err != nil {
+			lg.Error(ctx, "bootstrap: kubernetes client unavailable", "error", err)
+			os.Exit(1)
+		}
+
+		key, err := resolveAPIKey(ctx, cfg, store, inCluster, func() (*bootstrap.Credentials, error) {
+			return bootstrap.Run(ctx, http.DefaultClient, cfg.APIHost, cfg.Email, cfg.Password, "e2eprobe-"+runID)
+		})
+		if err != nil {
+			lg.Error(ctx, "bootstrap failed", "error", err)
+			os.Exit(1)
+		}
+		cfg.APIKey = key
+
+		if !inCluster {
+			// No Secret exists outside a cluster, so hand the operator the
+			// credential they would otherwise have no way to keep.
+			lg.Info(ctx, "bootstrap complete (not in-cluster): store this key as E2EPROBE_API_KEY to skip bootstrap next run",
+				"api_key", cfg.APIKey, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		} else {
+			lg.Info(ctx, "bootstrap complete: credential written to secret",
+				"secret", cfg.BootstrapSecretName, "tenant_id", cfg.TenantID, "environment_id", cfg.EnvironmentID)
+		}
+	}
+
 	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
 	if cfg.DryRun {
 		client = e2eprobe.NewDryRunClient(client, lg)
-		lg.Info(ctx, "dry-run mode: mutating calls are logged, not sent")
+		lg.Info(ctx, "dry-run mode enabled: mutating SDK calls will be logged as no-ops")
+	}
+	reg := e2eprobe.NewRegistry()
+
+	addCheck := func(check e2eprobe.Check, sched e2eprobe.Scheduler, key string) {
+		if cfg.Checks[key].Enabled {
+			runner.Add(check, sched)
+		}
 	}
 
-	notifiers := []incident.Notifier{incident.LogNotifier(lg)}
-	if cfg.Slack.BotToken != "" || cfg.Slack.WebhookURL != "" {
-		notifiers = append(notifiers, incident.SlackNotifier(cfg.Slack.WebhookURL, cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	seed := checks_pkg.NewSeedEnsure(client, reg, runID, lg)
+	addCheck(seed, e2eprobe.NewTickerScheduler(seed, cfg.Checks["SEED_ENSURE"].Interval), "SEED_ENSURE")
+
+	var ingest *checks_pkg.EventIngestDriver
+	if cfg.Checks["EVENT_INGEST_DRIVER"].Enabled {
+		ingest = checks_pkg.NewEventIngestDriver(client, reg, cfg.EventIngestSeed, runID)
+		runner.Add(ingest, e2eprobe.NewRateScheduler(ingest, cfg.EventIngestRate))
 	}
-	if tp != nil && cfg.OTEL.Enabled {
-		notifiers = append(notifiers, incident.OTELNotifier(tp.Tracer("e2eprobe")))
-	}
-	notifier := incident.Multi(notifiers...)
-	tracker, err := incident.NewTracker(func(k incident.Key) incident.Policy {
-		a := s.AlertPolicy(suiteEntryFor(s, k.Scenario))
-		return incident.Policy{AfterFailures: a.AfterFailures, AfterDuration: a.AfterDuration.Duration, RenotifyEvery: a.RenotifyEvery.Duration, SkipAfter: a.SkipAfter.Duration}
-	}, incident.DefaultRollup(), notifier, incident.FileStore(cfg.StateFile), time.Now)
-	if err != nil {
-		return err
+	defer func() {
+		if ingest != nil {
+			_ = ingest.Close()
+		}
+	}()
+
+	if cfg.Checks["ANALYTICS_PROBE"].Enabled {
+		ap := checks_pkg.NewAnalyticsProbe(client, reg, runID, lg)
+		runner.Add(ap, e2eprobe.NewTickerScheduler(ap, cfg.Checks["ANALYTICS_PROBE"].Interval))
 	}
 
-	box := inbox.New(inbox.Options{Token: cfg.WebhookToken})
-	wld := world.New(client, s, runID, lg)
-	deps := scenario.Deps{
-		Client:    client,
-		World:     wld,
-		Ledger:    ledger.NewLedger(48 * time.Hour),
-		Inbox:     box,
-		Suite:     s,
-		Logger:    lg,
-		RunID:     runID,
-		Tick:      s.Defaults.Tick.Duration,
-		Now:       time.Now,
-		StartedAt: time.Now(),
-	}
-	if tp != nil {
-		deps.Tracer = tp.Tracer("e2eprobe")
-	}
-	runner, err := scenario.NewRunner(cat, deps, bindings, tracker, notifier, scenario.Options{
-		Concurrency: s.Defaults.Concurrency,
-		Jitter:      time.Minute,
-		Heartbeat:   time.Hour,
-		DigestEvery: s.Defaults.Digest.Every.Duration,
-	})
-	if err != nil {
-		return err
+	if cfg.Checks["METER_AGGREGATION_PROBE"].Enabled {
+		mapr := checks_pkg.NewMeterAggregationProbe(client, reg, runID, lg)
+		runner.Add(mapr, e2eprobe.NewTickerScheduler(mapr, cfg.Checks["METER_AGGREGATION_PROBE"].Interval))
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle("/webhook", box.Handler())
-	mux.Handle("/healthz", box.Handler())
-	mux.Handle("/inbox/", box.Handler())
-	mux.Handle("/status", runner.Handler())
-	port, err := inbox.NewServer(cfg.ListenerPort, mux).Start(ctx)
-	if err != nil {
-		return fmt.Errorf("listener: %w", err)
+	if cfg.Checks["WALLET_BALANCE_PROBE"].Enabled {
+		wp := checks_pkg.NewWalletBalanceProbe(client, reg, runID)
+		runner.Add(wp, e2eprobe.NewTickerScheduler(wp, cfg.Checks["WALLET_BALANCE_PROBE"].Interval))
 	}
 
-	if err := wld.Provision(ctx); err != nil {
-		// Scenarios skip while their persona is missing; the provision scenario retries.
-		lg.Error(ctx, "initial provisioning incomplete", "error", err)
+	if cfg.Checks["WALLET_DEBIT_VERIFICATION"].Enabled {
+		wd := checks_pkg.NewWalletDebitVerification(client, reg, runID, checks_pkg.WalletDebitOpts{})
+		runner.Add(wd, e2eprobe.NewTickerScheduler(wd, cfg.Checks["WALLET_DEBIT_VERIFICATION"].Interval))
 	}
-	lg.Info(ctx, "e2eprobe starting",
-		"run_id", runID, "host", cfg.APIHost, "suite", suitePath, "bindings", len(bindings),
-		"events_per_day", s.EventsPerDay(cat), "tick", s.Defaults.Tick.String(), "listener_port", port)
+
+	if cfg.Checks["CYCLE_INVOICE_PROBE"].Enabled {
+		ci := checks_pkg.NewCycleInvoiceProbe(client, reg, runID)
+		runner.Add(ci, e2eprobe.NewTickerScheduler(ci, cfg.Checks["CYCLE_INVOICE_PROBE"].Interval))
+	}
+
+	var billingMatrix *billingmatrix.Engine
+	if cfg.BillingMatrix.Enabled {
+		billingMatrix = billingmatrix.NewEngine(client.Raw(), runID, cfg.BillingMatrix.AssertKnownIssues)
+		for _, family := range billingmatrix.Families {
+			bm := checks_pkg.NewBillingMatrixProbe(billingMatrix, family, cfg.BillingMatrix.ScenariosPerRun, lg)
+			runner.Add(bm, e2eprobe.NewTickerScheduler(bm, family.Interval()))
+		}
+	}
+
+	if cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Enabled {
+		mci := checks_pkg.NewMultiCadenceInvoiceProbe(client, reg, runID, lg)
+		runner.Add(mci, e2eprobe.NewTickerScheduler(mci, cfg.Checks["MULTI_CADENCE_INVOICE_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Enabled {
+		eu := checks_pkg.NewEntitlementAndUsageProbe(client, reg, runID)
+		runner.Add(eu, e2eprobe.NewTickerScheduler(eu, cfg.Checks["ENTITLEMENT_AND_USAGE_PROBE"].Interval))
+	}
+
+	if cfg.Checks["NEW_CUSTOMER_LIFECYCLE"].Enabled {
+		nl := checks_pkg.NewNewCustomerLifecycle(client, reg, runID, checks_pkg.NewCustomerLifecycleOpts{})
+		runner.Add(nl, e2eprobe.NewTickerScheduler(nl, cfg.Checks["NEW_CUSTOMER_LIFECYCLE"].Interval))
+	}
+
+	if cfg.Checks["CANCEL_CUSTOMER_FLOW"].Enabled {
+		cc := checks_pkg.NewCancelCustomerFlow(client, reg, runID, checks_pkg.InvoicePoll{})
+		runner.Add(cc, e2eprobe.NewTickerScheduler(cc, cfg.Checks["CANCEL_CUSTOMER_FLOW"].Interval))
+	}
+
+	if cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Enabled {
+		smf := checks_pkg.NewSubscriptionModificationFlow(client, reg, runID)
+		runner.Add(smf, e2eprobe.NewTickerScheduler(smf, cfg.Checks["SUBSCRIPTION_MODIFICATION_FLOW"].Interval))
+	}
+
+	if cfg.Checks["BUCKETED_METER_PROBE"].Enabled {
+		bmp := checks_pkg.NewBucketedMeterProbe(client, reg, runID, lg)
+		runner.Add(bmp, e2eprobe.NewTickerScheduler(bmp, cfg.Checks["BUCKETED_METER_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Enabled {
+		ctup := checks_pkg.NewCommitmentTrueUpProbe(client, reg, runID, lg)
+		runner.Add(ctup, e2eprobe.NewTickerScheduler(ctup, cfg.Checks["COMMITMENT_TRUE_UP_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Enabled {
+		eep := checks_pkg.NewEntitlementEnforcementProbe(client, reg, runID, lg)
+		runner.Add(eep, e2eprobe.NewTickerScheduler(eep, cfg.Checks["ENTITLEMENT_ENFORCEMENT_PROBE"].Interval))
+	}
+
+	if cfg.Checks["TAX_APPLICATION_PROBE"].Enabled {
+		tap := checks_pkg.NewTaxApplicationProbe(client, reg, runID, lg)
+		runner.Add(tap, e2eprobe.NewTickerScheduler(tap, cfg.Checks["TAX_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["COUPON_APPLICATION_PROBE"].Enabled {
+		cap_ := checks_pkg.NewCouponApplicationProbe(client, reg, runID, lg)
+		runner.Add(cap_, e2eprobe.NewTickerScheduler(cap_, cfg.Checks["COUPON_APPLICATION_PROBE"].Interval))
+	}
+
+	if cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Enabled {
+		pbip := checks_pkg.NewPersistentBillingInvariantsProbe(client, reg, runID, lg)
+		runner.Add(pbip, e2eprobe.NewTickerScheduler(pbip, cfg.Checks["PERSISTENT_BILLING_INVARIANTS_PROBE"].Interval))
+	}
+
+	if cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Enabled {
+		egap := checks_pkg.NewEntitlementGrantAdditiveProbe(client, reg, runID, lg)
+		runner.Add(egap, e2eprobe.NewTickerScheduler(egap, cfg.Checks["ENTITLEMENT_GRANT_ADDITIVE_PROBE"].Interval))
+	}
+
+	// The listener is created regardless of the LOW_WALLET_ALERT_LISTENER flag
+	// because LOW_BALANCE_ALERT_PROBE reads SeenThresholds from it to verify
+	// webhook receipt. If neither the listener check nor the probe is enabled,
+	// no HTTP server is bound.
+	lwl := checks_pkg.NewLowWalletAlertListener(runID, lg)
+	if cfg.Checks["LOW_WALLET_ALERT_LISTENER"].Enabled || cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Enabled {
+		wl := e2eprobe.NewHTTPWebhookListener(cfg.ListenerPort)
+		runner.Add(lwl, e2eprobe.NewListenerScheduler(lwl, wl))
+	}
+
+	if cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Enabled {
+		lbap := checks_pkg.NewLowBalanceAlertProbe(client, reg, lwl, runID, lg, checks_pkg.LowBalanceAlertOpts{})
+		runner.Add(lbap, e2eprobe.NewTickerScheduler(lbap, cfg.Checks["LOW_BALANCE_ALERT_PROBE"].Interval))
+	}
+
+	// One instance of each payment probe per gateway connected to the probe
+	// environment, so Slack and heartbeats attribute failures to the gateway.
+	for _, provider := range cfg.Payments.Providers {
+		opts := checks_pkg.PaymentProbeOpts{
+			Provider:          provider,
+			SettleTimeout:     cfg.Payments.SettleTimeout,
+			AssertKnownIssues: cfg.Payments.AssertKnownIssues,
+		}
+		if provider.SettleTimeout > 0 {
+			opts.SettleTimeout = provider.SettleTimeout
+		}
+		if cfg.Checks["PAYMENT_LINK_PROBE"].Enabled {
+			plp := checks_pkg.NewPaymentLinkProbe(client, reg, runID, lg, opts)
+			runner.Add(plp, e2eprobe.NewTickerScheduler(plp, cfg.Checks["PAYMENT_LINK_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_METHOD_PROBE"].Enabled {
+			pmp := checks_pkg.NewPaymentMethodProbe(client, reg, runID, lg, opts)
+			runner.Add(pmp, e2eprobe.NewTickerScheduler(pmp, cfg.Checks["PAYMENT_METHOD_PROBE"].Interval))
+		}
+		if cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Enabled && provider.FixedCustomerExternalID != "" {
+			pap := checks_pkg.NewPaymentAutoChargeProbe(client, reg, runID, lg, opts)
+			runner.Add(pap, e2eprobe.NewTickerScheduler(pap, max(cfg.Checks["PAYMENT_AUTOCHARGE_PROBE"].Interval, provider.AutoChargeInterval)))
+		}
+	}
+
+	if cfg.Checks["JANITOR"].Enabled {
+		jn := checks_pkg.NewJanitor(client, reg, cfg.JanitorMaxAge, runID)
+		if billingMatrix != nil {
+			jn.WithSweeper(billingMatrix)
+		}
+		runner.Add(jn, e2eprobe.NewTickerScheduler(jn, cfg.Checks["JANITOR"].Interval))
+	}
+
+	lg.Info(ctx, "e2eprobe probe starting", "run_id", runID, "host", cfg.APIHost, "checks", len(cfg.Checks))
 	runner.Start(ctx)
-	lg.Info(ctx, "e2eprobe shutdown", "run_id", runID)
-	return nil
-}
-
-// suiteEntryFor maps a catalog name back to the suite entry that enabled it,
-// so family scenarios share their entry's alert override.
-func suiteEntryFor(s *suite.Suite, scenarioName string) string {
-	for _, sc := range s.Scenarios {
-		if sc.Name == scenarioName {
-			return sc.Name
-		}
-		for _, f := range sc.Families {
-			if sc.Name+"-"+f == scenarioName {
-				return sc.Name
-			}
-		}
-	}
-	return scenarioName
+	lg.Info(ctx, "e2eprobe probe shutdown")
 }

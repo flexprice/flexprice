@@ -3,7 +3,7 @@
 - **Date:** 2026-11-19
 - **Author:** Ankit Malik
 - **Status:** Approved (decisions delegated to the author)
-- **Module:** `internal/ee/e2eprobe`, `cmd/e2eprobe`, `internal/ee/infrastructure/helm/flexprice/templates/probe`
+- **Module:** `internal/ee/e2eprobe`, `cmd/e2eprobe/v2`, `internal/ee/infrastructure/helm/flexprice/templates/probe`
 
 ## 1. Intent
 
@@ -118,7 +118,7 @@ Three independent axes were decided. Each row lists the consequence of choosing 
 ### 5.1 Package layout
 
 ```
-internal/ee/e2eprobe/
+internal/ee/e2eprobe/v2/
   e2eprobe.go       Kind, Status, Result, Attrs: the shared vocabulary
   error.go          CheckError and SDK error enrichment (kept)
   client*.go        SDK adapters (kept; EventOps drops ListRaw and gains IngestBulk)
@@ -132,7 +132,7 @@ internal/ee/e2eprobe/
   scenario/         Scenario, Context, Binding, Catalog, Runner, /status
   scenarios/        one file per scenario
   billingmatrix/    kept; adapted to the Result type and wrapped as one scenario per family
-cmd/e2eprobe/
+cmd/e2eprobe/v2/
   main.go           run (default) | validate | describe
   suite.example.yaml
 ```
@@ -416,7 +416,7 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 - Incident tracker tests drive the state machine through open, remind, resolve, skip and rollup.
 - Suite tests cover the embedded default, trait validation, unknown names and the load budget.
 - Inbox tests cover store bounds, `Await` matching and the shared secret.
-- `go test -tags e2eprobe_integration ./cmd/e2eprobe/` keeps the live smoke; the billing-matrix live
+- `go test -tags e2eprobe_integration ./cmd/e2eprobe/v2/` keeps the live smoke; the billing-matrix live
   test is kept.
 
 ## 7. Left to the builder

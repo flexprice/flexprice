@@ -1,17 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/scenario"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/suite"
 )
 
 type stubStore struct {
@@ -141,43 +136,5 @@ func TestParseFirstOTLPHeader(t *testing.T) {
 				t.Errorf("value = %q, want %q", gotValue, tc.wantValue)
 			}
 		})
-	}
-}
-
-func TestValidateCommand_RejectsUnknownScenario(t *testing.T) {
-	var out bytes.Buffer
-	err := validateSuite("", scenario.NewCatalog(), &out)
-	if err == nil || !strings.Contains(err.Error(), "provision") {
-		t.Fatalf("an empty catalog must reject the default suite's scenarios, got %v", err)
-	}
-}
-
-func TestDescribeCommand_PrintsMatrix(t *testing.T) {
-	cat := scenario.NewCatalog()
-	for _, name := range []string{"provision", "preflight", "janitor", "webhook-wiring", "ingest", "usage", "wallet-debit", "invoice-freshness",
-		"invoice-tax", "invoice-coupon", "invoice-commitment", "invoice-multi-cadence", "entitlement-usage", "low-balance-alert", "lifecycle", "cancel",
-		"line-item-change", "tax-preview", "coupon-preview", "commitment-preview", "entitlement-enforcement", "grant-inheritance", "checkout-link",
-		"payment-methods", "auto-charge", "billing-matrix-opening", "billing-matrix-change", "billing-matrix-grants", "billing-matrix-renewal", "billing-matrix-validation"} {
-		cat.Register(suite.ScenarioInfo{Name: name, Kind: e2eprobe.KindProbe, Every: time.Hour}, func(scenario.Deps) scenario.Scenario { return nil })
-	}
-	var out bytes.Buffer
-	if err := describeSuite("", cat, &out); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "events/day: 28080") || !strings.Contains(out.String(), "taxed") {
-		t.Errorf("describe output:\n%s", out.String())
-	}
-	if err := validateSuite("", cat, &out); err != nil {
-		t.Errorf("validate with a complete catalog: %v", err)
-	}
-}
-
-func TestValidateCommand_DefaultSuiteWithRealCatalog(t *testing.T) {
-	var out bytes.Buffer
-	if err := validateSuite("", newCatalog(), &out); err != nil {
-		t.Fatalf("the embedded suite must validate against the shipped catalog: %v", err)
-	}
-	if !strings.Contains(out.String(), "48 bindings") || !strings.Contains(out.String(), "28080 events/day") {
-		t.Errorf("summary = %q", out.String())
 	}
 }

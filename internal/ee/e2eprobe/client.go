@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
@@ -59,14 +58,13 @@ type Client interface {
 	Wallets() WalletOps
 	Events() EventOps
 	Invoices() InvoiceOps
+	NewAsyncEventClient() AsyncEventClient
 	Entitlements() EntitlementOps
 	Coupons() CouponOps
 	CouponAssociations() CouponAssociationOps
 	TaxRates() TaxRateOps
 	TaxAssociations() TaxAssociationOps
 	Payments() PaymentOps
-	Alerts() AlertOps
-	Tenant() TenantOps
 	Raw() RawOps
 }
 
@@ -134,32 +132,14 @@ type WalletOps interface {
 	TopUp(ctx context.Context, id string, body types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
 }
 
-// EventOps covers ingest and analytics, the one usage read served from the
-// meter_usage table. Raw event listing, event lookup and the raw-table usage
-// endpoints are deliberately absent: they scan the events table.
 type EventOps interface {
 	Ingest(ctx context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error)
-	IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error
 	GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
-}
-
-// AlertOps reads alert logs, which say whether the server raised an alert
-// independently of whether its webhook was delivered.
-type AlertOps interface {
-	QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]types.AlertLogResponse, error)
-}
-
-// Connection is the slice of a tenant connection preflight compares.
-type Connection struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	ProviderType string `json:"provider_type"`
-}
-
-// TenantOps reads tenant-level configuration the probe verifies but never writes.
-type TenantOps interface {
-	ListConnections(ctx context.Context) ([]Connection, error)
-	GetSetting(ctx context.Context, key string) (map[string]any, error)
+	// ListRaw queries the raw events table. The probe uses this to verify
+	// synchronously-ingested events actually landed before polling the
+	// aggregation pipeline — separating "ingest dropped" from "aggregation
+	// dropped" in failure attribution.
+	ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error)
 }
 
 type InvoiceOps interface {
@@ -267,22 +247,23 @@ type PaymentOps interface {
 	ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error)
 }
 
-// httpTimeout bounds every call so a stalled connection cannot hang a run.
-const httpTimeout = 60 * time.Second
+type AsyncEventClient interface {
+	Enqueue(eventName, externalCustomerID string, properties map[string]any) error
+	EnqueueWithOptions(opts flexprice.EventOptions) error
+	Flush() error
+	Close() error
+}
 
 func NewSDKClient(apiHost, apiKey string) Client {
-	httpClient := &http.Client{Timeout: httpTimeout}
 	sdk := flexprice.New(
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
-		flexprice.WithClient(httpClient),
 	)
-	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey, http: httpClient}
+	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
 }
 
 type sdkClient struct {
-	sdk  *flexprice.Flexprice
-	http *http.Client
+	sdk *flexprice.Flexprice
 	// apiHost + apiKey are captured here so raw-HTTP methods
 	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
 	// can bypass the SDK's
@@ -302,6 +283,9 @@ func (c *sdkClient) Subscriptions() SubscriptionOps { return subscriptionOps{c.s
 func (c *sdkClient) Wallets() WalletOps             { return walletOps{c.sdk.Wallets} }
 func (c *sdkClient) Events() EventOps               { return eventOps{c.sdk.Events} }
 func (c *sdkClient) Invoices() InvoiceOps           { return invoiceOps{c.sdk.Invoices} }
+func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
+	return c.sdk.NewAsyncClient()
+}
 func (c *sdkClient) Entitlements() EntitlementOps {
 	return entitlementOps{s: c.sdk.Entitlements, parent: c}
 }
@@ -313,44 +297,7 @@ func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
 func (c *sdkClient) TaxAssociations() TaxAssociationOps {
 	return taxAssociationOps{c.sdk.TaxAssociations}
 }
-func (c *sdkClient) Alerts() AlertOps  { return alertOps{c.sdk.Alerts} }
-func (c *sdkClient) Tenant() TenantOps { return tenantOps{parent: c} }
-func (c *sdkClient) Raw() RawOps       { return rawOps{parent: c} }
-
-type alertOps struct{ s *flexprice.Alerts }
-
-func (o alertOps) QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]types.AlertLogResponse, error) {
-	resp, err := o.s.QueryAlertLog(ctx, f)
-	if err != nil {
-		return nil, err
-	}
-	if resp == nil || resp.ListAlertLogsResponse == nil {
-		return nil, nil
-	}
-	return resp.ListAlertLogsResponse.Items, nil
-}
-
-type tenantOps struct{ parent *sdkClient }
-
-func (o tenantOps) ListConnections(ctx context.Context) ([]Connection, error) {
-	var out struct {
-		Connections []Connection `json:"connections"`
-	}
-	if err := o.parent.doRaw(ctx, http.MethodGet, "/connections", "", nil, &out); err != nil {
-		return nil, err
-	}
-	return out.Connections, nil
-}
-
-func (o tenantOps) GetSetting(ctx context.Context, key string) (map[string]any, error) {
-	var out struct {
-		Value map[string]any `json:"value"`
-	}
-	if err := o.parent.doRaw(ctx, http.MethodGet, "/settings/"+url.PathEscape(key), "", nil, &out); err != nil {
-		return nil, err
-	}
-	return out.Value, nil
-}
+func (c *sdkClient) Raw() RawOps { return rawOps{parent: c} }
 
 type rawOps struct{ parent *sdkClient }
 
@@ -468,7 +415,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := o.parent.http.Do(httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -564,9 +511,8 @@ func (o eventOps) Ingest(ctx context.Context, req types.IngestEventRequest) (*dt
 func (o eventOps) GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return o.s.GetUsageAnalytics(ctx, req)
 }
-func (o eventOps) IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error {
-	_, err := o.s.IngestEventsBulk(ctx, req)
-	return err
+func (o eventOps) ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	return o.s.ListRawEvents(ctx, req)
 }
 
 type invoiceOps struct{ s *flexprice.Invoices }
@@ -630,7 +576,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := o.parent.http.Do(httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -659,7 +605,7 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := o.parent.http.Do(httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
@@ -902,7 +848,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 		httpReq.Header.Set("x-api-key", c.apiKey)
 	}
 
-	resp, err := c.http.Do(httpReq)
+	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("do request: %w", err)
 	}

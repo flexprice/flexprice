@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
@@ -132,27 +133,8 @@ func (f *fakeEventOps) Ingest(_ context.Context, _ types.IngestEventRequest) (*d
 func (f *fakeEventOps) GetUsageAnalytics(_ context.Context, _ types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return &dtos.GetUsageAnalyticsResponse{}, nil
 }
-func (f *fakeEventOps) IngestBulk(_ context.Context, req types.BulkIngestEventRequest) error {
-	atomic.AddInt32(&f.ingestCalled, int32(len(req.Events)))
-	return nil
-}
-
-type fakeAlertOps struct{ calls int32 }
-
-func (f *fakeAlertOps) QueryLogs(_ context.Context, _ types.AlertLogFilter) ([]types.AlertLogResponse, error) {
-	atomic.AddInt32(&f.calls, 1)
-	return nil, nil
-}
-
-type fakeTenantOps struct{ calls int32 }
-
-func (f *fakeTenantOps) ListConnections(_ context.Context) ([]Connection, error) {
-	atomic.AddInt32(&f.calls, 1)
-	return []Connection{{ID: "conn_1", Name: "Stripe", ProviderType: "stripe"}}, nil
-}
-func (f *fakeTenantOps) GetSetting(_ context.Context, key string) (map[string]any, error) {
-	atomic.AddInt32(&f.calls, 1)
-	return map[string]any{"key": key}, nil
+func (f *fakeEventOps) ListRaw(_ context.Context, _ types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
+	return &dtos.ListRawEventsResponse{}, nil
 }
 
 type fakeInvoiceOps struct{ queryCalled int32 }
@@ -182,6 +164,19 @@ func (f *fakePriceOps) CreateBucketed(_ context.Context, _ types.CreatePriceRequ
 func (f *fakePriceOps) Query(_ context.Context, _ types.PriceFilter) (*dtos.QueryPriceResponse, error) {
 	return &dtos.QueryPriceResponse{}, nil
 }
+
+type fakeAsyncOps struct{ enqueueCalled int32 }
+
+func (f *fakeAsyncOps) Enqueue(_, _ string, _ map[string]any) error {
+	atomic.AddInt32(&f.enqueueCalled, 1)
+	return nil
+}
+func (f *fakeAsyncOps) EnqueueWithOptions(_ flexprice.EventOptions) error {
+	atomic.AddInt32(&f.enqueueCalled, 1)
+	return nil
+}
+func (f *fakeAsyncOps) Flush() error { return nil }
+func (f *fakeAsyncOps) Close() error { return nil }
 
 type fakeEntitlementOps struct{}
 
@@ -358,8 +353,7 @@ type fakeInnerClient struct {
 	taxRates           *fakeTaxRateOps
 	taxAssociations    *fakeTaxAssociationOps
 	payments           *fakePaymentOps
-	alerts             *fakeAlertOps
-	tenant             *fakeTenantOps
+	async              *fakeAsyncOps
 }
 
 func newFakeInnerClient() *fakeInnerClient {
@@ -378,8 +372,7 @@ func newFakeInnerClient() *fakeInnerClient {
 		taxRates:           &fakeTaxRateOps{},
 		taxAssociations:    &fakeTaxAssociationOps{},
 		payments:           &fakePaymentOps{},
-		alerts:             &fakeAlertOps{},
-		tenant:             &fakeTenantOps{},
+		async:              &fakeAsyncOps{},
 		raw:                &fakeRawOps{},
 	}
 }
@@ -397,8 +390,7 @@ func (c *fakeInnerClient) Coupons() CouponOps                       { return c.c
 func (c *fakeInnerClient) CouponAssociations() CouponAssociationOps { return c.couponAssociations }
 func (c *fakeInnerClient) TaxRates() TaxRateOps                     { return c.taxRates }
 func (c *fakeInnerClient) TaxAssociations() TaxAssociationOps       { return c.taxAssociations }
-func (c *fakeInnerClient) Alerts() AlertOps                         { return c.alerts }
-func (c *fakeInnerClient) Tenant() TenantOps                        { return c.tenant }
+func (c *fakeInnerClient) NewAsyncEventClient() AsyncEventClient    { return c.async }
 func (c *fakeInnerClient) Payments() PaymentOps                     { return c.payments }
 func (c *fakeInnerClient) Raw() RawOps                              { return c.raw }
 
@@ -505,8 +497,9 @@ func TestDryRunClient_MutatingMethodsAreNoOps(t *testing.T) {
 	if _, err := dry.Events().Ingest(ctx, types.IngestEventRequest{EventName: "e"}); err != nil {
 		t.Fatalf("Events.Ingest: %v", err)
 	}
-	if err := dry.Events().IngestBulk(ctx, types.BulkIngestEventRequest{Events: []types.IngestEventRequest{{EventName: "e"}, {EventName: "e"}}}); err != nil {
-		t.Fatalf("Events.IngestBulk: %v", err)
+	asyncClient := dry.NewAsyncEventClient()
+	if err := asyncClient.Enqueue("e", "c", nil); err != nil {
+		t.Fatalf("Async.Enqueue: %v", err)
 	}
 
 	// Assert inner was never reached.
@@ -530,6 +523,9 @@ func TestDryRunClient_MutatingMethodsAreNoOps(t *testing.T) {
 	}
 	if inner.events.ingestCalled != 0 {
 		t.Errorf("inner.events.Ingest was called %d times; want 0", inner.events.ingestCalled)
+	}
+	if inner.async.enqueueCalled != 0 {
+		t.Errorf("inner.async.Enqueue was called %d times; want 0", inner.async.enqueueCalled)
 	}
 }
 
@@ -557,19 +553,6 @@ func TestDryRunClient_ReadsPassThrough(t *testing.T) {
 	}
 	if inner.invoices.queryCalled == 0 {
 		t.Error("inner.invoices.Query was never called; reads should pass through")
-	}
-	if _, err := dry.Alerts().QueryLogs(ctx, types.AlertLogFilter{}); err != nil {
-		t.Fatalf("Alerts.QueryLogs: %v", err)
-	}
-	conns, err := dry.Tenant().ListConnections(ctx)
-	if err != nil || len(conns) != 1 || conns[0].ProviderType != "stripe" {
-		t.Fatalf("Tenant.ListConnections = %v %v", conns, err)
-	}
-	if _, err := dry.Tenant().GetSetting(ctx, "invoice_config"); err != nil {
-		t.Fatalf("Tenant.GetSetting: %v", err)
-	}
-	if inner.alerts.calls != 1 || inner.tenant.calls != 2 {
-		t.Errorf("keyed reads must reach inner: alerts=%d tenant=%d", inner.alerts.calls, inner.tenant.calls)
 	}
 }
 

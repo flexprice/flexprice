@@ -1,11 +1,8 @@
 package e2eprobe
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -112,38 +109,4 @@ func setIfAbsent(m map[string]string, k, v string) {
 	if _, ok := m[k]; !ok {
 		m[k] = v
 	}
-}
-
-// IsInfra reports whether err means the API could not answer at all: a 5xx,
-// a timeout or a transport failure. Such failures feed one region-level
-// incident instead of paging per scenario.
-func IsInfra(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return true
-	}
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return true
-	}
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	var api *sdkerrors.APIError
-	if errors.As(err, &api) && api != nil {
-		return api.StatusCode >= 500
-	}
-	var eer *sdkerrors.ErrorResponse
-	if errors.As(err, &eer) && eer != nil {
-		if eer.HTTPStatusCode != nil {
-			return *eer.HTTPStatusCode >= 500
-		}
-		if eer.HTTPMeta.Response != nil {
-			return eer.HTTPMeta.Response.StatusCode >= 500
-		}
-	}
-	return false
 }
