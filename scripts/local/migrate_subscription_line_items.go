@@ -59,9 +59,50 @@ func MigrateSubscriptionLineItems() error {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
 
+	return migrateSubscriptionLineItemsForTenants(
+		ctx,
+		tenants,
+		filter,
+		subscriptionRepo,
+		subscriptionLineItemRepo,
+		planRepo,
+		priceRepo,
+		meterRepo,
+	)
+}
+
+// migrateSubscriptionLineItemsForTenants holds the actual migration logic, split out from
+// MigrateSubscriptionLineItems so it can be exercised in tests against the in-memory
+// repositories (internal/testutil) without a live database.
+//
+// A note on the query pattern below, since it looks like it could be simplified further:
+// meters, plans, and prices are tenant-scoped - every repository List() call applies
+// ApplyTenantFilter(ctx, query) unconditionally (see internal/repository/ent/query_builder.go
+// and the per-entity ApplyTenantFilter methods, e.g. internal/repository/ent/meter.go). That
+// means they cannot be hoisted above the tenant loop and fetched once for all tenants; doing
+// so would run the query with no tenant in context and silently return the wrong (likely
+// empty) rows for every tenant except whichever one last set the context. Each of the three
+// List() calls genuinely has to happen once per tenant.
+//
+// What *is* fixable without touching tenant scoping: for every subscription, the original
+// code scanned the tenant's *entire* price list (`for _, p := range prices`) to find the
+// prices matching that subscription's plan - an O(subscriptions * prices) scan per tenant.
+// Pre-indexing prices by plan ID once per tenant (below) turns that into a single map lookup
+// per subscription, which is the part of this migration that actually scales with data volume.
+func migrateSubscriptionLineItemsForTenants(
+	ctx context.Context,
+	tenants []string,
+	filter *types.SubscriptionFilter,
+	subscriptionRepo subscription.Repository,
+	subscriptionLineItemRepo subscription.LineItemRepository,
+	planRepo plan.Repository,
+	priceRepo price.Repository,
+	meterRepo meter.Repository,
+) error {
 	for _, tenantID := range tenants {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-		subs, err := subscriptionRepo.List(ctx, filter)
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantID)
+
+		subs, err := subscriptionRepo.List(tenantCtx, filter)
 		if err != nil {
 			return fmt.Errorf("failed to list subscriptions: %w", err)
 		}
@@ -71,7 +112,7 @@ func MigrateSubscriptionLineItems() error {
 		// fetch all meters
 		meterFilter := types.NewNoLimitMeterFilter()
 		meterFilter.QueryFilter.Status = nil
-		meters, err := meterRepo.List(ctx, meterFilter)
+		meters, err := meterRepo.List(tenantCtx, meterFilter)
 		if err != nil {
 			return fmt.Errorf("failed to list meters: %w", err)
 		}
@@ -81,7 +122,7 @@ func MigrateSubscriptionLineItems() error {
 		}
 
 		// fetch all plans
-		plans, err := planRepo.List(ctx, types.NewNoLimitPlanFilter())
+		plans, err := planRepo.List(tenantCtx, types.NewNoLimitPlanFilter())
 		if err != nil {
 			return fmt.Errorf("failed to list plans: %w", err)
 		}
@@ -90,14 +131,17 @@ func MigrateSubscriptionLineItems() error {
 			plansByID[p.ID] = p
 		}
 
-		// fetch all prices
-		prices, err := priceRepo.List(ctx, types.NewNoLimitPriceFilter())
+		// fetch all prices once for this tenant, and index them by plan ID so the
+		// per-subscription lookup below doesn't rescan the full tenant price list
+		prices, err := priceRepo.List(tenantCtx, types.NewNoLimitPriceFilter())
 		if err != nil {
 			return fmt.Errorf("failed to list prices: %w", err)
 		}
-		pricesByID := make(map[string]*price.Price, len(prices))
+		pricesByPlanID := make(map[string][]*price.Price)
 		for _, p := range prices {
-			pricesByID[p.ID] = p
+			if p.Status == types.StatusPublished && p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+				pricesByPlanID[p.EntityID] = append(pricesByPlanID[p.EntityID], p)
+			}
 		}
 
 		// Process each subscription
@@ -116,11 +160,8 @@ func MigrateSubscriptionLineItems() error {
 			}
 
 			validPrices := make([]*price.Price, 0)
-			for _, p := range prices {
-				if p.EntityID == plan.ID &&
-					p.Status == types.StatusPublished &&
-					types.IsMatchingCurrency(p.Currency, sub.Currency) &&
-					p.EntityType == types.PRICE_ENTITY_TYPE_PLAN &&
+			for _, p := range pricesByPlanID[plan.ID] {
+				if types.IsMatchingCurrency(p.Currency, sub.Currency) &&
 					p.BillingPeriod == sub.BillingPeriod {
 					validPrices = append(validPrices, p)
 				}
@@ -150,7 +191,7 @@ func MigrateSubscriptionLineItems() error {
 					BillingPeriod:   sub.BillingPeriod,
 					StartDate:       sub.CurrentPeriodStart,
 					EndDate:         sub.CurrentPeriodEnd,
-					BaseModel:       types.GetDefaultBaseModel(ctx),
+					BaseModel:       types.GetDefaultBaseModel(tenantCtx),
 				}
 
 				if price.MeterID != "" {
@@ -165,7 +206,7 @@ func MigrateSubscriptionLineItems() error {
 			}
 
 			// Update subscription with line items
-			err = subscriptionLineItemRepo.CreateBulk(ctx, lineItems)
+			err = subscriptionLineItemRepo.CreateBulk(tenantCtx, lineItems)
 			if err != nil {
 				log.Printf("Failed to create subscription with line items %s: %v", sub.ID, err)
 				continue
