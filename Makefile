@@ -70,6 +70,19 @@ run-server:
 run-e2eprobe:
 	go run cmd/e2eprobe/main.go
 
+# e2eprobe v2 (internal/ee/e2eprobe/v2): run, or check a suite file without
+# touching a tenant. SUITE defaults to the suite embedded in the binary.
+SUITE ?=
+.PHONY: run-e2eprobe-v2 e2eprobe-v2-validate e2eprobe-v2-describe test-e2eprobe-v2
+run-e2eprobe-v2:
+	go run ./cmd/e2eprobe/v2 run $(if $(SUITE),--suite $(SUITE),)
+e2eprobe-v2-validate:
+	go run ./cmd/e2eprobe/v2 validate $(if $(SUITE),--suite $(SUITE),)
+e2eprobe-v2-describe:
+	go run ./cmd/e2eprobe/v2 describe $(if $(SUITE),--suite $(SUITE),)
+test-e2eprobe-v2:
+	go test -race ./internal/ee/e2eprobe/v2/... ./cmd/e2eprobe/v2/...
+
 E2EPROBE_IMAGE ?= flexprice/e2eprobe
 
 # Single-platform build loaded into the local Docker engine for testing.
@@ -86,6 +99,16 @@ e2eprobe-docker-build:
 e2eprobe-docker-push:
 	docker buildx build --push --platform linux/amd64,linux/arm64 \
 	  -f Dockerfile.e2eprobe -t $(E2EPROBE_IMAGE) .
+
+E2EPROBE_V2_IMAGE ?= flexprice/e2eprobe-v2
+
+.PHONY: e2eprobe-v2-docker-build e2eprobe-v2-docker-push
+e2eprobe-v2-docker-build:
+	docker buildx build --load \
+	  -f Dockerfile.e2eprobe-v2 -t $(E2EPROBE_V2_IMAGE) .
+e2eprobe-v2-docker-push:
+	docker buildx build --push --platform linux/amd64,linux/arm64 \
+	  -f Dockerfile.e2eprobe-v2 -t $(E2EPROBE_V2_IMAGE) .
 
 .PHONY: run-server-local
 run-server-local: run-server
@@ -202,15 +225,15 @@ endef
 
 # Run all tests
 test: install-typst
-	$(call run-go-test,-v -race ./internal/... ./cmd/server)
+	$(call run-go-test,-v -race ./internal/... ./cmd/server ./cmd/e2eprobe/...)
 
 # Run tests with verbose output
 test-verbose:
-	$(call run-go-test,-v ./internal/... ./cmd/server)
+	$(call run-go-test,-v ./internal/... ./cmd/server ./cmd/e2eprobe/...)
 
 # Run tests with coverage report
 test-coverage: install-typst
-	$(call run-go-test,-race -coverprofile=coverage.out ./internal/... ./cmd/server)
+	$(call run-go-test,-race -coverprofile=coverage.out ./internal/... ./cmd/server ./cmd/e2eprobe/...)
 	go tool cover -html=coverage.out -o coverage.html
 
 # Database related targets

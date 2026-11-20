@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:experimental
+# Build stage
+# Pin the builder to the runner's native arch ($BUILDPLATFORM) and
+# cross-compile to the requested $TARGETARCH. Avoids QEMU emulation of
+# the Go toolchain, which is 10-20x slower on multi-arch builds.
+#
+# Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
+# Go version must be >= the `go` directive in go.mod or `go mod download`
+# hard-fails. Bump this whenever that directive moves.
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS builder
+WORKDIR /app
+
+RUN apk add --no-cache git
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+COPY . .
+
+# TARGETARCH is provided automatically by buildx (e.g. amd64, arm64)
+ARG TARGETARCH
+ENV CGO_ENABLED=0 \
+    GOOS=linux
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o e2eprobe cmd/e2eprobe/v2/main.go
+
+# Final stage
+FROM alpine:3.24
+RUN apk --no-cache add ca-certificates tzdata && \
+    addgroup -S app && adduser -S -G app app
+
+WORKDIR /app
+COPY --from=builder /app/e2eprobe .
+RUN chown -R app:app /app
+
+# e2eprobe v2: the suite-driven probe. Defaults live in
+# internal/ee/e2eprobe/v2/config.go and match cmd/e2eprobe/v2/.env.example, so
+# nothing needs baking here. Override any knob at runtime with -e VAR=val; mount
+# a suite file and point E2EPROBE_SUITE_FILE at it to replace the embedded one.
+ENV TZ=UTC
+USER app
+
+# Required at runtime (not baked — keeps secrets out of image layers):
+#   E2EPROBE_API_HOST, E2EPROBE_API_KEY
+# Optional at runtime:
+#   E2EPROBE_SUITE_FILE, E2EPROBE_STATE_FILE, E2EPROBE_WEBHOOK_TOKEN,
+#   E2EPROBE_SLACK_WEBHOOK_URL, E2EPROBE_TENANT_ID, E2EPROBE_ENVIRONMENT_ID
+
+EXPOSE 8765
+CMD ["./e2eprobe"]
