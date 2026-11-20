@@ -46,15 +46,21 @@ type BindingState struct {
 type State struct {
 	Bindings map[string]*BindingState `json:"bindings"`
 	Infra    *Incident                `json:"infra,omitempty"`
-	SavedAt  time.Time                `json:"saved_at"`
+	// InfraSeen is when each binding last failed on infrastructure; it feeds the
+	// rollup and survives restarts so an outage is not declared over on boot.
+	InfraSeen map[string]time.Time `json:"infra_seen,omitempty"`
+	SavedAt   time.Time            `json:"saved_at"`
 }
 
 func newState() *State {
-	return &State{Bindings: map[string]*BindingState{}}
+	return &State{Bindings: map[string]*BindingState{}, InfraSeen: map[string]time.Time{}}
 }
 
 func (s *State) clone() State {
-	out := State{Bindings: make(map[string]*BindingState, len(s.Bindings)), SavedAt: s.SavedAt}
+	out := State{Bindings: make(map[string]*BindingState, len(s.Bindings)), InfraSeen: make(map[string]time.Time, len(s.InfraSeen)), SavedAt: s.SavedAt}
+	for k, v := range s.InfraSeen {
+		out.InfraSeen[k] = v
+	}
 	for k, st := range s.Bindings {
 		cp := *st
 		cp.Last.Mismatches = append([]string(nil), st.Last.Mismatches...)
@@ -133,6 +139,9 @@ func (f *fileStore) Load() (*State, error) {
 	}
 	if s.Bindings == nil {
 		s.Bindings = map[string]*BindingState{}
+	}
+	if s.InfraSeen == nil {
+		s.InfraSeen = map[string]time.Time{}
 	}
 	return s, nil
 }

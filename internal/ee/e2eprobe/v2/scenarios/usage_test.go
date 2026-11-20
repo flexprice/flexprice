@@ -157,7 +157,7 @@ func TestUsage_RequestIsBoundedToPersonaAndWindow(t *testing.T) {
 		t.Fatalf("analytics requests = %d, want 1", len(f.d.fc.Event.AnalyticsRequests))
 	}
 	req := f.d.fc.Event.AnalyticsRequests[0]
-	if req.ExternalCustomerID == nil || *req.ExternalCustomerID != "e2eprobe-cust-persistent-0" {
+	if req.ExternalCustomerID == nil || *req.ExternalCustomerID != "e2eprobe-taxed" {
 		t.Errorf("external_customer_id = %v", req.ExternalCustomerID)
 	}
 	if req.StartTime == nil || req.EndTime == nil || !req.StartTime.Equal(f.window.Start) || !req.EndTime.Equal(f.window.End) {

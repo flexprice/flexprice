@@ -30,7 +30,9 @@ Design and the reasoning behind every choice: `docs/design/2026-11-19-e2eprobe-r
    `scenario.Scenario`: `Name()`, `Kind()` (`KindProbe` reads a persona's state;
    `KindFlow` clones and acts), `Requires()` (traits the persona must carry; empty
    means tenant-level) and `Run(ctx, sc)`.
-2. Register it in `scenarios/register.go` with its default `Every`.
+2. Register it in `scenarios/register.go` with its default `Every`. If a run
+   ingests events, declare how many with `.ingests(n)` so the suite's daily
+   budget counts them; prefer more units per event over more events.
 3. Add it to the default suite (`suite/default.yaml`) and to
    `cmd/e2eprobe/v2/suite.example.yaml` if every region should run it.
 4. Write `scenarios/<name>_test.go` using `newTestDeps(t)` and `run(t, d, s, persona)`.
@@ -80,14 +82,31 @@ customer and one window of at most a day.
 ## 5. Load budget
 
 `suite.Validate` computes events per day from personas, profiles and the tick
-and refuses a suite above `defaults.load.max_events_per_day`. Keep new reads to
-one call per persona per run where you can; `describe` prints the budget.
+plus every enabled binding's `EventsPerRun` at its interval, and refuses a suite
+above `defaults.load.max_events_per_day` (100k by default; the default suite is
+about 54k). Keep new reads to one call per persona per run where you can;
+`describe` prints the split between profiles and flows.
 
 ## 6. Incidents and Slack
 
 Do not post to Slack from a scenario. Return a `Result`; the tracker decides.
 Thresholds live in `defaults.alert` and per-entry `alert:` overrides.
 Formatting lives in `incident/slack.go` and `incident/digest.go`.
+
+`Notifier` methods return the delivery error. The tracker stamps
+`last_notified` only on success and retries an undelivered open or reminder on
+its next tick, so a sink must return a rejection rather than log and swallow
+it. Infrastructure failures never page from `Observe`: the tick evaluates the
+region rollup first and pages a binding only when no rollup covers it.
+
+## 6a. Developer loop
+
+- `go run ./cmd/e2eprobe/v2 once --scenario <name> [--persona <p>] [--json]`
+  provisions the suite against the configured tenant, runs one binding and
+  exits 1 on failure. Slack stays quiet and incident state stays in memory.
+- `run --only a,b` narrows a region's suite to the bindings under investigation.
+- `E2EPROBE_DRY_RUN=true` logs every mutating call instead of sending it.
+- `make test-e2eprobe-v2` runs the module's tests with the race detector.
 
 ## 7. Testing
 
@@ -114,3 +133,5 @@ Formatting lives in `incident/slack.go` and `incident/digest.go`.
 | "I'll read raw events to see if ingest landed" | Scans the events table. Read `events/analytics` for the customer and window instead. |
 | "This persona has two subscriptions" | Analytics items repeat per subscription; filter on `SubscriptionID == persona.SubscriptionID()`. |
 | "Time to add an env var" | Optional configuration goes in the suite file; env is for secrets, endpoints and process knobs. |
+| "The janitor can match ephemerals by their display name" | A name proves nothing. Only the `e2eprobe-eph-` prefix or the ephemeral cohort tag authorizes a delete; the previous generation's customers are listed as legacy, never removed. |
+| "The over leg needs seven times the events" | Put more units on each event. The budget counts events; the oracle counts units. |

@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -29,13 +30,14 @@ func usageLine(amount string) types.InvoiceLineItemResponse {
 func usageFromIngested(d *testDeps) func(types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return func(req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 		sub := d.fc.Subscription.Items[req.SubscriptionID]
-		units := 0
+		units := 0.0
 		for _, ev := range d.fc.Event.Ingested {
 			if sub.CustomerID != nil && d.fc.Customer.Internal(ev.ExternalCustomerID) == *sub.CustomerID {
-				units++
+				v, _ := strconv.ParseFloat(ev.Properties["amount"], 64)
+				units += v
 			}
 		}
-		amount := float64(units) * 0.01
+		amount := units * 0.01
 		return &dtos.GetSubscriptionUsageResponse{GetUsageBySubscriptionResponse: &types.GetUsageBySubscriptionResponse{Amount: &amount}}, nil
 	}
 }
@@ -70,8 +72,8 @@ func TestCommitmentPreview_AlternatesLegs(t *testing.T) {
 	if r.Status != e2eprobe.StatusPass || r.Attrs["leg"] != "over" {
 		t.Fatalf("second run = %+v", r)
 	}
-	if len(d.fc.Event.Batches) != 2 || len(d.fc.Event.Batches[1]) != 700 {
-		t.Fatalf("over leg batches = %d", len(d.fc.Event.Batches))
+	if len(d.fc.Event.Batches) != 2 || len(d.fc.Event.Batches[1]) != 100 || d.fc.Event.Batches[1][0].Properties["amount"] != "7" {
+		t.Fatalf("the over leg sends 100 events of 7 units, got %d batches", len(d.fc.Event.Batches))
 	}
 	if d.World.Ephemerals().Count("customer") != 2 || len(d.fc.Invoice.PreviewCalls) != 2 {
 		t.Errorf("each leg clones and previews once: %d clones, %d previews", d.World.Ephemerals().Count("customer"), len(d.fc.Invoice.PreviewCalls))

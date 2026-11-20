@@ -37,6 +37,7 @@ func Validate(s *Suite, cat Catalog) error {
 	}
 
 	seen := map[string]bool{}
+	seenExt := map[string]string{}
 	for i, p := range s.Personas {
 		where := fmt.Sprintf("personas[%d]", i)
 		if p.Name != "" {
@@ -84,6 +85,11 @@ func Validate(s *Suite, cat Catalog) error {
 		}
 		if !strings.HasPrefix(p.ExternalIDOrDefault(), "e2eprobe-") {
 			fail("%s: external_id %q must start with e2eprobe-", where, p.ExternalID)
+		}
+		if ext := p.ExternalIDOrDefault(); seenExt[ext] != "" {
+			fail("%s: duplicate external_id %q, already used by persona %s", where, ext, seenExt[ext])
+		} else {
+			seenExt[ext] = p.Name
 		}
 	}
 

@@ -16,6 +16,10 @@ import (
 // perUnit is what every usage price in the plan charges per unit.
 var perUnit = decimal.RequireFromString("0.01")
 
+// commitmentLegEvents is the batch size of either leg; the over leg puts more
+// units on each event rather than sending more events.
+const commitmentLegEvents = 100
+
 // commitmentPreview alternates legs on clones of the committed persona: under
 // the commitment a true-up must bill usage up to it, over it the excess must
 // carry the overage factor.
@@ -28,8 +32,8 @@ type commitmentPreview struct {
 
 func newCommitmentPreview(scenario.Deps) *commitmentPreview {
 	return &commitmentPreview{
-		under: usageBatch{meter: "sum_commit", events: 100, value: "1"},
-		over:  usageBatch{meter: "sum_commit", events: 700, value: "1"},
+		under: usageBatch{meter: "sum_commit", events: commitmentLegEvents, value: "1"},
+		over:  usageBatch{meter: "sum_commit", events: commitmentLegEvents, value: "7"},
 		poll:  pollWindow{every: 5 * time.Second, within: 8 * time.Minute},
 	}
 }
@@ -73,7 +77,7 @@ func (s *commitmentPreview) Run(ctx context.Context, sc *scenario.Context) e2epr
 		return sc.Fail("ingest_bulk", err)
 	}
 	// Usage is read back before the preview; a preview computed early would bill too little.
-	raw := perUnit.Mul(decimal.NewFromInt(int64(batch.events)))
+	raw := perUnit.Mul(batch.units())
 	seen := decimal.Zero
 	err = s.poll.until(ctx, func() error {
 		resp, err := sc.Client().Subscriptions().GetUsage(ctx, types.GetUsageBySubscriptionRequest{SubscriptionID: eph.SubscriptionID()})

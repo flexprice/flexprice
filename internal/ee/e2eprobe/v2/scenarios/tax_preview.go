@@ -11,6 +11,9 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
+// taxPreviewEvents makes a $1.00 taxable usage line at the plan's $0.01 a unit.
+const taxPreviewEvents = 100
+
 // taxPreview puts usage on a clone carrying the shared tax association and
 // checks the preview taxes it at the shared rate.
 type taxPreview struct {
@@ -20,7 +23,7 @@ type taxPreview struct {
 
 func newTaxPreview(scenario.Deps) *taxPreview {
 	return &taxPreview{
-		batch: usageBatch{meter: "sum", events: 100, value: "1"},
+		batch: usageBatch{meter: "sum", events: taxPreviewEvents, value: "1"},
 		poll:  pollWindow{every: 5 * time.Second, within: 90 * time.Second},
 	}
 }

@@ -119,12 +119,12 @@ func (w *World) ensureCustomer(ctx context.Context, p *Persona) error {
 
 // primarySubscription picks the persona's monthly subscription out of the
 // customer's subscriptions on the plan: tagged with the persona, else the
-// persistent cohort, else the oldest untagged one. The quarterly multi-cadence
-// subscription is never a candidate.
+// persistent cohort, else the oldest untagged one. Quarterly subscriptions,
+// tagged or not, are never candidates.
 func primarySubscription(items []types.SubscriptionResponse, persona string) *types.SubscriptionResponse {
 	var cohort, untagged []types.SubscriptionResponse
 	for _, sub := range items {
-		if sub.ID == nil {
+		if sub.ID == nil || !monthly(sub) {
 			continue
 		}
 		switch sub.Metadata["e2eprobe_cohort"] {
@@ -149,6 +149,34 @@ func primarySubscription(items []types.SubscriptionResponse, persona string) *ty
 	return nil
 }
 
+func monthly(sub types.SubscriptionResponse) bool {
+	return sub.BillingPeriod == nil || *sub.BillingPeriod == types.BillingPeriodMonthly
+}
+
+// commitmentGap explains why an adopted subscription cannot carry the declared
+// commitment: it predates the declaration or was created with other terms.
+func commitmentGap(sub *types.SubscriptionResponse, want *suite.Commitment) string {
+	switch {
+	case sub.CommitmentAmount == nil || *sub.CommitmentAmount == "":
+		return "subscription predates the commitment declaration; it can only be set at create"
+	case sub.EnableTrueUp == nil || !*sub.EnableTrueUp:
+		return "subscription predates the commitment declaration: true-up is off and can only be set at create"
+	case want == nil:
+		return ""
+	case !sameAmount(*sub.CommitmentAmount, want.Amount):
+		return fmt.Sprintf("subscription commitment %s differs from the declared %s; it can only be set at create", *sub.CommitmentAmount, want.Amount)
+	case want.OverageFactor != "" && sub.OverageFactor != nil && !sameAmount(*sub.OverageFactor, want.OverageFactor):
+		return fmt.Sprintf("subscription overage factor %s differs from the declared %s; it can only be set at create", *sub.OverageFactor, want.OverageFactor)
+	}
+	return ""
+}
+
+func sameAmount(a, b string) bool {
+	x, errA := decimal.NewFromString(a)
+	y, errB := decimal.NewFromString(b)
+	return errA == nil && errB == nil && x.Equal(y)
+}
+
 func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona) error {
 	ext, planID, spec := p.ExternalID(), fx.PlanID(), p.Spec()
 	resp, err := w.client.Subscriptions().Query(ctx, types.SubscriptionFilter{ExternalCustomerID: ptr(ext), PlanID: ptr(planID)})
@@ -161,17 +189,12 @@ func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona
 	}
 	if existing := primarySubscription(items, p.Name()); existing != nil {
 		subID := *existing.ID
-		w.activateDraft(ctx, subID, existing.SubscriptionStatus)
+		if err := w.activateDraft(ctx, subID, existing.SubscriptionStatus); err != nil {
+			return err
+		}
 		p.update(func(p *Persona) { p.subscriptionID = subID })
 		if p.Has(e2eprobe.TraitCommitment) {
-			switch {
-			case existing.CommitmentAmount == nil || *existing.CommitmentAmount == "":
-				p.setGap(e2eprobe.TraitCommitment, "subscription predates the commitment declaration; it can only be set at create")
-			case existing.EnableTrueUp == nil || !*existing.EnableTrueUp:
-				p.setGap(e2eprobe.TraitCommitment, "subscription predates the commitment declaration: true-up is off and can only be set at create")
-			default:
-				p.setGap(e2eprobe.TraitCommitment, "")
-			}
+			p.setGap(e2eprobe.TraitCommitment, commitmentGap(existing, spec.Commitment))
 		}
 		if p.Has(e2eprobe.TraitCoupon) {
 			attached, err := w.couponAttached(ctx, fx, subID)
@@ -217,7 +240,9 @@ func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona
 		return errors.New("create subscription: empty response")
 	}
 	subID := *created.SubscriptionResponse.ID
-	w.activateDraft(ctx, subID, created.SubscriptionResponse.SubscriptionStatus)
+	if err := w.activateDraft(ctx, subID, created.SubscriptionResponse.SubscriptionStatus); err != nil {
+		return err
+	}
 	p.update(func(p *Persona) { p.subscriptionID = subID })
 	p.setGap(e2eprobe.TraitCommitment, "")
 	if p.Has(e2eprobe.TraitCoupon) && fx.CouponCode() != "" {
@@ -226,14 +251,16 @@ func (w *World) ensureSubscription(ctx context.Context, fx *Fixtures, p *Persona
 	return nil
 }
 
-// activateDraft activates a draft subscription; a failure is logged and the next pass retries.
-func (w *World) activateDraft(ctx context.Context, subID string, status *types.SubscriptionStatus) {
+// activateDraft activates a draft subscription; a draft left behind is an
+// error for the caller, since no scenario can bill or read usage on one.
+func (w *World) activateDraft(ctx context.Context, subID string, status *types.SubscriptionStatus) error {
 	if status == nil || *status != types.SubscriptionStatusDraft {
-		return
+		return nil
 	}
 	if _, err := w.client.Subscriptions().ActivateSubscription(ctx, subID, types.ActivateDraftSubscriptionRequest{StartDate: w.now().UTC()}); err != nil {
-		w.info(ctx, "world: subscription activation failed; retrying next pass", "subscription_id", subID, "error", err.Error())
+		return fmt.Errorf("activate subscription %s: %w", subID, err)
 	}
+	return nil
 }
 
 func (w *World) couponAttached(ctx context.Context, fx *Fixtures, subID string) (bool, error) {
@@ -300,17 +327,13 @@ func (w *World) ensureTaxAssociation(ctx context.Context, fx *Fixtures, p *Perso
 	return nil
 }
 
-// taxAssociationMatches accepts the shared rate by id, by code, or any
-// association when the rate id is still unknown: the probe only ever attaches
-// one rate to a persona's subscription.
+// taxAssociationMatches accepts the shared rate by id when it is known, else
+// by code; an association naming neither belongs to someone else.
 func taxAssociationMatches(ta types.TaxAssociationResponse, fx *Fixtures) bool {
 	if fx.TaxRateID() != "" && ta.TaxRateID != nil && *ta.TaxRateID == fx.TaxRateID() {
 		return true
 	}
-	if ta.TaxRate != nil && ta.TaxRate.Code != nil && *ta.TaxRate.Code == fx.TaxRateCode() {
-		return true
-	}
-	return fx.TaxRateID() == ""
+	return ta.TaxRate != nil && ta.TaxRate.Code != nil && *ta.TaxRate.Code == fx.TaxRateCode()
 }
 
 // recordTaxActive pins when the association started, once; a later pass
@@ -340,7 +363,9 @@ func (w *World) ensureMultiCadence(ctx context.Context, fx *Fixtures, p *Persona
 				continue
 			}
 			subID := *sub.ID
-			w.activateDraft(ctx, subID, sub.SubscriptionStatus)
+			if err := w.activateDraft(ctx, subID, sub.SubscriptionStatus); err != nil {
+				return err
+			}
 			p.update(func(p *Persona) { p.multiCadenceSubID = subID })
 			return nil
 		}
@@ -382,7 +407,9 @@ func (w *World) ensureMultiCadence(ctx context.Context, fx *Fixtures, p *Persona
 		return errors.New("create quarterly subscription: empty response")
 	}
 	subID := *created.SubscriptionResponse.ID
-	w.activateDraft(ctx, subID, created.SubscriptionResponse.SubscriptionStatus)
+	if err := w.activateDraft(ctx, subID, created.SubscriptionResponse.SubscriptionStatus); err != nil {
+		return err
+	}
 	p.update(func(p *Persona) { p.multiCadenceSubID = subID })
 	p.setGap(e2eprobe.TraitMultiCadence, "")
 	return nil
@@ -449,6 +476,9 @@ func (w *World) ensureWallet(ctx context.Context, p *Persona) error {
 		if p.Has(e2eprobe.TraitAlerts) && spec.Wallet != nil {
 			p.setGap(e2eprobe.TraitAlerts, gapIf(!thresholdsMatch(existing.AlertSettings, spec.Wallet.Thresholds), "wallet thresholds differ from the suite"))
 		}
+		if p.unfunded() == *existing.ID {
+			return w.fundWallet(ctx, p, *existing.ID, spec)
+		}
 		return nil
 	}
 	req := types.CreateWalletRequest{
@@ -469,6 +499,13 @@ func (w *World) ensureWallet(ctx context.Context, p *Persona) error {
 	walletID := *created.WalletResponse.ID
 	p.update(func(p *Persona) { p.walletID = walletID })
 	p.setGap(e2eprobe.TraitAlerts, "")
+	return w.fundWallet(ctx, p, walletID, spec)
+}
+
+// fundWallet applies the declared opening balance. A failed top-up is
+// remembered on the persona so the next pass retries it instead of adopting
+// an empty wallet as funded.
+func (w *World) fundWallet(ctx context.Context, p *Persona, walletID string, spec suite.Persona) error {
 	if spec.Wallet == nil || spec.Wallet.Balance == "" {
 		return nil
 	}
@@ -477,8 +514,10 @@ func (w *World) ensureWallet(ctx context.Context, p *Persona) error {
 		Description:       ptr("e2eprobe initial balance"),
 		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
 	}); err != nil {
+		p.update(func(p *Persona) { p.unfundedWalletID = walletID })
 		return fmt.Errorf("top up wallet %s: %w", walletID, err)
 	}
+	p.update(func(p *Persona) { p.unfundedWalletID = "" })
 	return nil
 }
 

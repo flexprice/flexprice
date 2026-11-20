@@ -3,9 +3,10 @@ package scenario
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
+	"hash/fnv"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
@@ -45,6 +46,7 @@ func (o Options) withDefaults() Options {
 type item struct {
 	binding  suite.Binding
 	scenario Scenario
+	running  atomic.Bool
 }
 
 // Runner schedules every binding and records what each run reported.
@@ -119,12 +121,23 @@ func (r *Runner) Start(ctx context.Context) {
 	wg.Wait()
 }
 
+// startDelay spreads first runs across the jitter window deterministically,
+// so a binding starts at the same offset on every boot.
+func startDelay(key string, jitter time.Duration) time.Duration {
+	if jitter <= 0 {
+		return 0
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(key))
+	return time.Duration(h.Sum64() % uint64(jitter))
+}
+
 func (r *Runner) loop(ctx context.Context, it *item) {
-	if r.opts.Jitter > 0 {
+	if delay := startDelay(bindingKey(it.binding).String(), r.opts.Jitter); delay > 0 {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(rand.N(r.opts.Jitter)): // #nosec G404 -- start spread, not security
+		case <-time.After(delay):
 		}
 	}
 	every := r.every(it.binding)
@@ -168,7 +181,9 @@ func (r *Runner) housekeeping(ctx context.Context) {
 		case <-heartbeat:
 			r.logHeartbeat(ctx)
 		case <-digest:
-			r.notifier.Digest(ctx, r.tracker.Digest(r.digestExtra()))
+			if err := r.notifier.Digest(ctx, r.tracker.Digest(r.digestExtra())); err != nil && r.deps.Logger != nil {
+				r.deps.Logger.Error(ctx, "e2eprobe digest delivery failed", "error", err)
+			}
 		}
 	}
 }
@@ -183,6 +198,12 @@ func (r *Runner) RunOnce(ctx context.Context, b suite.Binding) e2eprobe.Result {
 }
 
 func (r *Runner) execute(ctx context.Context, it *item) e2eprobe.Result {
+	// One run per binding at a time: the scenario instance is shared and a slow
+	// run must not be lapped by its own schedule.
+	if !it.running.CompareAndSwap(false, true) {
+		return e2eprobe.Skip("in_flight", "previous run of this binding is still in progress")
+	}
+	defer it.running.Store(false)
 	select {
 	case r.sem <- struct{}{}:
 	case <-ctx.Done():
@@ -211,9 +232,10 @@ func (r *Runner) execute(ctx context.Context, it *item) e2eprobe.Result {
 		span.SetStatus(codes.Error, res.Summary())
 	}
 	r.record(it, res)
-	r.tracker.Observe(ctx, bindingKey(b), res)
+	// The run context may already be past its deadline; pages go out on the parent.
+	r.tracker.Observe(parent, bindingKey(b), res)
 	if res.Status != e2eprobe.StatusPass && r.deps.Logger != nil {
-		r.deps.Logger.Info(ctx, "e2eprobe scenario did not pass",
+		r.deps.Logger.Info(parent, "e2eprobe scenario did not pass",
 			"scenario", b.Scenario, "persona", b.Persona, "status", string(res.Status), "step", res.Step, "reason", res.Reason, "infra", strconv.FormatBool(res.Infra))
 	}
 	return res

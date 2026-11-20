@@ -21,8 +21,8 @@ const planSoftLimit = 100
 func registerEntitlements(cat *scenario.Catalog) {
 	for _, r := range []registration{
 		entry("entitlement-usage", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newEntitlementUsage(d) }, e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents),
-		entry("entitlement-enforcement", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newEntitlementEnforcement(d) }, e2eprobe.TraitSoftLimit),
-		entry("grant-inheritance", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newGrantInheritance(d) }, e2eprobe.TraitAdditiveGrant),
+		entry("entitlement-enforcement", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newEntitlementEnforcement(d) }, e2eprobe.TraitSoftLimit).ingests(overLimitEvents),
+		entry("grant-inheritance", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newGrantInheritance(d) }, e2eprobe.TraitAdditiveGrant).ingests(grantEvents),
 	} {
 		cat.Register(r.info, r.build)
 	}

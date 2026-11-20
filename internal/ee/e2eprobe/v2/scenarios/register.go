@@ -19,6 +19,13 @@ func entry(name string, kind e2eprobe.Kind, every time.Duration, build scenario.
 	return registration{info: suite.ScenarioInfo{Name: name, Kind: kind, Traits: traits, Every: every}, build: build}
 }
 
+// ingests declares how many events one run sends, so the suite's daily budget
+// counts flow traffic as well as profile batches.
+func (r registration) ingests(events int) registration {
+	r.info.EventsPerRun = events
+	return r
+}
+
 // Register adds every scenario in this package to cat.
 func Register(cat *scenario.Catalog) {
 	all := []registration{

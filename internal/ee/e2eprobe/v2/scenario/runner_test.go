@@ -3,6 +3,7 @@ package scenario
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,16 +13,27 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/suite"
 )
 
-type recordingNotifier struct{ opened, resolved int32 }
+type recordingNotifier struct {
+	opened, resolved int32
+	mu               sync.Mutex
+	openedCtxErr     []error // ctx.Err() seen by each Opened
+}
 
-func (r *recordingNotifier) Opened(context.Context, incident.Incident, incident.BindingState) {
+func (r *recordingNotifier) Opened(ctx context.Context, _ incident.Incident, _ incident.BindingState) error {
 	atomic.AddInt32(&r.opened, 1)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.openedCtxErr = append(r.openedCtxErr, ctx.Err())
+	return nil
 }
-func (r *recordingNotifier) Reminded(context.Context, incident.Incident, incident.BindingState) {}
-func (r *recordingNotifier) Resolved(context.Context, incident.Incident, incident.BindingState, time.Time) {
+func (r *recordingNotifier) Reminded(context.Context, incident.Incident, incident.BindingState) error {
+	return nil
+}
+func (r *recordingNotifier) Resolved(context.Context, incident.Incident, incident.BindingState, time.Time) error {
 	atomic.AddInt32(&r.resolved, 1)
+	return nil
 }
-func (r *recordingNotifier) Digest(context.Context, incident.Digest) {}
+func (r *recordingNotifier) Digest(context.Context, incident.Digest) error { return nil }
 
 func newTracker(t *testing.T, deps Deps) (*incident.Tracker, *recordingNotifier) {
 	t.Helper()
@@ -180,5 +192,62 @@ func TestRunOnce_RunTimeoutBoundsAScenario(t *testing.T) {
 	}
 	if st := tracker.Snapshot().Bindings["usage · taxed"]; st == nil || st.Runs != 1 {
 		t.Error("a timed-out run must still be recorded")
+	}
+}
+
+func TestStartDelay_IsDeterministicAndBounded(t *testing.T) {
+	a, b := startDelay("usage · taxed", time.Minute), startDelay("usage · taxed", time.Minute)
+	if a != b || a < 0 || a >= time.Minute {
+		t.Fatalf("delays = %s, %s; want equal and inside the jitter", a, b)
+	}
+	if startDelay("usage · taxed", 0) != 0 {
+		t.Error("no jitter means no delay")
+	}
+}
+
+func TestRunOnce_SkipsWhileBindingInFlight(t *testing.T) {
+	deps, _ := newDeps(t, true)
+	cat := NewCatalog()
+	started, release := make(chan struct{}), make(chan struct{})
+	registerStub(cat, "usage", []e2eprobe.Trait{e2eprobe.TraitEvents}, time.Hour, func(context.Context, *Context) e2eprobe.Result {
+		close(started)
+		<-release
+		return e2eprobe.Pass()
+	})
+	tracker, _ := newTracker(t, deps)
+	b := suite.Binding{Scenario: "usage", Persona: "taxed", Every: time.Hour}
+	r, _ := NewRunner(cat, deps, []suite.Binding{b}, tracker, nil, Options{Concurrency: 2})
+	first := make(chan e2eprobe.Result, 1)
+	go func() { first <- r.RunOnce(context.Background(), b) }()
+	<-started
+	if res := r.RunOnce(context.Background(), b); res.Status != e2eprobe.StatusSkip || res.Step != "in_flight" {
+		t.Fatalf("an overlapping run of one binding must skip, got %+v", res)
+	}
+	close(release)
+	if res := <-first; res.Status != e2eprobe.StatusPass {
+		t.Fatalf("first run = %+v", res)
+	}
+	if st := tracker.Snapshot().Bindings["usage · taxed"]; st == nil || st.Runs != 1 {
+		t.Errorf("the overlap must not count as a run: %+v", st)
+	}
+}
+
+func TestRunOnce_TimedOutRunNotifiesWithLiveContext(t *testing.T) {
+	deps, _ := newDeps(t, true)
+	cat := NewCatalog()
+	registerStub(cat, "usage", []e2eprobe.Trait{e2eprobe.TraitEvents}, time.Hour, func(ctx context.Context, sc *Context) e2eprobe.Result {
+		<-ctx.Done()
+		return sc.Fail("assert", errors.New("wrong answer, late"))
+	})
+	tracker, n := newTracker(t, deps)
+	b := suite.Binding{Scenario: "usage", Persona: "taxed", Every: time.Hour}
+	r, _ := NewRunner(cat, deps, []suite.Binding{b}, tracker, nil, Options{RunTimeout: 50 * time.Millisecond})
+	if res := r.RunOnce(context.Background(), b); res.Status != e2eprobe.StatusFail {
+		t.Fatalf("result = %+v", res)
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if len(n.openedCtxErr) != 1 || n.openedCtxErr[0] != nil {
+		t.Fatalf("the page for a timed-out run must go out on a live context, got %v", n.openedCtxErr)
 	}
 }

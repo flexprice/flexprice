@@ -2,19 +2,22 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/inbox"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/incident"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/ledger"
@@ -24,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/world"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // buildLoggingConfig wires OTLP log export from the standard OTEL env vars so
@@ -181,32 +185,135 @@ func main() {
 	}
 	fs := flag.NewFlagSet(command, flag.ExitOnError)
 	suitePath := fs.String("suite", os.Getenv("E2EPROBE_SUITE_FILE"), "suite file; empty uses the embedded default")
+	only := fs.String("only", "", "run: comma-separated scenario names to run; every other binding is left out")
+	scenarioName := fs.String("scenario", "", "once: scenario to run")
+	personaName := fs.String("persona", "", "once: persona to run it on; optional when the suite binds the scenario to one persona")
+	asJSON := fs.Bool("json", false, "once: print the result as JSON")
 	_ = fs.Parse(args)
 
 	cat := newCatalog()
+	var err error
 	switch command {
 	case "validate":
-		if err := validateSuite(*suitePath, cat, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
+		err = validateSuite(*suitePath, cat, os.Stdout)
 	case "describe":
-		if err := describeSuite(*suitePath, cat, os.Stdout); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
+		err = describeSuite(*suitePath, cat, os.Stdout)
 	case "run":
-		if err := run(cat, *suitePath); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			os.Exit(1)
-		}
+		err = run(cat, *suitePath, splitList(*only))
+	case "once":
+		err = once(cat, *suitePath, *scenarioName, *personaName, *asJSON, os.Stdout)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q (run | validate | describe)\n", command)
+		fmt.Fprintf(os.Stderr, "unknown command %q (run | once | validate | describe)\n", command)
 		os.Exit(2)
+	}
+	if err != nil {
+		if !errors.Is(err, errScenarioFailed) {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+		os.Exit(1)
 	}
 }
 
-func run(cat *scenario.Catalog, suitePath string) error {
+// errScenarioFailed is once's exit status when the run itself reported a failure.
+var errScenarioFailed = errors.New("scenario failed")
+
+// runtime is a configured probe: everything run and once share.
+type runtime struct {
+	suite    *suite.Suite
+	bindings []suite.Binding
+	world    *world.World
+	inbox    *inbox.Inbox
+	runner   *scenario.Runner
+}
+
+type runtimeOptions struct {
+	only          []string     // scenario names to keep; empty keeps every binding
+	slack         bool         // deliver incidents to Slack when it is configured
+	otelIncidents bool         // mirror incidents as spans
+	stateFile     string       // incident snapshot path; empty keeps state in memory
+	tracer        trace.Tracer // nil runs without tracing
+}
+
+func newRuntime(cat *scenario.Catalog, cfg *e2eprobe.Config, s *suite.Suite, client e2eprobe.Client, lg *logger.Logger, runID string, opts runtimeOptions) (*runtime, error) {
+	bindings, err := s.Bindings(cat)
+	if err != nil {
+		return nil, err
+	}
+	if len(opts.only) > 0 {
+		if bindings = filterBindings(bindings, opts.only); len(bindings) == 0 {
+			return nil, fmt.Errorf("--only %s matches no binding in the suite; see describe", strings.Join(opts.only, ","))
+		}
+	}
+	notifiers := []incident.Notifier{incident.LogNotifier(lg)}
+	if opts.slack && (cfg.Slack.BotToken != "" || cfg.Slack.WebhookURL != "") {
+		notifiers = append(notifiers, incident.SlackNotifier(cfg.Slack.WebhookURL, cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
+	}
+	if opts.otelIncidents && opts.tracer != nil {
+		notifiers = append(notifiers, incident.OTELNotifier(opts.tracer))
+	}
+	notifier := incident.Multi(notifiers...)
+	tracker, err := incident.NewTracker(func(k incident.Key) incident.Policy {
+		a := s.AlertPolicy(suiteEntryFor(s, k.Scenario))
+		return incident.Policy{AfterFailures: a.AfterFailures, AfterDuration: a.AfterDuration.Duration, RenotifyEvery: a.RenotifyEvery.Duration, SkipAfter: a.SkipAfter.Duration}
+	}, incident.DefaultRollup(), notifier, incident.FileStore(opts.stateFile), time.Now)
+	if err != nil {
+		return nil, err
+	}
+	box := inbox.New(inbox.Options{Token: cfg.WebhookToken})
+	wld := world.New(client, s, runID, lg)
+	deps := scenario.Deps{
+		Client:    client,
+		World:     wld,
+		Ledger:    ledger.NewLedger(48 * time.Hour),
+		Inbox:     box,
+		Suite:     s,
+		Logger:    lg,
+		Tracer:    opts.tracer,
+		RunID:     runID,
+		Tick:      s.Defaults.Tick.Duration,
+		Now:       time.Now,
+		StartedAt: time.Now(),
+	}
+	runner, err := scenario.NewRunner(cat, deps, bindings, tracker, notifier, scenario.Options{
+		Concurrency: s.Defaults.Concurrency,
+		Jitter:      time.Minute,
+		Heartbeat:   time.Hour,
+		DigestEvery: s.Defaults.Digest.Every.Duration,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &runtime{suite: s, bindings: bindings, world: wld, inbox: box, runner: runner}, nil
+}
+
+func newLogger(cfg *e2eprobe.Config) (*logger.Logger, error) {
+	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
+	if err != nil {
+		return nil, fmt.Errorf("logger: %w", err)
+	}
+	for _, w := range cfg.Warnings {
+		lg.Warn(context.Background(), "e2eprobe config warning", "warning", w)
+	}
+	return lg, nil
+}
+
+func newClient(ctx context.Context, cfg *e2eprobe.Config, lg *logger.Logger) e2eprobe.Client {
+	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
+	if cfg.DryRun {
+		client = e2eprobe.NewDryRunClient(client, lg)
+		lg.Info(ctx, "dry-run mode: mutating calls are logged, not sent")
+	}
+	return client
+}
+
+func orDefault(path, fallback string) string {
+	if path != "" {
+		return path
+	}
+	return fallback
+}
+
+func run(cat *scenario.Catalog, suitePath string, only []string) error {
 	cfg, err := e2eprobe.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
@@ -215,24 +322,14 @@ func run(cat *scenario.Catalog, suitePath string) error {
 		fmt.Println("E2EPROBE_ENABLED=false; nothing to do")
 		return nil
 	}
-	if suitePath == "" {
-		suitePath = cfg.SuiteFile
-	}
+	suitePath = orDefault(suitePath, cfg.SuiteFile)
 	s, err := loadSuite(suitePath, cat)
 	if err != nil {
 		return err
 	}
-	bindings, err := s.Bindings(cat)
+	lg, err := newLogger(cfg)
 	if err != nil {
 		return err
-	}
-
-	lg, err := logger.NewLogger(&config.Configuration{Logging: buildLoggingConfig(cfg)})
-	if err != nil {
-		return fmt.Errorf("logger: %w", err)
-	}
-	for _, w := range cfg.Warnings {
-		lg.Warn(context.Background(), "e2eprobe config warning", "warning", w)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -253,76 +350,162 @@ func run(cat *scenario.Catalog, suitePath string) error {
 			_ = shutdownTracer(shutCtx)
 		}
 	}()
-
-	var client e2eprobe.Client = e2eprobe.NewSDKClient(cfg.APIHost, cfg.APIKey)
-	if cfg.DryRun {
-		client = e2eprobe.NewDryRunClient(client, lg)
-		lg.Info(ctx, "dry-run mode: mutating calls are logged, not sent")
-	}
-
-	notifiers := []incident.Notifier{incident.LogNotifier(lg)}
-	if cfg.Slack.BotToken != "" || cfg.Slack.WebhookURL != "" {
-		notifiers = append(notifiers, incident.SlackNotifier(cfg.Slack.WebhookURL, cfg.Slack.BotToken, cfg.Slack.Channel, nil, lg))
-	}
-	if tp != nil && cfg.OTEL.Enabled {
-		notifiers = append(notifiers, incident.OTELNotifier(tp.Tracer("e2eprobe")))
-	}
-	notifier := incident.Multi(notifiers...)
-	tracker, err := incident.NewTracker(func(k incident.Key) incident.Policy {
-		a := s.AlertPolicy(suiteEntryFor(s, k.Scenario))
-		return incident.Policy{AfterFailures: a.AfterFailures, AfterDuration: a.AfterDuration.Duration, RenotifyEvery: a.RenotifyEvery.Duration, SkipAfter: a.SkipAfter.Duration}
-	}, incident.DefaultRollup(), notifier, incident.FileStore(cfg.StateFile), time.Now)
-	if err != nil {
-		return err
-	}
-
-	box := inbox.New(inbox.Options{Token: cfg.WebhookToken})
-	wld := world.New(client, s, runID, lg)
-	deps := scenario.Deps{
-		Client:    client,
-		World:     wld,
-		Ledger:    ledger.NewLedger(48 * time.Hour),
-		Inbox:     box,
-		Suite:     s,
-		Logger:    lg,
-		RunID:     runID,
-		Tick:      s.Defaults.Tick.Duration,
-		Now:       time.Now,
-		StartedAt: time.Now(),
-	}
+	var tracer trace.Tracer
 	if tp != nil {
-		deps.Tracer = tp.Tracer("e2eprobe")
+		tracer = tp.Tracer("e2eprobe")
 	}
-	runner, err := scenario.NewRunner(cat, deps, bindings, tracker, notifier, scenario.Options{
-		Concurrency: s.Defaults.Concurrency,
-		Jitter:      time.Minute,
-		Heartbeat:   time.Hour,
-		DigestEvery: s.Defaults.Digest.Every.Duration,
+	rt, err := newRuntime(cat, cfg, s, newClient(ctx, cfg, lg), lg, runID, runtimeOptions{
+		only: only, slack: true, otelIncidents: cfg.OTEL.Enabled, stateFile: cfg.StateFile, tracer: tracer,
 	})
 	if err != nil {
 		return err
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/webhook", box.Handler())
-	mux.Handle("/healthz", box.Handler())
-	mux.Handle("/inbox/", box.Handler())
-	mux.Handle("/status", runner.Handler())
+	mux.Handle("/webhook", rt.inbox.Handler())
+	mux.Handle("/healthz", rt.inbox.Handler())
+	mux.Handle("/inbox/", rt.inbox.Handler())
+	mux.Handle("/status", rt.runner.Handler())
 	port, err := inbox.NewServer(cfg.ListenerPort, mux).Start(ctx)
 	if err != nil {
 		return fmt.Errorf("listener: %w", err)
 	}
 
-	if err := wld.Provision(ctx); err != nil {
+	if err := rt.world.Provision(ctx); err != nil {
 		// Scenarios skip while their persona is missing; the provision scenario retries.
 		lg.Error(ctx, "initial provisioning incomplete", "error", err)
 	}
 	lg.Info(ctx, "e2eprobe starting",
-		"run_id", runID, "host", cfg.APIHost, "suite", suitePath, "bindings", len(bindings),
+		"run_id", runID, "host", cfg.APIHost, "suite", suitePath, "bindings", len(rt.bindings), "only", strings.Join(only, ","),
 		"events_per_day", s.EventsPerDay(cat), "tick", s.Defaults.Tick.String(), "listener_port", port)
-	runner.Start(ctx)
+	rt.runner.Start(ctx)
 	lg.Info(ctx, "e2eprobe shutdown", "run_id", runID)
 	return nil
+}
+
+// once provisions the suite and runs one binding, for developing a scenario
+// or confirming a region by hand: Slack stays quiet, incident state stays in
+// memory and the exit status says whether the run passed.
+func once(cat *scenario.Catalog, suitePath, scenarioName, personaName string, asJSON bool, out io.Writer) error {
+	if scenarioName == "" {
+		return errors.New("once: --scenario is required (see describe for the bindings)")
+	}
+	cfg, err := e2eprobe.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("config: %w", err)
+	}
+	s, err := loadSuite(orDefault(suitePath, cfg.SuiteFile), cat)
+	if err != nil {
+		return err
+	}
+	lg, err := newLogger(cfg)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	runID := fmt.Sprintf("e2eprobe-once-%d", time.Now().Unix())
+	rt, err := newRuntime(cat, cfg, s, newClient(ctx, cfg, lg), lg, runID, runtimeOptions{})
+	if err != nil {
+		return err
+	}
+	return runOnce(ctx, rt, scenarioName, personaName, asJSON, out)
+}
+
+func runOnce(ctx context.Context, rt *runtime, scenarioName, personaName string, asJSON bool, out io.Writer) error {
+	b, err := resolveBinding(rt.bindings, scenarioName, personaName)
+	if err != nil {
+		return err
+	}
+	if err := rt.world.Provision(ctx); err != nil {
+		fmt.Fprintf(out, "provisioning incomplete: %v\n", err)
+	}
+	res := rt.runner.RunOnce(ctx, b)
+	if asJSON {
+		if err := json.NewEncoder(out).Encode(res); err != nil {
+			return err
+		}
+	} else {
+		printResult(out, b, res)
+	}
+	if res.Failed() {
+		return errScenarioFailed
+	}
+	return nil
+}
+
+func printResult(out io.Writer, b suite.Binding, r e2eprobe.Result) {
+	fmt.Fprintf(out, "%s: %s", incident.Key{Scenario: b.Scenario, Persona: b.Persona}, strings.ToUpper(string(r.Status)))
+	if r.Step != "" {
+		fmt.Fprintf(out, " at %s", r.Step)
+	}
+	if r.Reason != "" {
+		fmt.Fprintf(out, " (%s)", r.Reason)
+	}
+	fmt.Fprintln(out)
+	for _, m := range r.Mismatches {
+		fmt.Fprintf(out, "  - %s\n", m)
+	}
+	if r.Err != nil {
+		fmt.Fprintf(out, "  error: %v\n", r.Err)
+	}
+	keys := make([]string, 0, len(r.Attrs))
+	for k := range r.Attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(out, "  %s=%s\n", k, r.Attrs[k])
+	}
+}
+
+// resolveBinding picks the one binding a scenario and persona name; a persona
+// is only needed when the suite binds the scenario to more than one.
+func resolveBinding(bindings []suite.Binding, scenarioName, personaName string) (suite.Binding, error) {
+	var matches []suite.Binding
+	for _, b := range bindings {
+		if b.Scenario == scenarioName && (personaName == "" || b.Persona == personaName) {
+			matches = append(matches, b)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return matches[0], nil
+	case 0:
+		if personaName != "" {
+			return suite.Binding{}, fmt.Errorf("the suite does not bind %q to persona %q; see describe", scenarioName, personaName)
+		}
+		return suite.Binding{}, fmt.Errorf("the suite has no binding for %q; see describe", scenarioName)
+	}
+	personas := make([]string, 0, len(matches))
+	for _, b := range matches {
+		personas = append(personas, b.Persona)
+	}
+	return suite.Binding{}, fmt.Errorf("%q binds to %d personas (%s); pick one with --persona", scenarioName, len(matches), strings.Join(personas, ", "))
+}
+
+func filterBindings(bindings []suite.Binding, only []string) []suite.Binding {
+	keep := map[string]bool{}
+	for _, name := range only {
+		keep[name] = true
+	}
+	var out []suite.Binding
+	for _, b := range bindings {
+		if keep[b.Scenario] {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+func splitList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // suiteEntryFor maps a catalog name back to the suite entry that enabled it,

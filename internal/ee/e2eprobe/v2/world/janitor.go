@@ -3,6 +3,7 @@ package world
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,7 +22,7 @@ type SweepReport struct {
 	TaxAssociations int      // associations whose subscription is gone
 	Swept           int      // resources removed by registered sweepers
 	Failures        []string // deletes that failed and will be retried
-	Legacy          []string // persistent customers no persona uses
+	Legacy          []string // the previous generation's customers, reported but never deleted
 }
 
 func (w *World) AddSweeper(s OrphanSweeper) {
@@ -79,16 +80,22 @@ func (w *World) sweepRegistry(ctx context.Context, cutoff time.Time, report *Swe
 	}
 }
 
-// isEphemeralCustomer is deliberately loose so customers from earlier probe
-// generations, tagged differently, are still recognised.
-func isEphemeralCustomer(c types.CustomerResponse) bool {
-	if c.ExternalID != nil && (strings.HasPrefix(*c.ExternalID, EphemeralPrefix) || strings.HasPrefix(*c.ExternalID, "e2eprobe-cust-eph-")) {
+// isOwnEphemeral is the deletion gate: only customers this probe generation
+// created, by external-id prefix or cohort tag. A display name proves nothing.
+func isOwnEphemeral(c types.CustomerResponse) bool {
+	if c.ExternalID != nil && strings.HasPrefix(*c.ExternalID, EphemeralPrefix) {
 		return true
 	}
-	if c.Name != nil && strings.Contains(*c.Name, "Ephemeral") {
+	return c.Metadata["e2eprobe_cohort"] == EphemeralCohort
+}
+
+// isLegacyEphemeral recognises the previous generation's ephemerals; they are
+// reported, never deleted, while that probe may still be running.
+func isLegacyEphemeral(c types.CustomerResponse) bool {
+	if c.ExternalID != nil && strings.HasPrefix(*c.ExternalID, "e2eprobe-cust-eph-") {
 		return true
 	}
-	return c.Metadata["e2eprobe_cohort"] == EphemeralCohort || c.Metadata["e2eprobe_role"] == EphemeralCohort
+	return c.Metadata["e2eprobe_role"] == EphemeralCohort
 }
 
 func (w *World) sweepOrphans(ctx context.Context, cutoff time.Time, report *SweepReport) {
@@ -106,11 +113,19 @@ func (w *World) sweepOrphans(ctx context.Context, cutoff time.Time, report *Swee
 		if cust.ExternalID != nil {
 			ext = *cust.ExternalID
 		}
-		if cust.Metadata["e2eprobe_cohort"] == PersistentCohort && !known[ext] {
+		old := cust.CreatedAt != nil && !cust.CreatedAt.After(cutoff)
+		switch {
+		case known[ext]:
+			continue
+		case cust.Metadata["e2eprobe_cohort"] == PersistentCohort:
 			report.Legacy = append(report.Legacy, ext)
 			continue
-		}
-		if !isEphemeralCustomer(cust) || cust.ID == nil || cust.CreatedAt == nil || cust.CreatedAt.After(cutoff) {
+		case isLegacyEphemeral(cust):
+			if old {
+				report.Legacy = append(report.Legacy, ext)
+			}
+			continue
+		case !isOwnEphemeral(cust) || cust.ID == nil || !old:
 			continue
 		}
 		if err := w.deleteCustomer(ctx, *cust.ID, ext); err != nil {
@@ -119,6 +134,7 @@ func (w *World) sweepOrphans(ctx context.Context, cutoff time.Time, report *Swee
 		}
 		report.Orphans++
 	}
+	sort.Strings(report.Legacy)
 }
 
 // knownExternalIDs is every customer the suite expects to exist.
@@ -172,7 +188,10 @@ func (w *World) sweepTaxAssociations(ctx context.Context, report *SweepReport) {
 	if taxRateID == "" {
 		return
 	}
-	resp, err := w.client.TaxAssociations().List(ctx, nil, nil, nil, &taxRateID)
+	// Only subscription associations are the probe's; a customer-level one on the
+	// same rate belongs to whoever configured that customer.
+	entityType := string(types.TaxRateEntityTypeSubscription)
+	resp, err := w.client.TaxAssociations().List(ctx, &entityType, nil, nil, &taxRateID)
 	if err != nil {
 		report.Failures = append(report.Failures, fmt.Sprintf("list tax associations: %v", err))
 		return
@@ -181,7 +200,7 @@ func (w *World) sweepTaxAssociations(ctx context.Context, report *SweepReport) {
 		return
 	}
 	for _, ta := range resp.ListTaxAssociationsResponse.Items {
-		if ta.ID == nil || ta.EntityID == nil {
+		if ta.ID == nil || ta.EntityID == nil || ta.EntityType == nil || *ta.EntityType != types.TaxRateEntityTypeSubscription {
 			continue
 		}
 		if _, err := w.client.Subscriptions().Get(ctx, *ta.EntityID); !IsNotFound(err) {

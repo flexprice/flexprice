@@ -53,13 +53,14 @@ func (w *World) Provision(ctx context.Context) error {
 	var errs []error
 	for _, spec := range w.suite.Personas {
 		p := w.personas[spec.Name]
-		err := w.provisionPersona(ctx, p)
-		if err != nil {
-			// The last good state stands; a transient error must not silence every scenario on the persona.
+		scratch := p.scratch()
+		if err := w.provisionPersona(ctx, scratch); err != nil {
+			// The published binding stands; a transient error must not silence every scenario on the persona.
+			p.carryRecovery(scratch)
 			errs = append(errs, fmt.Errorf("persona %s: %w", spec.Name, err))
 			continue
 		}
-		p.update(func(p *Persona) { p.ready = true })
+		p.adopt(scratch)
 	}
 	return errors.Join(errs...)
 }

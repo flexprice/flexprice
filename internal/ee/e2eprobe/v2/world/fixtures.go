@@ -389,19 +389,36 @@ func (w *World) indexPrices(ctx context.Context, fx *Fixtures) error {
 	}
 	fx.set(func(f *Fixtures) {
 		for _, p := range resp.ListPricesResponse.Items {
-			if p.ID == nil || p.LookupKey == nil {
+			if p.ID == nil {
 				continue
 			}
-			if *p.LookupKey == basePriceLookupKey {
-				f.priceIDs["base"] = *p.ID
-				continue
-			}
-			if m, ok := e2eprobe.MeterByEventName(strings.TrimPrefix(*p.LookupKey, usagePricePrefix)); ok {
-				f.priceIDs[m.Key] = *p.ID
+			if key, ok := priceKey(p, f.meterIDs); ok {
+				f.priceIDs[key] = *p.ID
 			}
 		}
 	})
 	return nil
+}
+
+// priceKey names the catalog meter a plan price serves: by lookup key when the
+// probe created it, else by meter id when the price was adopted.
+func priceKey(p types.PriceResponse, meterIDs map[string]string) (string, bool) {
+	if p.LookupKey != nil {
+		if *p.LookupKey == basePriceLookupKey {
+			return "base", true
+		}
+		if m, ok := e2eprobe.MeterByEventName(strings.TrimPrefix(*p.LookupKey, usagePricePrefix)); ok {
+			return m.Key, true
+		}
+	}
+	if p.MeterID != nil {
+		for key, id := range meterIDs {
+			if id == *p.MeterID {
+				return key, true
+			}
+		}
+	}
+	return "", false
 }
 
 // softLimitEligible is every meter that takes the plan's 100-unit soft limit:

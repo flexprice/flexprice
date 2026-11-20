@@ -32,7 +32,7 @@ func newTestDeps(t *testing.T) *testDeps {
 	t.Helper()
 	d := &testDeps{fc: probetest.New(), now: testNow}
 	d.fc.Clock = func() time.Time { return d.now }
-	s := suite.Default()
+	s := withPayer(suite.Default())
 	w := world.New(d.fc, s, "run-test", nil)
 	w.SetClock(d.fc.Clock)
 	if err := w.Provision(context.Background()); err != nil {
@@ -74,4 +74,21 @@ func TestRegister_CoversDefaultSuite(t *testing.T) {
 			t.Errorf("%s not registered", name)
 		}
 	}
+}
+
+// withPayer adds the Stripe payer persona the example suite carries; the
+// embedded default has no gateway so a fresh region never pages on one.
+func withPayer(s *suite.Suite) *suite.Suite {
+	s.Personas = append(s.Personas, suite.Persona{
+		Name:    "payer-stripe",
+		Traits:  []e2eprobe.Trait{e2eprobe.TraitPayment},
+		Payment: &suite.Payment{Provider: "stripe", Currency: "USD", FixedCustomer: "e2eprobe-cust-pay-stripe-cards", DeclineLast4: "0341"},
+	})
+	s.Tenant.Connections = []string{"stripe"}
+	s.Scenarios = append(s.Scenarios,
+		suite.Scenario{Name: "checkout-link", Every: suite.Duration{Duration: 30 * time.Minute}},
+		suite.Scenario{Name: "payment-methods", Every: suite.Duration{Duration: time.Hour}},
+		suite.Scenario{Name: "auto-charge", Every: suite.Duration{Duration: 6 * time.Hour}},
+	)
+	return s
 }

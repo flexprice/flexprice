@@ -31,22 +31,26 @@ func (o otelNotifier) span(ctx context.Context, name string, inc Incident, faile
 	span.End()
 }
 
-func (o otelNotifier) Opened(ctx context.Context, inc Incident, _ BindingState) {
+func (o otelNotifier) Opened(ctx context.Context, inc Incident, _ BindingState) error {
 	o.span(ctx, "e2eprobe.incident.opened", inc, true)
+	return nil
 }
 
-func (o otelNotifier) Reminded(ctx context.Context, inc Incident, _ BindingState) {
+func (o otelNotifier) Reminded(ctx context.Context, inc Incident, _ BindingState) error {
 	o.span(ctx, "e2eprobe.incident.reminded", inc, true)
+	return nil
 }
 
-func (o otelNotifier) Resolved(ctx context.Context, inc Incident, _ BindingState, _ time.Time) {
+func (o otelNotifier) Resolved(ctx context.Context, inc Incident, _ BindingState, _ time.Time) error {
 	o.span(ctx, "e2eprobe.incident.resolved", inc, false)
+	return nil
 }
 
-func (o otelNotifier) Digest(ctx context.Context, d Digest) {
+func (o otelNotifier) Digest(ctx context.Context, d Digest) error {
 	_, span := o.tracer.Start(ctx, "e2eprobe.digest", trace.WithAttributes(
 		attribute.Int("e2eprobe.open_incidents", len(d.Open)),
 		attribute.Int("e2eprobe.bindings", len(d.Bindings)),
 	))
 	span.End()
+	return nil
 }

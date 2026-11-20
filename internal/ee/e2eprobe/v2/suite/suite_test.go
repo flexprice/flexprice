@@ -35,22 +35,22 @@ func newFakeCatalog() fakeCatalog {
 		{Name: "webhook-wiring", Kind: e2eprobe.KindProbe, Every: 15 * time.Minute},
 		{Name: "ingest", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents)},
 		{Name: "usage", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents), Every: 15 * time.Minute},
-		{Name: "wallet-debit", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitWallet), Every: 30 * time.Minute},
+		{Name: "wallet-debit", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitWallet), Every: 30 * time.Minute, EventsPerRun: 500},
 		{Name: "invoice-freshness", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},
 		{Name: "invoice-tax", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitTax), Every: time.Hour},
 		{Name: "invoice-coupon", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitCoupon), Every: time.Hour},
 		{Name: "invoice-commitment", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitCommitment), Every: time.Hour},
 		{Name: "invoice-multi-cadence", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitMultiCadence), Every: time.Hour},
 		{Name: "entitlement-usage", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents), Every: 30 * time.Minute},
-		{Name: "low-balance-alert", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitAlerts), Every: 10 * time.Minute},
-		{Name: "lifecycle", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: 30 * time.Minute},
+		{Name: "low-balance-alert", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitAlerts), Every: 10 * time.Minute, EventsPerRun: 1},
+		{Name: "lifecycle", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: 30 * time.Minute, EventsPerRun: 3},
 		{Name: "cancel", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},
 		{Name: "line-item-change", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},
-		{Name: "tax-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitTax), Every: time.Hour},
+		{Name: "tax-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitTax), Every: time.Hour, EventsPerRun: 100},
 		{Name: "coupon-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitCoupon), Every: time.Hour},
-		{Name: "commitment-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitCommitment), Every: time.Hour},
-		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSoftLimit), Every: time.Hour},
-		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitAdditiveGrant), Every: time.Hour},
+		{Name: "commitment-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitCommitment), Every: time.Hour, EventsPerRun: 100},
+		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSoftLimit), Every: time.Hour, EventsPerRun: 150},
+		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitAdditiveGrant), Every: time.Hour, EventsPerRun: 200},
 		{Name: "checkout-link", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 30 * time.Minute},
 		{Name: "payment-methods", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: time.Hour},
 		{Name: "auto-charge", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 6 * time.Hour},
@@ -75,12 +75,12 @@ func TestDefault_ParsesAndAppliesDefaults(t *testing.T) {
 	}
 	if s.Defaults.Concurrency != 4 || s.Defaults.Alert.AfterFailures != 3 || s.Defaults.Alert.AfterDuration.Duration != 20*time.Minute ||
 		s.Defaults.Alert.RenotifyEvery.Duration != 6*time.Hour || s.Defaults.Alert.SkipAfter.Duration != 24*time.Hour ||
-		s.Defaults.Load.MaxEventsPerDay != 50000 || s.Defaults.Janitor.MaxAge.Duration != time.Hour || s.Defaults.Digest.Every.Duration != 24*time.Hour ||
+		s.Defaults.Load.MaxEventsPerDay != 100000 || s.Defaults.Janitor.MaxAge.Duration != time.Hour || s.Defaults.Digest.Every.Duration != 24*time.Hour ||
 		s.Tenant.Webhooks.SilenceAfter.Duration != 6*time.Hour {
 		t.Errorf("defaults not applied: %+v %+v", s.Defaults, s.Tenant.Webhooks)
 	}
-	if len(s.Personas) != 11 {
-		t.Errorf("personas = %d, want 11", len(s.Personas))
+	if len(s.Personas) != 10 {
+		t.Errorf("personas = %d, want 10", len(s.Personas))
 	}
 	canary, ok := s.Persona("alert-canary")
 	if !ok || !canary.HasTrait(e2eprobe.TraitWallet) || !canary.HasTrait(e2eprobe.TraitAlerts) || canary.HasTrait(e2eprobe.TraitEvents) {
@@ -90,7 +90,7 @@ func TestDefault_ParsesAndAppliesDefaults(t *testing.T) {
 		t.Errorf("alert-canary thresholds missing: %+v", canary.Wallet)
 	}
 	taxed, _ := s.Persona("taxed")
-	if taxed.ExternalIDOrDefault() != "e2eprobe-cust-persistent-0" || !taxed.HasTrait(e2eprobe.TraitMultiCadence) || !taxed.HasTrait(e2eprobe.TraitEvents) {
+	if taxed.ExternalIDOrDefault() != "e2eprobe-taxed" || !taxed.HasTrait(e2eprobe.TraitMultiCadence) || !taxed.HasTrait(e2eprobe.TraitEvents) {
 		t.Errorf("taxed persona wrong: %+v", taxed)
 	}
 	committed, _ := s.Persona("committed")
@@ -107,7 +107,7 @@ func TestParse_PartialFileGetsDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Defaults.Tick.Duration != 10*time.Minute || s.Defaults.Alert.AfterFailures != 3 || s.Defaults.Load.MaxEventsPerDay != 50000 {
+	if s.Defaults.Tick.Duration != 10*time.Minute || s.Defaults.Alert.AfterFailures != 3 || s.Defaults.Load.MaxEventsPerDay != 100000 {
 		t.Errorf("defaults not applied on partial file: %+v", s.Defaults)
 	}
 	sc, ok := s.ScenarioConfig("lifecycle")
@@ -149,4 +149,21 @@ func TestAlertPolicy_OverlaysScenarioOverride(t *testing.T) {
 	if s.AlertPolicy("other").AfterFailures != 3 {
 		t.Error("scenario without override must get defaults")
 	}
+}
+
+// withPayer adds the Stripe payer persona the example suite carries; the
+// embedded default has no gateway so a fresh region never pages on one.
+func withPayer(s *Suite) *Suite {
+	s.Personas = append(s.Personas, Persona{
+		Name:    "payer-stripe",
+		Traits:  []e2eprobe.Trait{e2eprobe.TraitPayment},
+		Payment: &Payment{Provider: "stripe", Currency: "USD", FixedCustomer: "e2eprobe-cust-pay-stripe-cards", DeclineLast4: "0341"},
+	})
+	s.Tenant.Connections = []string{"stripe"}
+	s.Scenarios = append(s.Scenarios,
+		Scenario{Name: "checkout-link", Every: Duration{Duration: 30 * time.Minute}},
+		Scenario{Name: "payment-methods", Every: Duration{Duration: time.Hour}},
+		Scenario{Name: "auto-charge", Every: Duration{Duration: 6 * time.Hour}},
+	)
+	return s
 }

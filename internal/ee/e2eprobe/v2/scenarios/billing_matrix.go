@@ -6,8 +6,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/billingmatrix"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenario"
 )
 

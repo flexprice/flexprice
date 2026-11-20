@@ -56,8 +56,8 @@ func TestWorld_PersonasReadyAfterProvision(t *testing.T) {
 		t.Fatal("fixtures must be ready")
 	}
 	personas := w.Personas()
-	if len(personas) != 11 {
-		t.Fatalf("personas = %d, want 11", len(personas))
+	if len(personas) != 10 {
+		t.Fatalf("personas = %d, want 10", len(personas))
 	}
 	for _, p := range personas {
 		if !p.Ready() {
@@ -65,7 +65,7 @@ func TestWorld_PersonasReadyAfterProvision(t *testing.T) {
 		}
 	}
 	taxed, ok := w.Persona("taxed")
-	if !ok || taxed.ExternalID() != "e2eprobe-cust-persistent-0" || taxed.CustomerID() == "" || taxed.SubscriptionID() == "" || taxed.MultiCadenceSubID() == "" {
+	if !ok || taxed.ExternalID() != "e2eprobe-taxed" || taxed.CustomerID() == "" || taxed.SubscriptionID() == "" || taxed.MultiCadenceSubID() == "" {
 		t.Errorf("taxed persona = %+v", taxed)
 	}
 	if _, ok := w.Persona("ghost"); ok {
@@ -106,5 +106,46 @@ func TestWorld_ReprovisionErrorKeepsReadyPersonas(t *testing.T) {
 		if !p.Ready() {
 			t.Errorf("persona %s lost readiness on a transient error", p.Name())
 		}
+	}
+}
+
+func TestProvision_FailedRefreshKeepsPreviousBinding(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	ctx := context.Background()
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	couponed, _ := w.Persona("couponed")
+	previous := couponed.SubscriptionID()
+	// The live subscription vanished and a replacement appeared, but the coupon check cannot run.
+	delete(fc.Subscription.Items, previous)
+	fc.Subscription.Add("e2eprobe-couponed", types.SubscriptionResponse{
+		PlanID:             probetest.Ptr(w.Fixtures().PlanID()),
+		SubscriptionStatus: types.SubscriptionStatusActive.ToPointer(),
+		Metadata:           map[string]string{"e2eprobe_cohort": PersistentCohort, "e2eprobe_persona": "couponed"},
+	})
+	fc.CouponAssoc.ListErr = probetest.ServerError(503)
+	if err := w.Provision(ctx); err == nil {
+		t.Fatal("the coupon lookup failure must surface")
+	}
+	if couponed.SubscriptionID() != previous || !couponed.Ready() {
+		t.Fatalf("a failed refresh must leave the published binding alone: sub=%q ready=%v", couponed.SubscriptionID(), couponed.Ready())
+	}
+}
+
+func TestClone_ActivationFailureStillRegistersTheSubscription(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	ctx := context.Background()
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	fc.Subscription.CreateStatus = types.SubscriptionStatusDraft
+	fc.Subscription.ActivateErr = probetest.ServerError(503)
+	taxed, _ := w.Persona("taxed")
+	if _, err := w.Clone(ctx, taxed, "tax-preview"); err == nil {
+		t.Fatal("a clone whose subscription stays a draft is an error")
+	}
+	if w.Ephemerals().Count("subscription") != 1 || w.Ephemerals().Count("customer") != 1 {
+		t.Fatal("the janitor must still know about the half-built clone")
 	}
 }

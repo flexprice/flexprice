@@ -84,8 +84,10 @@ func (w *World) Clone(ctx context.Context, p *Persona, scenario string) (*Epheme
 		return nil, fmt.Errorf("create subscription for %s: empty response", ext)
 	}
 	eph.subscriptionID = *sub.SubscriptionResponse.ID
-	w.activateDraft(ctx, eph.subscriptionID, sub.SubscriptionResponse.SubscriptionStatus)
 	w.eph.Register("subscription", eph.subscriptionID, now)
+	if err := w.activateDraft(ctx, eph.subscriptionID, sub.SubscriptionResponse.SubscriptionStatus); err != nil {
+		return nil, fmt.Errorf("clone %s: %w", ext, err)
+	}
 
 	if p.Has(e2eprobe.TraitTax) {
 		taType := types.TaxRateEntityTypeSubscription

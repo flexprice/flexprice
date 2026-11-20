@@ -19,6 +19,7 @@ func TestValidate(t *testing.T) {
 		{"empty persona name", func(s *Suite) { s.Personas[0].Name = "" }, "name"},
 		{"bad persona name", func(s *Suite) { s.Personas[0].Name = "Bad Name" }, "Bad Name"},
 		{"duplicate persona", func(s *Suite) { s.Personas[1].Name = s.Personas[0].Name }, "duplicate persona"},
+		{"duplicate external id", func(s *Suite) { s.Personas[1].ExternalID = s.Personas[0].ExternalIDOrDefault() }, "duplicate external_id"},
 		{"unknown trait", func(s *Suite) { s.Personas[0].Traits = append(s.Personas[0].Traits, "teleport") }, "teleport"},
 		{"explicit events trait", func(s *Suite) { s.Personas[0].Traits = append(s.Personas[0].Traits, e2eprobe.TraitEvents) }, "derived"},
 		{"unknown profile", func(s *Suite) { s.Personas[0].Events = "firehose" }, "firehose"},
@@ -51,11 +52,11 @@ func TestValidate(t *testing.T) {
 		{"concurrency", func(s *Suite) { s.Defaults.Concurrency = 0 }, "concurrency"},
 		{"tick", func(s *Suite) { s.Defaults.Tick = Duration{30 * time.Second} }, "tick"},
 		{"scenario every", func(s *Suite) { mustScenario(s, "usage").Every = Duration{10 * time.Second} }, "every"},
-		{"budget", func(s *Suite) { s.Defaults.Load.MaxEventsPerDay = 1000 }, "28080 events/day exceeds 1000"},
+		{"budget", func(s *Suite) { s.Defaults.Load.MaxEventsPerDay = 1000 }, "53568 events/day exceeds 1000"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s := Default()
+			s := withPayer(Default())
 			tc.edit(s)
 			err := Validate(s, cat)
 			if err == nil {
@@ -69,7 +70,7 @@ func TestValidate(t *testing.T) {
 }
 
 func TestValidate_JoinsEveryViolation(t *testing.T) {
-	s := Default()
+	s := withPayer(Default())
 	s.Version = 3
 	s.Defaults.Concurrency = 0
 	err := Validate(s, newFakeCatalog())

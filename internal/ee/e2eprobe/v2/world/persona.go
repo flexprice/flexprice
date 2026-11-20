@@ -17,6 +17,7 @@ type Persona struct {
 	subscriptionID    string
 	multiCadenceSubID string
 	walletID          string
+	unfundedWalletID  string // created but its opening balance never landed
 	taxActiveFrom     time.Time
 	gaps              map[e2eprobe.Trait]string
 	ready             bool
@@ -102,4 +103,46 @@ func (p *Persona) update(fn func(*Persona)) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	fn(p)
+}
+
+func (p *Persona) unfunded() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.unfundedWalletID
+}
+
+// scratch is the working copy a provisioning pass mutates; adopt publishes it
+// only once the whole pass succeeded, so scenarios never see a persona whose
+// ids moved while its gaps still describe the old binding.
+func (p *Persona) scratch() *Persona {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	cp := &Persona{spec: p.spec, customerID: p.customerID, subscriptionID: p.subscriptionID, multiCadenceSubID: p.multiCadenceSubID,
+		walletID: p.walletID, unfundedWalletID: p.unfundedWalletID, taxActiveFrom: p.taxActiveFrom, gaps: make(map[e2eprobe.Trait]string, len(p.gaps))}
+	for k, v := range p.gaps {
+		cp.gaps[k] = v
+	}
+	return cp
+}
+
+func (p *Persona) adopt(s *Persona) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.customerID, p.subscriptionID, p.multiCadenceSubID = s.customerID, s.subscriptionID, s.multiCadenceSubID
+	p.walletID, p.unfundedWalletID, p.taxActiveFrom = s.walletID, s.unfundedWalletID, s.taxActiveFrom
+	p.gaps = make(map[e2eprobe.Trait]string, len(s.gaps))
+	for k, v := range s.gaps {
+		p.gaps[k] = v
+	}
+	p.ready = true
+}
+
+// carryRecovery keeps the bookkeeping a failed pass needs next time without
+// publishing any of its bindings.
+func (p *Persona) carryRecovery(s *Persona) {
+	if id := s.unfunded(); id != "" {
+		p.update(func(p *Persona) { p.unfundedWalletID = id })
+	}
 }

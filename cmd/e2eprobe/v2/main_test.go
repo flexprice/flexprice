@@ -6,12 +6,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/probetest"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenario"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/suite"
+	"github.com/flexprice/flexprice/internal/logger"
 )
 
 type stubStore struct {
@@ -153,18 +154,12 @@ func TestValidateCommand_RejectsUnknownScenario(t *testing.T) {
 }
 
 func TestDescribeCommand_PrintsMatrix(t *testing.T) {
-	cat := scenario.NewCatalog()
-	for _, name := range []string{"provision", "preflight", "janitor", "webhook-wiring", "ingest", "usage", "wallet-debit", "invoice-freshness",
-		"invoice-tax", "invoice-coupon", "invoice-commitment", "invoice-multi-cadence", "entitlement-usage", "low-balance-alert", "lifecycle", "cancel",
-		"line-item-change", "tax-preview", "coupon-preview", "commitment-preview", "entitlement-enforcement", "grant-inheritance", "checkout-link",
-		"payment-methods", "auto-charge", "billing-matrix-opening", "billing-matrix-change", "billing-matrix-grants", "billing-matrix-renewal", "billing-matrix-validation"} {
-		cat.Register(suite.ScenarioInfo{Name: name, Kind: e2eprobe.KindProbe, Every: time.Hour}, func(scenario.Deps) scenario.Scenario { return nil })
-	}
+	cat := newCatalog()
 	var out bytes.Buffer
 	if err := describeSuite("", cat, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "events/day: 28080") || !strings.Contains(out.String(), "taxed") {
+	if !strings.Contains(out.String(), "events/day: 53568") || !strings.Contains(out.String(), "taxed") {
 		t.Errorf("describe output:\n%s", out.String())
 	}
 	if err := validateSuite("", cat, &out); err != nil {
@@ -177,7 +172,61 @@ func TestValidateCommand_DefaultSuiteWithRealCatalog(t *testing.T) {
 	if err := validateSuite("", newCatalog(), &out); err != nil {
 		t.Fatalf("the embedded suite must validate against the shipped catalog: %v", err)
 	}
-	if !strings.Contains(out.String(), "48 bindings") || !strings.Contains(out.String(), "28080 events/day") {
+	if !strings.Contains(out.String(), "45 bindings") || !strings.Contains(out.String(), "53568 events/day") {
 		t.Errorf("summary = %q", out.String())
+	}
+}
+
+func TestFilterBindings_KeepsOnlyNamedScenarios(t *testing.T) {
+	bs := []suite.Binding{{Scenario: "usage", Persona: "a"}, {Scenario: "ingest", Persona: "a"}, {Scenario: "preflight"}}
+	got := filterBindings(bs, splitList(" usage, preflight ,"))
+	if len(got) != 2 || got[0].Scenario != "usage" || got[1].Scenario != "preflight" {
+		t.Fatalf("filtered = %+v", got)
+	}
+	if got := splitList(""); got != nil {
+		t.Errorf("an empty list must stay nil, got %v", got)
+	}
+}
+
+func TestResolveBinding_NeedsAPersonaOnlyWhenAmbiguous(t *testing.T) {
+	bs := []suite.Binding{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "preflight"}}
+	if _, err := resolveBinding(bs, "usage", ""); err == nil || !strings.Contains(err.Error(), "--persona") {
+		t.Fatalf("two personas need a choice, got %v", err)
+	}
+	if b, err := resolveBinding(bs, "usage", "b"); err != nil || b.Persona != "b" {
+		t.Fatalf("binding = %+v, err = %v", b, err)
+	}
+	if b, err := resolveBinding(bs, "preflight", ""); err != nil || b.Scenario != "preflight" {
+		t.Fatalf("a tenant-level scenario needs no persona: %+v, %v", b, err)
+	}
+	if _, err := resolveBinding(bs, "nope", ""); err == nil || !strings.Contains(err.Error(), "describe") {
+		t.Fatalf("an unknown scenario points at describe, got %v", err)
+	}
+}
+
+func TestRunOnce_RunsOneBindingAgainstTheFake(t *testing.T) {
+	cat := newCatalog()
+	fc := probetest.New()
+	rt, err := newRuntime(cat, &e2eprobe.Config{}, suite.Default(), fc, logger.NewNoopLogger(), "run-test", runtimeOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runOnce(context.Background(), rt, "ingest", "taxed", false, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "ingest · taxed: PASS") || len(fc.Event.Batches) != 1 {
+		t.Fatalf("output = %q, batches = %d", out.String(), len(fc.Event.Batches))
+	}
+	var js bytes.Buffer
+	_ = runOnce(context.Background(), rt, "preflight", "", true, &js)
+	if !strings.Contains(js.String(), `"status"`) {
+		t.Fatalf("json output = %q", js.String())
+	}
+	if _, err := newRuntime(cat, &e2eprobe.Config{}, suite.Default(), fc, logger.NewNoopLogger(), "run-test", runtimeOptions{only: []string{"nope"}}); err == nil {
+		t.Fatal("--only naming nothing in the suite is an error")
+	}
+	if _, err := resolveBinding(rt.bindings, "usage", ""); err == nil {
+		t.Fatal("usage binds to several personas in the default suite")
 	}
 }

@@ -2,6 +2,7 @@ package world
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -44,40 +45,47 @@ func TestSweep_ArchivesOldEphemeralsOnly(t *testing.T) {
 	}
 }
 
-func TestSweep_FindsOrphansByPrefixAndMetadata(t *testing.T) {
+func TestSweep_RemovesOnlyOwnedEphemerals(t *testing.T) {
 	w, fc := newWorld(t, suite.Default())
 	old := testStart.Add(-3 * time.Hour)
 	fc.Customer.Add("e2eprobe-eph-lifecycle-1", "cust_o1", nil, old)
-	fc.Customer.Add("e2eprobe-cust-eph-legacy", "cust_o2", nil, old)
-	fc.Customer.Add("renamed", "cust_o3", map[string]string{"e2eprobe_cohort": EphemeralCohort}, old)
-	fc.Customer.Add("tagged-legacy", "cust_o4", map[string]string{"e2eprobe_role": "ephemeral"}, old)
+	fc.Customer.Add("renamed", "cust_o2", map[string]string{"e2eprobe_cohort": EphemeralCohort}, old)
 	fc.Customer.Add("e2eprobe-eph-young", "cust_y", nil, testStart.Add(-10*time.Minute))
-	fc.Customer.Add("real-customer", "cust_real", nil, old)
+	fc.Customer.Add("e2eprobe-cust-eph-legacy", "cust_l1", nil, old)
+	fc.Customer.Add("tagged-legacy", "cust_l2", map[string]string{"e2eprobe_role": "ephemeral"}, old)
+	fc.Customer.Add("acme", "cust_real", nil, old)
+	named := fc.Customer.Items["acme"]
+	named.Name = probetest.Ptr("Ephemeral Labs")
+	fc.Customer.Items["acme"] = named
+	fc.Customer.Add("e2eprobe-wallet-a", "cust_known", map[string]string{"e2eprobe_cohort": EphemeralCohort}, old)
 	report := w.Sweep(context.Background(), testStart.Add(-time.Hour))
-	if report.Orphans != 4 || len(report.Failures) != 0 {
+	if report.Orphans != 2 || len(report.Failures) != 0 {
 		t.Fatalf("report = %+v", report)
 	}
-	for _, ext := range []string{"e2eprobe-eph-lifecycle-1", "e2eprobe-cust-eph-legacy", "renamed", "tagged-legacy"} {
+	for _, ext := range []string{"e2eprobe-eph-lifecycle-1", "renamed"} {
 		if _, stillThere := fc.Customer.Items[ext]; stillThere {
 			t.Errorf("%s must be deleted", ext)
 		}
 	}
-	for _, ext := range []string{"e2eprobe-eph-young", "real-customer"} {
+	for _, ext := range []string{"e2eprobe-eph-young", "e2eprobe-cust-eph-legacy", "tagged-legacy", "acme", "e2eprobe-wallet-a"} {
 		if _, kept := fc.Customer.Items[ext]; !kept {
-			t.Errorf("%s must be kept", ext)
+			t.Errorf("%s must be kept: only this probe's own ephemerals are deleted", ext)
 		}
+	}
+	if want := []string{"e2eprobe-cust-eph-legacy", "tagged-legacy"}; !reflect.DeepEqual(report.Legacy, want) {
+		t.Errorf("legacy = %v, want the previous probe's leftovers %v", report.Legacy, want)
 	}
 }
 
 func TestSweep_ListsLegacyPersistentCustomers(t *testing.T) {
-	w, fc := newWorld(t, suite.Default())
+	w, fc := newWorld(t, withPayer(suite.Default()))
 	fc.Customer.Add("e2eprobe-cust-persistent-7", "cust_p7", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	fc.Customer.Add("e2eprobe-cust-persistent-0", "cust_p0", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	fc.Customer.Add("e2eprobe-cust-pay-stripe-cards", "cust_cards", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	fc.Customer.Add("e2eprobe-cust-pay-stripe-expiry", "cust_expiry", map[string]string{"e2eprobe_cohort": PersistentCohort}, testStart.Add(-time.Hour))
 	report := w.Sweep(context.Background(), testStart)
-	if len(report.Legacy) != 1 || report.Legacy[0] != "e2eprobe-cust-persistent-7" {
-		t.Errorf("legacy = %v, want only persistent-7", report.Legacy)
+	if want := []string{"e2eprobe-cust-persistent-0", "e2eprobe-cust-persistent-7"}; !reflect.DeepEqual(report.Legacy, want) {
+		t.Errorf("legacy = %v, want the unadopted persistent customers %v", report.Legacy, want)
 	}
 	if len(fc.Customer.Deleted) != 0 {
 		t.Error("legacy fixtures are reported, never deleted")
@@ -143,4 +151,20 @@ type stubSweeper struct {
 func (s *stubSweeper) SweepOrphans(_ context.Context, _ time.Time) (int, []string) {
 	s.called = true
 	return s.removed, s.failed
+}
+
+func TestSweep_TaxCleanupSparesCustomerAssociations(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	ctx := context.Background()
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	customer := types.TaxRateEntityTypeCustomer
+	if _, err := fc.TaxAssoc.Create(ctx, types.CreateTaxAssociationRequest{TaxRateCode: w.Fixtures().TaxRateCode(), EntityID: probetest.Ptr("cust_live"), EntityType: &customer}); err != nil {
+		t.Fatal(err)
+	}
+	report := w.Sweep(ctx, testStart)
+	if report.TaxAssociations != 0 || len(fc.TaxAssoc.Deleted) != 0 {
+		t.Fatalf("a customer-level association is never the probe's to delete: %+v deleted=%v", report, fc.TaxAssoc.Deleted)
+	}
 }

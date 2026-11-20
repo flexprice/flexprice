@@ -26,7 +26,7 @@ func TestContext_CollectsMismatchesAndAttrs(t *testing.T) {
 	if r.Mismatches[0] != "tax: want 1.00, got 1.02" || r.Mismatches[1] != "line items: want 3, got 2" {
 		t.Errorf("mismatch text = %v", r.Mismatches)
 	}
-	if r.Attrs["persona"] != "taxed" || r.Attrs["external_customer_id"] != "e2eprobe-cust-persistent-0" || r.Attrs["scenario"] != "usage" || r.Attrs["subscription_id"] != "sub_1" {
+	if r.Attrs["persona"] != "taxed" || r.Attrs["external_customer_id"] != "e2eprobe-taxed" || r.Attrs["scenario"] != "usage" || r.Attrs["subscription_id"] != "sub_1" {
 		t.Errorf("attrs = %v", r.Attrs)
 	}
 	if sc.Persona() != taxed || sc.Client() != deps.Client || sc.World() != deps.World || sc.Ledger() != deps.Ledger || sc.Inbox() != deps.Inbox || sc.Suite() != deps.Suite || sc.RunID() != "run-test" || sc.Tick() != deps.Tick || !sc.Now().Equal(testNow) || sc.Scenario() != "usage" || sc.Logger() == nil {

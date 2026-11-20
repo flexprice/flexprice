@@ -135,6 +135,8 @@ type ScenarioInfo struct {
 	Kind   e2eprobe.Kind
 	Traits []e2eprobe.Trait
 	Every  time.Duration
+	// EventsPerRun is the ingest one run adds on top of the profile batches.
+	EventsPerRun int
 }
 
 // Catalog answers which scenarios and event profiles exist in the binary.
@@ -192,7 +194,7 @@ func applyDefaults(s *Suite) {
 	setDuration(&s.Defaults.Alert.RenotifyEvery, 6*time.Hour)
 	setDuration(&s.Defaults.Alert.SkipAfter, 24*time.Hour)
 	if s.Defaults.Load.MaxEventsPerDay == 0 {
-		s.Defaults.Load.MaxEventsPerDay = 50000
+		s.Defaults.Load.MaxEventsPerDay = 100000
 	}
 	setDuration(&s.Defaults.Janitor.MaxAge, time.Hour)
 	setDuration(&s.Defaults.Digest.Every, 24*time.Hour)
@@ -246,22 +248,45 @@ func (s *Suite) AlertPolicy(scenario string) Alert {
 	return policy
 }
 
-// EventsPerDay is the ingest the suite schedules: every persona with a profile
-// sends one batch per tick.
+// EventsPerDay is every event the suite schedules: profile batches plus the
+// ingest of each enabled scenario binding at its interval.
 func (s *Suite) EventsPerDay(cat Catalog) int {
-	ticksPerDay := int((24 * time.Hour) / s.Defaults.Tick.Duration)
-	total := 0
-	for _, p := range s.Personas {
-		if p.Events == "" {
-			continue
+	profiles, flows := s.Ingest(cat)
+	return profiles + flows
+}
+
+// Ingest splits the daily budget into profile batches and scenario-driven
+// ingest; bindings that cannot be resolved count as nothing and fail Validate.
+func (s *Suite) Ingest(cat Catalog) (profiles, flows int) {
+	const day = 24 * time.Hour
+	if tick := s.Defaults.Tick.Duration; tick > 0 {
+		for _, p := range s.Personas {
+			if p.Events == "" {
+				continue
+			}
+			if size, ok := cat.Profile(p.Events); ok {
+				profiles += size * int(day/tick)
+			}
 		}
-		size, ok := cat.Profile(p.Events)
-		if !ok {
-			continue
-		}
-		total += size * ticksPerDay
 	}
-	return total
+	bindings, err := s.Bindings(cat)
+	if err != nil {
+		return profiles, 0
+	}
+	for _, b := range bindings {
+		info, ok := cat.Scenario(b.Scenario)
+		if !ok || info.EventsPerRun == 0 {
+			continue
+		}
+		every := b.Every
+		if every <= 0 {
+			every = s.Defaults.Tick.Duration
+		}
+		if every > 0 {
+			flows += info.EventsPerRun * int(day/every)
+		}
+	}
+	return profiles, flows
 }
 
 // HasTrait includes the events trait, which a profile implies.

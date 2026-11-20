@@ -18,12 +18,12 @@ import (
 // persona rather than on the persona itself.
 func registerFlows(cat *scenario.Catalog) {
 	flows := []registration{
-		entry("lifecycle", e2eprobe.KindFlow, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLifecycle(d) }, e2eprobe.TraitSubscription),
+		entry("lifecycle", e2eprobe.KindFlow, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLifecycle(d) }, e2eprobe.TraitSubscription).ingests(lifecycleEvents),
 		entry("cancel", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCancellation(d) }, e2eprobe.TraitSubscription),
 		entry("line-item-change", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newLineItemChange(d) }, e2eprobe.TraitSubscription),
-		entry("tax-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newTaxPreview(d) }, e2eprobe.TraitTax),
+		entry("tax-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newTaxPreview(d) }, e2eprobe.TraitTax).ingests(taxPreviewEvents),
 		entry("coupon-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCouponPreview(d) }, e2eprobe.TraitCoupon),
-		entry("commitment-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCommitmentPreview(d) }, e2eprobe.TraitCommitment),
+		entry("commitment-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCommitmentPreview(d) }, e2eprobe.TraitCommitment).ingests(commitmentLegEvents),
 	}
 	for _, r := range flows {
 		cat.Register(r.info, r.build)
@@ -123,6 +123,9 @@ func decimalOf(s *string) decimal.Decimal {
 
 // lifecycle walks a brand-new customer through first usage: clone, ingest a few
 // events, read usage back, and note whether customer.created reached the inbox.
+// lifecycleEvents is the handful of events a new customer sends before its usage is read back.
+const lifecycleEvents = 3
+
 type lifecycle struct {
 	maxBacklog int
 	batch      usageBatch
@@ -132,7 +135,7 @@ type lifecycle struct {
 func newLifecycle(scenario.Deps) *lifecycle {
 	return &lifecycle{
 		maxBacklog: 5,
-		batch:      usageBatch{meter: "count", events: 3},
+		batch:      usageBatch{meter: "count", events: lifecycleEvents},
 		poll:       pollWindow{every: 5 * time.Second, within: 2 * time.Minute},
 	}
 }
@@ -180,4 +183,13 @@ func ownClones(sc *scenario.Context) int {
 		}
 	}
 	return n
+}
+
+// units is the quantity the batch puts on its meter: events times the value each carries.
+func (b usageBatch) units() decimal.Decimal {
+	v := decimal.NewFromInt(1)
+	if b.value != "" {
+		v = decimal.RequireFromString(b.value)
+	}
+	return v.Mul(decimal.NewFromInt(int64(b.events)))
 }

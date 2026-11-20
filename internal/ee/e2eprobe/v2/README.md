@@ -16,11 +16,17 @@ Contributor guide: [`AGENTS.md`](AGENTS.md).
 export E2EPROBE_API_HOST=https://api.cloud.flexprice.io/v1
 export E2EPROBE_API_KEY=<key for the probe tenant>
 export E2EPROBE_SLACK_WEBHOOK_URL=<optional>
-make run-e2eprobe                 # runs the embedded default suite
+make run-e2eprobe-v2              # runs the embedded default suite
 
 go run ./cmd/e2eprobe/v2 describe    # coverage matrix: personas × scenarios, event budget
 go run ./cmd/e2eprobe/v2 validate    # exit 1 with every problem in the suite
 go run ./cmd/e2eprobe/v2 describe --suite region.yaml
+
+# developing or confirming one scenario: one run, result on stdout, exit 1 on failure
+go run ./cmd/e2eprobe/v2 once --scenario usage --persona taxed
+go run ./cmd/e2eprobe/v2 once --scenario preflight --json
+go run ./cmd/e2eprobe/v2 run --only ingest,usage   # a subset of the suite, everything else left out
+make test-e2eprobe-v2                              # unit tests for the module
 ```
 
 The probe listens on `E2EPROBE_LISTENER_PORT` (default 8765):
@@ -102,8 +108,13 @@ Every persona with an `events` profile sends one bulk batch per tick
 from the tick, so a retry or restart re-sending a tick is idempotent on the
 server. The `standard` profile is 27 events across every unbucketed meter plus
 the hour-bucketed ones; `bucketed` is 6 events on the 15MIN, HOUR and DAY meters.
-Default budget: 7 standard personas and one bucketed persona, about 28k events a
-day, versus about 430k for the previous random driver.
+Default budget: profile batches from seven standard personas and one bucketed
+persona come to about 28k events a day; the flows that drive their own usage
+(wallet-debit, the previews, enforcement, grants) add about 25k, so the default
+suite sends about 54k a day against a 100k cap, versus about 430k for the
+previous random driver. Every flow declares its ingest at registration
+(`ingests(n)`), `describe` prints the split and `validate` refuses a suite over
+its cap.
 
 The ledger records which ticks were sent; the oracle computes the exact
 aggregate each meter must show for any window. A window with a missing batch
@@ -126,9 +137,9 @@ aggregate each meter must show for any window. A window with a missing batch
 | lifecycle, cancel, line-item-change | flow | baseline-a | clone + ingest + usage; cancel and delete the oldest clone; add a line item | subscriptions, usage |
 | tax-preview, coupon-preview, commitment-preview | flow | taxed, couponed, committed | preview math on a clone | preview |
 | entitlement-enforcement, grant-inheritance | flow | entitled, granted | 150 events past the soft limit; grant echoed and inherited by a clone | usage summary, entitlements |
-| checkout-link, payment-methods, auto-charge | flow | payment | hosted links, saved methods, auto-charge legs per gateway | payments |
+| checkout-link, payment-methods, auto-charge | flow | payment (regions that declare a payer persona) | hosted links, saved methods, auto-charge legs per gateway | payments |
 | billing-matrix-\<family\> | flow | tenant (off by default) | proration and cadence oracle | invoices, preview |
-| janitor | maintenance | tenant | removes ephemerals older than `janitor.max_age`; lists legacy fixtures | customers |
+| janitor | maintenance | tenant | removes this generation's ephemerals (`e2eprobe-eph-` prefix or cohort tag) older than `janitor.max_age`; the previous generation's customers are listed as legacy, never deleted | customers |
 
 Read discipline: nothing reads the raw `events` table (`/events/query`,
 `/events/lookup`, `/events/usage` and `/events/usage/meter` are not even on the
@@ -166,11 +177,42 @@ mint a second one. Requires the flexprice-native auth provider.
 
 ## Deployment
 
-The chart (`internal/ee/infrastructure/helm/flexprice`, `e2eprobe.*` values)
-runs one replica, mounts the API key and Slack webhook from
-`e2eprobe.existingSecret`, exposes the listener as a ClusterIP service and
-renders `e2eprobe.suite` into a ConfigMap. Image: `ghcr.io/flexprice/e2eprobe`,
-built by `.github/workflows/publish-e2eprobe-image.yml`.
+The chart (`internal/ee/infrastructure/helm/flexprice`, `e2eprobeV2.*` values,
+`templates/probe-v2`) runs one replica, mounts the API key, Slack webhook and
+inbox token from `e2eprobeV2.existingSecret`, exposes the listener as a
+ClusterIP service with liveness and readiness probes on `/healthz`, keeps the
+incident snapshot in the pod's `tmp` volume and renders `e2eprobeV2.suite` into
+a ConfigMap whose checksum rolls the pod when the suite changes. Image:
+`ghcr.io/flexprice/e2eprobe-v2`, built by
+`.github/workflows/publish-e2eprobe-v2-image.yml` from `Dockerfile.e2eprobe-v2`.
+
+## Running beside the current probe
+
+This module is the second generation. The current probe keeps running
+untouched from `internal/ee/e2eprobe` and `cmd/e2eprobe`, with its own image,
+chart component (`e2eprobe.*`) and workflow, until this one has earned trust;
+only `bootstrap/` and `billingmatrix/` are shared.
+
+- Every default persona is a customer of its own (`e2eprobe-<name>`), so the two
+  generations never write to one customer. Set `external_id` on a persona to
+  adopt an existing customer once the old probe is gone.
+- The janitor deletes only customers carrying this generation's markers. The
+  old probe's ephemerals and persistent customers are listed under `legacy` in
+  the sweep report and digest for a manual decision.
+- The plan, meters, features, coupon and tax rate are shared by lookup key; both
+  generations reconcile them the same way and neither deletes them.
+- Payment gateways are not assumed. A region with a gateway adds a payer
+  persona and `tenant.connections` to its suite; the fixed cards customer is
+  shared with the old probe, so run the payment scenarios in one generation
+  at a time.
+- Prefer a separate environment (and API key) for v2 while both run. That also
+  exercises provisioning from nothing, which the old customers never did.
+
+Swapping over: delete `internal/ee/e2eprobe/*.go`, `checks/`, `cmd/e2eprobe/*.go`,
+`templates/probe`, `Dockerfile.e2eprobe` and the old workflow; move `v2/` up one
+level and drop `/v2` from the import paths; rename `e2eprobeV2` to `e2eprobe` in
+values and region files; point the image name back. Nothing in this module
+depends on the old code.
 
 ## Live checks
 

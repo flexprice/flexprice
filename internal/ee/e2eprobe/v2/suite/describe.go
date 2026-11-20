@@ -64,7 +64,8 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 
 	line(tw, "\nLoad"+"\n")
 	line(tw, "tick: %s\n", s.Defaults.Tick)
-	line(tw, "events/day: %d of max %d\n", s.EventsPerDay(cat), s.Defaults.Load.MaxEventsPerDay)
+	profiles, flows := s.Ingest(cat)
+	line(tw, "events/day: %d of max %d (profiles %d, flows %d)\n", profiles+flows, s.Defaults.Load.MaxEventsPerDay, profiles, flows)
 	return tw.Flush()
 }
 

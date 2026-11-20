@@ -147,8 +147,8 @@ func TestRegisterEntitlements_DeclaresEveryScenario(t *testing.T) {
 	registerEntitlements(cat)
 	want := []suite.ScenarioInfo{
 		{Name: "entitlement-usage", Kind: e2eprobe.KindProbe, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents}, Every: 30 * time.Minute},
-		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit}, Every: time.Hour},
-		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitAdditiveGrant}, Every: time.Hour},
+		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit}, Every: time.Hour, EventsPerRun: overLimitEvents},
+		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitAdditiveGrant}, Every: time.Hour, EventsPerRun: grantEvents},
 	}
 	for _, w := range want {
 		info, ok := cat.Scenario(w.Name)

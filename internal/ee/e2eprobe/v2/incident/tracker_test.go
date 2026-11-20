@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,19 +17,35 @@ type fakeClock struct{ t time.Time }
 func (c *fakeClock) Now() time.Time          { return c.t }
 func (c *fakeClock) Advance(d time.Duration) { c.t = c.t.Add(d) }
 
-// recorder keeps one line per notification so tests assert order and count.
-type recorder struct{ events []string }
+// recorder keeps one line per notification so tests assert order and count;
+// failNext rejects that many deliveries first, as a Slack outage would.
+type recorder struct {
+	events   []string
+	opened   []Incident
+	failNext int
+}
 
-func (r *recorder) Opened(_ context.Context, inc Incident, _ BindingState) {
-	r.events = append(r.events, fmt.Sprintf("opened:%s:%s", inc.Key, inc.Kind))
+func (r *recorder) deliver(line string) error {
+	if r.failNext > 0 {
+		r.failNext--
+		r.events = append(r.events, "rejected:"+line)
+		return errors.New("slack: 429")
+	}
+	r.events = append(r.events, line)
+	return nil
 }
-func (r *recorder) Reminded(_ context.Context, inc Incident, _ BindingState) {
-	r.events = append(r.events, fmt.Sprintf("reminded:%s", inc.Key))
+
+func (r *recorder) Opened(_ context.Context, inc Incident, _ BindingState) error {
+	r.opened = append(r.opened, inc)
+	return r.deliver(fmt.Sprintf("opened:%s:%s", inc.Key, inc.Kind))
 }
-func (r *recorder) Resolved(_ context.Context, inc Incident, _ BindingState, _ time.Time) {
-	r.events = append(r.events, fmt.Sprintf("resolved:%s:%s", inc.Key, inc.Kind))
+func (r *recorder) Reminded(_ context.Context, inc Incident, _ BindingState) error {
+	return r.deliver(fmt.Sprintf("reminded:%s", inc.Key))
 }
-func (r *recorder) Digest(_ context.Context, _ Digest) { r.events = append(r.events, "digest") }
+func (r *recorder) Resolved(_ context.Context, inc Incident, _ BindingState, _ time.Time) error {
+	return r.deliver(fmt.Sprintf("resolved:%s:%s", inc.Key, inc.Kind))
+}
+func (r *recorder) Digest(_ context.Context, _ Digest) error { return r.deliver("digest") }
 
 var testPolicy = Policy{AfterFailures: 3, AfterDuration: 20 * time.Minute, RenotifyEvery: 6 * time.Hour, SkipAfter: 24 * time.Hour}
 
@@ -146,6 +163,10 @@ func TestTracker_InfraFailsPageAfterThresholds(t *testing.T) {
 		tr.Observe(ctx, usageTaxed, infra)
 		clock.Advance(10 * time.Minute)
 	}
+	if len(rec.events) != 0 {
+		t.Fatalf("infra pages wait for the rollup evaluation on Tick, got %v", rec.events)
+	}
+	tr.Tick(ctx)
 	if len(rec.events) != 1 || rec.events[0] != "opened:usage · taxed:failure" {
 		t.Fatalf("a single endpoint failing for 20 minutes must page, got %v", rec.events)
 	}
@@ -298,5 +319,91 @@ func TestTracker_PolicyPerKey(t *testing.T) {
 	tr.Tick(context.Background())
 	if len(rec.events) != 1 {
 		t.Fatalf("renotify_every 0 must never remind: %v", rec.events)
+	}
+}
+
+func TestTracker_InfraRollupSuppressesBindingPages(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 11, 19, 10, 0, 0, 0, time.UTC)}
+	rec := &recorder{}
+	eager := Policy{AfterFailures: 1, RenotifyEvery: 6 * time.Hour, SkipAfter: 24 * time.Hour}
+	tr, err := NewTracker(func(Key) Policy { return eager }, DefaultRollup(), rec, FileStore(""), clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	infra := e2eprobe.Fail("get", sdkerrors.NewAPIError("down", 503, "", nil), nil)
+	for _, k := range []Key{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "wallet-debit", Persona: "wallet-a"}} {
+		tr.Observe(ctx, k, infra)
+	}
+	tr.Tick(ctx)
+	if len(rec.events) != 1 || rec.events[0] != "opened:api:infra" {
+		t.Fatalf("three infra failures page once, as the rollup, got %v", rec.events)
+	}
+	if s := rec.opened[0].Summary; !strings.Contains(s, "usage · a") || !strings.Contains(s, "wallet-debit · wallet-a") {
+		t.Errorf("the rollup must name the bindings it covers: %q", s)
+	}
+	// Six hours of an ongoing outage: the rollup reminds once and no binding pages on its own.
+	for elapsed := time.Duration(0); elapsed < 6*time.Hour; elapsed += 10 * time.Minute {
+		clock.Advance(10 * time.Minute)
+		for _, k := range []Key{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "wallet-debit", Persona: "wallet-a"}} {
+			tr.Observe(ctx, k, infra)
+		}
+		tr.Tick(ctx)
+	}
+	if len(rec.events) != 2 || rec.events[1] != "reminded:api" {
+		t.Errorf("only the rollup reminds while it is open, got %v", rec.events)
+	}
+}
+
+func TestTracker_RestoredInfraRollupDoesNotRecoverOnRestart(t *testing.T) {
+	path := t.TempDir() + "/state.json"
+	tr, rec, clock := newTestTracker(t, FileStore(path))
+	ctx := context.Background()
+	infra := e2eprobe.Fail("get", sdkerrors.NewAPIError("down", 503, "", nil), nil)
+	for _, k := range []Key{{Scenario: "usage", Persona: "a"}, {Scenario: "usage", Persona: "b"}, {Scenario: "wallet-debit", Persona: "wallet-a"}} {
+		tr.Observe(ctx, k, infra)
+	}
+	tr.Tick(ctx)
+	if len(rec.events) != 1 {
+		t.Fatalf("setup: %v", rec.events)
+	}
+	rec2 := &recorder{}
+	restarted, err := NewTracker(func(Key) Policy { return testPolicy }, DefaultRollup(), rec2, FileStore(path), clock.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.Advance(time.Minute)
+	restarted.Tick(ctx)
+	if len(rec2.events) != 0 {
+		t.Fatalf("a restart inside the window must not resolve the outage: %v", rec2.events)
+	}
+	clock.Advance(20 * time.Minute)
+	restarted.Tick(ctx)
+	if len(rec2.events) != 1 || rec2.events[0] != "resolved:api:infra" {
+		t.Fatalf("a quiet window resolves the restored rollup, got %v", rec2.events)
+	}
+}
+
+func TestTracker_RetriesOpenedUntilDelivered(t *testing.T) {
+	tr, rec, clock := newTestTracker(t, FileStore(""))
+	rec.failNext = 1
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		tr.Observe(ctx, usageTaxed, fail("assert"))
+		clock.Advance(10 * time.Minute)
+	}
+	if len(rec.events) != 1 || rec.events[0] != "rejected:opened:usage · taxed:failure" {
+		t.Fatalf("setup: %v", rec.events)
+	}
+	if open := tr.Open(); len(open) != 1 || !open[0].LastNotified.IsZero() {
+		t.Fatalf("a rejected delivery leaves the incident undelivered: %+v", open)
+	}
+	tr.Tick(ctx)
+	tr.Tick(ctx)
+	if len(rec.events) != 2 || rec.events[1] != "opened:usage · taxed:failure" {
+		t.Fatalf("the next tick retries the delivery once, got %v", rec.events)
+	}
+	if open := tr.Open(); open[0].LastNotified.IsZero() {
+		t.Error("a delivered open must stamp last_notified")
 	}
 }

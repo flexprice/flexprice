@@ -26,8 +26,8 @@ var (
 // registerWallet adds the wallet scenarios; the orchestrator calls it from Register.
 func registerWallet(cat *scenario.Catalog) {
 	for _, r := range []registration{
-		entry("wallet-debit", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWalletDebit(d) }, e2eprobe.TraitWallet),
-		entry("low-balance-alert", e2eprobe.KindProbe, 10*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts),
+		entry("wallet-debit", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWalletDebit(d) }, e2eprobe.TraitWallet).ingests(walletDebitEvents),
+		entry("low-balance-alert", e2eprobe.KindProbe, 10*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts).ingests(1),
 	} {
 		cat.Register(r.info, r.build)
 	}

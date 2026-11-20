@@ -40,7 +40,7 @@ func newPaymentFixture(t *testing.T, provider string, spec func(*suite.Payment))
 		spec(&payment)
 	}
 	fx := &paymentFixture{testDeps: d, persona: "payer-" + provider}
-	s := suite.Default()
+	s := withPayer(suite.Default())
 	for i := range s.Personas {
 		if s.Personas[i].Name == "payer-stripe" {
 			s.Personas[i].Name, s.Personas[i].Payment = fx.persona, &payment

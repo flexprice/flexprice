@@ -421,6 +421,7 @@ type Subscriptions struct {
 	// CreateStatus is the status a new subscription starts in; Draft forces an activation.
 	CreateStatus types.SubscriptionStatus
 	CreateErr    error
+	ActivateErr  error
 	GetErr       error
 	CancelErr    error
 	Entitlements func(subID string) (*dtos.GetSubscriptionEntitlementsResponse, error)
@@ -567,6 +568,9 @@ func (f *Subscriptions) Query(_ context.Context, filter types.SubscriptionFilter
 func (f *Subscriptions) ActivateSubscription(_ context.Context, id string, _ types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.ActivateErr != nil {
+		return nil, f.ActivateErr
+	}
 	sub, ok := f.Items[id]
 	if !ok {
 		return nil, NotFound()

@@ -23,7 +23,7 @@ func TestIngest_SendsOneBulkBatchAndRecords(t *testing.T) {
 	if !d.Ledger.Recorded("taxed", tickEnd) {
 		t.Error("the tick must be recorded under the persona name")
 	}
-	if d.fc.Event.Batches[0][0].ExternalCustomerID != "e2eprobe-cust-persistent-0" {
+	if d.fc.Event.Batches[0][0].ExternalCustomerID != "e2eprobe-taxed" {
 		t.Errorf("events must target the persona's customer: %+v", d.fc.Event.Batches[0][0])
 	}
 	if r.Attrs["tick"] != tickEnd.Format(time.RFC3339) {

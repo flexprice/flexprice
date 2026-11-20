@@ -36,36 +36,36 @@ type slackNotifier struct {
 	lg       *logger.Logger
 }
 
-func (s *slackNotifier) Opened(ctx context.Context, inc Incident, st BindingState) {
-	s.post(ctx, FormatOpened(inc, st))
+func (s *slackNotifier) Opened(ctx context.Context, inc Incident, st BindingState) error {
+	return s.post(ctx, FormatOpened(inc, st))
 }
 
-func (s *slackNotifier) Reminded(ctx context.Context, inc Incident, st BindingState) {
-	s.post(ctx, FormatReminded(inc, st))
+func (s *slackNotifier) Reminded(ctx context.Context, inc Incident, st BindingState) error {
+	return s.post(ctx, FormatReminded(inc, st))
 }
 
-func (s *slackNotifier) Resolved(ctx context.Context, inc Incident, st BindingState, closedAt time.Time) {
-	s.post(ctx, FormatResolved(inc, st, closedAt))
+func (s *slackNotifier) Resolved(ctx context.Context, inc Incident, st BindingState, closedAt time.Time) error {
+	return s.post(ctx, FormatResolved(inc, st, closedAt))
 }
 
-func (s *slackNotifier) Digest(ctx context.Context, d Digest) {
-	s.post(ctx, FormatDigest(d))
+func (s *slackNotifier) Digest(ctx context.Context, d Digest) error {
+	return s.post(ctx, FormatDigest(d))
 }
 
-func (s *slackNotifier) post(ctx context.Context, text string) {
+// post delivers one message; the returned error names the failing step so the
+// tracker can retry and the log can say why Slack stayed quiet.
+func (s *slackNotifier) post(ctx context.Context, text string) error {
 	body := map[string]any{"text": text}
 	if s.channel != "" {
 		body["channel"] = s.channel
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
-		s.logErr(ctx, "marshal", err)
-		return
+		return s.fail(ctx, "marshal", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint, bytes.NewReader(buf))
 	if err != nil {
-		s.logErr(ctx, "build_request", err)
-		return
+		return s.fail(ctx, "build_request", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if s.botToken != "" {
@@ -73,16 +73,14 @@ func (s *slackNotifier) post(ctx context.Context, text string) {
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logErr(ctx, "transport", err)
-		return
+		return s.fail(ctx, "transport", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.logErr(ctx, "non_2xx", fmt.Errorf("status %d", resp.StatusCode))
-		return
+		return s.fail(ctx, "non_2xx", fmt.Errorf("status %d", resp.StatusCode))
 	}
 	if s.botToken == "" {
-		return
+		return nil
 	}
 	// chat.postMessage answers 200 with {"ok":false,"error":...} on a logical failure.
 	var ack struct {
@@ -90,12 +88,17 @@ func (s *slackNotifier) post(ctx context.Context, text string) {
 		Error string `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&ack); err != nil {
-		s.logErr(ctx, "decode_ack", err)
-		return
+		return s.fail(ctx, "decode_ack", err)
 	}
 	if !ack.OK {
-		s.logErr(ctx, "slack_api", fmt.Errorf("slack error %q", ack.Error))
+		return s.fail(ctx, "slack_api", fmt.Errorf("slack error %q", ack.Error))
 	}
+	return nil
+}
+
+func (s *slackNotifier) fail(ctx context.Context, step string, err error) error {
+	s.logErr(ctx, step, err)
+	return fmt.Errorf("slack %s: %w", step, err)
 }
 
 func (s *slackNotifier) logErr(ctx context.Context, step string, err error) {

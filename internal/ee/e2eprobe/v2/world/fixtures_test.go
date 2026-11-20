@@ -90,3 +90,28 @@ func TestFixtures_GrantFailureIsNotFatal(t *testing.T) {
 		t.Error("granted persona must record the missing grant as a gap")
 	}
 }
+
+func TestFixtures_IndexesAdoptedPriceWithoutLookupKey(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	ctx := context.Background()
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := w.Fixtures().PriceID("sum_commit")
+	for i := range fc.Price.Items {
+		if fc.Price.Items[i].ID != nil && *fc.Price.Items[i].ID == want {
+			fc.Price.Items[i].LookupKey = nil // a price created by hand carries no lookup key
+		}
+	}
+	created := len(fc.Price.Created)
+	again := New(fc, suite.Default(), "run-2", nil)
+	if err := again.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Fixtures().PriceID("sum_commit"); got != want {
+		t.Fatalf("sum_commit price = %q, want the adopted %q", got, want)
+	}
+	if len(fc.Price.Created) != created {
+		t.Error("an adopted price must not be created again")
+	}
+}

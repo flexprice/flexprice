@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/probetest"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestProvision_CreatesCustomerSubscriptionWalletByTraits(t *testing.T) {
-	w, fc := newWorld(t, suite.Default())
+	w, fc := newWorld(t, withPayer(suite.Default()))
 	if err := w.Provision(context.Background()); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
@@ -20,7 +21,7 @@ func TestProvision_CreatesCustomerSubscriptionWalletByTraits(t *testing.T) {
 	if walletA.CustomerID() == "" || walletA.SubscriptionID() == "" || walletA.WalletID() == "" {
 		t.Fatalf("wallet-a ids: %q %q %q", walletA.CustomerID(), walletA.SubscriptionID(), walletA.WalletID())
 	}
-	cust := fc.Customer.Items["e2eprobe-cust-persistent-2"]
+	cust := fc.Customer.Items["e2eprobe-wallet-a"]
 	if cust.Metadata["e2eprobe_cohort"] != PersistentCohort || cust.Metadata["e2eprobe_persona"] != "wallet-a" {
 		t.Errorf("customer metadata = %v", cust.Metadata)
 	}
@@ -91,7 +92,7 @@ func TestProvision_AdoptedSubscriptionWithoutTrueUpRecordsGap(t *testing.T) {
 func TestProvision_AdoptedSubscriptionRecordsGaps(t *testing.T) {
 	w, fc := newWorld(t, suite.Default())
 	adoptLegacy(t, fc, "e2eprobe-committed", types.SubscriptionResponse{})
-	adoptLegacy(t, fc, "e2eprobe-cust-persistent-1", types.SubscriptionResponse{})
+	adoptLegacy(t, fc, "e2eprobe-couponed", types.SubscriptionResponse{})
 	if err := w.Provision(context.Background()); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestProvision_BucketedPersonaSyncsMissingPrices(t *testing.T) {
 }
 
 func TestProvision_PaymentPersonaGapWhenFixedCustomerMissing(t *testing.T) {
-	w, fc := newWorld(t, suite.Default())
+	w, fc := newWorld(t, withPayer(suite.Default()))
 	if err := w.Provision(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -170,4 +171,128 @@ func TestProvision_PaymentPersonaGapWhenFixedCustomerMissing(t *testing.T) {
 		t.Errorf("gap must clear once the fixed customer exists, got %q", payer.Gap(e2eprobe.TraitPayment))
 	}
 	_ = probetest.Ptr("")
+}
+
+// withPayer adds the Stripe payer persona the example suite carries; the
+// embedded default has no gateway so a fresh region never pages on one.
+func withPayer(s *suite.Suite) *suite.Suite {
+	s.Personas = append(s.Personas, suite.Persona{
+		Name:    "payer-stripe",
+		Traits:  []e2eprobe.Trait{e2eprobe.TraitPayment},
+		Payment: &suite.Payment{Provider: "stripe", Currency: "USD", FixedCustomer: "e2eprobe-cust-pay-stripe-cards", DeclineLast4: "0341"},
+	})
+	s.Tenant.Connections = []string{"stripe"}
+	s.Scenarios = append(s.Scenarios,
+		suite.Scenario{Name: "checkout-link", Every: suite.Duration{Duration: 30 * time.Minute}},
+		suite.Scenario{Name: "payment-methods", Every: suite.Duration{Duration: time.Hour}},
+		suite.Scenario{Name: "auto-charge", Every: suite.Duration{Duration: 6 * time.Hour}},
+	)
+	return s
+}
+
+func TestProvision_AdoptedCommitmentMismatchRecordsGap(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	adoptLegacy(t, fc, "e2eprobe-committed", types.SubscriptionResponse{CommitmentAmount: probetest.Ptr("3.00"), OverageFactor: probetest.Ptr("1.5"), EnableTrueUp: probetest.Ptr(true)})
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	committed, _ := w.Persona("committed")
+	if gap := committed.Gap(e2eprobe.TraitCommitment); !strings.Contains(gap, "3.00") || !strings.Contains(gap, "5.00") {
+		t.Fatalf("a different commitment is a gap naming both amounts, got %q", gap)
+	}
+}
+
+func TestProvision_AdoptedCommitmentMatchesNumerically(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	adoptLegacy(t, fc, "e2eprobe-committed", types.SubscriptionResponse{CommitmentAmount: probetest.Ptr("5"), OverageFactor: probetest.Ptr("1.50"), EnableTrueUp: probetest.Ptr(true)})
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	committed, _ := w.Persona("committed")
+	if gap := committed.Gap(e2eprobe.TraitCommitment); gap != "" {
+		t.Fatalf("5 and 5.00 are the same commitment, got gap %q", gap)
+	}
+}
+
+func TestProvision_ActivationFailureLeavesPersonaNotReady(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	fc.Subscription.CreateStatus = types.SubscriptionStatusDraft
+	fc.Subscription.ActivateErr = probetest.ServerError(503)
+	if err := w.Provision(context.Background()); err == nil || !strings.Contains(err.Error(), "activate") {
+		t.Fatalf("a failed activation must surface, got %v", err)
+	}
+	baseline, _ := w.Persona("baseline-a")
+	if baseline.Ready() {
+		t.Fatal("a persona whose subscription is still a draft is not ready")
+	}
+	fc.Subscription.ActivateErr = nil
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatalf("second pass: %v", err)
+	}
+	if !baseline.Ready() {
+		t.Fatal("the next pass activates and readies the persona")
+	}
+}
+
+func TestProvision_UnknownSharedRateDoesNotAdoptForeignAssociation(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	ctx := context.Background()
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	taxed, _ := w.Persona("taxed")
+	// A restart after a duplicate-create left the shared rate id unknown, and the
+	// persona's only association is on some other rate.
+	subscription := types.TaxRateEntityTypeSubscription
+	fc.TaxAssoc.Items = []types.TaxAssociationResponse{{ID: probetest.Ptr("ta_foreign"), EntityID: probetest.Ptr(taxed.SubscriptionID()), EntityType: &subscription, TaxRateID: probetest.Ptr("txr_foreign")}}
+	w.Fixtures().setTaxRateID("")
+	created := len(fc.TaxAssoc.Created)
+	if err := w.Provision(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Fixtures().TaxRateID(); got == "txr_foreign" {
+		t.Fatal("an association on another rate must not become the shared rate")
+	}
+	if len(fc.TaxAssoc.Created) != created+1 || fc.TaxAssoc.Created[created].TaxRateCode != w.Fixtures().TaxRateCode() {
+		t.Fatalf("the shared association must be created for the persona, got %+v", fc.TaxAssoc.Created[created:])
+	}
+}
+
+func TestPrimarySubscription_SkipsUntaggedQuarterly(t *testing.T) {
+	quarterly, monthly := types.BillingPeriodQuarterly, types.BillingPeriodMonthly
+	items := []types.SubscriptionResponse{
+		{ID: probetest.Ptr("sub_1"), BillingPeriod: &quarterly},
+		{ID: probetest.Ptr("sub_2"), BillingPeriod: &monthly},
+	}
+	if got := primarySubscription(items, "taxed"); got == nil || *got.ID != "sub_2" {
+		t.Fatalf("the monthly subscription is the primary one, got %+v", got)
+	}
+	if got := primarySubscription(items[:1], "taxed"); got != nil {
+		t.Fatalf("a lone quarterly subscription is never primary, got %+v", got)
+	}
+}
+
+func TestProvision_WalletFundingRetriesAfterFailure(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	fc.Wallet.TopUpErr = probetest.ServerError(500)
+	if err := w.Provision(context.Background()); err == nil {
+		t.Fatal("a failed initial top-up must surface")
+	}
+	walletA, _ := w.Persona("wallet-a")
+	if walletA.Ready() {
+		t.Fatal("an unfunded wallet persona is not ready")
+	}
+	fc.Wallet.TopUpErr = nil
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatalf("second pass: %v", err)
+	}
+	funded := false
+	for _, tu := range fc.Wallet.TopUps {
+		if tu.WalletID == walletA.WalletID() && tu.Amount == "100.00" {
+			funded = true
+		}
+	}
+	if !funded || !walletA.Ready() || len(fc.Wallet.Created) != 2 {
+		t.Fatalf("the next pass funds the adopted wallet without creating another: funded=%v ready=%v created=%d", funded, walletA.Ready(), len(fc.Wallet.Created))
+	}
 }

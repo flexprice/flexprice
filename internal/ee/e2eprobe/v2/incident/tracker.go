@@ -13,14 +13,13 @@ import (
 
 // Tracker owns the incident state machine for every binding.
 type Tracker struct {
-	mu        sync.Mutex
-	policy    func(Key) Policy
-	rollup    Rollup
-	notifier  Notifier
-	store     Store
-	now       func() time.Time
-	state     *State
-	infraSeen map[string]time.Time
+	mu       sync.Mutex
+	policy   func(Key) Policy
+	rollup   Rollup
+	notifier Notifier
+	store    Store
+	now      func() time.Time
+	state    *State
 }
 
 // NewTracker restores state from the store; restored incidents are not re-announced.
@@ -32,14 +31,16 @@ func NewTracker(policy func(Key) Policy, rollup Rollup, n Notifier, store Store,
 	if rollup.MinBindings <= 0 || rollup.Window <= 0 {
 		rollup = DefaultRollup()
 	}
+	if state.InfraSeen == nil {
+		state.InfraSeen = map[string]time.Time{}
+	}
 	return &Tracker{
-		policy:    policy,
-		rollup:    rollup,
-		notifier:  n,
-		store:     store,
-		now:       now,
-		state:     state,
-		infraSeen: map[string]time.Time{},
+		policy:   policy,
+		rollup:   rollup,
+		notifier: n,
+		store:    store,
+		now:      now,
+		state:    state,
 	}, nil
 }
 
@@ -59,7 +60,7 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 		st.Consecutive = 0
 		st.FailingSince = time.Time{}
 		st.SkippingSince = time.Time{}
-		delete(t.infraSeen, k.String())
+		delete(t.state.InfraSeen, k.String())
 		t.resolve(ctx, st, now)
 
 	case r.Status == e2eprobe.StatusSkip:
@@ -71,7 +72,7 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 
 	default:
 		if r.Infra {
-			t.infraSeen[k.String()] = now
+			t.state.InfraSeen[k.String()] = now
 		}
 		if st.Incident != nil && st.Incident.Kind == KindCoverage {
 			t.resolve(ctx, st, now)
@@ -81,91 +82,119 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 		if st.FailingSince.IsZero() {
 			st.FailingSince = now
 		}
-		policy := t.policy(k)
 		switch {
 		case st.Incident != nil:
 			st.Incident.Runs = st.Consecutive
 			st.Incident.Summary = r.Summary()
-		case r.Infra && t.state.Infra != nil:
-			// A region-wide outage is one incident; its bindings do not page on their own.
-		case st.Consecutive >= policy.AfterFailures && now.Sub(st.FailingSince) >= policy.AfterDuration:
+		case r.Infra:
+			// Infrastructure failures page from Tick, after the rollup has had its say.
+		case meetsThresholds(st, t.policy(k), now):
 			t.open(ctx, st, KindFailure, r.Summary(), now)
 		}
 	}
 	t.save()
 }
 
-// Tick sends reminders, opens coverage incidents and evaluates the infra rollup.
+// Tick evaluates the infra rollup first, then pages infrastructure failures
+// that are not covered by it, opens coverage incidents, retries undelivered
+// messages and sends reminders.
 func (t *Tracker) Tick(ctx context.Context) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.now()
+	t.evaluateInfra(ctx, now)
 	for _, key := range t.sortedKeys() {
 		st := t.state.Bindings[key]
 		policy := t.policy(st.Key)
-		if st.Incident == nil && !st.SkippingSince.IsZero() && now.Sub(st.SkippingSince) >= policy.SkipAfter {
+		switch {
+		case st.Incident == nil && !st.SkippingSince.IsZero() && now.Sub(st.SkippingSince) >= policy.SkipAfter:
 			t.open(ctx, st, KindCoverage, st.Last.Summary(), now)
-			continue
+		case st.Incident == nil && infraFailing(st) && t.state.Infra == nil && meetsThresholds(st, policy, now):
+			t.open(ctx, st, KindFailure, st.Last.Summary(), now)
+		case st.Incident != nil && infraFailing(st) && t.state.Infra != nil:
+			// Covered by the region-wide incident; its own reminders would only repeat it.
+		default:
+			t.remind(ctx, st.Incident, *st, policy, now)
 		}
-		t.remind(ctx, st.Incident, *st, policy, now)
 	}
-	t.evaluateInfra(ctx, now)
 	t.save()
 }
 
+// meetsThresholds is the paging gate: enough consecutive failures for long enough.
+func meetsThresholds(st *BindingState, p Policy, now time.Time) bool {
+	return st.Consecutive >= p.AfterFailures && now.Sub(st.FailingSince) >= p.AfterDuration
+}
+
+func infraFailing(st *BindingState) bool {
+	return st.Consecutive > 0 && st.Last.Status == e2eprobe.StatusFail && st.Last.Infra
+}
+
 func (t *Tracker) evaluateInfra(ctx context.Context, now time.Time) {
-	affected := 0
-	for key, seen := range t.infraSeen {
+	var affected []string
+	for key, seen := range t.state.InfraSeen {
 		if now.Sub(seen) > t.rollup.Window {
-			delete(t.infraSeen, key)
+			delete(t.state.InfraSeen, key)
 			continue
 		}
-		affected++
+		affected = append(affected, key)
 	}
+	sort.Strings(affected)
 	synthetic := BindingState{Key: infraKey}
 	switch {
-	case t.state.Infra == nil && affected >= t.rollup.MinBindings:
+	case t.state.Infra == nil && len(affected) >= t.rollup.MinBindings:
 		inc := Incident{
-			ID:           incidentID(infraKey, now),
-			Key:          infraKey,
-			Kind:         KindInfra,
-			OpenedAt:     now,
-			LastNotified: now,
-			Summary:      fmt.Sprintf("%d bindings saw infrastructure errors in the last %s", affected, t.rollup.Window),
-			Runs:         affected,
+			ID:       incidentID(infraKey, now),
+			Key:      infraKey,
+			Kind:     KindInfra,
+			OpenedAt: now,
+			Summary:  fmt.Sprintf("%d bindings saw infrastructure errors in the last %s: %s", len(affected), t.rollup.Window, strings.Join(affected, ", ")),
+			Runs:     len(affected),
 		}
 		t.state.Infra = &inc
-		t.notifier.Opened(ctx, inc, synthetic)
-	case t.state.Infra != nil && affected == 0:
+		t.notifyOpened(ctx, t.state.Infra, synthetic, now)
+	case t.state.Infra != nil && len(affected) == 0:
 		inc := *t.state.Infra
 		t.state.Infra = nil
-		t.notifier.Resolved(ctx, inc, synthetic, now)
+		_ = t.notifier.Resolved(ctx, inc, synthetic, now)
 	case t.state.Infra != nil:
-		t.state.Infra.Runs = affected
+		t.state.Infra.Runs = len(affected)
 		t.remind(ctx, t.state.Infra, synthetic, t.policy(infraKey), now)
 	}
 }
 
+// remind retries an undelivered open first; otherwise it reminds once per
+// renotify window. A rejected delivery leaves the stamp alone so the next
+// tick tries again.
 func (t *Tracker) remind(ctx context.Context, inc *Incident, st BindingState, policy Policy, now time.Time) {
-	if inc == nil || policy.RenotifyEvery <= 0 || now.Sub(inc.LastNotified) < policy.RenotifyEvery {
-		return
+	switch {
+	case inc == nil:
+	case inc.LastNotified.IsZero():
+		t.notifyOpened(ctx, inc, st, now)
+	case policy.RenotifyEvery <= 0 || now.Sub(inc.LastNotified) < policy.RenotifyEvery:
+	default:
+		if err := t.notifier.Reminded(ctx, *inc, st); err == nil {
+			inc.LastNotified = now
+		}
 	}
-	inc.LastNotified = now
-	t.notifier.Reminded(ctx, *inc, st)
+}
+
+func (t *Tracker) notifyOpened(ctx context.Context, inc *Incident, st BindingState, now time.Time) {
+	if err := t.notifier.Opened(ctx, *inc, st); err == nil {
+		inc.LastNotified = now
+	}
 }
 
 func (t *Tracker) open(ctx context.Context, st *BindingState, kind IncidentKind, summary string, now time.Time) {
 	inc := Incident{
-		ID:           incidentID(st.Key, now),
-		Key:          st.Key,
-		Kind:         kind,
-		OpenedAt:     now,
-		LastNotified: now,
-		Summary:      summary,
-		Runs:         st.Consecutive,
+		ID:       incidentID(st.Key, now),
+		Key:      st.Key,
+		Kind:     kind,
+		OpenedAt: now,
+		Summary:  summary,
+		Runs:     st.Consecutive,
 	}
 	st.Incident = &inc
-	t.notifier.Opened(ctx, inc, *st)
+	t.notifyOpened(ctx, st.Incident, *st, now)
 }
 
 func (t *Tracker) resolve(ctx context.Context, st *BindingState, now time.Time) {
@@ -174,7 +203,7 @@ func (t *Tracker) resolve(ctx context.Context, st *BindingState, now time.Time) 
 	}
 	inc := *st.Incident
 	st.Incident = nil
-	t.notifier.Resolved(ctx, inc, *st, now)
+	_ = t.notifier.Resolved(ctx, inc, *st, now)
 }
 
 func (t *Tracker) binding(k Key) *BindingState {
