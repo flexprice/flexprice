@@ -68,6 +68,16 @@ type InvoiceSyncSettings struct {
 	// Embedded rather than nested so the provider-specific settings stay inline in the
 	// same JSON object they have always been stored in.
 	ZohoInvoiceSyncSettings
+	StripeInvoiceSyncSettings
+}
+
+// StripeInvoiceSyncSettings overrides how synced invoices are collected and sent in Stripe.
+type StripeInvoiceSyncSettings struct {
+	// Nil lets the sync decide from the collection method and saved payment method.
+	AutoAdvance *bool `json:"auto_advance,omitempty"`
+
+	// Nil sends Stripe's invoice email for send_invoice invoices.
+	SendInvoiceEmail *bool `json:"send_invoice_email,omitempty"`
 }
 
 // ZohoInvoiceSyncSettings holds the outbound invoice settings that map onto Zoho Books API
@@ -186,6 +196,17 @@ func (s *InvoiceSyncSettings) ZohoPaymentGateways() []ZohoPaymentGateway {
 		return nil
 	}
 	return s.PaymentGateways.Gateways
+}
+
+func (s *InvoiceSyncSettings) StripeAutoAdvance() *bool {
+	if s == nil {
+		return nil
+	}
+	return s.AutoAdvance
+}
+
+func (s *InvoiceSyncSettings) IsStripeSendInvoiceEmailEnabled() bool {
+	return s == nil || s.SendInvoiceEmail == nil || *s.SendInvoiceEmail
 }
 
 // IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the

@@ -6296,7 +6296,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 			voidedInStripe := true
 			for _, inv := range overdueInvoices {
-				ok, err := stripeIntegration.InvoiceSyncSvc.VoidInvoiceInStripe(subCtx, inv.ID)
+				ok, err := stripeIntegration.InvoiceSyncSvc.VoidInvoice(subCtx, inv.ID)
 				if err != nil {
 					s.Logger.Error(ctx, "failed to void overdue invoice in Stripe, retrying next run",
 						"error", err,

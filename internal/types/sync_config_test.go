@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -230,4 +231,24 @@ func TestSyncConfigValidateRejectsBadZohoPaymentGateways(t *testing.T) {
 		},
 	}
 	assert.Error(t, cfg.Validate())
+}
+
+func TestInvoiceSyncSettings_Stripe(t *testing.T) {
+	cases := []struct {
+		name          string
+		settings      *InvoiceSyncSettings
+		wantAdvance   *bool
+		wantSendEmail bool
+	}{
+		{"nil settings", nil, nil, true},
+		{"unset", &InvoiceSyncSettings{}, nil, true},
+		{"auto advance off", &InvoiceSyncSettings{StripeInvoiceSyncSettings: StripeInvoiceSyncSettings{AutoAdvance: lo.ToPtr(false)}}, lo.ToPtr(false), true},
+		{"email off", &InvoiceSyncSettings{StripeInvoiceSyncSettings: StripeInvoiceSyncSettings{SendInvoiceEmail: lo.ToPtr(false)}}, nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.wantAdvance, tc.settings.StripeAutoAdvance())
+			require.Equal(t, tc.wantSendEmail, tc.settings.IsStripeSendInvoiceEmailEnabled())
+		})
+	}
 }

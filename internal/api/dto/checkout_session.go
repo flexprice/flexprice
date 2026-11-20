@@ -34,7 +34,7 @@ func (p *PaymentParams) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return p.PaymentProvider.ValidateLinkExpiry(p.PaymentProviderConfig)
 }
 
 // RedirectionParams groups post-checkout redirect URLs.
@@ -149,7 +149,7 @@ func (r *CreateCheckoutSessionRequest) Validate() error {
 }
 
 func (r *CreateCheckoutSessionRequest) ResolveExpiresAt(now time.Time) time.Time {
-	return now.UTC().Add(r.PaymentProvider.SessionExpiry())
+	return now.UTC().Add(r.PaymentProvider.ResolveSessionExpiry(r.PaymentProviderConfig))
 }
 
 func (r *CreateCheckoutSessionRequest) ToCheckoutSession(ctx context.Context, customerID string) *domainCheckout.CheckoutSession {
@@ -235,7 +235,7 @@ func (r *PayFirstCheckoutRequest) ToCheckoutSession(ctx context.Context, custome
 		SuccessURL:            r.Checkout.SuccessURL,
 		FailureURL:            r.Checkout.FailureURL,
 		CancelURL:             r.Checkout.CancelURL,
-		ExpiresAt:             clock.Now().Add(r.Checkout.PaymentProvider.SessionExpiry()),
+		ExpiresAt:             clock.Now().Add(r.Checkout.PaymentProvider.ResolveSessionExpiry(r.Checkout.PaymentProviderConfig)),
 		Metadata:              r.Checkout.Metadata,
 		BaseModel:             types.GetDefaultBaseModel(ctx),
 	}

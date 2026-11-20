@@ -39,16 +39,16 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 	}
 
 	linkResp, err := a.PaymentSvc.CreatePaymentLink(ctx, &CreateStripePaymentLinkRequest{
-		InvoiceID:              req.InvoiceID,
-		CustomerID:             req.CustomerID,
-		Amount:                 req.Amount,
-		Currency:               req.Currency,
-		SuccessURL:             req.SuccessURL,
-		CancelURL:              req.CancelURL,
-		Metadata:               req.Metadata,
-		SaveCardAndMakeDefault: false,
-		PaymentID:              req.PaymentID,
-		ExpiresAt:              req.ExpiresAt,
+		InvoiceID:  req.InvoiceID,
+		CustomerID: req.CustomerID,
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		Metadata:   req.Metadata,
+		SaveCard:   true,
+		PaymentID:  req.PaymentID,
+		ExpiresAt:  req.ExpiresAt,
 	}, a.CustomerSvc, a.InvoiceSvc)
 	if err != nil {
 		return nil, err
@@ -65,8 +65,8 @@ func (a *CheckoutAdapter) CreatePaymentLink(
 	}, nil
 }
 
-// CreateAuthorizationLink creates a Stripe checkout session that vaults the card as the
-// customer's default for future off-session charges.
+// CreateAuthorizationLink creates a Stripe checkout session that saves the card for future
+// off-session charges.
 func (a *CheckoutAdapter) CreateAuthorizationLink(
 	ctx context.Context,
 	req interfaces.AuthorizationLinkRequest,
@@ -77,16 +77,16 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 	}
 
 	linkResp, err := a.PaymentSvc.CreatePaymentLink(ctx, &CreateStripePaymentLinkRequest{
-		InvoiceID:              req.InvoiceID,
-		CustomerID:             req.CustomerID,
-		Amount:                 req.Amount,
-		Currency:               req.Currency,
-		SuccessURL:             req.SuccessURL,
-		CancelURL:              req.CancelURL,
-		Metadata:               req.Metadata,
-		SaveCardAndMakeDefault: true,
-		PaymentID:              req.PaymentID,
-		ExpiresAt:              req.ExpiresAt,
+		InvoiceID:  req.InvoiceID,
+		CustomerID: req.CustomerID,
+		Amount:     req.Amount,
+		Currency:   req.Currency,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+		Metadata:   req.Metadata,
+		SaveCard:   true,
+		PaymentID:  req.PaymentID,
+		ExpiresAt:  req.ExpiresAt,
 	}, a.CustomerSvc, a.InvoiceSvc)
 	if err != nil {
 		return nil, err
@@ -248,6 +248,11 @@ func (a *CheckoutAdapter) ExpirePaymentLink(ctx context.Context, req interfaces.
 	if req.GatewayTrackingID == "" {
 		return nil, ierr.NewError("gateway tracking id is required to expire a stripe checkout session").
 			Mark(ierr.ErrValidation)
+	}
+	if !strings.HasPrefix(req.GatewayTrackingID, checkoutSessionIDPrefix) {
+		return nil, ierr.NewError("stripe handle is not a checkout session").
+			WithReportableDetails(map[string]interface{}{"gateway_tracking_id": req.GatewayTrackingID}).
+			Mark(ierr.ErrNotImplemented)
 	}
 
 	stripeClient, _, err := a.Client.GetStripeClient(ctx)
