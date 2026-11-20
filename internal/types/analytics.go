@@ -108,18 +108,16 @@ const (
 
 // Billing family metrics.
 const (
-	MetricInvoiceTotal       Metric = "invoice_total"
-	MetricTotalReceivables   Metric = "total_receivables"
-	MetricReceivablesAging   Metric = "receivables_aging"
-	MetricDaysToPay          Metric = "days_to_pay"
-	MetricARPU               Metric = "arpu"
-	MetricARPUPaid           Metric = "arpu_paid"
-	MetricCreditConsumption  Metric = "credit_consumption"
-	MetricCreditTopups       Metric = "credit_topups"
-	MetricNetBilling         Metric = "net_billing"
-	MetricInvoiceTotalIssued Metric = "invoice_total_issued"
-	MetricNetBillingIssued   Metric = "net_billing_issued"
-	MetricActiveCustomers    Metric = "active_customers"
+	MetricInvoiceTotal      Metric = "invoice_total"
+	MetricTotalReceivables  Metric = "total_receivables"
+	MetricReceivablesAging  Metric = "receivables_aging"
+	MetricDaysToPay         Metric = "days_to_pay"
+	MetricARPU              Metric = "arpu"
+	MetricARPUPaid          Metric = "arpu_paid"
+	MetricCreditConsumption Metric = "credit_consumption"
+	MetricCreditTopups      Metric = "credit_topups"
+	MetricNetBilling        Metric = "net_billing"
+	MetricActiveCustomers   Metric = "active_customers"
 )
 
 func (m Metric) Validate() error {

@@ -13,6 +13,13 @@ Manual / API-driven issuance, automated billing schedules, PSP webhooks promptin
 5. **Payment capture** aligns with PSP state via `payment` domain + integration clients.
 6. **Credit notes** reconcile partial reversals referencing original invoice lineage.
 
+## Dates
+
+- **Issue date** is the billing boundary the invoice belongs to (`invoice.IssueDateFor`): period end for cycle, proration, threshold and pause invoices; period start for create, trial, resume and update invoices. Other invoices keep the caller's `issue_date` (top-ups use `effective_date`) or their creation time.
+- Drafts get it when created and when their period moves; finalization re-derives it and caps it at `finalized_at`, so it is never in the future. A future `issue_date` is rejected on create.
+- **Due date** counts from the issue date. **`finalized_at`** stays the audit time of finalization.
+- The `invoice_finalized` journal entry and Stripe's `effective_at` use the issue date.
+
 Temporal integration points noted in hotspots: **`internal/api/v1/invoice`** directly references global Temporal service at certain operations.
 
 ## Modules touched

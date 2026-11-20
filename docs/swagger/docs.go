@@ -37529,8 +37529,6 @@ const docTemplate = `{
                 "credit_consumption",
                 "credit_topups",
                 "net_billing",
-                "invoice_total_issued",
-                "net_billing_issued",
                 "active_customers"
             ],
             "x-enum-varnames": [
@@ -37546,8 +37544,6 @@ const docTemplate = `{
                 "MetricCreditConsumption",
                 "MetricCreditTopups",
                 "MetricNetBilling",
-                "MetricInvoiceTotalIssued",
-                "MetricNetBillingIssued",
                 "MetricActiveCustomers"
             ]
         },

@@ -27,8 +27,8 @@ func TestBuildNetBilling(t *testing.T) {
 	assert.Contains(t, q.SQL, "reports_db.credit_notes AS n WHERE")
 	assert.Contains(t, q.SQL, "i.invoice_status = 'FINALIZED'")
 	assert.Contains(t, q.SQL, "n.credit_note_status = 'FINALIZED'")
-	assert.Contains(t, q.SQL, "i.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
-	assert.Contains(t, q.SQL, "SELECT nullIf(finalized_at, toDateTime64(0, 6)) AS b")
+	assert.Contains(t, q.SQL, "i.issue_date >= toDateTime64({from:String}, 6, 'UTC')")
+	assert.Contains(t, q.SQL, "SELECT nullIf(issue_date, toDateTime64(0, 6)) AS b")
 	assert.Contains(t, q.SQL, "n.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
 	assert.Contains(t, q.SQL, "GROUP BY bucket, d_currency ORDER BY bucket, d_currency LIMIT 11")
 	assert.NotContains(t, q.SQL, "'t'")
@@ -48,20 +48,6 @@ func TestBuildCreditConsumptionIsSelectQuery(t *testing.T) {
 	assert.Contains(t, q.SQL, "FROM (SELECT d.*, JSONExtractArrayRaw")
 	assert.Contains(t, q.SQL, "GROUP BY bucket, d_credit_type, d_currency")
 	assert.Contains(t, q.SQL, "d.transaction_reason IN ('INVOICE_PAYMENT', 'CREDIT_ADJUSTMENT')")
-}
-
-func TestBuildNetBillingIssued(t *testing.T) {
-	q, err := buildBillingQuery(customRV(types.MetricNetBillingIssued, types.ShapeTimeseries), "reports_db", "t", "e", 10)
-	require.NoError(t, err)
-	assert.Contains(t, q.SQL, "i.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
-	assert.Contains(t, q.SQL, "SELECT nullIf(finalized_at, toDateTime64(0, 6)) AS b")
-	assert.NotContains(t, q.SQL, "period_start")
-	assert.Contains(t, q.SQL, "n.finalized_at >= toDateTime64({from:String}, 6, 'UTC')")
-	require.Len(t, q.Columns, 3)
-	assert.Equal(t, "net_billing_issued", q.Columns[2].Name)
-
-	_, err = buildBillingQuery(customRV(types.MetricNetBillingIssued, types.ShapeBreakdown), "reports_db", "t", "e", 0)
-	require.Error(t, err)
 }
 
 func TestBuildNetBilling_Rejects(t *testing.T) {
