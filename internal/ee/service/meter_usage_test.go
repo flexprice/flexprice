@@ -7952,7 +7952,7 @@ type noCostsheet struct {
 	CostSheetUsageTrackingService
 }
 
-func (noCostsheet) GetCostAnalyticsFromMeterUsage(context.Context, *dto.GetCostAnalyticsRequest) (*dto.GetCostAnalyticsResponse, error) {
+func (noCostsheet) GetCostAnalyticsFromMeterUsage(context.Context, *dto.GetCostAnalyticsRequest, string) (*dto.GetCostAnalyticsResponse, error) {
 	return nil, ierr.NewError("no active costsheet found").Mark(ierr.ErrNotFound)
 }
 
