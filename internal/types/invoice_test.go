@@ -71,8 +71,17 @@ func TestPaymentTermsDueDate(t *testing.T) {
 		{"end of next month from january 31", PaymentTermsEndOfNextMonth, utc(2027, 1, 31), utc(2027, 2, 28), true},
 		{"end of next month across year", PaymentTermsEndOfNextMonth, utc(2026, 12, 15), utc(2027, 1, 31), true},
 		{"end of month uses location month", PaymentTermsEndOfMonth, utc(2026, 10, 1).In(newYork), time.Date(2026, 9, 30, 20, 0, 0, 0, newYork), true},
+		{"custom net 7", "7 NET", utc(2026, 10, 1), utc(2026, 10, 8), true},
+		{"net 1", "1 NET", utc(2026, 10, 1), utc(2026, 10, 2), true},
+		{"net 365", "365 NET", utc(2026, 10, 1), utc(2027, 10, 1), true},
+		{"due on receipt", PaymentTermsDueOnReceipt, utc(2026, 10, 1), utc(2026, 10, 1), true},
 		{"empty", "", utc(2026, 10, 1), time.Time{}, false},
-		{"invalid", "7 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"net 0", "0 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"net 366", "366 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"leading zero", "07 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"plus sign", "+7 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"no days", " NET", utc(2026, 10, 1), time.Time{}, false},
+		{"lowercase", "7 net", utc(2026, 10, 1), time.Time{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -96,6 +105,15 @@ func TestInvoiceConfig_PaymentTermsValidation(t *testing.T) {
 	cfg.PaymentTerms = lo.ToPtr(PaymentTermsEndOfMonth)
 	require.NoError(t, cfg.Validate())
 
+	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("120 NET"))
+	require.NoError(t, cfg.Validate())
+
+	cfg.PaymentTerms = lo.ToPtr(PaymentTermsDueOnReceipt)
+	require.NoError(t, cfg.Validate())
+
 	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("END_OF_WEEK"))
+	require.Error(t, cfg.Validate())
+
+	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("366 NET"))
 	require.Error(t, cfg.Validate())
 }

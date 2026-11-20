@@ -778,6 +778,9 @@ type UpdateSubscriptionRequest struct {
 
 	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
+	// PaymentTerms sets the invoice payment terms. Omit to leave unchanged; send "" to use the tenant's payment terms.
+	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -789,6 +792,12 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 
 	if r.ProrationBehavior != nil {
 		if err := r.ProrationBehavior.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if r.PaymentTerms != nil {
+		if err := r.PaymentTerms.Validate(); err != nil {
 			return err
 		}
 	}

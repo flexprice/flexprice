@@ -10904,6 +10904,11 @@ definitions:
         description: ParentSubscriptionID sets or clears the parent subscription.
           Omit to leave unchanged; send "" to clear.
         type: string
+      payment_terms:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTerms'
+        description: PaymentTerms sets the invoice payment terms. Omit to leave unchanged;
+          send "" to use the tenant's payment terms.
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -14520,6 +14525,7 @@ definitions:
     - 60 NET
     - 75 NET
     - 90 NET
+    - DUE_ON_RECEIPT
     - END_OF_MONTH
     - END_OF_NEXT_MONTH
     type: string
@@ -14530,6 +14536,7 @@ definitions:
     - PaymentTerms60Net
     - PaymentTerms75Net
     - PaymentTerms90Net
+    - PaymentTermsDueOnReceipt
     - PaymentTermsEndOfMonth
     - PaymentTermsEndOfNextMonth
   types.PerformanceObligationStatus:

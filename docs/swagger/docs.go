@@ -32916,6 +32916,14 @@ const docTemplate = `{
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
                 },
+                "payment_terms": {
+                    "description": "PaymentTerms sets the invoice payment terms. Omit to leave unchanged; send \"\" to use the tenant's payment terms.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
                 "proration_behavior": {
                     "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
                     "allOf": [
@@ -37818,6 +37826,7 @@ const docTemplate = `{
                 "60 NET",
                 "75 NET",
                 "90 NET",
+                "DUE_ON_RECEIPT",
                 "END_OF_MONTH",
                 "END_OF_NEXT_MONTH"
             ],
@@ -37828,6 +37837,7 @@ const docTemplate = `{
                 "PaymentTerms60Net",
                 "PaymentTerms75Net",
                 "PaymentTerms90Net",
+                "PaymentTermsDueOnReceipt",
                 "PaymentTermsEndOfMonth",
                 "PaymentTermsEndOfNextMonth"
             ]
