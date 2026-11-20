@@ -53,9 +53,20 @@ function isRecord(x: unknown): x is Record<string, unknown> {
  */
 export class CustomerPortal {
   private sdk: Flexprice;
+  // Customer-portal/wallet endpoints now model per-operation security; the SDK's
+  // global apiKeyAuth is NOT applied for them, so we thread it in per call.
+  private apiKeyAuth?: SDKOptions["apiKeyAuth"];
 
   constructor(options: SDKOptions) {
     this.sdk = new Flexprice(options);
+    this.apiKeyAuth = options.apiKeyAuth;
+  }
+
+  /** Resolve the global apiKey (may be a lazy fn) into a per-operation security arg. */
+  private async resolveSecurity(): Promise<{ option1: { apiKeyAuth: string } } | undefined> {
+    const key =
+      typeof this.apiKeyAuth === "function" ? await this.apiKeyAuth() : this.apiKeyAuth;
+    return key ? { option1: { apiKeyAuth: key } } : undefined;
   }
 
   /**
@@ -92,8 +103,11 @@ export class CustomerPortal {
       }
     };
 
+    // These endpoints take per-operation security; supply the global apiKey per call.
+    const portalSec = (await this.resolveSecurity()) ?? {};
+
     const customer = await safe("Customer lookup", () =>
-      this.sdk.customers.getCustomerByExternalId(customerExternalId),
+      this.sdk.customers.getCustomerByExternalId(portalSec, customerExternalId),
     );
 
     const customerData =
@@ -113,17 +127,17 @@ export class CustomerPortal {
     const [usage, entitlements, walletBalance, subsResp, invoicesResp, summary] = await Promise.all([
       opts.includeUsage
         ? safe("Usage", () =>
-          this.sdk.customers.getCustomerUsageSummary({ customerId }),
+          this.sdk.customers.getCustomerUsageSummary(portalSec, { customerId }),
         )
         : undefined,
       opts.includeEntitlements
         ? safe("Entitlements", () =>
-          this.sdk.customers.getCustomerEntitlements(customerId),
+          this.sdk.customers.getCustomerEntitlements(portalSec, customerId),
         )
         : undefined,
       opts.includeWalletBalance
         ? safe("Wallets", () =>
-          this.sdk.wallets.getCustomerWallets({
+          this.sdk.wallets.getCustomerWallets(portalSec, {
             id: customerId,
             includeRealTimeBalance: true,
           }),
@@ -131,7 +145,7 @@ export class CustomerPortal {
         : undefined,
       opts.includeSubscriptions
         ? safe("Subscriptions", () =>
-          this.sdk.subscriptions.querySubscription({
+          this.sdk.subscriptions.querySubscription(portalSec, {
             customerId,
             externalCustomerId: customerExternalId,
             limit: opts.subscriptionLimit ?? 10,
@@ -140,7 +154,7 @@ export class CustomerPortal {
         : undefined,
       opts.includeInvoices
         ? safe("Invoices", () =>
-          this.sdk.invoices.queryInvoice({
+          this.sdk.invoices.queryInvoice(portalSec, {
             customerId,
             limit: opts.invoiceLimit ?? 5,
           }),
@@ -148,7 +162,7 @@ export class CustomerPortal {
         : undefined,
       opts.includeSummary
         ? safe("Summary", () =>
-          this.sdk.invoices.getCustomerInvoiceSummary(customerId),
+          this.sdk.invoices.getCustomerInvoiceSummary(portalSec, customerId),
         )
         : undefined,
     ]);
