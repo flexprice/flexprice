@@ -157,6 +157,10 @@ type RollupDirtyRequest struct {
 type RollupDirtyResult struct {
 	Rolled  int
 	Skipped int
+	// ScopedOut counts subscriptions the scan considered and decided had
+	// nothing to recompute. Without it a small Rolled cannot be told apart
+	// from a scan that wrongly excluded most of the environment.
+	ScopedOut int
 	// Cursor is the last subscription completed, for resuming after a failure.
 	Cursor *RollupCursor
 }
