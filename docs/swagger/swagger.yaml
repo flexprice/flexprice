@@ -3963,7 +3963,12 @@ definitions:
       payment_behavior:
         $ref: '#/definitions/types.PaymentBehavior'
       payment_terms:
-        $ref: '#/definitions/types.PaymentTerms'
+        allOf:
+        - $ref: '#/definitions/types.PaymentTerms'
+        description: 'PaymentTerms sets when invoices fall due: "<days> NET" with
+          days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any
+          day count in that range is accepted, not only the listed values. Omit to
+          use the tenant''s payment terms.'
       phases:
         items:
           $ref: '#/definitions/SubscriptionPhaseCreateRequest'
@@ -9505,8 +9510,10 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'PaymentTerms sets when invoices fall due: "<days> NET" with
+          days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any
+          day count in that range is accepted, not only the listed values. Unset uses
+          the tenant''s payment terms.'
       phases:
         description: Phases are the subscription phases for this subscription
         items:
@@ -9720,8 +9727,10 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'PaymentTerms sets when invoices fall due: "<days> NET" with
+          days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any
+          day count in that range is accepted, not only the listed values. Unset uses
+          the tenant''s payment terms.'
       phases:
         description: Phases are included when "phases" is in expand parameter
         items:
@@ -10907,8 +10916,10 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms sets the invoice payment terms. Omit to leave unchanged;
-          send "" to use the tenant's payment terms.
+        description: 'PaymentTerms sets when invoices fall due: "<days> NET" with
+          days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any
+          day count in that range is accepted, not only the listed values. Omit to
+          leave unchanged; send "" to use the tenant''s payment terms.'
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -14518,6 +14529,9 @@ definitions:
     - PaymentStatusPartiallyRefunded
     - PaymentStatusVoided
   types.PaymentTerms:
+    description: '"<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH
+      or END_OF_NEXT_MONTH. The enum lists common values; any day count in that range
+      is accepted.'
     enum:
     - 15 NET
     - 30 NET

@@ -38654,6 +38654,7 @@
       },
       "types.PaymentTerms": {
         "type": "string",
+        "description": "\"<days> NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values; any day count in that range is accepted.",
         "enum": [
           "15 NET",
           "30 NET",

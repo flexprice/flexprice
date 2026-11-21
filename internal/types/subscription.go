@@ -275,6 +275,7 @@ func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
 
 // PaymentTerms represents invoice payment terms: net days ("<N> NET", 1–365), due on receipt or end of month.
 // Used to compute invoice due date from the issue date.
+// @Description "<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values; any day count in that range is accepted.
 type PaymentTerms string
 
 const (
