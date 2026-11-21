@@ -23328,7 +23328,12 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentBehavior"
                 },
                 "payment_terms": {
-                    "$ref": "#/definitions/types.PaymentTerms"
+                    "description": "PaymentTerms sets when invoices fall due. Omit to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
                 },
                 "phases": {
                     "type": "array",
@@ -31002,7 +31007,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -31263,7 +31268,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -32915,6 +32920,14 @@ const docTemplate = `{
                 "parent_subscription_id": {
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
+                },
+                "payment_terms": {
+                    "description": "PaymentTerms sets when invoices fall due. Omit to leave unchanged; send \"\" to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
                 },
                 "proration_behavior": {
                     "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
@@ -37810,6 +37823,7 @@ const docTemplate = `{
             ]
         },
         "types.PaymentTerms": {
+            "description": "\"\u003cdays\u003e NET\" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.",
             "type": "string",
             "enum": [
                 "15 NET",
@@ -37818,6 +37832,7 @@ const docTemplate = `{
                 "60 NET",
                 "75 NET",
                 "90 NET",
+                "DUE_ON_RECEIPT",
                 "END_OF_MONTH",
                 "END_OF_NEXT_MONTH"
             ],
@@ -37828,6 +37843,7 @@ const docTemplate = `{
                 "PaymentTerms60Net",
                 "PaymentTerms75Net",
                 "PaymentTerms90Net",
+                "PaymentTermsDueOnReceipt",
                 "PaymentTermsEndOfMonth",
                 "PaymentTermsEndOfNextMonth"
             ]

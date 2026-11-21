@@ -496,6 +496,9 @@ func (s *InvoiceService) setDates(ctx context.Context, req *InvoiceCreateRequest
 		req.PaymentTerms = lo.ToPtr(zohoPaymentTermsEndOfMonth)
 	case types.PaymentTermsEndOfNextMonth:
 		req.PaymentTerms = lo.ToPtr(zohoPaymentTermsEndOfNextMonth)
+	case types.PaymentTermsDueOnReceipt:
+		req.PaymentTerms = lo.ToPtr(0)
+		req.PaymentTermsLabel = "Due on Receipt"
 	default:
 		days, _ := types.PaymentTermsToDueDateDays(terms)
 		req.PaymentTerms = lo.ToPtr(days)

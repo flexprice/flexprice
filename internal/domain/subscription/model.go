@@ -134,7 +134,7 @@ type Subscription struct {
 	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
 	ParentSubscriptionID *string `db:"parent_subscription_id" json:"parent_subscription_id,omitempty"`
 
-	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
+	// PaymentTerms sets when invoices fall due; nil uses the tenant's.
 	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
 
 	// Settings overrides the customer's and environment's settings for this subscription.

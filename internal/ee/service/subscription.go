@@ -2127,6 +2127,14 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
+	if req.PaymentTerms != nil {
+		if *req.PaymentTerms == "" {
+			subscription.PaymentTerms = nil
+		} else {
+			subscription.PaymentTerms = req.PaymentTerms
+		}
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing

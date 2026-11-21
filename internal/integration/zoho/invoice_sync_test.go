@@ -626,6 +626,8 @@ func TestSetDates(t *testing.T) {
 		{name: "end of month issued 1st", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(9, 30), wantDate: "2026-09-01", wantDue: "2026-09-30", wantTerms: lo.ToPtr(-2)},
 		{name: "tenant end of next month", tenantTerms: lo.ToPtr(types.PaymentTermsEndOfNextMonth), issueDate: ist(9, 28), dueDate: ist(10, 31), wantDate: "2026-09-28", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-3)},
 		{name: "subscription net overrides tenant", subTerms: lo.ToPtr(types.PaymentTerms30Net), tenantTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 1), wantDate: "2026-09-01", wantDue: "2026-10-01", wantTerms: lo.ToPtr(30), wantLabel: "Net 30"},
+		{name: "custom net days", subTerms: lo.ToPtr(types.PaymentTerms("120 NET")), issueDate: ist(9, 1), dueDate: ist(12, 30), wantDate: "2026-09-01", wantDue: "2026-12-30", wantTerms: lo.ToPtr(120), wantLabel: "Net 120"},
+		{name: "due on receipt", subTerms: lo.ToPtr(types.PaymentTermsDueOnReceipt), issueDate: ist(9, 1), dueDate: ist(9, 1), wantDate: "2026-09-01", wantDue: "2026-09-01", wantTerms: lo.ToPtr(0), wantLabel: "Due on Receipt"},
 		{name: "due date no longer matches terms", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 15), wantDate: "2026-09-01", wantDue: "2026-10-15"},
 		{name: "no terms sends due date only", issueDate: ist(9, 1), dueDate: ist(9, 2), wantDate: "2026-09-01", wantDue: "2026-09-02"},
 		{name: "issue date in subscription timezone", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: time.Date(2026, 10, 1, 0, 30, 0, 0, kolkata), dueDate: time.Date(2026, 10, 31, 0, 30, 0, 0, kolkata), wantDate: "2026-10-01", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-2)},

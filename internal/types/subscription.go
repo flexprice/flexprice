@@ -1,6 +1,9 @@
 package types
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -270,8 +273,8 @@ func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
 	return g.Default() == LineItemGroupingPerBillingPeriod
 }
 
-// PaymentTerms represents invoice payment terms: net days (e.g. "30 NET") or end of month.
-// Used to compute invoice due date from the issue date.
+// PaymentTerms sets when an invoice falls due, counted from its issue date.
+// @Description "<days> NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.
 type PaymentTerms string
 
 const (
@@ -282,16 +285,16 @@ const (
 	PaymentTerms75Net PaymentTerms = "75 NET"
 	PaymentTerms90Net PaymentTerms = "90 NET"
 
+	PaymentTermsDueOnReceipt   PaymentTerms = "DUE_ON_RECEIPT"
 	PaymentTermsEndOfMonth     PaymentTerms = "END_OF_MONTH"
 	PaymentTermsEndOfNextMonth PaymentTerms = "END_OF_NEXT_MONTH"
 )
 
-// AllPaymentTerms is the list of allowed payment term values.
-var AllPaymentTerms = []PaymentTerms{
-	PaymentTerms15Net, PaymentTerms30Net, PaymentTerms45Net,
-	PaymentTerms60Net, PaymentTerms75Net, PaymentTerms90Net,
-	PaymentTermsEndOfMonth, PaymentTermsEndOfNextMonth,
-}
+const (
+	paymentTermsNetSuffix  = " NET"
+	paymentTermsMinNetDays = 1
+	paymentTermsMaxNetDays = 365
+)
 
 func (p PaymentTerms) String() string {
 	return string(p)
@@ -299,40 +302,36 @@ func (p PaymentTerms) String() string {
 
 // Validate returns an error if the payment terms value is not allowed.
 func (p PaymentTerms) Validate() error {
-	if p == "" {
+	if p == "" || p == PaymentTermsEndOfMonth || p == PaymentTermsEndOfNextMonth {
 		return nil
 	}
-	if !lo.Contains(AllPaymentTerms, p) {
-		return ierr.NewError("invalid payment_terms").
-			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET, END_OF_MONTH, END_OF_NEXT_MONTH").
-			WithReportableDetails(map[string]any{
-				"payment_terms":  p,
-				"allowed_values": AllPaymentTerms,
-			}).
-			Mark(ierr.ErrValidation)
+	if _, ok := PaymentTermsToDueDateDays(p); ok {
+		return nil
 	}
-	return nil
+	return ierr.NewError("invalid payment_terms").
+		WithHint(fmt.Sprintf("Payment terms must be \"<days> NET\" with days from %d to %d (e.g. \"45 NET\"), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH", paymentTermsMinNetDays, paymentTermsMaxNetDays)).
+		WithReportableDetails(map[string]any{
+			"payment_terms": p,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 // PaymentTermsToDueDateDays returns the number of days after the issue date for the given payment terms.
-// Returns (0, false) if the value is invalid or empty.
+// Returns (0, false) for end of month terms and for invalid or empty values.
 func PaymentTermsToDueDateDays(p PaymentTerms) (int, bool) {
-	switch p {
-	case PaymentTerms15Net:
-		return 15, true
-	case PaymentTerms30Net:
-		return 30, true
-	case PaymentTerms45Net:
-		return 45, true
-	case PaymentTerms60Net:
-		return 60, true
-	case PaymentTerms75Net:
-		return 75, true
-	case PaymentTerms90Net:
-		return 90, true
-	default:
+	if p == PaymentTermsDueOnReceipt {
+		return 0, true
+	}
+	digits, ok := strings.CutSuffix(string(p), paymentTermsNetSuffix)
+	if !ok {
 		return 0, false
 	}
+	days, err := strconv.Atoi(digits)
+	// Rejects non-canonical forms such as "07 NET".
+	if err != nil || strconv.Itoa(days) != digits || days < paymentTermsMinNetDays || days > paymentTermsMaxNetDays {
+		return 0, false
+	}
+	return days, true
 }
 
 // PaymentTermsDueDate returns the invoice due date for the payment terms, counted from the issue date.
