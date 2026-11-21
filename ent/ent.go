@@ -37,6 +37,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/customerusagewatermark"
 	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
@@ -55,7 +56,6 @@ import (
 	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
-	"github.com/flexprice/flexprice/ent/meterusageperiodcheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -171,6 +171,7 @@ func checkColumn(t, c string) error {
 			creditnote.Table:                       creditnote.ValidColumn,
 			creditnotelineitem.Table:               creditnotelineitem.ValidColumn,
 			customer.Table:                         customer.ValidColumn,
+			customerusagewatermark.Table:           customerusagewatermark.ValidColumn,
 			emaillog.Table:                         emaillog.ValidColumn,
 			entitlement.Table:                      entitlement.ValidColumn,
 			entitlementgrant.Table:                 entitlementgrant.ValidColumn,
@@ -189,7 +190,6 @@ func checkColumn(t, c string) error {
 			journalline.Table:                      journalline.ValidColumn,
 			meter.Table:                            meter.ValidColumn,
 			meterusagecheckpoint.Table:             meterusagecheckpoint.ValidColumn,
-			meterusageperiodcheckpoint.Table:       meterusageperiodcheckpoint.ValidColumn,
 			payment.Table:                          payment.ValidColumn,
 			paymentattempt.Table:                   paymentattempt.ValidColumn,
 			paymentmethod.Table:                    paymentmethod.ValidColumn,

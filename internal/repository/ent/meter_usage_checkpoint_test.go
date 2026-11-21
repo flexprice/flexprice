@@ -79,17 +79,17 @@ func TestMeterUsageCheckpointRepository(t *testing.T) {
 	require.True(t, got.Total.Equal(decimal.NewFromInt(-40)))
 }
 
-func TestMeterUsageCheckpointRepositoryAdvancePeriods(t *testing.T) {
+func TestMeterUsageCheckpointRepositoryUpdateCustomerCheckpoints(t *testing.T) {
 	client := newRealPostgresTestClient(t)
 	repo := NewMeterUsageCheckpointRepository(client, logger.NewNoopLogger())
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.GenerateUUIDWithPrefix("tenant")), "env_period")
 	periodStart := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	hour := func(h int) time.Time { return periodStart.Add(time.Duration(h) * time.Hour) }
 	total := func(meterID string, aggregation types.AggregationType, qty int64) meterusagecheckpoint.PeriodTotal {
-		return meterusagecheckpoint.PeriodTotal{MeterID: meterID, AggregationType: aggregation, Quantity: decimal.NewFromInt(qty)}
+		return meterusagecheckpoint.PeriodTotal{PeriodStart: periodStart, MeterID: meterID, AggregationType: aggregation, Quantity: decimal.NewFromInt(qty)}
 	}
-	advance := func(customerID string, from, to time.Time, totals ...meterusagecheckpoint.PeriodTotal) *meterusagecheckpoint.PeriodAdvance {
-		return &meterusagecheckpoint.PeriodAdvance{CustomerID: customerID, PeriodStart: periodStart, From: from, To: to, Totals: totals}
+	update := func(customerID string, from, to time.Time, totals ...meterusagecheckpoint.PeriodTotal) *meterusagecheckpoint.CustomerCheckpointUpdate {
+		return &meterusagecheckpoint.CustomerCheckpointUpdate{CustomerID: customerID, From: from, To: to, Totals: totals}
 	}
 	totals := func(customerID string) map[string]string {
 		rows, err := repo.ListPeriodTotals(ctx, customerID, periodStart)
@@ -101,36 +101,38 @@ func TestMeterUsageCheckpointRepositoryAdvancePeriods(t *testing.T) {
 		return got
 	}
 
-	n, err := repo.AdvancePeriods(ctx, []*meterusagecheckpoint.PeriodAdvance{
-		advance("cust_a", periodStart, hour(3), total("m_sum", types.AggregationSum, 5), total("m_max", types.AggregationMax, -4)),
-		advance("cust_b", periodStart, hour(3), total("m_sum", types.AggregationSum, 1)),
+	n, err := repo.UpdateCustomerCheckpoints(ctx, []*meterusagecheckpoint.CustomerCheckpointUpdate{
+		update("cust_a", time.Time{}, hour(3), total("m_sum", types.AggregationSum, 5), total("m_max", types.AggregationMax, -4)),
+		update("cust_b", time.Time{}, hour(3), total("m_sum", types.AggregationSum, 1)),
 	})
 	require.NoError(t, err)
-	require.Equal(t, 2, n, "new periods start at their From and advance")
+	require.Equal(t, 2, n, "customers without a watermark get one at To")
 
-	n, err = repo.AdvancePeriods(ctx, []*meterusagecheckpoint.PeriodAdvance{
-		advance("cust_a", hour(3), hour(4), total("m_sum", types.AggregationSum, 3), total("m_max", types.AggregationMax, -9), total("m_count", types.AggregationCount, 2)),
-		advance("cust_b", periodStart, hour(4), total("m_sum", types.AggregationSum, 100)),
+	n, err = repo.UpdateCustomerCheckpoints(ctx, []*meterusagecheckpoint.CustomerCheckpointUpdate{
+		update("cust_a", hour(3), hour(4), total("m_sum", types.AggregationSum, 3), total("m_max", types.AggregationMax, -9), total("m_count", types.AggregationCount, 2)),
+		update("cust_b", time.Time{}, hour(4), total("m_sum", types.AggregationSum, 100)),
+		update("cust_c", hour(1), hour(4), total("m_sum", types.AggregationSum, 100)),
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, n, "cust_b is no longer at its From, so its usage is not added again")
+	require.Equal(t, 1, n, "cust_b already has a watermark and cust_c's is not at From, so neither is added again")
 	require.Equal(t, map[string]string{"m_sum": "8", "m_max": "-4", "m_count": "2"}, totals("cust_a"),
 		"SUM and COUNT add, MAX keeps the higher value")
 	require.Equal(t, map[string]string{"m_sum": "1"}, totals("cust_b"))
+	require.Empty(t, totals("cust_c"))
 
-	checkpoints, err := repo.ListPeriodCheckpoints(ctx, []string{"cust_a", "cust_b", "cust_none"})
+	watermarks, err := repo.ListUsageWatermarks(ctx, []string{"cust_a", "cust_b", "cust_none"})
 	require.NoError(t, err)
 	until := map[string]time.Time{}
-	for _, c := range checkpoints {
-		until[c.CustomerID] = c.AggregatedUntil
+	for _, w := range watermarks {
+		until[w.CustomerID] = w.AggregatedUntil
 	}
 	require.Len(t, until, 2)
 	require.True(t, until["cust_a"].Equal(hour(4)))
 	require.True(t, until["cust_b"].Equal(hour(3)))
 
-	other, err := repo.ListPeriodCheckpoints(types.SetEnvironmentID(ctx, "env_other"), []string{"cust_a"})
+	other, err := repo.ListUsageWatermarks(types.SetEnvironmentID(ctx, "env_other"), []string{"cust_a"})
 	require.NoError(t, err)
-	require.Empty(t, other, "checkpoints are scoped to the environment")
+	require.Empty(t, other, "watermarks are scoped to the environment")
 
 	// Running totals live on other meters (never-reset SUM); their reads skip per-period rows.
 	_, err = repo.Upsert(ctx, &meterusagecheckpoint.MeterUsageCheckpoint{

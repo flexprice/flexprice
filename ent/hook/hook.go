@@ -309,6 +309,18 @@ func (f CustomerFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerMutation", m)
 }
 
+// The CustomerUsageWatermarkFunc type is an adapter to allow the use of ordinary
+// function as CustomerUsageWatermark mutator.
+type CustomerUsageWatermarkFunc func(context.Context, *ent.CustomerUsageWatermarkMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CustomerUsageWatermarkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CustomerUsageWatermarkMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerUsageWatermarkMutation", m)
+}
+
 // The EmailLogFunc type is an adapter to allow the use of ordinary
 // function as EmailLog mutator.
 type EmailLogFunc func(context.Context, *ent.EmailLogMutation) (ent.Value, error)
@@ -523,18 +535,6 @@ func (f MeterUsageCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (e
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterUsageCheckpointMutation", m)
-}
-
-// The MeterUsagePeriodCheckpointFunc type is an adapter to allow the use of ordinary
-// function as MeterUsagePeriodCheckpoint mutator.
-type MeterUsagePeriodCheckpointFunc func(context.Context, *ent.MeterUsagePeriodCheckpointMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f MeterUsagePeriodCheckpointFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.MeterUsagePeriodCheckpointMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.MeterUsagePeriodCheckpointMutation", m)
 }
 
 // The PaymentFunc type is an adapter to allow the use of ordinary

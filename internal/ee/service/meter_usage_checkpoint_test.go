@@ -222,15 +222,20 @@ func (h *checkpointHarness) ingest(t *testing.T, externalCustomerID, id string, 
 	h.aggregatedUsage.active[hour] = append(h.aggregatedUsage.active[hour], externalCustomerID)
 }
 
-// totals returns a customer's per-period totals by meter and requires their checkpoint is at wantUntil.
+// totals returns a customer's totals for the November period by meter and requires their watermark is at wantUntil.
 func (h *checkpointHarness) totals(t *testing.T, customerID string, wantUntil time.Time) map[string]string {
 	t.Helper()
+	return h.periodTotals(t, customerID, checkpointPeriodStart, wantUntil)
+}
+
+func (h *checkpointHarness) periodTotals(t *testing.T, customerID string, periodStart, wantUntil time.Time) map[string]string {
+	t.Helper()
 	ctx := aggregatedUsageCtx()
-	checkpoints, err := h.checkpoints.ListPeriodCheckpoints(ctx, []string{customerID})
+	watermarks, err := h.checkpoints.ListUsageWatermarks(ctx, []string{customerID})
 	require.NoError(t, err)
-	require.Len(t, checkpoints, 1)
-	require.True(t, checkpoints[0].AggregatedUntil.Equal(wantUntil), "checkpoint at %s, want %s", checkpoints[0].AggregatedUntil, wantUntil)
-	rows, err := h.checkpoints.ListPeriodTotals(ctx, customerID, checkpointPeriodStart)
+	require.Len(t, watermarks, 1)
+	require.True(t, watermarks[0].AggregatedUntil.Equal(wantUntil), "watermark at %s, want %s", watermarks[0].AggregatedUntil, wantUntil)
+	rows, err := h.checkpoints.ListPeriodTotals(ctx, customerID, periodStart)
 	require.NoError(t, err)
 	got := make(map[string]string, len(rows))
 	for _, r := range rows {
@@ -239,26 +244,26 @@ func (h *checkpointHarness) totals(t *testing.T, customerID string, wantUntil ti
 	return got
 }
 
-func TestUsageCheckpointEnvironment(t *testing.T) {
+func TestUpdateCustomerCheckpoints(t *testing.T) {
 	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
 	h.ingest(t, "cust_1", "e1", checkpointHour(5).Add(10*time.Minute), 4)
 	h.ingest(t, "cust_1", "e2", checkpointHour(6).Add(20*time.Minute), 9)
 	h.ingest(t, "cust_1", "e3", checkpointHour(7).Add(30*time.Minute), 2) // after the first cutoff
 
-	result, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
+	result, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Customers)
 	require.Equal(t, 1, result.Outcomes["updated"])
 	require.Equal(t, map[string]string{"m_sum": "13", "m_count": "2", "m_max": "9"}, h.totals(t, "cus_1", checkpointHour(7)),
 		"first run counts from the period start; COUNT_UNIQUE and never-reset SUM are not checkpointed")
 
-	result, err = h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
+	result, err = h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Outcomes["updated"])
 	require.Equal(t, map[string]string{"m_sum": "15", "m_count": "3", "m_max": "9"}, h.totals(t, "cus_1", checkpointHour(8)),
 		"second run adds only [07:00, 08:00); MAX keeps the higher stored value")
 
-	result, err = h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
+	result, err = h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Outcomes["current"], "a re-run at the same cutoff changes nothing")
 	require.Equal(t, map[string]string{"m_sum": "15", "m_count": "3", "m_max": "9"}, h.totals(t, "cus_1", checkpointHour(8)))
@@ -269,7 +274,7 @@ func TestUsageCheckpointReadsSharedWindowOnce(t *testing.T) {
 	h.ingest(t, "cust_1", "e1", checkpointHour(6), 4)
 	h.ingest(t, "cust_2", "e2", checkpointHour(6).Add(time.Minute), 7)
 
-	_, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
+	_, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
 	require.Equal(t, 1, h.usage.totalsCalls, "both customers start from the period start, so one query covers them")
 	require.Equal(t, 1, h.usage.finalCalls, "stored totals read with FINAL")
@@ -280,13 +285,13 @@ func TestUsageCheckpointReadsSharedWindowOnce(t *testing.T) {
 func TestUsageCheckpointGroupsCustomersByWindow(t *testing.T) {
 	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
 	h.ingest(t, "cust_1", "e1", checkpointHour(6), 4)
-	_, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
+	_, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
 
 	h.usage.totalsCalls = 0
 	h.ingest(t, "cust_1", "e2", checkpointHour(7), 1)
 	h.ingest(t, "cust_2", "e3", checkpointHour(7), 3)
-	_, err = h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
+	_, err = h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
 	require.Equal(t, 2, h.usage.totalsCalls, "cust_1 adds [07:00, 08:00) while new cust_2 reads from the period start")
 	require.Equal(t, map[string]string{"m_sum": "5", "m_count": "2", "m_max": "4"}, h.totals(t, "cus_1", checkpointHour(8)))
@@ -299,7 +304,7 @@ func TestUsageCheckpointClampsToPeriodEnd(t *testing.T) {
 	h.ingest(t, "cust_1", "e1", checkpointHour(5), 4)
 	h.ingest(t, "cust_1", "e2", checkpointHour(7), 100) // next period's usage, in the hour the run reads
 
-	_, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
+	_, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"m_sum": "4", "m_count": "1", "m_max": "4"}, h.totals(t, "cus_1", periodEnd))
 }
@@ -308,31 +313,46 @@ func TestUsageCheckpointReadsOnlyTheFinalizedHour(t *testing.T) {
 	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
 	h.ingest(t, "cust_1", "e1", checkpointHour(5), 4)
 
-	result, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
+	result, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
 	require.Zero(t, result.Customers, "cust_1 had no usage in [06:00, 07:00)")
 
 	h.ingest(t, "cust_1", "e2", checkpointHour(7), 1)
-	_, err = h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
+	_, err = h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
 	require.Equal(t, map[string]string{"m_sum": "5", "m_count": "2", "m_max": "4"}, h.totals(t, "cus_1", checkpointHour(8)),
 		"the next active hour catches up from the period start")
 }
 
-func TestUsageCheckpointSkipsCustomersWithoutOneSubscription(t *testing.T) {
+func TestUsageCheckpointAddsUsageToEveryCurrentPeriod(t *testing.T) {
 	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
 	require.NoError(t, h.svc.SubRepo.Create(aggregatedUsageCtx(), &subscription.Subscription{
 		ID: "sub_1b", CustomerID: "cus_1", EnvironmentID: "env_1", SubscriptionStatus: types.SubscriptionStatusActive,
-		CurrentPeriodStart: checkpointPeriodStart, CurrentPeriodEnd: checkpointPeriodStart.AddDate(0, 1, 0),
+		CurrentPeriodStart: checkpointHour(3), CurrentPeriodEnd: checkpointPeriodStart.AddDate(0, 1, 0),
 		BaseModel: types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
 	}))
-	h.ingest(t, "cust_1", "e1", checkpointHour(6), 4)
-	h.aggregatedUsage.active[checkpointHour(6)] = append(h.aggregatedUsage.active[checkpointHour(6)], "cust_missing")
+	h.ingest(t, "cust_1", "e1", checkpointHour(2), 4)
+	h.ingest(t, "cust_1", "e2", checkpointHour(6), 5)
 
-	result, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
+	result, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
-	require.Equal(t, 1, result.Outcomes["multiple_subscriptions"])
-	require.Equal(t, 1, result.Outcomes["unknown_customer"])
+	require.Equal(t, 1, result.Outcomes["updated"])
+	require.Equal(t, map[string]string{"m_sum": "9", "m_count": "2", "m_max": "5"}, h.periodTotals(t, "cus_1", checkpointPeriodStart, checkpointHour(7)))
+	require.Equal(t, map[string]string{"m_sum": "5", "m_count": "1", "m_max": "5"}, h.periodTotals(t, "cus_1", checkpointHour(3), checkpointHour(7)),
+		"the second subscription's period counts only from its own start")
+}
+
+func TestUsageCheckpointCustomerWithoutSubscription(t *testing.T) {
+	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
+	require.NoError(t, h.svc.CustomerRepo.Create(aggregatedUsageCtx(), &customer.Customer{
+		ID: "cus_3", ExternalID: "cust_3", EnvironmentID: "env_1",
+		BaseModel: types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
+	}))
+	h.ingest(t, "cust_3", "e1", checkpointHour(6), 4)
+
+	result, err := h.svc.UpdateCustomerCheckpoints(aggregatedUsageCtx(), checkpointHour(7))
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Outcomes["no_subscription"])
 	require.Zero(t, h.usage.totalsCalls)
 }
 
@@ -365,6 +385,6 @@ func TestUsageCheckpointActiveEnvironments(t *testing.T) {
 
 func TestUsageCheckpointWithoutStore(t *testing.T) {
 	svc := &usageCheckpointService{ServiceParams: ServiceParams{Logger: logger.NewNoopLogger(), Config: &config.Configuration{}}}
-	_, err := svc.CheckpointEnvironment(context.Background(), checkpointHour(7))
+	_, err := svc.UpdateCustomerCheckpoints(context.Background(), checkpointHour(7))
 	require.ErrorContains(t, err, "aggregated usage repository is not configured")
 }

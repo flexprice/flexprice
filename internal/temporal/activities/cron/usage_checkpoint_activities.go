@@ -36,7 +36,7 @@ func (a *UsageCheckpointActivities) ListUsageCheckpointEnvironmentsActivity(ctx 
 func (a *UsageCheckpointActivities) UsageCheckpointEnvironmentActivity(ctx context.Context, input cronModels.UsageCheckpointEnvironmentInput) error {
 	ctx = context.WithValue(ctx, types.CtxTenantID, input.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, input.EnvironmentID)
-	result, err := a.checkpointService.CheckpointEnvironment(ctx, input.Cutoff)
+	result, err := a.checkpointService.UpdateCustomerCheckpoints(ctx, input.Cutoff)
 	if err != nil {
 		a.logger.Error(ctx, "usage checkpoint: environment failed", "error", err,
 			"tenant_id", input.TenantID, "environment_id", input.EnvironmentID)

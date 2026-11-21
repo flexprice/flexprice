@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,14 +17,14 @@ import (
 type InMemoryMeterUsageCheckpointStore struct {
 	writeMu sync.Mutex
 	*InMemoryStore[*meterusagecheckpoint.MeterUsageCheckpoint]
-	// periods holds period checkpoints by tenant|environment|customer|period start.
-	periods map[string]*meterusagecheckpoint.PeriodCheckpoint
+	// watermarks holds usage watermarks by tenant|environment|customer.
+	watermarks map[string]time.Time
 }
 
 func NewInMemoryMeterUsageCheckpointStore() *InMemoryMeterUsageCheckpointStore {
 	return &InMemoryMeterUsageCheckpointStore{
 		InMemoryStore: NewInMemoryStore[*meterusagecheckpoint.MeterUsageCheckpoint](),
-		periods:       make(map[string]*meterusagecheckpoint.PeriodCheckpoint),
+		watermarks:    make(map[string]time.Time),
 	}
 }
 
@@ -119,64 +118,57 @@ func (s *InMemoryMeterUsageCheckpointStore) ListPeriodTotals(
 	}, nil)
 }
 
-func periodKey(ctx context.Context, customerID string, periodStart time.Time) string {
-	return types.GetTenantID(ctx) + "|" + types.GetEnvironmentID(ctx) + "|" + customerID + "|" + periodStart.UTC().String()
+func watermarkKey(ctx context.Context, customerID string) string {
+	return types.GetTenantID(ctx) + "|" + types.GetEnvironmentID(ctx) + "|" + customerID
 }
 
-func (s *InMemoryMeterUsageCheckpointStore) ListPeriodCheckpoints(
+func (s *InMemoryMeterUsageCheckpointStore) ListUsageWatermarks(
 	ctx context.Context,
 	customerIDs []string,
-) ([]*meterusagecheckpoint.PeriodCheckpoint, error) {
+) ([]*meterusagecheckpoint.UsageWatermark, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	prefix := types.GetTenantID(ctx) + "|" + types.GetEnvironmentID(ctx) + "|"
-	wanted := lo.SliceToMap(customerIDs, func(id string) (string, bool) { return id, true })
-	var result []*meterusagecheckpoint.PeriodCheckpoint
-	for key, p := range s.periods {
-		if strings.HasPrefix(key, prefix) && wanted[p.CustomerID] {
-			copied := *p
-			result = append(result, &copied)
+	var result []*meterusagecheckpoint.UsageWatermark
+	for _, customerID := range customerIDs {
+		if at, ok := s.watermarks[watermarkKey(ctx, customerID)]; ok {
+			result = append(result, &meterusagecheckpoint.UsageWatermark{CustomerID: customerID, AggregatedUntil: at})
 		}
 	}
 	return result, nil
 }
 
-func (s *InMemoryMeterUsageCheckpointStore) AdvancePeriods(
+func (s *InMemoryMeterUsageCheckpointStore) UpdateCustomerCheckpoints(
 	ctx context.Context,
-	advances []*meterusagecheckpoint.PeriodAdvance,
+	updates []*meterusagecheckpoint.CustomerCheckpointUpdate,
 ) (int, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	advanced := 0
-	for _, a := range advances {
-		key := periodKey(ctx, a.CustomerID, a.PeriodStart)
-		p, ok := s.periods[key]
-		if !ok {
-			p = &meterusagecheckpoint.PeriodCheckpoint{CustomerID: a.CustomerID, PeriodStart: a.PeriodStart, AggregatedUntil: a.From}
-			s.periods[key] = p
-		}
-		if !p.AggregatedUntil.Equal(a.From) {
+	applied := 0
+	for _, u := range updates {
+		key := watermarkKey(ctx, u.CustomerID)
+		at, ok := s.watermarks[key]
+		if ok != !u.From.IsZero() || (ok && !at.Equal(u.From)) {
 			continue
 		}
-		p.AggregatedUntil = a.To
-		advanced++
-		if err := s.addPeriodTotals(ctx, a); err != nil {
-			return advanced, err
+		s.watermarks[key] = u.To
+		applied++
+		if err := s.addPeriodTotals(ctx, u); err != nil {
+			return applied, err
 		}
 	}
-	return advanced, nil
+	return applied, nil
 }
 
-func (s *InMemoryMeterUsageCheckpointStore) addPeriodTotals(ctx context.Context, a *meterusagecheckpoint.PeriodAdvance) error {
-	existing, err := s.ListPeriodTotals(ctx, a.CustomerID, a.PeriodStart)
-	if err != nil {
-		return err
-	}
-	byMeter := lo.KeyBy(existing, func(c *meterusagecheckpoint.MeterUsageCheckpoint) string { return c.MeterID })
-	for _, t := range a.Totals {
-		if current, ok := byMeter[t.MeterID]; ok {
+func (s *InMemoryMeterUsageCheckpointStore) addPeriodTotals(ctx context.Context, u *meterusagecheckpoint.CustomerCheckpointUpdate) error {
+	for _, t := range u.Totals {
+		existing, err := s.ListPeriodTotals(ctx, u.CustomerID, t.PeriodStart)
+		if err != nil {
+			return err
+		}
+		current, found := lo.Find(existing, func(c *meterusagecheckpoint.MeterUsageCheckpoint) bool { return c.MeterID == t.MeterID })
+		if found {
 			next := *current
-			next.AggregatedUntil = a.To
+			next.AggregatedUntil = u.To
 			if current.AggregationType == types.AggregationMax {
 				next.Total = decimal.Max(current.Total, t.Quantity)
 			} else {
@@ -187,10 +179,10 @@ func (s *InMemoryMeterUsageCheckpointStore) addPeriodTotals(ctx context.Context,
 			}
 			continue
 		}
-		periodStart := a.PeriodStart
+		periodStart := t.PeriodStart
 		row := &meterusagecheckpoint.MeterUsageCheckpoint{
-			ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT), CustomerID: a.CustomerID,
-			MeterID: t.MeterID, AggregationType: t.AggregationType, Total: t.Quantity, AggregatedUntil: a.To,
+			ID: types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT), CustomerID: u.CustomerID,
+			MeterID: t.MeterID, AggregationType: t.AggregationType, Total: t.Quantity, AggregatedUntil: u.To,
 			PeriodStart: &periodStart, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
 		}
 		if err := s.Create(ctx, row.ID, row); err != nil {

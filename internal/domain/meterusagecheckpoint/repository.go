@@ -16,25 +16,24 @@ type GetLatestBeforeParams struct {
 	Before          time.Time
 }
 
-// PeriodCheckpoint is how far one customer's per-period totals are aggregated.
-type PeriodCheckpoint struct {
+// UsageWatermark is how far a customer's usage has been added to their period totals.
+type UsageWatermark struct {
 	CustomerID      string
-	PeriodStart     time.Time
 	AggregatedUntil time.Time
 }
 
-// PeriodTotal is one meter's usage to add to a period total.
+// PeriodTotal is one meter's usage to add to one billing period's total.
 type PeriodTotal struct {
+	PeriodStart     time.Time
 	MeterID         string
 	AggregationType types.AggregationType
 	Quantity        decimal.Decimal
 }
 
-// PeriodAdvance adds Totals to one customer's period and moves its checkpoint from From to To.
-type PeriodAdvance struct {
-	CustomerID  string
-	PeriodStart time.Time
-	// From is the aggregated_until the run read: the period start for a period with no checkpoint yet.
+// CustomerCheckpointUpdate adds Totals to a customer's period totals and moves their watermark from From to To.
+type CustomerCheckpointUpdate struct {
+	CustomerID string
+	// From is the watermark the run read; zero for a customer with none.
 	From   time.Time
 	To     time.Time
 	Totals []PeriodTotal
@@ -55,11 +54,11 @@ type Repository interface {
 	// ListPeriodTotals returns the customer's per-period rows for one billing period.
 	ListPeriodTotals(ctx context.Context, customerID string, periodStart time.Time) ([]*MeterUsageCheckpoint, error)
 
-	// ListPeriodCheckpoints returns the period checkpoints of the given customers.
-	ListPeriodCheckpoints(ctx context.Context, customerIDs []string) ([]*PeriodCheckpoint, error)
+	// ListUsageWatermarks returns the watermarks of the given customers.
+	ListUsageWatermarks(ctx context.Context, customerIDs []string) ([]*UsageWatermark, error)
 
-	// AdvancePeriods applies every advance in one transaction: SUM and COUNT totals add, MAX keeps the
-	// higher value. An advance whose checkpoint is no longer at From is skipped, so a retry or an
-	// overlapping run never adds usage twice. It returns the number of advances applied.
-	AdvancePeriods(ctx context.Context, advances []*PeriodAdvance) (int, error)
+	// UpdateCustomerCheckpoints applies every update in one transaction: SUM and COUNT totals add, MAX
+	// keeps the higher value. An update whose watermark is no longer at From is skipped, so a retry or
+	// an overlapping run never adds usage twice. It returns the number of updates applied.
+	UpdateCustomerCheckpoints(ctx context.Context, updates []*CustomerCheckpointUpdate) (int, error)
 }
