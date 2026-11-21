@@ -34,7 +34,7 @@ func NewHourlyUsageRepository(cfg *config.Configuration, cache RedisCache, log *
 	impl, _ := cache.(*redisCacheImpl)
 	if impl == nil || impl.client == nil {
 		if cfg.AggregatedUsage.IsEnabledForAnyTenant() {
-			return nil, fmt.Errorf("aggregated_usage is enabled but Redis is not available: fix the redis config or set aggregated_usage.enabled=false and aggregated_usage.enabled_tenants=[]")
+			return nil, fmt.Errorf("aggregated_usage is enabled but Redis is not available: fix the redis config or set aggregated_usage.enabled=false")
 		}
 		log.Info(context.Background(), "NewHourlyUsageRepository: Redis client is nil, returning nil repository")
 		return nil, nil

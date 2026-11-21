@@ -563,8 +563,8 @@ meter_usage_tracking_lazy:
 
 # Hourly per-customer meter quantities in Redis for real-time usage reads.
 aggregated_usage:
-  enabled: false # true = every tenant
-  enabled_tenants: [] # tenant IDs enabled while enabled is false
+  enabled: false # master switch; when true, runs only for enabled_tenants
+  enabled_tenants: [] # tenant IDs with aggregated usage
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
 # per-customer Temporal workflow (spend + entitlement grants + wallet alerts).

@@ -61,10 +61,10 @@ func TestNewHourlyUsageRepositoryWithoutRedis(t *testing.T) {
 		wantErrMsg      string
 	}{
 		{name: "disabled returns no store, whatever dedup is"},
-		{name: "enabled for all tenants without Redis fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true}, singleDup: true, bulkDedup: true, wantErrMsg: "Redis is not available"},
-		{name: "enabled for listed tenants without Redis fails", aggregatedUsage: config.AggregatedUsageConfig{EnabledTenants: []string{"tenant_1"}}, singleDup: true, bulkDedup: true, wantErrMsg: "Redis is not available"},
-		{name: "enabled with single-event dedup off fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true}, bulkDedup: true, wantErrMsg: "meter_usage_tracking.redis_deduplication_enabled=true"},
-		{name: "enabled with bulk dedup off fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true}, singleDup: true, wantErrMsg: "bulk_meter_usage_tracking.redis_deduplication_enabled=true"},
+		{name: "enabled without tenants returns no store", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true}, singleDup: true, bulkDedup: true},
+		{name: "enabled for listed tenants without Redis fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_1"}}, singleDup: true, bulkDedup: true, wantErrMsg: "Redis is not available"},
+		{name: "enabled with single-event dedup off fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_1"}}, bulkDedup: true, wantErrMsg: "meter_usage_tracking.redis_deduplication_enabled=true"},
+		{name: "enabled with bulk dedup off fails", aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_1"}}, singleDup: true, wantErrMsg: "bulk_meter_usage_tracking.redis_deduplication_enabled=true"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1027,19 +1027,19 @@ type MeterUsageTrackingConfig struct {
 
 // AggregatedUsageConfig gates writing hourly per-customer meter quantities to Redis on ingest.
 type AggregatedUsageConfig struct {
-	// Enabled turns the aggregated usage on for every tenant; EnabledTenants turns it on for the listed ones only.
+	// Enabled is the master switch; aggregated usage runs only for the tenants in EnabledTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
 }
 
 // IsEnabledForTenant reports whether ingestion writes aggregated usage for tenantID.
 func (c AggregatedUsageConfig) IsEnabledForTenant(tenantID string) bool {
-	return resolveTenantRollout(tenantID, c.Enabled, c.EnabledTenants, nil)
+	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
 }
 
 // IsEnabledForAnyTenant reports whether aggregated usage is on for at least one tenant.
 func (c AggregatedUsageConfig) IsEnabledForAnyTenant() bool {
-	return c.Enabled || len(c.EnabledTenants) > 0
+	return c.Enabled && len(c.EnabledTenants) > 0
 }
 
 // ValidateAggregatedUsage rejects an enabled aggregated usage without Redis event dedup on both meter
