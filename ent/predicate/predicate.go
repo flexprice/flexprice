@@ -135,6 +135,9 @@ type Meter func(*sql.Selector)
 // MeterUsageCheckpoint is the predicate function for meterusagecheckpoint builders.
 type MeterUsageCheckpoint func(*sql.Selector)
 
+// MeterUsagePeriodCheckpoint is the predicate function for meterusageperiodcheckpoint builders.
+type MeterUsagePeriodCheckpoint func(*sql.Selector)
+
 // Payment is the predicate function for payment builders.
 type Payment func(*sql.Selector)
 

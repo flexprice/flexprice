@@ -40,7 +40,7 @@ func UsageCheckpointWorkflow(ctx workflow.Context, _ cronModels.UsageCheckpointW
 		RetryPolicy:         usageCheckpointRetryPolicy,
 	})
 	var environments []cronModels.UsageCheckpointEnvironment
-	if err := workflow.ExecuteActivity(listCtx, ActivityListUsageCheckpointEnvironments).Get(ctx, &environments); err != nil {
+	if err := workflow.ExecuteActivity(listCtx, ActivityListUsageCheckpointEnvironments, cronModels.UsageCheckpointListInput{Cutoff: cutoff}).Get(ctx, &environments); err != nil {
 		return err
 	}
 

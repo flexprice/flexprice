@@ -54,6 +54,7 @@ import (
 	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/ent/meterusageperiodcheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -143,6 +144,7 @@ const (
 	TypeJournalLine                      = "JournalLine"
 	TypeMeter                            = "Meter"
 	TypeMeterUsageCheckpoint             = "MeterUsageCheckpoint"
+	TypeMeterUsagePeriodCheckpoint       = "MeterUsagePeriodCheckpoint"
 	TypePayment                          = "Payment"
 	TypePaymentAttempt                   = "PaymentAttempt"
 	TypePaymentMethod                    = "PaymentMethod"
@@ -61670,6 +61672,884 @@ func (m *MeterUsageCheckpointMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *MeterUsageCheckpointMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown MeterUsageCheckpoint edge %s", name)
+}
+
+// MeterUsagePeriodCheckpointMutation represents an operation that mutates the MeterUsagePeriodCheckpoint nodes in the graph.
+type MeterUsagePeriodCheckpointMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	customer_id      *string
+	period_start     *time.Time
+	aggregated_until *time.Time
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*MeterUsagePeriodCheckpoint, error)
+	predicates       []predicate.MeterUsagePeriodCheckpoint
+}
+
+var _ ent.Mutation = (*MeterUsagePeriodCheckpointMutation)(nil)
+
+// meterusageperiodcheckpointOption allows management of the mutation configuration using functional options.
+type meterusageperiodcheckpointOption func(*MeterUsagePeriodCheckpointMutation)
+
+// newMeterUsagePeriodCheckpointMutation creates new mutation for the MeterUsagePeriodCheckpoint entity.
+func newMeterUsagePeriodCheckpointMutation(c config, op Op, opts ...meterusageperiodcheckpointOption) *MeterUsagePeriodCheckpointMutation {
+	m := &MeterUsagePeriodCheckpointMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeMeterUsagePeriodCheckpoint,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withMeterUsagePeriodCheckpointID sets the ID field of the mutation.
+func withMeterUsagePeriodCheckpointID(id string) meterusageperiodcheckpointOption {
+	return func(m *MeterUsagePeriodCheckpointMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *MeterUsagePeriodCheckpoint
+		)
+		m.oldValue = func(ctx context.Context) (*MeterUsagePeriodCheckpoint, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().MeterUsagePeriodCheckpoint.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withMeterUsagePeriodCheckpoint sets the old MeterUsagePeriodCheckpoint of the mutation.
+func withMeterUsagePeriodCheckpoint(node *MeterUsagePeriodCheckpoint) meterusageperiodcheckpointOption {
+	return func(m *MeterUsagePeriodCheckpointMutation) {
+		m.oldValue = func(context.Context) (*MeterUsagePeriodCheckpoint, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m MeterUsagePeriodCheckpointMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m MeterUsagePeriodCheckpointMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of MeterUsagePeriodCheckpoint entities.
+func (m *MeterUsagePeriodCheckpointMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *MeterUsagePeriodCheckpointMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().MeterUsagePeriodCheckpoint.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[meterusageperiodcheckpoint.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[meterusageperiodcheckpoint.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, meterusageperiodcheckpoint.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[meterusageperiodcheckpoint.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[meterusageperiodcheckpoint.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, meterusageperiodcheckpoint.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[meterusageperiodcheckpoint.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[meterusageperiodcheckpoint.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, meterusageperiodcheckpoint.FieldEnvironmentID)
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetPeriodStart sets the "period_start" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetPeriodStart(t time.Time) {
+	m.period_start = &t
+}
+
+// PeriodStart returns the value of the "period_start" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) PeriodStart() (r time.Time, exists bool) {
+	v := m.period_start
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriodStart returns the old "period_start" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldPeriodStart(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriodStart is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriodStart requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriodStart: %w", err)
+	}
+	return oldValue.PeriodStart, nil
+}
+
+// ResetPeriodStart resets all changes to the "period_start" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetPeriodStart() {
+	m.period_start = nil
+}
+
+// SetAggregatedUntil sets the "aggregated_until" field.
+func (m *MeterUsagePeriodCheckpointMutation) SetAggregatedUntil(t time.Time) {
+	m.aggregated_until = &t
+}
+
+// AggregatedUntil returns the value of the "aggregated_until" field in the mutation.
+func (m *MeterUsagePeriodCheckpointMutation) AggregatedUntil() (r time.Time, exists bool) {
+	v := m.aggregated_until
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregatedUntil returns the old "aggregated_until" field's value of the MeterUsagePeriodCheckpoint entity.
+// If the MeterUsagePeriodCheckpoint object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *MeterUsagePeriodCheckpointMutation) OldAggregatedUntil(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregatedUntil is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregatedUntil requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregatedUntil: %w", err)
+	}
+	return oldValue.AggregatedUntil, nil
+}
+
+// ResetAggregatedUntil resets all changes to the "aggregated_until" field.
+func (m *MeterUsagePeriodCheckpointMutation) ResetAggregatedUntil() {
+	m.aggregated_until = nil
+}
+
+// Where appends a list predicates to the MeterUsagePeriodCheckpointMutation builder.
+func (m *MeterUsagePeriodCheckpointMutation) Where(ps ...predicate.MeterUsagePeriodCheckpoint) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the MeterUsagePeriodCheckpointMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *MeterUsagePeriodCheckpointMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.MeterUsagePeriodCheckpoint, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *MeterUsagePeriodCheckpointMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *MeterUsagePeriodCheckpointMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (MeterUsagePeriodCheckpoint).
+func (m *MeterUsagePeriodCheckpointMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *MeterUsagePeriodCheckpointMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.tenant_id != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldEnvironmentID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldCustomerID)
+	}
+	if m.period_start != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldPeriodStart)
+	}
+	if m.aggregated_until != nil {
+		fields = append(fields, meterusageperiodcheckpoint.FieldAggregatedUntil)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *MeterUsagePeriodCheckpointMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case meterusageperiodcheckpoint.FieldTenantID:
+		return m.TenantID()
+	case meterusageperiodcheckpoint.FieldStatus:
+		return m.Status()
+	case meterusageperiodcheckpoint.FieldCreatedAt:
+		return m.CreatedAt()
+	case meterusageperiodcheckpoint.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case meterusageperiodcheckpoint.FieldCreatedBy:
+		return m.CreatedBy()
+	case meterusageperiodcheckpoint.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case meterusageperiodcheckpoint.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case meterusageperiodcheckpoint.FieldCustomerID:
+		return m.CustomerID()
+	case meterusageperiodcheckpoint.FieldPeriodStart:
+		return m.PeriodStart()
+	case meterusageperiodcheckpoint.FieldAggregatedUntil:
+		return m.AggregatedUntil()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *MeterUsagePeriodCheckpointMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case meterusageperiodcheckpoint.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case meterusageperiodcheckpoint.FieldStatus:
+		return m.OldStatus(ctx)
+	case meterusageperiodcheckpoint.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case meterusageperiodcheckpoint.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case meterusageperiodcheckpoint.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case meterusageperiodcheckpoint.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case meterusageperiodcheckpoint.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case meterusageperiodcheckpoint.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case meterusageperiodcheckpoint.FieldPeriodStart:
+		return m.OldPeriodStart(ctx)
+	case meterusageperiodcheckpoint.FieldAggregatedUntil:
+		return m.OldAggregatedUntil(ctx)
+	}
+	return nil, fmt.Errorf("unknown MeterUsagePeriodCheckpoint field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeterUsagePeriodCheckpointMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case meterusageperiodcheckpoint.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldPeriodStart:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriodStart(v)
+		return nil
+	case meterusageperiodcheckpoint.FieldAggregatedUntil:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregatedUntil(v)
+		return nil
+	}
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *MeterUsagePeriodCheckpointMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *MeterUsagePeriodCheckpointMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *MeterUsagePeriodCheckpointMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(meterusageperiodcheckpoint.FieldCreatedBy) {
+		fields = append(fields, meterusageperiodcheckpoint.FieldCreatedBy)
+	}
+	if m.FieldCleared(meterusageperiodcheckpoint.FieldUpdatedBy) {
+		fields = append(fields, meterusageperiodcheckpoint.FieldUpdatedBy)
+	}
+	if m.FieldCleared(meterusageperiodcheckpoint.FieldEnvironmentID) {
+		fields = append(fields, meterusageperiodcheckpoint.FieldEnvironmentID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *MeterUsagePeriodCheckpointMutation) ClearField(name string) error {
+	switch name {
+	case meterusageperiodcheckpoint.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case meterusageperiodcheckpoint.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case meterusageperiodcheckpoint.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	}
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *MeterUsagePeriodCheckpointMutation) ResetField(name string) error {
+	switch name {
+	case meterusageperiodcheckpoint.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case meterusageperiodcheckpoint.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case meterusageperiodcheckpoint.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case meterusageperiodcheckpoint.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case meterusageperiodcheckpoint.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case meterusageperiodcheckpoint.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case meterusageperiodcheckpoint.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case meterusageperiodcheckpoint.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case meterusageperiodcheckpoint.FieldPeriodStart:
+		m.ResetPeriodStart()
+		return nil
+	case meterusageperiodcheckpoint.FieldAggregatedUntil:
+		m.ResetAggregatedUntil()
+		return nil
+	}
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *MeterUsagePeriodCheckpointMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *MeterUsagePeriodCheckpointMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *MeterUsagePeriodCheckpointMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown MeterUsagePeriodCheckpoint edge %s", name)
 }
 
 // PaymentMutation represents an operation that mutates the Payment nodes in the graph.

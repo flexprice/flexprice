@@ -48,6 +48,7 @@ import (
 	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/ent/meterusageperiodcheckpoint"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -2135,6 +2136,39 @@ func init() {
 	meterusagecheckpointDescAggregationType := meterusagecheckpointFields[3].Descriptor()
 	// meterusagecheckpoint.AggregationTypeValidator is a validator for the "aggregation_type" field. It is called by the builders before save.
 	meterusagecheckpoint.AggregationTypeValidator = meterusagecheckpointDescAggregationType.Validators[0].(func(string) error)
+	meterusageperiodcheckpointMixin := schema.MeterUsagePeriodCheckpoint{}.Mixin()
+	meterusageperiodcheckpointMixinFields0 := meterusageperiodcheckpointMixin[0].Fields()
+	_ = meterusageperiodcheckpointMixinFields0
+	meterusageperiodcheckpointMixinFields1 := meterusageperiodcheckpointMixin[1].Fields()
+	_ = meterusageperiodcheckpointMixinFields1
+	meterusageperiodcheckpointFields := schema.MeterUsagePeriodCheckpoint{}.Fields()
+	_ = meterusageperiodcheckpointFields
+	// meterusageperiodcheckpointDescTenantID is the schema descriptor for tenant_id field.
+	meterusageperiodcheckpointDescTenantID := meterusageperiodcheckpointMixinFields0[0].Descriptor()
+	// meterusageperiodcheckpoint.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	meterusageperiodcheckpoint.TenantIDValidator = meterusageperiodcheckpointDescTenantID.Validators[0].(func(string) error)
+	// meterusageperiodcheckpointDescStatus is the schema descriptor for status field.
+	meterusageperiodcheckpointDescStatus := meterusageperiodcheckpointMixinFields0[1].Descriptor()
+	// meterusageperiodcheckpoint.DefaultStatus holds the default value on creation for the status field.
+	meterusageperiodcheckpoint.DefaultStatus = meterusageperiodcheckpointDescStatus.Default.(string)
+	// meterusageperiodcheckpointDescCreatedAt is the schema descriptor for created_at field.
+	meterusageperiodcheckpointDescCreatedAt := meterusageperiodcheckpointMixinFields0[2].Descriptor()
+	// meterusageperiodcheckpoint.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meterusageperiodcheckpoint.DefaultCreatedAt = meterusageperiodcheckpointDescCreatedAt.Default.(func() time.Time)
+	// meterusageperiodcheckpointDescUpdatedAt is the schema descriptor for updated_at field.
+	meterusageperiodcheckpointDescUpdatedAt := meterusageperiodcheckpointMixinFields0[3].Descriptor()
+	// meterusageperiodcheckpoint.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meterusageperiodcheckpoint.DefaultUpdatedAt = meterusageperiodcheckpointDescUpdatedAt.Default.(func() time.Time)
+	// meterusageperiodcheckpoint.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meterusageperiodcheckpoint.UpdateDefaultUpdatedAt = meterusageperiodcheckpointDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// meterusageperiodcheckpointDescEnvironmentID is the schema descriptor for environment_id field.
+	meterusageperiodcheckpointDescEnvironmentID := meterusageperiodcheckpointMixinFields1[0].Descriptor()
+	// meterusageperiodcheckpoint.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	meterusageperiodcheckpoint.DefaultEnvironmentID = meterusageperiodcheckpointDescEnvironmentID.Default.(string)
+	// meterusageperiodcheckpointDescCustomerID is the schema descriptor for customer_id field.
+	meterusageperiodcheckpointDescCustomerID := meterusageperiodcheckpointFields[1].Descriptor()
+	// meterusageperiodcheckpoint.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	meterusageperiodcheckpoint.CustomerIDValidator = meterusageperiodcheckpointDescCustomerID.Validators[0].(func(string) error)
 	paymentMixin := schema.Payment{}.Mixin()
 	paymentMixinFields0 := paymentMixin[0].Fields()
 	_ = paymentMixinFields0

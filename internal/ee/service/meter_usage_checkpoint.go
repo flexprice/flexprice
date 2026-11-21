@@ -175,18 +175,27 @@ func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
 // UsageCheckpointService adds finalized ClickHouse usage to per-period meter totals for customers
 // whose usage is in the Redis hourly totals.
 type UsageCheckpointService interface {
-	// CheckpointEnvironment brings every recently active customer of the tenant and environment
-	// in ctx up to cutoff: their current periods' totals then cover all usage before it.
+	// ActiveEnvironments returns the environments, of tenants with aggregated usage on, that had
+	// customers with usage in the hour before cutoff.
+	ActiveEnvironments(ctx context.Context, cutoff time.Time) ([]UsageCheckpointEnvironment, error)
+
+	// CheckpointEnvironment brings the period totals of the customers active in the hour before cutoff,
+	// in the tenant and environment in ctx, up to cutoff.
 	CheckpointEnvironment(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error)
 }
 
-// UsageCheckpointResult counts the customers read and their billing periods by outcome.
+// UsageCheckpointEnvironment names one tenant environment to checkpoint.
+type UsageCheckpointEnvironment struct {
+	TenantID      string
+	EnvironmentID string
+}
+
+// UsageCheckpointResult counts the customers read and what happened to each.
 type UsageCheckpointResult struct {
 	Customers int
 	Outcomes  map[string]int
 }
 
-// record counts billing periods (or customers, before their periods are known) under outcome.
 func (r *UsageCheckpointResult) record(ctx context.Context, outcome usageCheckpointOutcome, count int) {
 	if count == 0 {
 		return
@@ -198,12 +207,12 @@ func (r *UsageCheckpointResult) record(ctx context.Context, outcome usageCheckpo
 type usageCheckpointOutcome string
 
 const (
-	usageCheckpointUpdated         usageCheckpointOutcome = "updated"
-	usageCheckpointCurrent         usageCheckpointOutcome = "current"
-	usageCheckpointUnknownCustomer usageCheckpointOutcome = "unknown_customer"
-	usageCheckpointNoSubscription  usageCheckpointOutcome = "no_subscription"
-	usageCheckpointConflict        usageCheckpointOutcome = "conflict"
-	usageCheckpointFailed          usageCheckpointOutcome = "failed"
+	usageCheckpointUpdated               usageCheckpointOutcome = "updated"
+	usageCheckpointCurrent               usageCheckpointOutcome = "current"
+	usageCheckpointConflict              usageCheckpointOutcome = "conflict"
+	usageCheckpointUnknownCustomer       usageCheckpointOutcome = "unknown_customer"
+	usageCheckpointNoSubscription        usageCheckpointOutcome = "no_subscription"
+	usageCheckpointMultipleSubscriptions usageCheckpointOutcome = "multiple_subscriptions"
 )
 
 // checkpointBatchSize caps the customers in one Postgres or ClickHouse IN list. At 500, even
@@ -225,274 +234,183 @@ type usageWindow struct {
 	start, end time.Time
 }
 
-// periodUpdate is one customer's billing period, its stored rows and the window the run adds to them.
-type periodUpdate struct {
-	customerID         string
-	externalCustomerID string
-	periodStart        time.Time
-	rows               []*meterusagecheckpoint.MeterUsageCheckpoint
-	window             usageWindow
-}
-
-// windowTotals holds usage by window, then by external customer.
-type windowTotals map[usageWindow]map[string][]*events.MeterTotals
-
-func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
-	if s.HourlyUsageRepo == nil {
-		return nil, ierr.NewError("aggregated usage store is not configured").
-			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
-			Mark(ierr.ErrSystem)
-	}
-	externalCustomerIDs, err := s.recentlyActiveCustomers(ctx, cutoff)
+func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context, cutoff time.Time) ([]UsageCheckpointEnvironment, error) {
+	active, err := s.activeCustomers(ctx, cutoff)
 	if err != nil {
 		return nil, err
+	}
+	environments := lo.Uniq(lo.Map(active, func(c aggregatedusage.ActiveCustomer, _ int) UsageCheckpointEnvironment {
+		return UsageCheckpointEnvironment{TenantID: c.TenantID, EnvironmentID: c.EnvironmentID}
+	}))
+	return lo.Filter(environments, func(e UsageCheckpointEnvironment, _ int) bool {
+		return s.Config.AggregatedUsage.IsEnabledForTenant(e.TenantID)
+	}), nil
+}
+
+func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
+	active, err := s.activeCustomers(ctx, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	var externalCustomerIDs []string
+	for _, c := range active {
+		if c.TenantID == tenantID && c.EnvironmentID == environmentID {
+			externalCustomerIDs = append(externalCustomerIDs, c.ExternalCustomerID)
+		}
 	}
 
 	result := &UsageCheckpointResult{Customers: len(externalCustomerIDs), Outcomes: make(map[string]int)}
-	updates, err := s.pendingPeriodUpdates(ctx, externalCustomerIDs, cutoff, result)
-	if err != nil {
-		return nil, err
-	}
-	totals, err := s.readWindowTotals(ctx, updates)
-	if err != nil {
-		return nil, err
-	}
-	meters, err := s.supportedMeters(ctx, totals)
-	if err != nil {
-		return nil, err
-	}
-	for _, update := range updates {
-		result.record(ctx, s.writePeriodUpdate(ctx, update, totals[update.window][update.externalCustomerID], meters), 1)
+	for _, batch := range lo.Chunk(externalCustomerIDs, checkpointBatchSize) {
+		if err := s.checkpointBatch(ctx, batch, cutoff, result); err != nil {
+			return nil, err
+		}
 	}
 	return result, nil
 }
 
-// recentlyActiveCustomers reads the active sets of the late window's hours before cutoff, so a
-// customer missed by up to two failed runs is still picked up.
-func (s *usageCheckpointService) recentlyActiveCustomers(ctx context.Context, cutoff time.Time) ([]string, error) {
-	var customers []string
-	for hour := cutoff.Add(-aggregatedusage.LateWindow); hour.Before(cutoff); hour = hour.Add(time.Hour) {
-		active, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, hour)
-		if err != nil {
-			return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
-		}
-		customers = append(customers, active...)
+// activeCustomers reads the customers with usage in the hour before cutoff: the hour this run finalizes.
+// A customer missed by a failed run is caught up the next time they are active, from their checkpoint.
+func (s *usageCheckpointService) activeCustomers(ctx context.Context, cutoff time.Time) ([]aggregatedusage.ActiveCustomer, error) {
+	if s.HourlyUsageRepo == nil {
+		return nil, ierr.NewError("aggregated usage repository is not configured").
+			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
+			Mark(ierr.ErrSystem)
 	}
-	return lo.Uniq(customers), nil
+	active, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, cutoff.Add(-time.Hour))
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
+	}
+	return active, nil
 }
 
-// pendingPeriodUpdates loads the customers, their current periods and stored rows, and returns the
-// periods with usage left to add. The rest are recorded in result straight away.
-func (s *usageCheckpointService) pendingPeriodUpdates(
-	ctx context.Context,
-	externalCustomerIDs []string,
-	cutoff time.Time,
-	result *UsageCheckpointResult,
-) ([]*periodUpdate, error) {
-	var updates []*periodUpdate
-	for _, batch := range lo.Chunk(externalCustomerIDs, checkpointBatchSize) {
-		customerFilter := types.NewNoLimitCustomerFilter()
-		customerFilter.ExternalIDs = batch
-		customers, err := s.CustomerRepo.List(ctx, customerFilter)
-		if err != nil {
-			return nil, err
-		}
-		result.record(ctx, usageCheckpointUnknownCustomer, len(batch)-len(customers))
-		if len(customers) == 0 {
+// checkpointBatch brings up to checkpointBatchSize customers up to cutoff: two Postgres reads, one
+// ClickHouse read per distinct window and one Postgres transaction.
+func (s *usageCheckpointService) checkpointBatch(ctx context.Context, externalCustomerIDs []string, cutoff time.Time, result *UsageCheckpointResult) error {
+	customerFilter := types.NewNoLimitCustomerFilter()
+	customerFilter.ExternalIDs = externalCustomerIDs
+	customers, err := s.CustomerRepo.List(ctx, customerFilter)
+	if err != nil {
+		return err
+	}
+	result.record(ctx, usageCheckpointUnknownCustomer, len(externalCustomerIDs)-len(customers))
+	if len(customers) == 0 {
+		return nil
+	}
+	customerIDs := lo.Map(customers, func(c *customer.Customer, _ int) string { return c.ID })
+
+	subs, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CustomerIDs:        customerIDs,
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+	})
+	if err != nil {
+		return err
+	}
+	subsByCustomer := lo.GroupBy(subs, func(sub *subscription.Subscription) string { return sub.CustomerID })
+
+	checkpoints, err := s.MeterUsageCheckpointRepo.ListPeriodCheckpoints(ctx, customerIDs)
+	if err != nil {
+		return err
+	}
+	aggregatedUntil := make(map[string]time.Time, len(checkpoints))
+	for _, c := range checkpoints {
+		aggregatedUntil[c.CustomerID+"|"+c.PeriodStart.UTC().String()] = c.AggregatedUntil.UTC()
+	}
+
+	advances := make(map[string]*meterusagecheckpoint.PeriodAdvance)
+	customersByWindow := make(map[usageWindow][]string)
+	for _, cust := range customers {
+		switch len(subsByCustomer[cust.ID]) {
+		case 0:
+			result.record(ctx, usageCheckpointNoSubscription, 1)
+			continue
+		case 1:
+		default:
+			result.record(ctx, usageCheckpointMultipleSubscriptions, 1)
 			continue
 		}
+		sub := subsByCustomer[cust.ID][0]
+		periodStart := sub.CurrentPeriodStart.UTC()
+		window := usageWindow{start: periodStart, end: types.EarliestOf(cutoff.UTC(), sub.CurrentPeriodEnd.UTC())}
+		if at, ok := aggregatedUntil[cust.ID+"|"+periodStart.String()]; ok {
+			window.start = at
+		}
+		if !window.end.After(window.start) {
+			result.record(ctx, usageCheckpointCurrent, 1)
+			continue
+		}
+		advances[cust.ExternalID] = &meterusagecheckpoint.PeriodAdvance{
+			CustomerID: cust.ID, PeriodStart: periodStart, From: window.start, To: window.end,
+		}
+		customersByWindow[window] = append(customersByWindow[window], cust.ExternalID)
+	}
+	if len(advances) == 0 {
+		return nil
+	}
 
-		subs, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
-			QueryFilter:        types.NewNoLimitQueryFilter(),
-			CustomerIDs:        lo.Map(customers, func(c *customer.Customer, _ int) string { return c.ID }),
-			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+	if err := s.addWindowUsage(ctx, customersByWindow, advances); err != nil {
+		return err
+	}
+	advanced, err := s.MeterUsageCheckpointRepo.AdvancePeriods(ctx, lo.Values(advances))
+	if err != nil {
+		return err
+	}
+	result.record(ctx, usageCheckpointUpdated, advanced)
+	result.record(ctx, usageCheckpointConflict, len(advances)-advanced)
+	return nil
+}
+
+// addWindowUsage reads each window's usage from ClickHouse, once for all customers sharing it, and adds
+// it to their advances. Meters a period total cannot hold (deleted or unsupported) are left out.
+func (s *usageCheckpointService) addWindowUsage(
+	ctx context.Context,
+	customersByWindow map[usageWindow][]string,
+	advances map[string]*meterusagecheckpoint.PeriodAdvance,
+) error {
+	var rows []*events.MeterTotals
+	for window, externalCustomerIDs := range customersByWindow {
+		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: externalCustomerIDs,
+			StartTime:           window.start,
+			EndTime:             window.end,
+			// Stored totals, so FINAL merges duplicate rows.
+			UseFinal: true,
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
-		subsByCustomer := lo.GroupBy(subs, func(sub *subscription.Subscription) string { return sub.CustomerID })
-
-		for _, cust := range customers {
-			periods := currentPeriods(subsByCustomer[cust.ID], cutoff)
-			if len(periods) == 0 {
-				result.record(ctx, usageCheckpointNoSubscription, 1)
-				continue
-			}
-			for _, period := range periods {
-				rows, err := s.MeterUsageCheckpointRepo.ListPeriodTotals(ctx, cust.ID, period.start)
-				if err != nil {
-					return nil, err
-				}
-				window := usageWindow{start: period.start, end: cutoff.UTC()}
-				if len(rows) > 0 {
-					window.start = rows[0].AggregatedUntil.UTC()
-				}
-				if period.end.Before(window.end) {
-					window.end = period.end
-				}
-				if !window.end.After(window.start) {
-					result.record(ctx, usageCheckpointCurrent, 1)
-					continue
-				}
-				updates = append(updates, &periodUpdate{
-					customerID:         cust.ID,
-					externalCustomerID: cust.ExternalID,
-					periodStart:        period.start,
-					rows:               rows,
-					window:             window,
-				})
-			}
-		}
+		rows = append(rows, totals...)
 	}
-	return updates, nil
-}
-
-type billingPeriod struct {
-	start, end time.Time
-}
-
-// currentPeriods returns one period per distinct current period start that has begun. Subscriptions
-// sharing a start share rows, which run to the latest end among them.
-func currentPeriods(subs []*subscription.Subscription, cutoff time.Time) []billingPeriod {
-	ends := make(map[time.Time]time.Time)
-	for _, sub := range subs {
-		start := sub.CurrentPeriodStart.UTC()
-		if !start.Before(cutoff) {
-			continue
-		}
-		if end, ok := ends[start]; !ok || sub.CurrentPeriodEnd.After(end) {
-			ends[start] = sub.CurrentPeriodEnd.UTC()
-		}
-	}
-	periods := make([]billingPeriod, 0, len(ends))
-	for start, end := range ends {
-		periods = append(periods, billingPeriod{start: start, end: end})
-	}
-	return periods
-}
-
-// readWindowTotals reads each window once for all the customers that share it. In steady state every
-// customer shares [previous cutoff, cutoff), so a run is one query per batch of customers.
-func (s *usageCheckpointService) readWindowTotals(ctx context.Context, updates []*periodUpdate) (windowTotals, error) {
-	customersByWindow := make(map[usageWindow][]string)
-	for _, update := range updates {
-		customersByWindow[update.window] = append(customersByWindow[update.window], update.externalCustomerID)
+	if len(rows) == 0 {
+		return nil
 	}
 
-	totals := make(windowTotals, len(customersByWindow))
-	for window, customers := range customersByWindow {
-		byCustomer := make(map[string][]*events.MeterTotals)
-		for _, batch := range lo.Chunk(lo.Uniq(customers), checkpointBatchSize) {
-			rows, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
-				TenantID:            types.GetTenantID(ctx),
-				EnvironmentID:       types.GetEnvironmentID(ctx),
-				ExternalCustomerIDs: batch,
-				StartTime:           window.start,
-				EndTime:             window.end,
-				// Stored totals, so FINAL merges duplicate rows.
-				UseFinal: true,
-			})
-			if err != nil {
-				return nil, err
-			}
-			for _, row := range rows {
-				byCustomer[row.ExternalCustomerID] = append(byCustomer[row.ExternalCustomerID], row)
-			}
-		}
-		totals[window] = byCustomer
-	}
-	return totals, nil
-}
-
-// supportedMeters loads every meter with usage in totals, keeping those a period total can hold.
-func (s *usageCheckpointService) supportedMeters(ctx context.Context, totals windowTotals) (map[string]*meter.Meter, error) {
-	var ids []string
-	for _, byCustomer := range totals {
-		for _, rows := range byCustomer {
-			for _, row := range rows {
-				ids = append(ids, row.MeterID)
-			}
-		}
-	}
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Uniq(ids))
+	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Uniq(lo.Map(rows, func(t *events.MeterTotals, _ int) string { return t.MeterID })))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	supported := make(map[string]*meter.Meter, len(meters))
+	aggregationByMeter := make(map[string]types.AggregationType, len(meters))
 	for _, m := range meters {
 		if aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
-			supported[m.ID] = m
+			aggregationByMeter[m.ID] = m.Aggregation.Type
 		}
 	}
-	return supported, nil
-}
-
-// writePeriodUpdate merges a window's usage into one period's rows and saves them in one transaction.
-func (s *usageCheckpointService) writePeriodUpdate(
-	ctx context.Context,
-	update *periodUpdate,
-	window []*events.MeterTotals,
-	meters map[string]*meter.Meter,
-) usageCheckpointOutcome {
-	err := s.MeterUsageCheckpointRepo.UpdatePeriodTotals(ctx, meterusagecheckpoint.UpdatePeriodTotalsParams{
-		CustomerID:              update.customerID,
-		PeriodStart:             update.periodStart,
-		ExpectedAggregatedUntil: update.window.start,
-		Rows:                    mergePeriodTotals(ctx, update.rows, window, meters, update.window.end),
-	})
-	if ierr.IsVersionConflict(err) {
-		return usageCheckpointConflict
-	}
-	if err != nil {
-		s.Logger.Error(ctx, "usage checkpoint: failed to update billing period", "error", err,
-			"customer_id", update.customerID, "period_start", update.periodStart)
-		return usageCheckpointFailed
-	}
-	return usageCheckpointUpdated
-}
-
-// mergePeriodTotals adds a window's usage to a period's rows and stamps every row with windowEnd, so
-// the period's rows stay together. SUM and COUNT add, MAX keeps the higher value. Usage of a meter
-// with no row starts one, unless the meter is missing from meters (deleted or unsupported).
-func mergePeriodTotals(
-	ctx context.Context,
-	rows []*meterusagecheckpoint.MeterUsageCheckpoint,
-	window []*events.MeterTotals,
-	meters map[string]*meter.Meter,
-	windowEnd time.Time,
-) []*meterusagecheckpoint.MeterUsageCheckpoint {
-	windowByMeter := lo.KeyBy(window, func(t *events.MeterTotals) string { return t.MeterID })
-	next := make([]*meterusagecheckpoint.MeterUsageCheckpoint, 0, len(rows)+len(window))
-
 	for _, row := range rows {
-		updated := *row
-		updated.AggregatedUntil = windowEnd
-		if total, ok := windowByMeter[row.MeterID]; ok {
-			updated.Total = addWindowTotal(row.AggregationType, row.Total, true, total)
-			delete(windowByMeter, row.MeterID)
-		}
-		next = append(next, &updated)
-	}
-
-	for meterID, total := range windowByMeter {
-		m, ok := meters[meterID]
+		aggregation, ok := aggregationByMeter[row.MeterID]
 		if !ok {
 			continue
 		}
-		next = append(next, &meterusagecheckpoint.MeterUsageCheckpoint{
-			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT),
-			MeterID:         m.ID,
-			AggregationType: m.Aggregation.Type,
-			Total:           addWindowTotal(m.Aggregation.Type, decimal.Zero, false, total),
-			AggregatedUntil: windowEnd,
-			EnvironmentID:   types.GetEnvironmentID(ctx),
-			BaseModel:       types.GetDefaultBaseModel(ctx),
+		advance := advances[row.ExternalCustomerID]
+		advance.Totals = append(advance.Totals, meterusagecheckpoint.PeriodTotal{
+			MeterID:         row.MeterID,
+			AggregationType: aggregation,
+			Quantity:        addWindowTotal(aggregation, decimal.Zero, false, row),
 		})
 	}
-	return next
+	return nil
 }
 
 // addWindowTotal merges one window's total into a stored total. hasStored is false for a new row,

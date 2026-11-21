@@ -21,10 +21,10 @@ type fakeHourlyUsageRepository struct {
 	calls  int
 	usage  []aggregatedusage.HourlyUsage
 	err    error
-	active map[time.Time][]string
+	active map[time.Time][]aggregatedusage.ActiveCustomer
 }
 
-func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]string, error) {
+func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]aggregatedusage.ActiveCustomer, error) {
 	return f.active[hour], f.err
 }
 
@@ -76,26 +76,26 @@ func TestRecordAggregatedUsage(t *testing.T) {
 	}{
 		{
 			name:            "enabled tenant writes supported meters only",
-			aggregatedUsage: config.AggregatedUsageConfig{EnabledTenants: []string{"tenant_on"}},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records:         []*events.MeterUsage{usage("mtr_sum", now, 2), usage("mtr_sum", now, 3), usage("mtr_unique", now, 1)},
 			wantCalls:       1,
 			wantSum:         "5",
 		},
 		{
 			name:            "tenant not enabled writes nothing",
-			aggregatedUsage: config.AggregatedUsageConfig{EnabledTenants: []string{"tenant_other"}},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_other"}},
 			records:         []*events.MeterUsage{usage("mtr_sum", now, 2)},
 			wantSum:         "0",
 		},
 		{
 			name:            "usage older than the cutoff skips Redis",
-			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records:         []*events.MeterUsage{usage("mtr_sum", now.Add(-5*time.Hour), 2)},
 			wantSum:         "0",
 		},
 		{
 			name:            "count is one per event, whatever the quantity",
-			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records:         []*events.MeterUsage{usage("mtr_count", now, 7), usage("mtr_count", now, 0)},
 			wantCalls:       1,
 			wantSum:         "0",
@@ -103,14 +103,14 @@ func TestRecordAggregatedUsage(t *testing.T) {
 		},
 		{
 			name:            "the cutoff hour is kept, usage just before it is dropped",
-			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records:         []*events.MeterUsage{usage("mtr_sum", cutoff, 2), usage("mtr_sum", cutoff.Add(-time.Second), 3)},
 			wantCalls:       1,
 			wantSum:         "2",
 		},
 		{
 			name:            "rows without a customer are skipped",
-			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records: []*events.MeterUsage{{
 				Event: events.Event{Timestamp: now}, MeterID: "mtr_sum", QtyTotal: decimal.NewFromInt(2),
 			}},
@@ -118,7 +118,7 @@ func TestRecordAggregatedUsage(t *testing.T) {
 		},
 		{
 			name:            "store error is swallowed",
-			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true},
+			aggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 			records:         []*events.MeterUsage{usage("mtr_sum", now, 2)},
 			storeErr:        errors.New("redis down"),
 			wantCalls:       1,
@@ -152,7 +152,7 @@ func TestRecordAggregatedUsage(t *testing.T) {
 func TestRecordAggregatedUsageWithoutStore(t *testing.T) {
 	svc := &meterUsageTrackingService{ServiceParams: ServiceParams{
 		Logger: logger.NewNoopLogger(),
-		Config: &config.Configuration{AggregatedUsage: config.AggregatedUsageConfig{Enabled: true}},
+		Config: &config.Configuration{AggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}}},
 	}}
 	require.NotPanics(t, func() {
 		svc.recordAggregatedUsage(aggregatedUsageCtx(), []*events.MeterUsage{{MeterID: "mtr_sum"}}, nil)
@@ -179,7 +179,7 @@ func newAggregatedUsageConsumer(t *testing.T, dedupEnabled bool) (*meterUsageTra
 			SettingsRepo: testutil.NewInMemorySettingsStore(),
 			Locker:       testutil.NewInMemoryRedisLocker(testutil.NewInMemoryRedis().(*testutil.InMemoryRedis)),
 			Config: &config.Configuration{
-				AggregatedUsage:        config.AggregatedUsageConfig{Enabled: true},
+				AggregatedUsage:        config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}},
 				MeterUsageTracking:     config.MeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 				BulkMeterUsageTracking: config.BulkMeterUsageTrackingConfig{RedisDeduplicationEnabled: dedupEnabled},
 			},

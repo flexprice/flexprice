@@ -360,7 +360,7 @@ func RegisterWorkflowsAndActivities(
 		revenueRollup:                cronActivities.NewRevenueRollupActivities(revenue.New(params), params.Config, params.Logger),
 		revenueRecognition:           cronActivities.NewRevenueRecognitionActivities(params.JournalService, params.Logger),
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
-		usageCheckpoint:              cronActivities.NewUsageCheckpointActivities(service.NewUsageCheckpointService(params), tenantService, environmentService, params.Config, params.Logger),
+		usageCheckpoint:              cronActivities.NewUsageCheckpointActivities(service.NewUsageCheckpointService(params), params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 		emailDispatch:                cronActivities.NewEmailDispatchActivities(service.NewEmailNotificationService(params), params.Logger),
 	}

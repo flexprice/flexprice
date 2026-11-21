@@ -48,11 +48,19 @@ type HourlyUsage struct {
 	Quantity           decimal.Decimal
 }
 
+// ActiveCustomer is a customer with usage in some hour.
+type ActiveCustomer struct {
+	TenantID           string
+	EnvironmentID      string
+	ExternalCustomerID string
+}
+
 // Repository keeps hourly usage in Redis for the tenant and environment in ctx.
 type Repository interface {
 	// Increment merges usage into Redis: SUM and COUNT add, MAX keeps the higher value. Entries for
 	// the same customer, meter and hour may repeat.
 	Increment(ctx context.Context, usage []HourlyUsage) error
-	// ListActiveCustomers returns the external customer IDs with usage in the UTC hour starting at hour.
-	ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error)
+	// ListActiveCustomers returns every customer, across tenants and environments, with usage in the
+	// UTC hour starting at hour.
+	ListActiveCustomers(ctx context.Context, hour time.Time) ([]ActiveCustomer, error)
 }

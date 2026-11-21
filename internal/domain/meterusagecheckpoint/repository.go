@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // GetLatestBeforeParams selects one customer's checkpoints for a meter and aggregation type.
@@ -15,15 +16,28 @@ type GetLatestBeforeParams struct {
 	Before          time.Time
 }
 
-// UpdatePeriodTotalsParams moves one customer's per-period rows for one billing period
-// from ExpectedAggregatedUntil to the AggregatedUntil set on each row.
-type UpdatePeriodTotalsParams struct {
+// PeriodCheckpoint is how far one customer's per-period totals are aggregated.
+type PeriodCheckpoint struct {
+	CustomerID      string
+	PeriodStart     time.Time
+	AggregatedUntil time.Time
+}
+
+// PeriodTotal is one meter's usage to add to a period total.
+type PeriodTotal struct {
+	MeterID         string
+	AggregationType types.AggregationType
+	Quantity        decimal.Decimal
+}
+
+// PeriodAdvance adds Totals to one customer's period and moves its checkpoint from From to To.
+type PeriodAdvance struct {
 	CustomerID  string
 	PeriodStart time.Time
-	// ExpectedAggregatedUntil is the aggregated_until every stored row of the period must still have.
-	ExpectedAggregatedUntil time.Time
-	// Rows carry the new total and aggregated_until; a row missing from the table is created.
-	Rows []*MeterUsageCheckpoint
+	// From is the aggregated_until the run read: the period start for a period with no checkpoint yet.
+	From   time.Time
+	To     time.Time
+	Totals []PeriodTotal
 }
 
 // Repository stores running totals, one per customer, meter and instant, and per-period
@@ -41,7 +55,11 @@ type Repository interface {
 	// ListPeriodTotals returns the customer's per-period rows for one billing period.
 	ListPeriodTotals(ctx context.Context, customerID string, periodStart time.Time) ([]*MeterUsageCheckpoint, error)
 
-	// UpdatePeriodTotals writes every row in one transaction, or nothing and a version-conflict
-	// error when any stored row of the period is no longer at params.ExpectedAggregatedUntil.
-	UpdatePeriodTotals(ctx context.Context, params UpdatePeriodTotalsParams) error
+	// ListPeriodCheckpoints returns the period checkpoints of the given customers.
+	ListPeriodCheckpoints(ctx context.Context, customerIDs []string) ([]*PeriodCheckpoint, error)
+
+	// AdvancePeriods applies every advance in one transaction: SUM and COUNT totals add, MAX keeps the
+	// higher value. An advance whose checkpoint is no longer at From is skipped, so a retry or an
+	// overlapping run never adds usage twice. It returns the number of advances applied.
+	AdvancePeriods(ctx context.Context, advances []*PeriodAdvance) (int, error)
 }

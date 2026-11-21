@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -15,9 +16,10 @@ import (
 const (
 	aggregatedUsageHourLayout = "2006010215"
 
-	// activeSetTTL outlives the last checkpoint run that reads an hour's active set: that run's cutoff
-	// is the hour plus LateWindow, and it fires LateWindow + CutoffGrace later. One hour of slack.
-	activeSetTTL = 2*aggregatedusage.LateWindow + aggregatedusage.CutoffGrace + time.Hour
+	// activeSetTTL outlives the checkpoint run that reads an hour's active set: it fires 1h + LateWindow
+	// + CutoffGrace after the hour starts (4h10m), and the TTL may date from the hour's first write.
+	// The rest is slack for a retried run.
+	activeSetTTL = 5 * time.Hour
 )
 
 type hourlyUsageRepository struct {
@@ -34,7 +36,7 @@ func NewHourlyUsageRepository(cfg *config.Configuration, cache RedisCache, log *
 	impl, _ := cache.(*redisCacheImpl)
 	if impl == nil || impl.client == nil {
 		if cfg.AggregatedUsage.IsEnabledForAnyTenant() {
-			return nil, fmt.Errorf("aggregated_usage is enabled but Redis is not available: fix the redis config or set aggregated_usage.enabled=false and aggregated_usage.enabled_tenants=[]")
+			return nil, fmt.Errorf("aggregated_usage is enabled but Redis is not available: fix the redis config or set aggregated_usage.enabled=false")
 		}
 		log.Info(context.Background(), "NewHourlyUsageRepository: Redis client is nil, returning nil repository")
 		return nil, nil
@@ -55,11 +57,10 @@ func newAggregatedUsageKeys(keyPrefix, tenantID, environmentID string, b aggrega
 	}
 	hour := b.Hour.UTC().Format(aggregatedUsageHourLayout)
 	customerTag := fmt.Sprintf("{%s:%s:%s}", tenantID, environmentID, b.ExternalCustomerID)
-	environmentTag := fmt.Sprintf("{%s:%s}", tenantID, environmentID)
 	return aggregatedUsageKeys{
 		qty:    prefix + "qty:" + customerTag + ":" + hour,
 		max:    prefix + "max:" + customerTag + ":" + hour,
-		active: prefix + "active:" + environmentTag + ":" + hour,
+		active: prefix + "active:" + hour,
 		field:  aggregatedUsageField(b),
 	}
 }
@@ -96,7 +97,7 @@ func (s *hourlyUsageRepository) Increment(ctx context.Context, usage []aggregate
 			pipe.Do(ctx, "HINCRBYFLOAT", keys.qty, keys.field, b.Quantity.String())
 			pipe.Expire(ctx, keys.qty, aggregatedusage.HourlyUsageTTL)
 		}
-		pipe.SAdd(ctx, keys.active, b.ExternalCustomerID)
+		pipe.SAdd(ctx, keys.active, activeMember(tenantID, environmentID, b.ExternalCustomerID))
 		pipe.Expire(ctx, keys.active, activeSetTTL)
 	}
 
@@ -137,15 +138,25 @@ func mergeHourlyUsage(usage []aggregatedusage.HourlyUsage) []aggregatedusage.Hou
 	return result
 }
 
-func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error) {
-	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-	if tenantID == "" || environmentID == "" {
-		return nil, fmt.Errorf("aggregated usage active customers: tenant and environment are required")
-	}
-	key := newAggregatedUsageKeys(s.keyPrefix, tenantID, environmentID, aggregatedusage.HourlyUsage{Hour: hour}).active
-	customers, err := s.client.SMembers(ctx, key).Result()
+func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]aggregatedusage.ActiveCustomer, error) {
+	key := newAggregatedUsageKeys(s.keyPrefix, "", "", aggregatedusage.HourlyUsage{Hour: hour}).active
+	members, err := s.client.SMembers(ctx, key).Result()
 	if err != nil {
 		return nil, fmt.Errorf("aggregated usage active customers: %w", err)
 	}
+	customers := make([]aggregatedusage.ActiveCustomer, 0, len(members))
+	for _, member := range members {
+		parts := strings.SplitN(member, "|", 3)
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("aggregated usage active customers: malformed member %q in %s", member, key)
+		}
+		customers = append(customers, aggregatedusage.ActiveCustomer{TenantID: parts[0], EnvironmentID: parts[1], ExternalCustomerID: parts[2]})
+	}
 	return customers, nil
+}
+
+// activeMember names a customer in the hourly active set, which spans all tenants and environments.
+// Tenant and environment IDs contain no "|", so the external ID may.
+func activeMember(tenantID, environmentID, externalCustomerID string) string {
+	return tenantID + "|" + environmentID + "|" + externalCustomerID
 }

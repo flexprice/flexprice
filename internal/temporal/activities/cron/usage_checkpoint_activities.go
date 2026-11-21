@@ -3,72 +3,33 @@ package cron
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// UsageCheckpointActivities lists the environments with aggregated usage and checkpoints one at a time.
+// UsageCheckpointActivities finds the environments with active customers and checkpoints one at a time.
 type UsageCheckpointActivities struct {
-	checkpointService  service.UsageCheckpointService
-	tenantService      service.TenantService
-	environmentService service.EnvironmentService
-	config             *config.Configuration
-	logger             *logger.Logger
+	checkpointService service.UsageCheckpointService
+	logger            *logger.Logger
 }
 
-func NewUsageCheckpointActivities(
-	checkpointService service.UsageCheckpointService,
-	tenantService service.TenantService,
-	environmentService service.EnvironmentService,
-	cfg *config.Configuration,
-	log *logger.Logger,
-) *UsageCheckpointActivities {
-	return &UsageCheckpointActivities{
-		checkpointService:  checkpointService,
-		tenantService:      tenantService,
-		environmentService: environmentService,
-		config:             cfg,
-		logger:             log,
-	}
+func NewUsageCheckpointActivities(checkpointService service.UsageCheckpointService, log *logger.Logger) *UsageCheckpointActivities {
+	return &UsageCheckpointActivities{checkpointService: checkpointService, logger: log}
 }
 
-// ListUsageCheckpointEnvironmentsActivity returns every published environment of each tenant with
-// aggregated usage enabled; none when aggregated_usage is off.
-func (a *UsageCheckpointActivities) ListUsageCheckpointEnvironmentsActivity(ctx context.Context) ([]cronModels.UsageCheckpointEnvironment, error) {
-	aggregatedUsage := a.config.AggregatedUsage
-	if !aggregatedUsage.IsEnabledForAnyTenant() {
-		return nil, nil
-	}
-	tenants, err := a.tenantService.GetAllTenants(ctx)
+// ListUsageCheckpointEnvironmentsActivity returns the environments with customers to checkpoint up to input.Cutoff.
+func (a *UsageCheckpointActivities) ListUsageCheckpointEnvironmentsActivity(ctx context.Context, input cronModels.UsageCheckpointListInput) ([]cronModels.UsageCheckpointEnvironment, error) {
+	environments, err := a.checkpointService.ActiveEnvironments(ctx, input.Cutoff)
 	if err != nil {
 		return nil, err
 	}
-
-	var environments []cronModels.UsageCheckpointEnvironment
-	for _, tenant := range tenants {
-		if !aggregatedUsage.IsEnabledForTenant(tenant.ID) {
-			continue
-		}
-		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenant.ID)
-		filter := types.GetDefaultFilter()
-		for {
-			page, err := a.environmentService.GetEnvironments(tenantCtx, filter)
-			if err != nil {
-				return nil, err
-			}
-			for _, environment := range page.Environments {
-				environments = append(environments, cronModels.UsageCheckpointEnvironment{TenantID: tenant.ID, EnvironmentID: environment.ID})
-			}
-			if len(page.Environments) < filter.Limit {
-				break
-			}
-			filter.Offset += filter.Limit
-		}
+	result := make([]cronModels.UsageCheckpointEnvironment, 0, len(environments))
+	for _, e := range environments {
+		result = append(result, cronModels.UsageCheckpointEnvironment{TenantID: e.TenantID, EnvironmentID: e.EnvironmentID})
 	}
-	return environments, nil
+	return result, nil
 }
 
 // UsageCheckpointEnvironmentActivity brings one environment's per-period totals up to input.Cutoff.
