@@ -79,8 +79,8 @@ func TestOptimizeMeterUsage_LookbackCapped(t *testing.T) {
 	conn := &fakeOptimizeConn{}
 	err, o, _ := runOptimize(t, conn, true, 9)
 	require.NoError(t, err)
-	require.Equal(t, maxOptimizeLookback, o)
-	require.Len(t, conn.execs, maxOptimizeLookback)
+	require.Equal(t, 7, o)
+	require.Len(t, conn.execs, 7)
 }
 
 func TestOptimizeMeterUsage_ContinuesAfterFailure(t *testing.T) {
