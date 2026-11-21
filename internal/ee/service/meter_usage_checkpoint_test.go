@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -189,7 +189,7 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 	h := &checkpointHarness{
 		usage:           &countingMeterUsageStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()},
 		checkpoints:     testutil.NewInMemoryMeterUsageCheckpointStore(),
-		aggregatedUsage: &fakeHourlyUsageRepository{active: map[time.Time][]aggregatedusage.ActiveCustomer{}},
+		aggregatedUsage: &fakeHourlyUsageRepository{active: map[time.Time][]string{}},
 	}
 	h.svc = &usageCheckpointService{ServiceParams: ServiceParams{
 		Logger:                   logger.NewNoopLogger(),
@@ -219,8 +219,7 @@ func (h *checkpointHarness) ingest(t *testing.T, externalCustomerID, id string, 
 	}
 	require.NoError(t, h.usage.BulkInsertMeterUsage(aggregatedUsageCtx(), records))
 	hour := ts.UTC().Truncate(time.Hour)
-	h.aggregatedUsage.active[hour] = append(h.aggregatedUsage.active[hour],
-		aggregatedusage.ActiveCustomer{TenantID: "tenant_on", EnvironmentID: "env_1", ExternalCustomerID: externalCustomerID})
+	h.aggregatedUsage.active[hour] = append(h.aggregatedUsage.active[hour], externalCustomerID)
 }
 
 // totals returns a customer's per-period totals by meter and requires their checkpoint is at wantUntil.
@@ -328,8 +327,7 @@ func TestUsageCheckpointSkipsCustomersWithoutOneSubscription(t *testing.T) {
 		BaseModel: types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
 	}))
 	h.ingest(t, "cust_1", "e1", checkpointHour(6), 4)
-	h.aggregatedUsage.active[checkpointHour(6)] = append(h.aggregatedUsage.active[checkpointHour(6)],
-		aggregatedusage.ActiveCustomer{TenantID: "tenant_on", EnvironmentID: "env_1", ExternalCustomerID: "cust_missing"})
+	h.aggregatedUsage.active[checkpointHour(6)] = append(h.aggregatedUsage.active[checkpointHour(6)], "cust_missing")
 
 	result, err := h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(7))
 	require.NoError(t, err)
@@ -339,19 +337,30 @@ func TestUsageCheckpointSkipsCustomersWithoutOneSubscription(t *testing.T) {
 }
 
 func TestUsageCheckpointActiveEnvironments(t *testing.T) {
-	h := newCheckpointHarness(t, checkpointPeriodStart.AddDate(0, 1, 0))
-	h.aggregatedUsage.active[checkpointHour(6)] = []aggregatedusage.ActiveCustomer{
-		{TenantID: "tenant_on", EnvironmentID: "env_1", ExternalCustomerID: "cust_1"},
-		{TenantID: "tenant_on", EnvironmentID: "env_1", ExternalCustomerID: "cust_2"},
-		{TenantID: "tenant_on", EnvironmentID: "env_2", ExternalCustomerID: "cust_3"},
-		{TenantID: "tenant_off", EnvironmentID: "env_1", ExternalCustomerID: "cust_4"},
+	environments := testutil.NewInMemoryEnvironmentStore()
+	// The in-memory store doesn't scope by tenant (the Postgres repository does), so only tenant_on is seeded.
+	ctx := context.WithValue(context.Background(), types.CtxTenantID, "tenant_on")
+	for _, id := range []string{"env_1", "env_2"} {
+		require.NoError(t, environments.Create(ctx, &environment.Environment{
+			ID: id, BaseModel: types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
+		}))
 	}
-	environments, err := h.svc.ActiveEnvironments(context.Background(), checkpointHour(7))
+	svc := &usageCheckpointService{ServiceParams: ServiceParams{
+		Config:          &config.Configuration{AggregatedUsage: config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{"tenant_on"}}},
+		EnvironmentRepo: environments,
+	}}
+
+	got, err := svc.ActiveEnvironments(context.Background())
 	require.NoError(t, err)
 	require.ElementsMatch(t, []UsageCheckpointEnvironment{
 		{TenantID: "tenant_on", EnvironmentID: "env_1"},
 		{TenantID: "tenant_on", EnvironmentID: "env_2"},
-	}, environments, "one entry per environment; tenants with aggregated usage off are left out")
+	}, got, "every environment of each enabled tenant")
+
+	svc.Config.AggregatedUsage.Enabled = false
+	got, err = svc.ActiveEnvironments(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, got, "the master switch off lists nothing")
 }
 
 func TestUsageCheckpointWithoutStore(t *testing.T) {

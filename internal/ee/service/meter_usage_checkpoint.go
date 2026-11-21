@@ -175,9 +175,8 @@ func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
 // UsageCheckpointService adds finalized ClickHouse usage to per-period meter totals for customers
 // whose usage is in the Redis hourly totals.
 type UsageCheckpointService interface {
-	// ActiveEnvironments returns the environments, of tenants with aggregated usage on, that had
-	// customers with usage in the hour before cutoff.
-	ActiveEnvironments(ctx context.Context, cutoff time.Time) ([]UsageCheckpointEnvironment, error)
+	// ActiveEnvironments returns every environment of the tenants with aggregated usage on.
+	ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error)
 
 	// CheckpointEnvironment brings the period totals of the customers active in the hour before cutoff,
 	// in the tenant and environment in ctx, up to cutoff.
@@ -234,30 +233,43 @@ type usageWindow struct {
 	start, end time.Time
 }
 
-func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context, cutoff time.Time) ([]UsageCheckpointEnvironment, error) {
-	active, err := s.activeCustomers(ctx, cutoff)
-	if err != nil {
-		return nil, err
+func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error) {
+	aggregatedUsage := s.Config.AggregatedUsage
+	if !aggregatedUsage.Enabled {
+		return nil, nil
 	}
-	environments := lo.Uniq(lo.Map(active, func(c aggregatedusage.ActiveCustomer, _ int) UsageCheckpointEnvironment {
-		return UsageCheckpointEnvironment{TenantID: c.TenantID, EnvironmentID: c.EnvironmentID}
-	}))
-	return lo.Filter(environments, func(e UsageCheckpointEnvironment, _ int) bool {
-		return s.Config.AggregatedUsage.IsEnabledForTenant(e.TenantID)
-	}), nil
+	var environments []UsageCheckpointEnvironment
+	for _, tenantID := range aggregatedUsage.EnabledTenants {
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantID)
+		filter := types.GetDefaultFilter()
+		for {
+			page, err := s.EnvironmentRepo.List(tenantCtx, filter)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range page {
+				environments = append(environments, UsageCheckpointEnvironment{TenantID: tenantID, EnvironmentID: e.ID})
+			}
+			if len(page) < filter.Limit {
+				break
+			}
+			filter.Offset += filter.Limit
+		}
+	}
+	return environments, nil
 }
 
 func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
-	active, err := s.activeCustomers(ctx, cutoff)
-	if err != nil {
-		return nil, err
+	if s.HourlyUsageRepo == nil {
+		return nil, ierr.NewError("aggregated usage repository is not configured").
+			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
+			Mark(ierr.ErrSystem)
 	}
-	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
-	var externalCustomerIDs []string
-	for _, c := range active {
-		if c.TenantID == tenantID && c.EnvironmentID == environmentID {
-			externalCustomerIDs = append(externalCustomerIDs, c.ExternalCustomerID)
-		}
+	// Only the hour this run finalizes: a customer missed by a failed run is caught up the next time
+	// they are active, from their checkpoint.
+	externalCustomerIDs, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, cutoff.Add(-time.Hour))
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
 	}
 
 	result := &UsageCheckpointResult{Customers: len(externalCustomerIDs), Outcomes: make(map[string]int)}
@@ -267,21 +279,6 @@ func (s *usageCheckpointService) CheckpointEnvironment(ctx context.Context, cuto
 		}
 	}
 	return result, nil
-}
-
-// activeCustomers reads the customers with usage in the hour before cutoff: the hour this run finalizes.
-// A customer missed by a failed run is caught up the next time they are active, from their checkpoint.
-func (s *usageCheckpointService) activeCustomers(ctx context.Context, cutoff time.Time) ([]aggregatedusage.ActiveCustomer, error) {
-	if s.HourlyUsageRepo == nil {
-		return nil, ierr.NewError("aggregated usage repository is not configured").
-			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
-			Mark(ierr.ErrSystem)
-	}
-	active, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, cutoff.Add(-time.Hour))
-	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
-	}
-	return active, nil
 }
 
 // checkpointBatch brings up to checkpointBatchSize customers up to cutoff: two Postgres reads, one

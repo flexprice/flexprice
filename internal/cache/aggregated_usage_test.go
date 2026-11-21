@@ -28,7 +28,7 @@ func TestNewAggregatedUsageKeys(t *testing.T) {
 			usage:      aggregatedusage.HourlyUsage{ExternalCustomerID: "cust_1", Hour: hour, MeterID: "meter_a", Aggregation: types.AggregationSum},
 			wantQty:    "qty:{tenant_1:env_1:cust_1}:2026111813",
 			wantMax:    "max:{tenant_1:env_1:cust_1}:2026111813",
-			wantActive: "active:2026111813",
+			wantActive: "active:{tenant_1:env_1}:2026111813",
 			wantField:  "sum:meter_a",
 		},
 		{
@@ -37,7 +37,7 @@ func TestNewAggregatedUsageKeys(t *testing.T) {
 			usage:      aggregatedusage.HourlyUsage{ExternalCustomerID: "cust_1", Hour: hour.In(time.FixedZone("IST", 5*3600+1800)), MeterID: "meter_b", Aggregation: types.AggregationCount},
 			wantQty:    "fp:qty:{tenant_1:env_1:cust_1}:2026111813",
 			wantMax:    "fp:max:{tenant_1:env_1:cust_1}:2026111813",
-			wantActive: "fp:active:2026111813",
+			wantActive: "fp:active:{tenant_1:env_1}:2026111813",
 			wantField:  "count:meter_b",
 		},
 	}

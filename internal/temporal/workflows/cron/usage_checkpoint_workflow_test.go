@@ -13,7 +13,7 @@ import (
 	"go.temporal.io/sdk/testsuite"
 )
 
-func listUsageCheckpointEnvironmentsStub(_ context.Context, _ cronModels.UsageCheckpointListInput) ([]cronModels.UsageCheckpointEnvironment, error) {
+func listUsageCheckpointEnvironmentsStub(_ context.Context) ([]cronModels.UsageCheckpointEnvironment, error) {
 	return nil, nil
 }
 
@@ -42,7 +42,7 @@ func TestUsageCheckpointWorkflow(t *testing.T) {
 			env := ts.NewTestWorkflowEnvironment()
 			env.RegisterActivityWithOptions(listUsageCheckpointEnvironmentsStub, activity.RegisterOptions{Name: ActivityListUsageCheckpointEnvironments})
 			env.RegisterActivityWithOptions(usageCheckpointEnvironmentStub, activity.RegisterOptions{Name: ActivityUsageCheckpointEnvironment})
-			env.OnActivity(ActivityListUsageCheckpointEnvironments, mock.Anything, mock.Anything).Return(environments, nil)
+			env.OnActivity(ActivityListUsageCheckpointEnvironments, mock.Anything).Return(environments, nil)
 
 			var mu sync.Mutex
 			var inputs []cronModels.UsageCheckpointEnvironmentInput

@@ -21,10 +21,10 @@ type fakeHourlyUsageRepository struct {
 	calls  int
 	usage  []aggregatedusage.HourlyUsage
 	err    error
-	active map[time.Time][]aggregatedusage.ActiveCustomer
+	active map[time.Time][]string
 }
 
-func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]aggregatedusage.ActiveCustomer, error) {
+func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]string, error) {
 	return f.active[hour], f.err
 }
 

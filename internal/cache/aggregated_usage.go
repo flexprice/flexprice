@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -56,10 +55,11 @@ func newAggregatedUsageKeys(keyPrefix, tenantID, environmentID string, b aggrega
 	}
 	hour := b.Hour.UTC().Format(aggregatedUsageHourLayout)
 	customerTag := fmt.Sprintf("{%s:%s:%s}", tenantID, environmentID, b.ExternalCustomerID)
+	environmentTag := fmt.Sprintf("{%s:%s}", tenantID, environmentID)
 	return aggregatedUsageKeys{
 		qty:    prefix + "qty:" + customerTag + ":" + hour,
 		max:    prefix + "max:" + customerTag + ":" + hour,
-		active: prefix + "active:" + hour,
+		active: prefix + "active:" + environmentTag + ":" + hour,
 		field:  aggregatedUsageField(b),
 	}
 }
@@ -96,7 +96,7 @@ func (s *hourlyUsageRepository) Increment(ctx context.Context, usage []aggregate
 			pipe.Do(ctx, "HINCRBYFLOAT", keys.qty, keys.field, b.Quantity.String())
 			pipe.Expire(ctx, keys.qty, aggregatedusage.HourlyUsageTTL)
 		}
-		pipe.SAdd(ctx, keys.active, activeMember(tenantID, environmentID, b.ExternalCustomerID))
+		pipe.SAdd(ctx, keys.active, b.ExternalCustomerID)
 		pipe.Expire(ctx, keys.active, activeSetTTL)
 	}
 
@@ -137,25 +137,15 @@ func mergeHourlyUsage(usage []aggregatedusage.HourlyUsage) []aggregatedusage.Hou
 	return result
 }
 
-func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]aggregatedusage.ActiveCustomer, error) {
-	key := newAggregatedUsageKeys(s.keyPrefix, "", "", aggregatedusage.HourlyUsage{Hour: hour}).active
-	members, err := s.client.SMembers(ctx, key).Result()
+func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error) {
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" {
+		return nil, fmt.Errorf("aggregated usage active customers: tenant and environment are required")
+	}
+	key := newAggregatedUsageKeys(s.keyPrefix, tenantID, environmentID, aggregatedusage.HourlyUsage{Hour: hour}).active
+	customers, err := s.client.SMembers(ctx, key).Result()
 	if err != nil {
 		return nil, fmt.Errorf("aggregated usage active customers: %w", err)
 	}
-	customers := make([]aggregatedusage.ActiveCustomer, 0, len(members))
-	for _, member := range members {
-		parts := strings.SplitN(member, "|", 3)
-		if len(parts) != 3 {
-			return nil, fmt.Errorf("aggregated usage active customers: malformed member %q in %s", member, key)
-		}
-		customers = append(customers, aggregatedusage.ActiveCustomer{TenantID: parts[0], EnvironmentID: parts[1], ExternalCustomerID: parts[2]})
-	}
 	return customers, nil
-}
-
-// activeMember names a customer in the hourly active set, which spans all tenants and environments.
-// Tenant and environment IDs contain no "|", so the external ID may.
-func activeMember(tenantID, environmentID, externalCustomerID string) string {
-	return tenantID + "|" + environmentID + "|" + externalCustomerID
 }

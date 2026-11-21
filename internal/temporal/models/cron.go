@@ -157,12 +157,7 @@ type SelfBillingHourlyWorkflowInput struct{}
 // UsageCheckpointWorkflowInput is the input for UsageCheckpointWorkflow.
 type UsageCheckpointWorkflowInput struct{}
 
-// UsageCheckpointListInput asks for the environments with customers to checkpoint up to Cutoff.
-type UsageCheckpointListInput struct {
-	Cutoff time.Time `json:"cutoff"`
-}
-
-// UsageCheckpointEnvironment names one tenant environment with customers to checkpoint.
+// UsageCheckpointEnvironment names one tenant environment with aggregated usage enabled.
 type UsageCheckpointEnvironment struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
