@@ -1239,6 +1239,10 @@ func init() {
 	customer.DefaultTaxTreatment = types.TaxTreatment(customerDescTaxTreatment.Default.(string))
 	// customer.TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
 	customer.TaxTreatmentValidator = customerDescTaxTreatment.Validators[0].(func(string) error)
+	// customerDescAggregatedUsageEligible is the schema descriptor for aggregated_usage_eligible field.
+	customerDescAggregatedUsageEligible := customerFields[17].Descriptor()
+	// customer.DefaultAggregatedUsageEligible holds the default value on creation for the aggregated_usage_eligible field.
+	customer.DefaultAggregatedUsageEligible = customerDescAggregatedUsageEligible.Default.(bool)
 	emaillogMixin := schema.EmailLog{}.Mixin()
 	emaillogMixinFields0 := emaillogMixin[0].Fields()
 	_ = emaillogMixinFields0

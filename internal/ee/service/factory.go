@@ -1,6 +1,8 @@
 package service
 
 import (
+	"golang.org/x/sync/singleflight"
+
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
@@ -96,6 +98,9 @@ type ServiceParams struct {
 	Locker        cache.Locker
 	// HourlyUsageRepo holds hourly per-customer meter quantities in Redis; nil without Redis.
 	HourlyUsageRepo aggregatedusage.Repository
+	// WalletBalanceComputes merges concurrent real-time balance computes of one wallet into one; shared by
+	// every service built from these params. Nil (tests) computes each call.
+	WalletBalanceComputes *singleflight.Group
 
 	// Repositories
 	AuthRepo                     auth.Repository
@@ -317,6 +322,7 @@ func NewServiceParams(
 		RedisCache:                   redisCache,
 		Locker:                       locker,
 		HourlyUsageRepo:              hourlyUsageRepository,
+		WalletBalanceComputes:        &singleflight.Group{},
 		AuthRepo:                     authRepo,
 		UserRepo:                     userRepo,
 		EventRepo:                    eventRepo,

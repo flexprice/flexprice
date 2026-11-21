@@ -310,6 +310,20 @@ func (_c *CustomerCreate) SetSettings(v *types.SettingsOverride) *CustomerCreate
 	return _c
 }
 
+// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
+func (_c *CustomerCreate) SetAggregatedUsageEligible(v bool) *CustomerCreate {
+	_c.mutation.SetAggregatedUsageEligible(v)
+	return _c
+}
+
+// SetNillableAggregatedUsageEligible sets the "aggregated_usage_eligible" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableAggregatedUsageEligible(v *bool) *CustomerCreate {
+	if v != nil {
+		_c.SetAggregatedUsageEligible(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *CustomerCreate) SetID(v string) *CustomerCreate {
 	_c.mutation.SetID(v)
@@ -375,6 +389,10 @@ func (_c *CustomerCreate) defaults() {
 		v := customer.DefaultTaxTreatment
 		_c.mutation.SetTaxTreatment(v)
 	}
+	if _, ok := _c.mutation.AggregatedUsageEligible(); !ok {
+		v := customer.DefaultAggregatedUsageEligible
+		_c.mutation.SetAggregatedUsageEligible(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -419,6 +437,9 @@ func (_c *CustomerCreate) check() error {
 		if err := customer.TaxTreatmentValidator(string(v)); err != nil {
 			return &ValidationError{Name: "tax_treatment", err: fmt.Errorf(`ent: validator failed for field "Customer.tax_treatment": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.AggregatedUsageEligible(); !ok {
+		return &ValidationError{Name: "aggregated_usage_eligible", err: errors.New(`ent: missing required field "Customer.aggregated_usage_eligible"`)}
 	}
 	return nil
 }
@@ -550,6 +571,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Settings(); ok {
 		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
 		_node.Settings = value
+	}
+	if value, ok := _c.mutation.AggregatedUsageEligible(); ok {
+		_spec.SetField(customer.FieldAggregatedUsageEligible, field.TypeBool, value)
+		_node.AggregatedUsageEligible = value
 	}
 	return _node, _spec
 }

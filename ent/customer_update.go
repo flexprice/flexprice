@@ -375,6 +375,20 @@ func (_u *CustomerUpdate) ClearSettings() *CustomerUpdate {
 	return _u
 }
 
+// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
+func (_u *CustomerUpdate) SetAggregatedUsageEligible(v bool) *CustomerUpdate {
+	_u.mutation.SetAggregatedUsageEligible(v)
+	return _u
+}
+
+// SetNillableAggregatedUsageEligible sets the "aggregated_usage_eligible" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableAggregatedUsageEligible(v *bool) *CustomerUpdate {
+	if v != nil {
+		_u.SetAggregatedUsageEligible(*v)
+	}
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdate) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -563,6 +577,9 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AggregatedUsageEligible(); ok {
+		_spec.SetField(customer.FieldAggregatedUsageEligible, field.TypeBool, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -928,6 +945,20 @@ func (_u *CustomerUpdateOne) ClearSettings() *CustomerUpdateOne {
 	return _u
 }
 
+// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
+func (_u *CustomerUpdateOne) SetAggregatedUsageEligible(v bool) *CustomerUpdateOne {
+	_u.mutation.SetAggregatedUsageEligible(v)
+	return _u
+}
+
+// SetNillableAggregatedUsageEligible sets the "aggregated_usage_eligible" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableAggregatedUsageEligible(v *bool) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetAggregatedUsageEligible(*v)
+	}
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -1146,6 +1177,9 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AggregatedUsageEligible(); ok {
+		_spec.SetField(customer.FieldAggregatedUsageEligible, field.TypeBool, value)
 	}
 	_node = &Customer{config: _u.config}
 	_spec.Assign = _node.assignValues

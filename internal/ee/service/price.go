@@ -139,6 +139,7 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
 	}
+	s.markPriceSourceChanged(ctx, p)
 	return response, nil
 }
 
@@ -467,6 +468,11 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 				s.syncPriceToQuickBooksIfEnabled(syncCtx, priceResp.Price.ID, priceResp.Price.EntityID)
 			}
 		}
+	}
+	// One evaluation per plan or addon, however many of its prices the batch created.
+	created := lo.UniqBy(response.Items, func(p *dto.PriceResponse) string { return string(p.EntityType) + ":" + p.EntityID })
+	for _, priceResp := range created {
+		s.markPriceSourceChanged(ctx, priceResp.Price)
 	}
 
 	return response, nil
@@ -1066,6 +1072,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		if newPriceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 			s.syncPriceToQuickBooksIfEnabled(ctx, newPriceResp.Price.ID, newPriceResp.Price.EntityID)
 		}
+		s.markPriceSourceChanged(ctx, existingPrice)
 
 		return newPriceResp, nil
 	} else {
@@ -1107,6 +1114,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		}
 
 		response := &dto.PriceResponse{Price: existingPrice}
+		s.markPriceSourceChanged(ctx, existingPrice)
 
 		return response, nil
 	}
@@ -1160,8 +1168,20 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	if err := s.PriceRepo.Update(ctx, price, true); err != nil {
 		return err
 	}
+	s.markPriceSourceChanged(ctx, price)
 
 	return nil
+}
+
+// markPriceSourceChanged re-evaluates the aggregated usage eligibility of the customers billed on a plan or addon
+// once one of its prices is added, edited or ended.
+func (s *priceService) markPriceSourceChanged(ctx context.Context, p *price.Price) {
+	switch p.EntityType {
+	case types.PRICE_ENTITY_TYPE_PLAN:
+		NewAggregatedUsageService(s.ServiceParams).EvaluateEligibility(ctx, AggregatedUsagePlan, p.EntityID)
+	case types.PRICE_ENTITY_TYPE_ADDON:
+		NewAggregatedUsageService(s.ServiceParams).EvaluateEligibility(ctx, AggregatedUsageAddon, p.EntityID)
+	}
 }
 
 // calculateBucketedMaxCost calculates cost for bucketed max values

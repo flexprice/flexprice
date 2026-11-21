@@ -171,6 +171,11 @@ func BillingEntityID(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldBillingEntityID, v))
 }
 
+// AggregatedUsageEligible applies equality check predicate on the "aggregated_usage_eligible" field. It's identical to AggregatedUsageEligibleEQ.
+func AggregatedUsageEligible(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAggregatedUsageEligible, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldTenantID, v))
@@ -1673,6 +1678,16 @@ func SettingsIsNil() predicate.Customer {
 // SettingsNotNil applies the NotNil predicate on the "settings" field.
 func SettingsNotNil() predicate.Customer {
 	return predicate.Customer(sql.FieldNotNull(FieldSettings))
+}
+
+// AggregatedUsageEligibleEQ applies the EQ predicate on the "aggregated_usage_eligible" field.
+func AggregatedUsageEligibleEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldAggregatedUsageEligible, v))
+}
+
+// AggregatedUsageEligibleNEQ applies the NEQ predicate on the "aggregated_usage_eligible" field.
+func AggregatedUsageEligibleNEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldAggregatedUsageEligible, v))
 }
 
 // And groups predicates with the AND operator between them.

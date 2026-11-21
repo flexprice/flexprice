@@ -19,4 +19,9 @@ type Repository interface {
 	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's customers
 	// without an entity to its default entity, bypassing the activity log.
 	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
+	// IsAggregatedUsageEligible reads whether the customer's wallet balance can be served from the aggregated usage.
+	IsAggregatedUsageEligible(ctx context.Context, id string) (bool, error)
+	// SetAggregatedUsageEligible sets the flag on the customers whose flag differs, bypassing the activity log
+	// (it is internal bookkeeping), and returns the IDs it changed.
+	SetAggregatedUsageEligible(ctx context.Context, ids []string, eligible bool) ([]string, error)
 }

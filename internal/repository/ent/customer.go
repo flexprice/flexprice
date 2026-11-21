@@ -622,6 +622,69 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	r.redisCache.Delete(ctx, cacheKey)
 }
 
+func (r *customerRepository) IsAggregatedUsageEligible(ctx context.Context, id string) (bool, error) {
+	span := StartRepositorySpan(ctx, "customer", "is_aggregated_usage_eligible", map[string]interface{}{"customer_id": id})
+	defer FinishSpan(span)
+
+	eligible, err := r.client.Reader(ctx).Customer.Query().
+		Where(
+			customer.ID(id),
+			customer.TenantID(types.GetTenantID(ctx)),
+			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Select(customer.FieldAggregatedUsageEligible).
+		Bool(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return false, ierr.WithError(err).WithHintf("Customer with ID %s was not found", id).Mark(ierr.ErrNotFound)
+		}
+		return false, ierr.WithError(err).WithHint("Failed to read the customer's aggregated usage flag").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return eligible, nil
+}
+
+func (r *customerRepository) SetAggregatedUsageEligible(ctx context.Context, ids []string, eligible bool) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	span := StartRepositorySpan(ctx, "customer", "set_aggregated_usage_eligible", map[string]interface{}{
+		"customer_count": len(ids),
+		"eligible":       eligible,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		UPDATE customers
+		SET aggregated_usage_eligible = $3
+		WHERE tenant_id = $1 AND environment_id = $2 AND id = ANY($4) AND aggregated_usage_eligible <> $3
+		RETURNING id`
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, eligible, pq.Array(ids))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("Failed to update the customers' aggregated usage flag").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var changed []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			SetSpanError(span, err)
+			return changed, ierr.WithError(err).WithHint("Failed to read updated customers").Mark(ierr.ErrDatabase)
+		}
+		changed = append(changed, id)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return changed, ierr.WithError(err).WithHint("Failed to read updated customers").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return changed, nil
+}
+
 func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)

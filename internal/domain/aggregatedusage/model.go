@@ -28,6 +28,12 @@ func Cutoff(now time.Time) time.Time {
 	return now.UTC().Add(-LateWindow - CutoffGrace).Truncate(time.Hour)
 }
 
+// OldestRedisHour is the oldest hour whose usage is certain to still be in Redis: the TTL runs from
+// the last write, which is no earlier than the hour's start. Older hours may have expired.
+func OldestRedisHour(now time.Time) time.Time {
+	return now.UTC().Truncate(time.Hour).Add(-(HourlyUsageTTL - time.Hour))
+}
+
 // SupportsAggregation reports whether usage with this aggregation can be kept as hourly usage in Redis.
 func SupportsAggregation(aggregation types.AggregationType) bool {
 	switch aggregation {
@@ -53,6 +59,8 @@ type Repository interface {
 	// Increment merges usage into Redis: SUM and COUNT add, MAX keeps the higher value. Entries for
 	// the same customer, meter and hour may repeat.
 	Increment(ctx context.Context, usage []HourlyUsage) error
+	// ListForCustomer reads one customer's usage for the given hours in one round trip.
+	ListForCustomer(ctx context.Context, externalCustomerID string, hours []time.Time) ([]HourlyUsage, error)
 	// ListActiveCustomers returns the external customer IDs with usage in the UTC hour starting at hour.
 	ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error)
 }

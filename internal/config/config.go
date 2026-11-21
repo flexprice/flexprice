@@ -1030,6 +1030,8 @@ type AggregatedUsageConfig struct {
 	// Enabled is the master switch; aggregated usage runs only for the tenants in EnabledTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
+	// BalanceFreshSeconds lets a real-time balance read reuse a balance computed within this many seconds; 0 turns it off.
+	BalanceFreshSeconds int64 `mapstructure:"balance_fresh_seconds" default:"5"`
 }
 
 // IsEnabledForTenant reports whether ingestion writes aggregated usage for tenantID.
@@ -1342,6 +1344,7 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
+	v.SetDefault("aggregated_usage.balance_fresh_seconds", 5)
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")

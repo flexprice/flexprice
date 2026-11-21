@@ -941,6 +941,7 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 }
 
 func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, entitlementID string) {
+	s.markEntitlementSourceChanged(ctx, entitlementID)
 	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
 		EntitlementID: entitlementID,
 		TenantID:      types.GetTenantID(ctx),
@@ -963,6 +964,31 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+	}
+}
+
+// markEntitlementSourceChanged re-evaluates the aggregated usage eligibility of the customers an entitlement change
+// affects: everyone on its plan or addon, or its subscription's customer.
+func (s *entitlementService) markEntitlementSourceChanged(ctx context.Context, entitlementID string) {
+	if s.Config == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return
+	}
+	ent, err := s.EntitlementRepo.Get(ctx, entitlementID)
+	if ierr.IsNotFound(err) {
+		return // deleted: losing an entitlement can't make an aggregated usage price wrong
+	}
+	if err != nil {
+		s.Logger.Error(ctx, "aggregated usage: failed to load changed entitlement", "error", err, "entitlement_id", entitlementID)
+		return
+	}
+	aggregatedUsage := NewAggregatedUsageService(s.ServiceParams)
+	switch ent.EntityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsagePlan, ent.EntityID)
+	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsageAddon, ent.EntityID)
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsageSubscription, ent.EntityID)
 	}
 }
 

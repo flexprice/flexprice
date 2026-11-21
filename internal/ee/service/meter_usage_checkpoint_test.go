@@ -200,6 +200,7 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 		MeterUsageRepo:           h.usage,
 		MeterUsageCheckpointRepo: h.checkpoints,
 		HourlyUsageRepo:          h.aggregatedUsage,
+		RedisCache:               testutil.NewInMemoryRedis(),
 	}}
 	return h
 }

@@ -33052,38 +33052,39 @@ func (m *CreditNoteLineItemMutation) ResetEdge(name string) error {
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
 type CustomerMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *string
-	tenant_id             *string
-	status                *string
-	created_at            *time.Time
-	updated_at            *time.Time
-	created_by            *string
-	updated_by            *string
-	environment_id        *string
-	metadata              *map[string]string
-	external_id           *string
-	name                  *string
-	email                 *string
-	contact               *string
-	billing_currency      *string
-	address_line1         *string
-	address_line2         *string
-	address_city          *string
-	address_state         *string
-	address_postal_code   *string
-	address_country       *string
-	timezone              *string
-	tax_treatment         *types.TaxTreatment
-	contact_persons       *[]*schema.ContactPerson
-	appendcontact_persons []*schema.ContactPerson
-	billing_entity_id     *string
-	settings              **types.SettingsOverride
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*Customer, error)
-	predicates            []predicate.Customer
+	op                        Op
+	typ                       string
+	id                        *string
+	tenant_id                 *string
+	status                    *string
+	created_at                *time.Time
+	updated_at                *time.Time
+	created_by                *string
+	updated_by                *string
+	environment_id            *string
+	metadata                  *map[string]string
+	external_id               *string
+	name                      *string
+	email                     *string
+	contact                   *string
+	billing_currency          *string
+	address_line1             *string
+	address_line2             *string
+	address_city              *string
+	address_state             *string
+	address_postal_code       *string
+	address_country           *string
+	timezone                  *string
+	tax_treatment             *types.TaxTreatment
+	contact_persons           *[]*schema.ContactPerson
+	appendcontact_persons     []*schema.ContactPerson
+	billing_entity_id         *string
+	settings                  **types.SettingsOverride
+	aggregated_usage_eligible *bool
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*Customer, error)
+	predicates                []predicate.Customer
 }
 
 var _ ent.Mutation = (*CustomerMutation)(nil)
@@ -34291,6 +34292,42 @@ func (m *CustomerMutation) ResetSettings() {
 	delete(m.clearedFields, customer.FieldSettings)
 }
 
+// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
+func (m *CustomerMutation) SetAggregatedUsageEligible(b bool) {
+	m.aggregated_usage_eligible = &b
+}
+
+// AggregatedUsageEligible returns the value of the "aggregated_usage_eligible" field in the mutation.
+func (m *CustomerMutation) AggregatedUsageEligible() (r bool, exists bool) {
+	v := m.aggregated_usage_eligible
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAggregatedUsageEligible returns the old "aggregated_usage_eligible" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldAggregatedUsageEligible(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAggregatedUsageEligible is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAggregatedUsageEligible requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAggregatedUsageEligible: %w", err)
+	}
+	return oldValue.AggregatedUsageEligible, nil
+}
+
+// ResetAggregatedUsageEligible resets all changes to the "aggregated_usage_eligible" field.
+func (m *CustomerMutation) ResetAggregatedUsageEligible() {
+	m.aggregated_usage_eligible = nil
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -34325,7 +34362,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -34398,6 +34435,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.settings != nil {
 		fields = append(fields, customer.FieldSettings)
 	}
+	if m.aggregated_usage_eligible != nil {
+		fields = append(fields, customer.FieldAggregatedUsageEligible)
+	}
 	return fields
 }
 
@@ -34454,6 +34494,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingEntityID()
 	case customer.FieldSettings:
 		return m.Settings()
+	case customer.FieldAggregatedUsageEligible:
+		return m.AggregatedUsageEligible()
 	}
 	return nil, false
 }
@@ -34511,6 +34553,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingEntityID(ctx)
 	case customer.FieldSettings:
 		return m.OldSettings(ctx)
+	case customer.FieldAggregatedUsageEligible:
+		return m.OldAggregatedUsageEligible(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -34687,6 +34731,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSettings(v)
+		return nil
+	case customer.FieldAggregatedUsageEligible:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAggregatedUsageEligible(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
@@ -34913,6 +34964,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldSettings:
 		m.ResetSettings()
+		return nil
+	case customer.FieldAggregatedUsageEligible:
+		m.ResetAggregatedUsageEligible()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)

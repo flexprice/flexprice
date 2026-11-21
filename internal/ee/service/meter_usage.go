@@ -33,6 +33,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -275,6 +276,8 @@ type GetSubscriptionMeterUsageRequest struct {
 	BillingAnchor   *time.Time
 	UseFinal        bool // true for invoice creation
 	IncludeFeatures bool // true for analytics (resolve meter → feature)
+	// Source is the caller; wallet reads of an eligible customer's current period come from the aggregated usage.
+	Source types.UsageSource
 
 	// Analytics-only filters. These are forwarded to the windowed
 	// GetDetailedAnalytics call inside GetSubscriptionMeterUsage. They have no
@@ -489,6 +492,71 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	return s.GetSubscriptionMeterUsageWithSub(ctx, sub, req)
 }
 
+// aggregatedMeterUsage serves a wallet read of a customer on the aggregated usage path: one usage per charged meter,
+// with its plan or addon price and its quantity from the aggregated usage. served is false off that path; a
+// aggregated usage failure is logged and the caller reads Postgres and ClickHouse instead.
+func (s *meterUsageService) aggregatedMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
+	if !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return nil, false
+	}
+	aggregatedUsage := NewAggregatedUsageService(s.ServiceParams)
+	if !aggregatedUsage.IsAggregatedUsageEligible(ctx, sub, types.UsageSourceWallet) {
+		metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadIneligible))
+		return nil, false
+	}
+	prices, meters, err := aggregatedUsage.UsagePrices(ctx, sub)
+	if err != nil {
+		return s.aggregatedUsageReadFailed(ctx, sub, err)
+	}
+	quantities, err := aggregatedUsage.PeriodQuantities(ctx, sub, meters)
+	if err != nil {
+		return s.aggregatedUsageReadFailed(ctx, sub, err)
+	}
+	metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadServed))
+	return aggregatedSubscriptionMeterUsage(sub, prices, meters, quantities), true
+}
+
+// aggregatedUsageReadFailed records a failed aggregated usage read so the caller falls back to Postgres and ClickHouse.
+func (s *meterUsageService) aggregatedUsageReadFailed(ctx context.Context, sub *subscription.Subscription, err error) (*SubscriptionMeterUsage, bool) {
+	metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadError))
+	s.logger.Error(ctx, "aggregated usage read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
+	return nil, false
+}
+
+// aggregatedSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or
+// addon price over the current period.
+func aggregatedSubscriptionMeterUsage(
+	sub *subscription.Subscription,
+	pricesByMeter map[string]*price.Price,
+	meters map[string]*meter.Meter,
+	quantities map[string]decimal.Decimal,
+) *SubscriptionMeterUsage {
+	result := &SubscriptionMeterUsage{
+		Subscription:   sub,
+		LineItemUsages: make([]*LineItemMeterUsage, 0, len(quantities)),
+		MeterMap:       meters,
+		PriceMap:       make(map[string]*price.Price, len(pricesByMeter)),
+		FeatureMap:     make(map[string]*feature.Feature),
+		MeterToFeature: make(map[string]*feature.Feature),
+	}
+	for meterID, p := range pricesByMeter {
+		result.PriceMap[p.ID] = p
+		quantity, hasUsage := quantities[meterID]
+		if !hasUsage {
+			continue
+		}
+		result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+			MeterID:     meterID,
+			Meter:       meters[meterID],
+			Price:       p,
+			PeriodStart: sub.CurrentPeriodStart,
+			PeriodEnd:   sub.CurrentPeriodEnd,
+			Usage:       quantity,
+		})
+	}
+	return result
+}
+
 // GetSubscriptionMeterUsageWithSub is the data-fed variant of
 // GetSubscriptionMeterUsage: the caller supplies the subscription so no extra
 // DB fetch happens for it. Line items are (re)loaded scoped to the usage window
@@ -500,6 +568,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 ) (*SubscriptionMeterUsage, error) {
 	if req == nil || sub == nil {
 		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
+	}
+
+	if req.Source == types.UsageSourceWallet && !req.LifetimeUsage &&
+		req.StartTime.Equal(sub.CurrentPeriodStart) && req.EndTime.Equal(sub.CurrentPeriodEnd) {
+		if result, served := s.aggregatedMeterUsage(ctx, sub); served {
+			return result, nil
+		}
 	}
 
 	// 2. Resolve external customer IDs for meter_usage queries.
@@ -2540,7 +2615,7 @@ func (s *meterUsageService) ConvertToBillingCharges(
 		totalCost = totalCost.Add(cost)
 
 		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: lu.LineItem.ID,
+			SubscriptionLineItemID: lo.FromPtr(lu.LineItem).ID,
 			Currency:               lu.Price.Currency,
 			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, lu.Price.Currency),
 			FilterValues:           make(price.JSONBFilters),

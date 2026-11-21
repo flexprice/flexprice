@@ -83,6 +83,11 @@ func (r *InMemoryRedis) ForceCacheSet(_ context.Context, key string, value inter
 	r.set(key, value, expiration)
 }
 
+// ForceCacheSetNX sets the value only if the key is absent or expired.
+func (r *InMemoryRedis) ForceCacheSetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	_, _ = r.TrySetNX(ctx, key, value, expiration)
+}
+
 // Delete removes a key.
 func (r *InMemoryRedis) Delete(_ context.Context, key string) {
 	r.mu.Lock()

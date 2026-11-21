@@ -104,6 +104,12 @@ func (s *billingService) CalculateMeterUsageCharges(
 		return nil, decimal.Zero, nil
 	}
 
+	// A customer on the aggregated usage path has no entitlements, grants or commitments: its charge is price × quantity.
+	if periodStart.Equal(sub.CurrentPeriodStart) && periodEnd.Equal(sub.CurrentPeriodEnd) &&
+		NewAggregatedUsageService(s.ServiceParams).IsAggregatedUsageEligible(ctx, sub, source) {
+		return s.aggregatedUsageCharges(ctx, usage, periodStart, periodEnd)
+	}
+
 	querySource := source
 
 	asOf := clock.Now()
@@ -499,6 +505,38 @@ func (s *billingService) CalculateMeterUsageCharges(
 	}
 
 	return append(usageCharges, commitmentLines...), totalUsageCost.Add(commitmentTotal), nil
+}
+
+// aggregatedUsageCharges prices each usage charge as its plan or addon price × quantity, rounded per charge as
+// billing rounds.
+func (s *billingService) aggregatedUsageCharges(
+	ctx context.Context,
+	usage *dto.GetUsageBySubscriptionResponse,
+	periodStart, periodEnd time.Time,
+) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	priceService := NewPriceService(s.ServiceParams)
+	lines := make([]dto.CreateInvoiceLineItemRequest, 0, len(usage.Charges))
+	total := decimal.Zero
+	for _, charge := range usage.Charges {
+		if charge.Price == nil {
+			continue
+		}
+		quantity := charge.QuantityDecimal()
+		amount := types.RoundToCurrencyPrecision(priceService.CalculateCost(ctx, charge.Price, quantity), charge.Price.Currency)
+		total = total.Add(amount)
+		lines = append(lines, dto.CreateInvoiceLineItemRequest{
+			PriceType:              lo.ToPtr(string(charge.Price.Type)),
+			PriceID:                lo.ToPtr(charge.Price.ID),
+			MeterID:                lo.ToPtr(charge.Price.MeterID),
+			DisplayName:            lo.ToPtr(charge.MeterDisplayName),
+			Amount:                 amount,
+			Quantity:               quantity,
+			PeriodStart:            lo.ToPtr(periodStart),
+			PeriodEnd:              lo.ToPtr(periodEnd),
+			SubscriptionLineItemID: lo.ToPtr(charge.SubscriptionLineItemID),
+		})
+	}
+	return lines, total, nil
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed

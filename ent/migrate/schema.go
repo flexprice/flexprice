@@ -1164,6 +1164,7 @@ var (
 		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
 		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "settings", Type: field.TypeJSON, Nullable: true},
+		{Name: "aggregated_usage_eligible", Type: field.TypeBool, Default: false},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{

@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,7 @@ import (
 // InMemoryCustomerStore implements customer.Repository
 type InMemoryCustomerStore struct {
 	*InMemoryStore[*customer.Customer]
+	realtimeEligible sync.Map // customer ID -> bool
 }
 
 // NewInMemoryCustomerStore creates a new in-memory customer store
@@ -256,6 +258,29 @@ func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types
 }
 
 // AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.
+func (s *InMemoryCustomerStore) IsAggregatedUsageEligible(ctx context.Context, id string) (bool, error) {
+	if _, err := s.InMemoryStore.Get(ctx, id); err != nil {
+		return false, err
+	}
+	eligible, _ := s.realtimeEligible.Load(id)
+	return eligible == true, nil
+}
+
+func (s *InMemoryCustomerStore) SetAggregatedUsageEligible(ctx context.Context, ids []string, eligible bool) ([]string, error) {
+	var changed []string
+	for _, id := range ids {
+		if _, err := s.InMemoryStore.Get(ctx, id); err != nil {
+			continue
+		}
+		current, _ := s.realtimeEligible.Load(id)
+		if (current == true) != eligible {
+			s.realtimeEligible.Store(id, eligible)
+			changed = append(changed, id)
+		}
+	}
+	return changed, nil
+}
+
 func (s *InMemoryCustomerStore) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
 	return 0, ierr.NewError("not supported by the in-memory customer store").Mark(ierr.ErrNotImplemented)
 }

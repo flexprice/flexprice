@@ -624,6 +624,7 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 	}
 
 	publishAfterCommit(ctx, s.ServiceParams, event)
+	NewAggregatedUsageService(s.ServiceParams).EvaluateEligibility(ctx, AggregatedUsageSubscription, c.SubscriptionID)
 }
 
 // recomputeDrafts recomputes the drafts and skipped period invoices billing the subscription's periods that end after

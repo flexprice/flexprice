@@ -862,6 +862,23 @@ func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_CurrentPeriodDraftReportsAppli
 	s.True(decimal.NewFromInt(20).Equal(resp.CurrentPeriodCreditsApplied["subs_a"]))
 }
 
+// An uncomputed current-period draft is skipped without being computed: live usage covers it and
+// a subscription draft's compute keeps the credits already applied, so computing it is wasted work.
+func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_UncomputedCurrentPeriodDraftIsNotComputed() {
+	now := time.Now().UTC()
+	start, end := now.Add(-20*24*time.Hour), now.Add(10*24*time.Hour)
+	inv := s.subscriptionDraft("inv_uncomputed", "subs_a", decimal.NewFromInt(30), decimal.NewFromInt(20), start, end)
+	inv.LastComputedAt = nil
+	s.Require().NoError(s.GetStores().InvoiceRepo.Update(s.GetContext(), inv))
+
+	resp := s.unpaid(map[string]time.Time{"subs_a": start})
+	s.Empty(resp.Invoices)
+	s.True(decimal.NewFromInt(20).Equal(resp.CurrentPeriodCreditsApplied["subs_a"]))
+	stored, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), inv.ID)
+	s.Require().NoError(err)
+	s.Nil(stored.LastComputedAt, "the read must not compute a draft it skips")
+}
+
 // Period ended but the billing run hasn't rolled the subscription yet: live usage still covers
 // it, so the draft must not be counted a second time as unpaid.
 func (s *CreditExpiryInvoiceRaceSuite) TestUnpaid_EndedButNotRolledDraftNotCountedTwice() {

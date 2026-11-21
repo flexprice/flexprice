@@ -117,6 +117,9 @@ func (Customer) Fields() []ent.Field {
 			Nillable(),
 		field.JSON("settings", &types.SettingsOverride{}).
 			Optional(),
+		// aggregated_usage_eligible marks a customer whose wallet balance can be served from aggregated usage.
+		field.Bool("aggregated_usage_eligible").
+			Default(false),
 	}
 }
 

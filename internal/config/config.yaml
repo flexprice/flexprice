@@ -565,6 +565,7 @@ meter_usage_tracking_lazy:
 aggregated_usage:
   enabled: false # master switch; when true, runs only for enabled_tenants
   enabled_tenants: [] # tenant IDs with aggregated usage
+  balance_fresh_seconds: 5 # real-time balance reads reuse a balance computed within this window; 0 = off
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
 # per-customer Temporal workflow (spend + entitlement grants + wallet alerts).
