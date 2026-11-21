@@ -654,7 +654,7 @@ type CreateSubscriptionRequest struct {
 	// SubscriptionStatus: set to "draft" to skip invoice creation and payment on create.
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
-	// PaymentTerms sets when invoices fall due: "<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Omit to use the tenant's payment terms.
+	// PaymentTerms sets when invoices fall due. Omit to use the tenant's.
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 
 	// Settings overrides the customer and environment settings for this subscription.
@@ -781,7 +781,7 @@ type UpdateSubscriptionRequest struct {
 	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
-	// PaymentTerms sets when invoices fall due: "<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Omit to leave unchanged; send "" to use the tenant's payment terms.
+	// PaymentTerms sets when invoices fall due. Omit to leave unchanged; send "" to use the tenant's.
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 }
 

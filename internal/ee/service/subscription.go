@@ -2127,7 +2127,6 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
-	// payment_terms: omit = unchanged, "" = use the tenant's terms.
 	if req.PaymentTerms != nil {
 		if *req.PaymentTerms == "" {
 			subscription.PaymentTerms = nil

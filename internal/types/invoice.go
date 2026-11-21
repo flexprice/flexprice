@@ -446,7 +446,7 @@ type InvoiceConfig struct {
 	InvoiceNumberSeparator                 string              `json:"separator,omitempty"` // Empty string ("") is valid for no separator
 	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
 	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after the issue date when payment is due
-	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default for when invoices fall due: "<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Takes precedence over due_date_days when set
+	PaymentTerms                           *PaymentTerms       `json:"payment_terms,omitempty"`                            // Tenant default payment terms; takes precedence over due_date_days when set
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 	FinalizationDelaySeconds               int                 `json:"finalization_delay_seconds,omitempty" validate:"omitempty,min=0"` // Seconds to wait after invoice creation before finalization. 0 = immediate.
 	AutoFinalize                           bool                `json:"auto_finalize"`                                                   // When false, drafts are not finalized at period end and wait for a manual finalize. Defaults to true.

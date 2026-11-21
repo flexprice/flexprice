@@ -23328,7 +23328,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentBehavior"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due: \"\u003cdays\u003e NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Omit to use the tenant's payment terms.",
+                    "description": "PaymentTerms sets when invoices fall due. Omit to use the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -31007,7 +31007,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due: \"\u003cdays\u003e NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Unset uses the tenant's payment terms.",
+                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -31268,7 +31268,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due: \"\u003cdays\u003e NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Unset uses the tenant's payment terms.",
+                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -32922,7 +32922,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due: \"\u003cdays\u003e NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH; any day count in that range is accepted, not only the listed values. Omit to leave unchanged; send \"\" to use the tenant's payment terms.",
+                    "description": "PaymentTerms sets when invoices fall due. Omit to leave unchanged; send \"\" to use the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -37823,7 +37823,7 @@ const docTemplate = `{
             ]
         },
         "types.PaymentTerms": {
-            "description": "\"\u003cdays\u003e NET\" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values; any day count in that range is accepted.",
+            "description": "\"\u003cdays\u003e NET\" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.",
             "type": "string",
             "enum": [
                 "15 NET",

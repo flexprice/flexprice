@@ -273,9 +273,8 @@ func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
 	return g.Default() == LineItemGroupingPerBillingPeriod
 }
 
-// PaymentTerms represents invoice payment terms: net days ("<N> NET", 1–365), due on receipt or end of month.
-// Used to compute invoice due date from the issue date.
-// @Description "<days> NET" with days from 1 to 365, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values; any day count in that range is accepted.
+// PaymentTerms sets when an invoice falls due, counted from its issue date.
+// @Description "<days> NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.
 type PaymentTerms string
 
 const (
@@ -328,7 +327,7 @@ func PaymentTermsToDueDateDays(p PaymentTerms) (int, bool) {
 		return 0, false
 	}
 	days, err := strconv.Atoi(digits)
-	// Only the canonical form ("7 NET", not "07 NET" or "+7 NET") is accepted.
+	// Rejects non-canonical forms such as "07 NET".
 	if err != nil || strconv.Itoa(days) != digits || days < paymentTermsMinNetDays || days > paymentTermsMaxNetDays {
 		return 0, false
 	}
