@@ -81,9 +81,6 @@ type CreditNoteLineItem func(*sql.Selector)
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 
-// CustomerUsageWatermark is the predicate function for customerusagewatermark builders.
-type CustomerUsageWatermark func(*sql.Selector)
-
 // EmailLog is the predicate function for emaillog builders.
 type EmailLog func(*sql.Selector)
 
@@ -137,6 +134,9 @@ type Meter func(*sql.Selector)
 
 // MeterUsageCheckpoint is the predicate function for meterusagecheckpoint builders.
 type MeterUsageCheckpoint func(*sql.Selector)
+
+// MeterUsageCheckpointWatermark is the predicate function for meterusagecheckpointwatermark builders.
+type MeterUsageCheckpointWatermark func(*sql.Selector)
 
 // Payment is the predicate function for payment builders.
 type Payment func(*sql.Selector)

@@ -8,8 +8,8 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
-	"github.com/flexprice/flexprice/ent/customerusagewatermark"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpointwatermark"
 	domainCheckpoint "github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -195,51 +195,47 @@ func (r *meterUsageCheckpointRepository) ListPeriodTotals(
 	}), nil
 }
 
-func (r *meterUsageCheckpointRepository) ListUsageWatermarks(
+func (r *meterUsageCheckpointRepository) ListMeterUsageCheckpointWatermarks(
 	ctx context.Context,
 	customerIDs []string,
-) ([]*domainCheckpoint.UsageWatermark, error) {
+) ([]*domainCheckpoint.MeterUsageCheckpointWatermark, error) {
 	if len(customerIDs) == 0 {
 		return nil, nil
 	}
-	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "list_usage_watermarks", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "meter_usage_checkpoint", "list_meter_usage_checkpoint_watermarks", map[string]interface{}{
 		"customers": len(customerIDs),
 	})
 	defer FinishSpan(span)
 
-	rows, err := r.client.Writer(ctx).CustomerUsageWatermark.Query().
+	rows, err := r.client.Writer(ctx).MeterUsageCheckpointWatermark.Query().
 		Where(
-			customerusagewatermark.TenantID(types.GetTenantID(ctx)),
-			customerusagewatermark.EnvironmentID(types.GetEnvironmentID(ctx)),
-			customerusagewatermark.CustomerIDIn(customerIDs...),
-			customerusagewatermark.Status(string(types.StatusPublished)),
+			meterusagecheckpointwatermark.TenantID(types.GetTenantID(ctx)),
+			meterusagecheckpointwatermark.EnvironmentID(types.GetEnvironmentID(ctx)),
+			meterusagecheckpointwatermark.CustomerIDIn(customerIDs...),
+			meterusagecheckpointwatermark.Status(string(types.StatusPublished)),
 		).
 		All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
-		return nil, ierr.WithError(err).WithHint("Failed to list usage watermarks").Mark(ierr.ErrDatabase)
+		return nil, ierr.WithError(err).WithHint("Failed to list meter usage checkpoint watermarks").Mark(ierr.ErrDatabase)
 	}
-	return lo.Map(rows, func(row *ent.CustomerUsageWatermark, _ int) *domainCheckpoint.UsageWatermark {
-		return &domainCheckpoint.UsageWatermark{CustomerID: row.CustomerID, AggregatedUntil: row.AggregatedUntil}
+	return lo.Map(rows, func(row *ent.MeterUsageCheckpointWatermark, _ int) *domainCheckpoint.MeterUsageCheckpointWatermark {
+		return &domainCheckpoint.MeterUsageCheckpointWatermark{CustomerID: row.CustomerID, AggregatedUntil: row.AggregatedUntil}
 	}), nil
 }
 
-// Creates the watermarks of customers that have none, at To; a customer another run created meanwhile is skipped.
-const insertUsageWatermarksSQL = `
-INSERT INTO customer_usage_watermarks
+// Upserts each customer's watermark to its To. An existing watermark moves only while it is still at the
+// From the run read (NULL for a customer that had none), so a retried run never adds usage twice.
+const upsertWatermarksSQL = `
+WITH v AS (
+	SELECT * FROM unnest($6::text[], $7::text[], $8::text[], $9::timestamptz[]) AS v(id, customer_id, from_ts, to_ts)
+)
+INSERT INTO meter_usage_checkpoint_watermarks AS w
 	(id, tenant_id, environment_id, status, created_at, updated_at, created_by, updated_by, customer_id, aggregated_until)
-SELECT v.id, $1, $2, $3, $4, $4, NULLIF($5, ''), NULLIF($5, ''), v.customer_id, v.to_ts
-FROM unnest($6::text[], $7::text[], $8::timestamptz[]) AS v(id, customer_id, to_ts)
-ON CONFLICT (tenant_id, environment_id, customer_id) DO NOTHING
-RETURNING customer_id`
-
-// Moves each watermark still at its From to its To.
-const advanceUsageWatermarksSQL = `
-UPDATE customer_usage_watermarks w
-SET aggregated_until = v.to_ts, updated_at = $4, updated_by = NULLIF($5, '')
-FROM unnest($6::text[], $7::timestamptz[], $8::timestamptz[]) AS v(customer_id, from_ts, to_ts)
-WHERE w.tenant_id = $1 AND w.environment_id = $2 AND w.status = $3
-	AND w.customer_id = v.customer_id AND w.aggregated_until = v.from_ts
+SELECT v.id, $1, $2, $3, $4, $4, NULLIF($5, ''), NULLIF($5, ''), v.customer_id, v.to_ts FROM v
+ON CONFLICT (tenant_id, environment_id, customer_id) DO UPDATE
+SET aggregated_until = EXCLUDED.aggregated_until, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+WHERE w.aggregated_until = (SELECT NULLIF(v.from_ts, '')::timestamptz FROM v WHERE v.customer_id = EXCLUDED.customer_id)
 RETURNING w.customer_id`
 
 // Adds each meter's window quantity to its period total: MAX keeps the higher value, SUM and COUNT add.
@@ -277,57 +273,41 @@ func (r *meterUsageCheckpointRepository) UpdateCustomerCheckpoints(
 	defer FinishSpan(span)
 
 	now, userID, published := clock.Now(), types.GetUserID(ctx), string(types.StatusPublished)
-	var newIDs, newCustomers, newTos, customers, froms, tos []string
+	var ids, customers, froms, tos []string
 	for _, u := range updates {
-		if u.From.IsZero() {
-			newIDs = append(newIDs, types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER_USAGE_WATERMARK))
-			newCustomers = append(newCustomers, u.CustomerID)
-			newTos = append(newTos, formatTimestamp(u.To))
-			continue
-		}
+		ids = append(ids, types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT_WATERMARK))
 		customers = append(customers, u.CustomerID)
-		froms = append(froms, formatTimestamp(u.From))
+		froms = append(froms, formatOptionalTimestamp(u.From))
 		tos = append(tos, formatTimestamp(u.To))
 	}
 
 	applied := make(map[string]bool, len(updates))
 	err := r.client.WithTx(ctx, func(txCtx context.Context) error {
 		db := r.client.Writer(txCtx)
-		collect := func(query string, args ...any) error {
-			rows, err := db.QueryContext(txCtx, query, args...)
-			if err != nil {
-				return err
-			}
-			defer rows.Close()
-			for rows.Next() {
-				var customerID string
-				if err := rows.Scan(&customerID); err != nil {
-					return err
-				}
-				applied[customerID] = true
-			}
-			return rows.Err()
+		rows, err := db.QueryContext(txCtx, upsertWatermarksSQL, tenantID, environmentID, published, now, userID,
+			pq.Array(ids), pq.Array(customers), pq.Array(froms), pq.Array(tos))
+		if err != nil {
+			return err
 		}
-		if len(newCustomers) > 0 {
-			if err := collect(insertUsageWatermarksSQL, tenantID, environmentID, published, now, userID,
-				pq.Array(newIDs), pq.Array(newCustomers), pq.Array(newTos)); err != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var customerID string
+			if err := rows.Scan(&customerID); err != nil {
 				return err
 			}
+			applied[customerID] = true
 		}
-		if len(customers) > 0 {
-			if err := collect(advanceUsageWatermarksSQL, tenantID, environmentID, published, now, userID,
-				pq.Array(customers), pq.Array(froms), pq.Array(tos)); err != nil {
-				return err
-			}
+		if err := rows.Err(); err != nil {
+			return err
 		}
 
-		var ids, totalCustomers, meters, aggregations, quantities, periodStarts, totalTos []string
+		var totalIDs, totalCustomers, meters, aggregations, quantities, periodStarts, totalTos []string
 		for _, u := range updates {
 			if !applied[u.CustomerID] {
 				continue
 			}
 			for _, t := range u.Totals {
-				ids = append(ids, types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT))
+				totalIDs = append(totalIDs, types.GenerateUUIDWithPrefix(types.UUID_PREFIX_METER_USAGE_CHECKPOINT))
 				totalCustomers = append(totalCustomers, u.CustomerID)
 				meters = append(meters, t.MeterID)
 				aggregations = append(aggregations, string(t.AggregationType))
@@ -336,11 +316,11 @@ func (r *meterUsageCheckpointRepository) UpdateCustomerCheckpoints(
 				totalTos = append(totalTos, formatTimestamp(u.To))
 			}
 		}
-		if len(ids) == 0 {
+		if len(totalIDs) == 0 {
 			return nil
 		}
-		_, err := db.ExecContext(txCtx, addPeriodTotalsSQL, tenantID, environmentID, published, now, userID,
-			pq.Array(ids), pq.Array(totalCustomers), pq.Array(meters), pq.Array(aggregations),
+		_, err = db.ExecContext(txCtx, addPeriodTotalsSQL, tenantID, environmentID, published, now, userID,
+			pq.Array(totalIDs), pq.Array(totalCustomers), pq.Array(meters), pq.Array(aggregations),
 			pq.Array(quantities), pq.Array(periodStarts), pq.Array(totalTos), string(types.AggregationMax))
 		return err
 	})
@@ -354,4 +334,12 @@ func (r *meterUsageCheckpointRepository) UpdateCustomerCheckpoints(
 
 func formatTimestamp(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// formatOptionalTimestamp is formatTimestamp, or "" (NULL in the SQL above) for the zero time.
+func formatOptionalTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return formatTimestamp(t)
 }

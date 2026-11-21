@@ -122,16 +122,16 @@ func watermarkKey(ctx context.Context, customerID string) string {
 	return types.GetTenantID(ctx) + "|" + types.GetEnvironmentID(ctx) + "|" + customerID
 }
 
-func (s *InMemoryMeterUsageCheckpointStore) ListUsageWatermarks(
+func (s *InMemoryMeterUsageCheckpointStore) ListMeterUsageCheckpointWatermarks(
 	ctx context.Context,
 	customerIDs []string,
-) ([]*meterusagecheckpoint.UsageWatermark, error) {
+) ([]*meterusagecheckpoint.MeterUsageCheckpointWatermark, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	var result []*meterusagecheckpoint.UsageWatermark
+	var result []*meterusagecheckpoint.MeterUsageCheckpointWatermark
 	for _, customerID := range customerIDs {
 		if at, ok := s.watermarks[watermarkKey(ctx, customerID)]; ok {
-			result = append(result, &meterusagecheckpoint.UsageWatermark{CustomerID: customerID, AggregatedUntil: at})
+			result = append(result, &meterusagecheckpoint.MeterUsageCheckpointWatermark{CustomerID: customerID, AggregatedUntil: at})
 		}
 	}
 	return result, nil

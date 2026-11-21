@@ -231,6 +231,12 @@ type usageWindow struct {
 	start, end time.Time
 }
 
+// customerWindow is one customer's usage in one window.
+type customerWindow struct {
+	externalCustomerID string
+	window             usageWindow
+}
+
 func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error) {
 	aggregatedUsage := s.Config.AggregatedUsage
 	if !aggregatedUsage.Enabled {
@@ -300,17 +306,19 @@ func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, 
 	}
 	subsByCustomer := lo.GroupBy(subs, func(sub *subscription.Subscription) string { return sub.CustomerID })
 
-	watermarks, err := s.MeterUsageCheckpointRepo.ListUsageWatermarks(ctx, customerIDs)
+	watermarks, err := s.MeterUsageCheckpointRepo.ListMeterUsageCheckpointWatermarks(ctx, customerIDs)
 	if err != nil {
 		return err
 	}
-	watermarkByCustomer := lo.SliceToMap(watermarks, func(w *meterusagecheckpoint.UsageWatermark) (string, time.Time) {
+	watermarkByCustomer := lo.SliceToMap(watermarks, func(w *meterusagecheckpoint.MeterUsageCheckpointWatermark) (string, time.Time) {
 		return w.CustomerID, w.AggregatedUntil.UTC()
 	})
 
 	updates := make(map[string]*meterusagecheckpoint.CustomerCheckpointUpdate)
-	// periodStarts lists, per window and customer, the billing periods that window's usage is added to.
-	periodStarts := make(map[usageWindow]map[string][]time.Time)
+	// customersByWindow is who to read from ClickHouse per window; periodStarts is which billing periods
+	// each customer's window usage is added to.
+	customersByWindow := make(map[usageWindow][]string)
+	periodStarts := make(map[customerWindow][]time.Time)
 	for _, cust := range customers {
 		customerSubs := subsByCustomer[cust.ID]
 		if len(customerSubs) == 0 {
@@ -330,10 +338,11 @@ func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, 
 			if !window.end.After(window.start) {
 				continue
 			}
-			if periodStarts[window] == nil {
-				periodStarts[window] = make(map[string][]time.Time)
+			key := customerWindow{externalCustomerID: cust.ExternalID, window: window}
+			if len(periodStarts[key]) == 0 {
+				customersByWindow[window] = append(customersByWindow[window], cust.ExternalID)
 			}
-			periodStarts[window][cust.ExternalID] = append(periodStarts[window][cust.ExternalID], start)
+			periodStarts[key] = append(periodStarts[key], start)
 			windowed = true
 		}
 		if !windowed {
@@ -346,7 +355,7 @@ func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, 
 		return nil
 	}
 
-	if err := s.addWindowUsage(ctx, periodStarts, updates); err != nil {
+	if err := s.addWindowUsage(ctx, customersByWindow, periodStarts, updates); err != nil {
 		return err
 	}
 	applied, err := s.MeterUsageCheckpointRepo.UpdateCustomerCheckpoints(ctx, lo.Values(updates))
@@ -363,7 +372,8 @@ func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, 
 // unsupported or never reset) are left out.
 func (s *usageCheckpointService) addWindowUsage(
 	ctx context.Context,
-	periodStarts map[usageWindow]map[string][]time.Time,
+	customersByWindow map[usageWindow][]string,
+	periodStarts map[customerWindow][]time.Time,
 	updates map[string]*meterusagecheckpoint.CustomerCheckpointUpdate,
 ) error {
 	type windowRow struct {
@@ -371,11 +381,11 @@ func (s *usageCheckpointService) addWindowUsage(
 		total  *events.MeterTotals
 	}
 	var rows []windowRow
-	for window, byCustomer := range periodStarts {
+	for window, externalCustomerIDs := range customersByWindow {
 		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: lo.Keys(byCustomer),
+			ExternalCustomerIDs: externalCustomerIDs,
 			StartTime:           window.start,
 			EndTime:             window.end,
 			// Stored totals, so FINAL merges duplicate rows.
@@ -409,7 +419,7 @@ func (s *usageCheckpointService) addWindowUsage(
 			continue
 		}
 		update := updates[r.total.ExternalCustomerID]
-		for _, start := range periodStarts[r.window][r.total.ExternalCustomerID] {
+		for _, start := range periodStarts[customerWindow{externalCustomerID: r.total.ExternalCustomerID, window: r.window}] {
 			update.Totals = append(update.Totals, meterusagecheckpoint.PeriodTotal{
 				PeriodStart:     start,
 				MeterID:         r.total.MeterID,

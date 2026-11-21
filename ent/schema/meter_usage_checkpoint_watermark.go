@@ -7,20 +7,20 @@ import (
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
-// CustomerUsageWatermark is how far a customer's usage has been added to their period totals
+// MeterUsageCheckpointWatermark is how far a customer's usage has been added to their period totals
 // (meter_usage_checkpoints rows with period_start).
-type CustomerUsageWatermark struct {
+type MeterUsageCheckpointWatermark struct {
 	ent.Schema
 }
 
-func (CustomerUsageWatermark) Mixin() []ent.Mixin {
+func (MeterUsageCheckpointWatermark) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
 		baseMixin.EnvironmentMixin{},
 	}
 }
 
-func (CustomerUsageWatermark) Fields() []ent.Field {
+func (MeterUsageCheckpointWatermark) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
 			SchemaType(map[string]string{
@@ -40,10 +40,10 @@ func (CustomerUsageWatermark) Fields() []ent.Field {
 	}
 }
 
-func (CustomerUsageWatermark) Indexes() []ent.Index {
+func (MeterUsageCheckpointWatermark) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "customer_id").
 			Unique().
-			StorageKey("customerusagewatermark_customer"),
+			StorageKey("meterusagecheckpointwatermark_customer"),
 	}
 }

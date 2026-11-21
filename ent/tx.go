@@ -64,8 +64,6 @@ type Tx struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
-	// CustomerUsageWatermark is the client for interacting with the CustomerUsageWatermark builders.
-	CustomerUsageWatermark *CustomerUsageWatermarkClient
 	// EmailLog is the client for interacting with the EmailLog builders.
 	EmailLog *EmailLogClient
 	// Entitlement is the client for interacting with the Entitlement builders.
@@ -102,6 +100,8 @@ type Tx struct {
 	Meter *MeterClient
 	// MeterUsageCheckpoint is the client for interacting with the MeterUsageCheckpoint builders.
 	MeterUsageCheckpoint *MeterUsageCheckpointClient
+	// MeterUsageCheckpointWatermark is the client for interacting with the MeterUsageCheckpointWatermark builders.
+	MeterUsageCheckpointWatermark *MeterUsageCheckpointWatermarkClient
 	// Payment is the client for interacting with the Payment builders.
 	Payment *PaymentClient
 	// PaymentAttempt is the client for interacting with the PaymentAttempt builders.
@@ -318,7 +318,6 @@ func (tx *Tx) init() {
 	tx.CreditNote = NewCreditNoteClient(tx.config)
 	tx.CreditNoteLineItem = NewCreditNoteLineItemClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
-	tx.CustomerUsageWatermark = NewCustomerUsageWatermarkClient(tx.config)
 	tx.EmailLog = NewEmailLogClient(tx.config)
 	tx.Entitlement = NewEntitlementClient(tx.config)
 	tx.EntitlementGrant = NewEntitlementGrantClient(tx.config)
@@ -337,6 +336,7 @@ func (tx *Tx) init() {
 	tx.JournalLine = NewJournalLineClient(tx.config)
 	tx.Meter = NewMeterClient(tx.config)
 	tx.MeterUsageCheckpoint = NewMeterUsageCheckpointClient(tx.config)
+	tx.MeterUsageCheckpointWatermark = NewMeterUsageCheckpointWatermarkClient(tx.config)
 	tx.Payment = NewPaymentClient(tx.config)
 	tx.PaymentAttempt = NewPaymentAttemptClient(tx.config)
 	tx.PaymentMethod = NewPaymentMethodClient(tx.config)

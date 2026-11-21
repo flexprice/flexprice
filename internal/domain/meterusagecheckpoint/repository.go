@@ -16,8 +16,8 @@ type GetLatestBeforeParams struct {
 	Before          time.Time
 }
 
-// UsageWatermark is how far a customer's usage has been added to their period totals.
-type UsageWatermark struct {
+// MeterUsageCheckpointWatermark is how far a customer's usage has been added to their period totals.
+type MeterUsageCheckpointWatermark struct {
 	CustomerID      string
 	AggregatedUntil time.Time
 }
@@ -54,8 +54,8 @@ type Repository interface {
 	// ListPeriodTotals returns the customer's per-period rows for one billing period.
 	ListPeriodTotals(ctx context.Context, customerID string, periodStart time.Time) ([]*MeterUsageCheckpoint, error)
 
-	// ListUsageWatermarks returns the watermarks of the given customers.
-	ListUsageWatermarks(ctx context.Context, customerIDs []string) ([]*UsageWatermark, error)
+	// ListMeterUsageCheckpointWatermarks returns the watermarks of the given customers.
+	ListMeterUsageCheckpointWatermarks(ctx context.Context, customerIDs []string) ([]*MeterUsageCheckpointWatermark, error)
 
 	// UpdateCustomerCheckpoints applies every update in one transaction: SUM and COUNT totals add, MAX
 	// keeps the higher value. An update whose watermark is no longer at From is skipped, so a retry or

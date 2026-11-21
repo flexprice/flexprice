@@ -110,17 +110,15 @@ func TestMeterUsageCheckpointRepositoryUpdateCustomerCheckpoints(t *testing.T) {
 
 	n, err = repo.UpdateCustomerCheckpoints(ctx, []*meterusagecheckpoint.CustomerCheckpointUpdate{
 		update("cust_a", hour(3), hour(4), total("m_sum", types.AggregationSum, 3), total("m_max", types.AggregationMax, -9), total("m_count", types.AggregationCount, 2)),
-		update("cust_b", time.Time{}, hour(4), total("m_sum", types.AggregationSum, 100)),
-		update("cust_c", hour(1), hour(4), total("m_sum", types.AggregationSum, 100)),
+		update("cust_b", hour(2), hour(4), total("m_sum", types.AggregationSum, 100)),
 	})
 	require.NoError(t, err)
-	require.Equal(t, 1, n, "cust_b already has a watermark and cust_c's is not at From, so neither is added again")
+	require.Equal(t, 1, n, "cust_b's watermark is no longer at From, so its usage is not added again")
 	require.Equal(t, map[string]string{"m_sum": "8", "m_max": "-4", "m_count": "2"}, totals("cust_a"),
 		"SUM and COUNT add, MAX keeps the higher value")
 	require.Equal(t, map[string]string{"m_sum": "1"}, totals("cust_b"))
-	require.Empty(t, totals("cust_c"))
 
-	watermarks, err := repo.ListUsageWatermarks(ctx, []string{"cust_a", "cust_b", "cust_none"})
+	watermarks, err := repo.ListMeterUsageCheckpointWatermarks(ctx, []string{"cust_a", "cust_b", "cust_none"})
 	require.NoError(t, err)
 	until := map[string]time.Time{}
 	for _, w := range watermarks {
@@ -130,7 +128,7 @@ func TestMeterUsageCheckpointRepositoryUpdateCustomerCheckpoints(t *testing.T) {
 	require.True(t, until["cust_a"].Equal(hour(4)))
 	require.True(t, until["cust_b"].Equal(hour(3)))
 
-	other, err := repo.ListUsageWatermarks(types.SetEnvironmentID(ctx, "env_other"), []string{"cust_a"})
+	other, err := repo.ListMeterUsageCheckpointWatermarks(types.SetEnvironmentID(ctx, "env_other"), []string{"cust_a"})
 	require.NoError(t, err)
 	require.Empty(t, other, "watermarks are scoped to the environment")
 

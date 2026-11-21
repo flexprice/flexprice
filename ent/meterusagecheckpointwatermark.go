@@ -9,11 +9,11 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/flexprice/flexprice/ent/customerusagewatermark"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpointwatermark"
 )
 
-// CustomerUsageWatermark is the model entity for the CustomerUsageWatermark schema.
-type CustomerUsageWatermark struct {
+// MeterUsageCheckpointWatermark is the model entity for the MeterUsageCheckpointWatermark schema.
+type MeterUsageCheckpointWatermark struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID string `json:"id,omitempty"`
@@ -39,13 +39,13 @@ type CustomerUsageWatermark struct {
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
-func (*CustomerUsageWatermark) scanValues(columns []string) ([]any, error) {
+func (*MeterUsageCheckpointWatermark) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customerusagewatermark.FieldID, customerusagewatermark.FieldTenantID, customerusagewatermark.FieldStatus, customerusagewatermark.FieldCreatedBy, customerusagewatermark.FieldUpdatedBy, customerusagewatermark.FieldEnvironmentID, customerusagewatermark.FieldCustomerID:
+		case meterusagecheckpointwatermark.FieldID, meterusagecheckpointwatermark.FieldTenantID, meterusagecheckpointwatermark.FieldStatus, meterusagecheckpointwatermark.FieldCreatedBy, meterusagecheckpointwatermark.FieldUpdatedBy, meterusagecheckpointwatermark.FieldEnvironmentID, meterusagecheckpointwatermark.FieldCustomerID:
 			values[i] = new(sql.NullString)
-		case customerusagewatermark.FieldCreatedAt, customerusagewatermark.FieldUpdatedAt, customerusagewatermark.FieldAggregatedUntil:
+		case meterusagecheckpointwatermark.FieldCreatedAt, meterusagecheckpointwatermark.FieldUpdatedAt, meterusagecheckpointwatermark.FieldAggregatedUntil:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -55,68 +55,68 @@ func (*CustomerUsageWatermark) scanValues(columns []string) ([]any, error) {
 }
 
 // assignValues assigns the values that were returned from sql.Rows (after scanning)
-// to the CustomerUsageWatermark fields.
-func (_m *CustomerUsageWatermark) assignValues(columns []string, values []any) error {
+// to the MeterUsageCheckpointWatermark fields.
+func (_m *MeterUsageCheckpointWatermark) assignValues(columns []string, values []any) error {
 	if m, n := len(values), len(columns); m < n {
 		return fmt.Errorf("mismatch number of scan values: %d != %d", m, n)
 	}
 	for i := range columns {
 		switch columns[i] {
-		case customerusagewatermark.FieldID:
+		case meterusagecheckpointwatermark.FieldID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field id", values[i])
 			} else if value.Valid {
 				_m.ID = value.String
 			}
-		case customerusagewatermark.FieldTenantID:
+		case meterusagecheckpointwatermark.FieldTenantID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
 			} else if value.Valid {
 				_m.TenantID = value.String
 			}
-		case customerusagewatermark.FieldStatus:
+		case meterusagecheckpointwatermark.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
 			}
-		case customerusagewatermark.FieldCreatedAt:
+		case meterusagecheckpointwatermark.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
 			} else if value.Valid {
 				_m.CreatedAt = value.Time
 			}
-		case customerusagewatermark.FieldUpdatedAt:
+		case meterusagecheckpointwatermark.FieldUpdatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
 			} else if value.Valid {
 				_m.UpdatedAt = value.Time
 			}
-		case customerusagewatermark.FieldCreatedBy:
+		case meterusagecheckpointwatermark.FieldCreatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field created_by", values[i])
 			} else if value.Valid {
 				_m.CreatedBy = value.String
 			}
-		case customerusagewatermark.FieldUpdatedBy:
+		case meterusagecheckpointwatermark.FieldUpdatedBy:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field updated_by", values[i])
 			} else if value.Valid {
 				_m.UpdatedBy = value.String
 			}
-		case customerusagewatermark.FieldEnvironmentID:
+		case meterusagecheckpointwatermark.FieldEnvironmentID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
 				_m.EnvironmentID = value.String
 			}
-		case customerusagewatermark.FieldCustomerID:
+		case meterusagecheckpointwatermark.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
 				_m.CustomerID = value.String
 			}
-		case customerusagewatermark.FieldAggregatedUntil:
+		case meterusagecheckpointwatermark.FieldAggregatedUntil:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field aggregated_until", values[i])
 			} else if value.Valid {
@@ -129,34 +129,34 @@ func (_m *CustomerUsageWatermark) assignValues(columns []string, values []any) e
 	return nil
 }
 
-// Value returns the ent.Value that was dynamically selected and assigned to the CustomerUsageWatermark.
+// Value returns the ent.Value that was dynamically selected and assigned to the MeterUsageCheckpointWatermark.
 // This includes values selected through modifiers, order, etc.
-func (_m *CustomerUsageWatermark) Value(name string) (ent.Value, error) {
+func (_m *MeterUsageCheckpointWatermark) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
-// Update returns a builder for updating this CustomerUsageWatermark.
-// Note that you need to call CustomerUsageWatermark.Unwrap() before calling this method if this CustomerUsageWatermark
+// Update returns a builder for updating this MeterUsageCheckpointWatermark.
+// Note that you need to call MeterUsageCheckpointWatermark.Unwrap() before calling this method if this MeterUsageCheckpointWatermark
 // was returned from a transaction, and the transaction was committed or rolled back.
-func (_m *CustomerUsageWatermark) Update() *CustomerUsageWatermarkUpdateOne {
-	return NewCustomerUsageWatermarkClient(_m.config).UpdateOne(_m)
+func (_m *MeterUsageCheckpointWatermark) Update() *MeterUsageCheckpointWatermarkUpdateOne {
+	return NewMeterUsageCheckpointWatermarkClient(_m.config).UpdateOne(_m)
 }
 
-// Unwrap unwraps the CustomerUsageWatermark entity that was returned from a transaction after it was closed,
+// Unwrap unwraps the MeterUsageCheckpointWatermark entity that was returned from a transaction after it was closed,
 // so that all future queries will be executed through the driver which created the transaction.
-func (_m *CustomerUsageWatermark) Unwrap() *CustomerUsageWatermark {
+func (_m *MeterUsageCheckpointWatermark) Unwrap() *MeterUsageCheckpointWatermark {
 	_tx, ok := _m.config.driver.(*txDriver)
 	if !ok {
-		panic("ent: CustomerUsageWatermark is not a transactional entity")
+		panic("ent: MeterUsageCheckpointWatermark is not a transactional entity")
 	}
 	_m.config.driver = _tx.drv
 	return _m
 }
 
 // String implements the fmt.Stringer.
-func (_m *CustomerUsageWatermark) String() string {
+func (_m *MeterUsageCheckpointWatermark) String() string {
 	var builder strings.Builder
-	builder.WriteString("CustomerUsageWatermark(")
+	builder.WriteString("MeterUsageCheckpointWatermark(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tenant_id=")
 	builder.WriteString(_m.TenantID)
@@ -188,5 +188,5 @@ func (_m *CustomerUsageWatermark) String() string {
 	return builder.String()
 }
 
-// CustomerUsageWatermarks is a parsable slice of CustomerUsageWatermark.
-type CustomerUsageWatermarks []*CustomerUsageWatermark
+// MeterUsageCheckpointWatermarks is a parsable slice of MeterUsageCheckpointWatermark.
+type MeterUsageCheckpointWatermarks []*MeterUsageCheckpointWatermark

@@ -11,68 +11,68 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/flexprice/flexprice/ent/customerusagewatermark"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpointwatermark"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
-// CustomerUsageWatermarkQuery is the builder for querying CustomerUsageWatermark entities.
-type CustomerUsageWatermarkQuery struct {
+// MeterUsageCheckpointWatermarkQuery is the builder for querying MeterUsageCheckpointWatermark entities.
+type MeterUsageCheckpointWatermarkQuery struct {
 	config
 	ctx        *QueryContext
-	order      []customerusagewatermark.OrderOption
+	order      []meterusagecheckpointwatermark.OrderOption
 	inters     []Interceptor
-	predicates []predicate.CustomerUsageWatermark
+	predicates []predicate.MeterUsageCheckpointWatermark
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the CustomerUsageWatermarkQuery builder.
-func (_q *CustomerUsageWatermarkQuery) Where(ps ...predicate.CustomerUsageWatermark) *CustomerUsageWatermarkQuery {
+// Where adds a new predicate for the MeterUsageCheckpointWatermarkQuery builder.
+func (_q *MeterUsageCheckpointWatermarkQuery) Where(ps ...predicate.MeterUsageCheckpointWatermark) *MeterUsageCheckpointWatermarkQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *CustomerUsageWatermarkQuery) Limit(limit int) *CustomerUsageWatermarkQuery {
+func (_q *MeterUsageCheckpointWatermarkQuery) Limit(limit int) *MeterUsageCheckpointWatermarkQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *CustomerUsageWatermarkQuery) Offset(offset int) *CustomerUsageWatermarkQuery {
+func (_q *MeterUsageCheckpointWatermarkQuery) Offset(offset int) *MeterUsageCheckpointWatermarkQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *CustomerUsageWatermarkQuery) Unique(unique bool) *CustomerUsageWatermarkQuery {
+func (_q *MeterUsageCheckpointWatermarkQuery) Unique(unique bool) *MeterUsageCheckpointWatermarkQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *CustomerUsageWatermarkQuery) Order(o ...customerusagewatermark.OrderOption) *CustomerUsageWatermarkQuery {
+func (_q *MeterUsageCheckpointWatermarkQuery) Order(o ...meterusagecheckpointwatermark.OrderOption) *MeterUsageCheckpointWatermarkQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// First returns the first CustomerUsageWatermark entity from the query.
-// Returns a *NotFoundError when no CustomerUsageWatermark was found.
-func (_q *CustomerUsageWatermarkQuery) First(ctx context.Context) (*CustomerUsageWatermark, error) {
+// First returns the first MeterUsageCheckpointWatermark entity from the query.
+// Returns a *NotFoundError when no MeterUsageCheckpointWatermark was found.
+func (_q *MeterUsageCheckpointWatermarkQuery) First(ctx context.Context) (*MeterUsageCheckpointWatermark, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{customerusagewatermark.Label}
+		return nil, &NotFoundError{meterusagecheckpointwatermark.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) FirstX(ctx context.Context) *CustomerUsageWatermark {
+func (_q *MeterUsageCheckpointWatermarkQuery) FirstX(ctx context.Context) *MeterUsageCheckpointWatermark {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -80,22 +80,22 @@ func (_q *CustomerUsageWatermarkQuery) FirstX(ctx context.Context) *CustomerUsag
 	return node
 }
 
-// FirstID returns the first CustomerUsageWatermark ID from the query.
-// Returns a *NotFoundError when no CustomerUsageWatermark ID was found.
-func (_q *CustomerUsageWatermarkQuery) FirstID(ctx context.Context) (id string, err error) {
+// FirstID returns the first MeterUsageCheckpointWatermark ID from the query.
+// Returns a *NotFoundError when no MeterUsageCheckpointWatermark ID was found.
+func (_q *MeterUsageCheckpointWatermarkQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{customerusagewatermark.Label}
+		err = &NotFoundError{meterusagecheckpointwatermark.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) FirstIDX(ctx context.Context) string {
+func (_q *MeterUsageCheckpointWatermarkQuery) FirstIDX(ctx context.Context) string {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -103,10 +103,10 @@ func (_q *CustomerUsageWatermarkQuery) FirstIDX(ctx context.Context) string {
 	return id
 }
 
-// Only returns a single CustomerUsageWatermark entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one CustomerUsageWatermark entity is found.
-// Returns a *NotFoundError when no CustomerUsageWatermark entities are found.
-func (_q *CustomerUsageWatermarkQuery) Only(ctx context.Context) (*CustomerUsageWatermark, error) {
+// Only returns a single MeterUsageCheckpointWatermark entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one MeterUsageCheckpointWatermark entity is found.
+// Returns a *NotFoundError when no MeterUsageCheckpointWatermark entities are found.
+func (_q *MeterUsageCheckpointWatermarkQuery) Only(ctx context.Context) (*MeterUsageCheckpointWatermark, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -115,14 +115,14 @@ func (_q *CustomerUsageWatermarkQuery) Only(ctx context.Context) (*CustomerUsage
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{customerusagewatermark.Label}
+		return nil, &NotFoundError{meterusagecheckpointwatermark.Label}
 	default:
-		return nil, &NotSingularError{customerusagewatermark.Label}
+		return nil, &NotSingularError{meterusagecheckpointwatermark.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) OnlyX(ctx context.Context) *CustomerUsageWatermark {
+func (_q *MeterUsageCheckpointWatermarkQuery) OnlyX(ctx context.Context) *MeterUsageCheckpointWatermark {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -130,10 +130,10 @@ func (_q *CustomerUsageWatermarkQuery) OnlyX(ctx context.Context) *CustomerUsage
 	return node
 }
 
-// OnlyID is like Only, but returns the only CustomerUsageWatermark ID in the query.
-// Returns a *NotSingularError when more than one CustomerUsageWatermark ID is found.
+// OnlyID is like Only, but returns the only MeterUsageCheckpointWatermark ID in the query.
+// Returns a *NotSingularError when more than one MeterUsageCheckpointWatermark ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *CustomerUsageWatermarkQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *MeterUsageCheckpointWatermarkQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -142,15 +142,15 @@ func (_q *CustomerUsageWatermarkQuery) OnlyID(ctx context.Context) (id string, e
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{customerusagewatermark.Label}
+		err = &NotFoundError{meterusagecheckpointwatermark.Label}
 	default:
-		err = &NotSingularError{customerusagewatermark.Label}
+		err = &NotSingularError{meterusagecheckpointwatermark.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) OnlyIDX(ctx context.Context) string {
+func (_q *MeterUsageCheckpointWatermarkQuery) OnlyIDX(ctx context.Context) string {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -158,18 +158,18 @@ func (_q *CustomerUsageWatermarkQuery) OnlyIDX(ctx context.Context) string {
 	return id
 }
 
-// All executes the query and returns a list of CustomerUsageWatermarks.
-func (_q *CustomerUsageWatermarkQuery) All(ctx context.Context) ([]*CustomerUsageWatermark, error) {
+// All executes the query and returns a list of MeterUsageCheckpointWatermarks.
+func (_q *MeterUsageCheckpointWatermarkQuery) All(ctx context.Context) ([]*MeterUsageCheckpointWatermark, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*CustomerUsageWatermark, *CustomerUsageWatermarkQuery]()
-	return withInterceptors[[]*CustomerUsageWatermark](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*MeterUsageCheckpointWatermark, *MeterUsageCheckpointWatermarkQuery]()
+	return withInterceptors[[]*MeterUsageCheckpointWatermark](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) AllX(ctx context.Context) []*CustomerUsageWatermark {
+func (_q *MeterUsageCheckpointWatermarkQuery) AllX(ctx context.Context) []*MeterUsageCheckpointWatermark {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -177,20 +177,20 @@ func (_q *CustomerUsageWatermarkQuery) AllX(ctx context.Context) []*CustomerUsag
 	return nodes
 }
 
-// IDs executes the query and returns a list of CustomerUsageWatermark IDs.
-func (_q *CustomerUsageWatermarkQuery) IDs(ctx context.Context) (ids []string, err error) {
+// IDs executes the query and returns a list of MeterUsageCheckpointWatermark IDs.
+func (_q *MeterUsageCheckpointWatermarkQuery) IDs(ctx context.Context) (ids []string, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(customerusagewatermark.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(meterusagecheckpointwatermark.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) IDsX(ctx context.Context) []string {
+func (_q *MeterUsageCheckpointWatermarkQuery) IDsX(ctx context.Context) []string {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -199,16 +199,16 @@ func (_q *CustomerUsageWatermarkQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (_q *CustomerUsageWatermarkQuery) Count(ctx context.Context) (int, error) {
+func (_q *MeterUsageCheckpointWatermarkQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*CustomerUsageWatermarkQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*MeterUsageCheckpointWatermarkQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) CountX(ctx context.Context) int {
+func (_q *MeterUsageCheckpointWatermarkQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -217,7 +217,7 @@ func (_q *CustomerUsageWatermarkQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *CustomerUsageWatermarkQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *MeterUsageCheckpointWatermarkQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -230,7 +230,7 @@ func (_q *CustomerUsageWatermarkQuery) Exist(ctx context.Context) (bool, error) 
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *CustomerUsageWatermarkQuery) ExistX(ctx context.Context) bool {
+func (_q *MeterUsageCheckpointWatermarkQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -238,18 +238,18 @@ func (_q *CustomerUsageWatermarkQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the CustomerUsageWatermarkQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the MeterUsageCheckpointWatermarkQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *CustomerUsageWatermarkQuery) Clone() *CustomerUsageWatermarkQuery {
+func (_q *MeterUsageCheckpointWatermarkQuery) Clone() *MeterUsageCheckpointWatermarkQuery {
 	if _q == nil {
 		return nil
 	}
-	return &CustomerUsageWatermarkQuery{
+	return &MeterUsageCheckpointWatermarkQuery{
 		config:     _q.config,
 		ctx:        _q.ctx.Clone(),
-		order:      append([]customerusagewatermark.OrderOption{}, _q.order...),
+		order:      append([]meterusagecheckpointwatermark.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.CustomerUsageWatermark{}, _q.predicates...),
+		predicates: append([]predicate.MeterUsageCheckpointWatermark{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -266,15 +266,15 @@ func (_q *CustomerUsageWatermarkQuery) Clone() *CustomerUsageWatermarkQuery {
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.CustomerUsageWatermark.Query().
-//		GroupBy(customerusagewatermark.FieldTenantID).
+//	client.MeterUsageCheckpointWatermark.Query().
+//		GroupBy(meterusagecheckpointwatermark.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *CustomerUsageWatermarkQuery) GroupBy(field string, fields ...string) *CustomerUsageWatermarkGroupBy {
+func (_q *MeterUsageCheckpointWatermarkQuery) GroupBy(field string, fields ...string) *MeterUsageCheckpointWatermarkGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &CustomerUsageWatermarkGroupBy{build: _q}
+	grbuild := &MeterUsageCheckpointWatermarkGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = customerusagewatermark.Label
+	grbuild.label = meterusagecheckpointwatermark.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -288,23 +288,23 @@ func (_q *CustomerUsageWatermarkQuery) GroupBy(field string, fields ...string) *
 //		TenantID string `json:"tenant_id,omitempty"`
 //	}
 //
-//	client.CustomerUsageWatermark.Query().
-//		Select(customerusagewatermark.FieldTenantID).
+//	client.MeterUsageCheckpointWatermark.Query().
+//		Select(meterusagecheckpointwatermark.FieldTenantID).
 //		Scan(ctx, &v)
-func (_q *CustomerUsageWatermarkQuery) Select(fields ...string) *CustomerUsageWatermarkSelect {
+func (_q *MeterUsageCheckpointWatermarkQuery) Select(fields ...string) *MeterUsageCheckpointWatermarkSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &CustomerUsageWatermarkSelect{CustomerUsageWatermarkQuery: _q}
-	sbuild.label = customerusagewatermark.Label
+	sbuild := &MeterUsageCheckpointWatermarkSelect{MeterUsageCheckpointWatermarkQuery: _q}
+	sbuild.label = meterusagecheckpointwatermark.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a CustomerUsageWatermarkSelect configured with the given aggregations.
-func (_q *CustomerUsageWatermarkQuery) Aggregate(fns ...AggregateFunc) *CustomerUsageWatermarkSelect {
+// Aggregate returns a MeterUsageCheckpointWatermarkSelect configured with the given aggregations.
+func (_q *MeterUsageCheckpointWatermarkQuery) Aggregate(fns ...AggregateFunc) *MeterUsageCheckpointWatermarkSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *CustomerUsageWatermarkQuery) prepareQuery(ctx context.Context) error {
+func (_q *MeterUsageCheckpointWatermarkQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -316,7 +316,7 @@ func (_q *CustomerUsageWatermarkQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !customerusagewatermark.ValidColumn(f) {
+		if !meterusagecheckpointwatermark.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -330,16 +330,16 @@ func (_q *CustomerUsageWatermarkQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *CustomerUsageWatermarkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*CustomerUsageWatermark, error) {
+func (_q *MeterUsageCheckpointWatermarkQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*MeterUsageCheckpointWatermark, error) {
 	var (
-		nodes = []*CustomerUsageWatermark{}
+		nodes = []*MeterUsageCheckpointWatermark{}
 		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*CustomerUsageWatermark).scanValues(nil, columns)
+		return (*MeterUsageCheckpointWatermark).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &CustomerUsageWatermark{config: _q.config}
+		node := &MeterUsageCheckpointWatermark{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
@@ -355,7 +355,7 @@ func (_q *CustomerUsageWatermarkQuery) sqlAll(ctx context.Context, hooks ...quer
 	return nodes, nil
 }
 
-func (_q *CustomerUsageWatermarkQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *MeterUsageCheckpointWatermarkQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -364,8 +364,8 @@ func (_q *CustomerUsageWatermarkQuery) sqlCount(ctx context.Context) (int, error
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *CustomerUsageWatermarkQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(customerusagewatermark.Table, customerusagewatermark.Columns, sqlgraph.NewFieldSpec(customerusagewatermark.FieldID, field.TypeString))
+func (_q *MeterUsageCheckpointWatermarkQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(meterusagecheckpointwatermark.Table, meterusagecheckpointwatermark.Columns, sqlgraph.NewFieldSpec(meterusagecheckpointwatermark.FieldID, field.TypeString))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -374,9 +374,9 @@ func (_q *CustomerUsageWatermarkQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, customerusagewatermark.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, meterusagecheckpointwatermark.FieldID)
 		for i := range fields {
-			if fields[i] != customerusagewatermark.FieldID {
+			if fields[i] != meterusagecheckpointwatermark.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -404,12 +404,12 @@ func (_q *CustomerUsageWatermarkQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *CustomerUsageWatermarkQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *MeterUsageCheckpointWatermarkQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(customerusagewatermark.Table)
+	t1 := builder.Table(meterusagecheckpointwatermark.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = customerusagewatermark.Columns
+		columns = meterusagecheckpointwatermark.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -436,28 +436,28 @@ func (_q *CustomerUsageWatermarkQuery) sqlQuery(ctx context.Context) *sql.Select
 	return selector
 }
 
-// CustomerUsageWatermarkGroupBy is the group-by builder for CustomerUsageWatermark entities.
-type CustomerUsageWatermarkGroupBy struct {
+// MeterUsageCheckpointWatermarkGroupBy is the group-by builder for MeterUsageCheckpointWatermark entities.
+type MeterUsageCheckpointWatermarkGroupBy struct {
 	selector
-	build *CustomerUsageWatermarkQuery
+	build *MeterUsageCheckpointWatermarkQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *CustomerUsageWatermarkGroupBy) Aggregate(fns ...AggregateFunc) *CustomerUsageWatermarkGroupBy {
+func (_g *MeterUsageCheckpointWatermarkGroupBy) Aggregate(fns ...AggregateFunc) *MeterUsageCheckpointWatermarkGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *CustomerUsageWatermarkGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *MeterUsageCheckpointWatermarkGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CustomerUsageWatermarkQuery, *CustomerUsageWatermarkGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*MeterUsageCheckpointWatermarkQuery, *MeterUsageCheckpointWatermarkGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *CustomerUsageWatermarkGroupBy) sqlScan(ctx context.Context, root *CustomerUsageWatermarkQuery, v any) error {
+func (_g *MeterUsageCheckpointWatermarkGroupBy) sqlScan(ctx context.Context, root *MeterUsageCheckpointWatermarkQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -484,28 +484,28 @@ func (_g *CustomerUsageWatermarkGroupBy) sqlScan(ctx context.Context, root *Cust
 	return sql.ScanSlice(rows, v)
 }
 
-// CustomerUsageWatermarkSelect is the builder for selecting fields of CustomerUsageWatermark entities.
-type CustomerUsageWatermarkSelect struct {
-	*CustomerUsageWatermarkQuery
+// MeterUsageCheckpointWatermarkSelect is the builder for selecting fields of MeterUsageCheckpointWatermark entities.
+type MeterUsageCheckpointWatermarkSelect struct {
+	*MeterUsageCheckpointWatermarkQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *CustomerUsageWatermarkSelect) Aggregate(fns ...AggregateFunc) *CustomerUsageWatermarkSelect {
+func (_s *MeterUsageCheckpointWatermarkSelect) Aggregate(fns ...AggregateFunc) *MeterUsageCheckpointWatermarkSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *CustomerUsageWatermarkSelect) Scan(ctx context.Context, v any) error {
+func (_s *MeterUsageCheckpointWatermarkSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*CustomerUsageWatermarkQuery, *CustomerUsageWatermarkSelect](ctx, _s.CustomerUsageWatermarkQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*MeterUsageCheckpointWatermarkQuery, *MeterUsageCheckpointWatermarkSelect](ctx, _s.MeterUsageCheckpointWatermarkQuery, _s, _s.inters, v)
 }
 
-func (_s *CustomerUsageWatermarkSelect) sqlScan(ctx context.Context, root *CustomerUsageWatermarkQuery, v any) error {
+func (_s *MeterUsageCheckpointWatermarkSelect) sqlScan(ctx context.Context, root *MeterUsageCheckpointWatermarkQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

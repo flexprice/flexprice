@@ -231,7 +231,7 @@ func (h *checkpointHarness) totals(t *testing.T, customerID string, wantUntil ti
 func (h *checkpointHarness) periodTotals(t *testing.T, customerID string, periodStart, wantUntil time.Time) map[string]string {
 	t.Helper()
 	ctx := aggregatedUsageCtx()
-	watermarks, err := h.checkpoints.ListUsageWatermarks(ctx, []string{customerID})
+	watermarks, err := h.checkpoints.ListMeterUsageCheckpointWatermarks(ctx, []string{customerID})
 	require.NoError(t, err)
 	require.Len(t, watermarks, 1)
 	require.True(t, watermarks[0].AggregatedUntil.Equal(wantUntil), "watermark at %s, want %s", watermarks[0].AggregatedUntil, wantUntil)
