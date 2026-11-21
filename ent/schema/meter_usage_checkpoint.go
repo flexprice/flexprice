@@ -81,12 +81,12 @@ func (MeterUsageCheckpoint) Fields() []ent.Field {
 
 func (MeterUsageCheckpoint) Indexes() []ent.Index {
 	return []ent.Index{
-		// One running total per instant, and the latest-at-or-before lookup is a
-		// backward scan on aggregated_until with no sort.
+		// One checkpoint per instant, and the latest-at-or-before lookup is a
+		// backward scan on aggregated_until with no sort. Period rows never share a meter with
+		// running totals (the checkpoint job skips never-reset SUM meters), so they cannot collide.
 		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "aggregated_until").
 			Unique().
-			Annotations(entsql.IndexWhere("(period_start IS NULL)")).
-			StorageKey("meterusagecheckpoint_running_total"),
+			StorageKey("meterusagecheckpoint_customer_meter_aggregated_until"),
 
 		// One per-period row per customer, meter and billing period.
 		index.Fields("tenant_id", "environment_id", "customer_id", "meter_id", "period_start").

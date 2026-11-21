@@ -132,14 +132,14 @@ func TestMeterUsageCheckpointRepositoryAdvancePeriods(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, other, "checkpoints are scoped to the environment")
 
-	// A running total at the same instant does not collide, and running-total reads skip per-period rows.
+	// Running totals live on other meters (never-reset SUM); their reads skip per-period rows.
 	_, err = repo.Upsert(ctx, &meterusagecheckpoint.MeterUsageCheckpoint{
-		ID: types.GenerateUUIDWithPrefix("muc"), CustomerID: "cust_a", MeterID: "m_sum", AggregationType: types.AggregationSum,
+		ID: types.GenerateUUIDWithPrefix("muc"), CustomerID: "cust_a", MeterID: "m_running", AggregationType: types.AggregationSum,
 		Total: decimal.NewFromInt(42), AggregatedUntil: hour(4), EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
 	})
 	require.NoError(t, err)
 	latest, err := repo.GetLatestBefore(ctx, meterusagecheckpoint.GetLatestBeforeParams{
-		CustomerID: "cust_a", MeterID: "m_sum", AggregationType: types.AggregationSum, Before: hour(5),
+		CustomerID: "cust_a", MeterID: "m_running", AggregationType: types.AggregationSum, Before: hour(5),
 	})
 	require.NoError(t, err)
 	require.True(t, latest.Total.Equal(decimal.NewFromInt(42)))

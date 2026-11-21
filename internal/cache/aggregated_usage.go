@@ -16,10 +16,9 @@ import (
 const (
 	aggregatedUsageHourLayout = "2006010215"
 
-	// activeSetTTL outlives the checkpoint run that reads an hour's active set: it fires 1h + LateWindow
-	// + CutoffGrace after the hour starts (4h10m), and the TTL may date from the hour's first write.
-	// The rest is slack for a retried run.
-	activeSetTTL = 5 * time.Hour
+	// activeSetTTL outlives the checkpoint run that reads an hour's active set, which fires 1h + LateWindow
+	// + CutoffGrace after the hour starts; the TTL may date from the hour's first write.
+	activeSetTTL = 2*aggregatedusage.LateWindow + aggregatedusage.CutoffGrace + time.Hour
 )
 
 type hourlyUsageRepository struct {

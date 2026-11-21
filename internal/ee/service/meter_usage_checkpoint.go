@@ -362,7 +362,7 @@ func (s *usageCheckpointService) checkpointBatch(ctx context.Context, externalCu
 }
 
 // addWindowUsage reads each window's usage from ClickHouse, once for all customers sharing it, and adds
-// it to their advances. Meters a period total cannot hold (deleted or unsupported) are left out.
+// it to their advances. Meters a period total does not hold (deleted, unsupported or never reset) are left out.
 func (s *usageCheckpointService) addWindowUsage(
 	ctx context.Context,
 	customersByWindow map[usageWindow][]string,
@@ -394,7 +394,8 @@ func (s *usageCheckpointService) addWindowUsage(
 	}
 	aggregationByMeter := make(map[string]types.AggregationType, len(meters))
 	for _, m := range meters {
-		if aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
+		// Never-reset SUM meters keep running totals instead, and the read path doesn't use them.
+		if aggregatedusage.SupportsAggregation(m.Aggregation.Type) && !keepsRunningAggregate(m) {
 			aggregationByMeter[m.ID] = m.Aggregation.Type
 		}
 	}

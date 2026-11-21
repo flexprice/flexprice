@@ -151,8 +151,8 @@ type checkpointHarness struct {
 }
 
 // newCheckpointHarness seeds customers cust_1 and cust_2 (internal cus_1 and cus_2), each with one
-// subscription from November 1 to periodEnd, and four meters: SUM, COUNT and MAX (checkpointed) and
-// COUNT_UNIQUE (not).
+// subscription from November 1 to periodEnd, and five meters: SUM, COUNT and MAX (checkpointed),
+// COUNT_UNIQUE and a never-reset SUM (not).
 func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness {
 	t.Helper()
 	ctx := aggregatedUsageCtx()
@@ -180,6 +180,11 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 			BaseModel: types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
 		}))
 	}
+	require.NoError(t, meters.CreateMeter(ctx, &meter.Meter{
+		ID: "m_never", EventName: "api_call", Aggregation: meter.Aggregation{Type: types.AggregationSum},
+		ResetUsage: types.ResetUsageNever,
+		BaseModel:  types.BaseModel{TenantID: "tenant_on", Status: types.StatusPublished},
+	}))
 
 	h := &checkpointHarness{
 		usage:           &countingMeterUsageStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()},
@@ -203,7 +208,7 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 func (h *checkpointHarness) ingest(t *testing.T, externalCustomerID, id string, ts time.Time, qty int64) {
 	t.Helper()
 	var records []*events.MeterUsage
-	for _, meterID := range []string{"m_sum", "m_count", "m_max", "m_unique"} {
+	for _, meterID := range []string{"m_sum", "m_count", "m_max", "m_unique", "m_never"} {
 		records = append(records, &events.MeterUsage{
 			Event: events.Event{
 				ID: id, TenantID: "tenant_on", EnvironmentID: "env_1", ExternalCustomerID: externalCustomerID, Timestamp: ts,
@@ -246,7 +251,7 @@ func TestUsageCheckpointEnvironment(t *testing.T) {
 	require.Equal(t, 1, result.Customers)
 	require.Equal(t, 1, result.Outcomes["updated"])
 	require.Equal(t, map[string]string{"m_sum": "13", "m_count": "2", "m_max": "9"}, h.totals(t, "cus_1", checkpointHour(7)),
-		"first run counts from the period start; COUNT_UNIQUE is not checkpointed")
+		"first run counts from the period start; COUNT_UNIQUE and never-reset SUM are not checkpointed")
 
 	result, err = h.svc.CheckpointEnvironment(aggregatedUsageCtx(), checkpointHour(8))
 	require.NoError(t, err)
