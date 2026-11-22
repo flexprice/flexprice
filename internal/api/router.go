@@ -42,6 +42,8 @@ type Handlers struct {
 	Invoice                  *v1.InvoiceHandler
 	Feature                  *v1.FeatureHandler
 	Activity                 *v1.ActivityHandler
+	Collections              *v1.CollectionsHandler
+	Reminders                *v1.ReminderHandler
 	Entitlement              *v1.EntitlementHandler
 	CreditGrant              *v1.CreditGrantHandler
 	Payment                  *v1.PaymentHandler
@@ -562,6 +564,20 @@ func NewRouter(
 				activityRoutes.POST("", read(types.EntityActivity, types.ActionRead), handlers.Activity.ListActivity)
 				activityRoutes.GET("/:id", read(types.EntityActivity, types.ActionRead), handlers.Activity.GetActivity)
 			}
+		}
+
+		collectionsRoutes := v1Private.Group("/collections")
+		{
+			collectionsRoutes.GET("/board", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoard)
+			collectionsRoutes.GET("/board/columns/:key", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoardColumn)
+			collectionsRoutes.GET("/reminders", read(types.EntityCollections, types.ActionRead), handlers.Reminders.ListReminders)
+			collectionsRoutes.POST("/reminders/approve", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.BulkApproveReminders)
+			collectionsRoutes.GET("/reminders/:id", read(types.EntityCollections, types.ActionRead), handlers.Reminders.GetReminder)
+			collectionsRoutes.PUT("/reminders/:id", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.UpdateReminder)
+			collectionsRoutes.POST("/reminders/:id/approve", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.ApproveReminder)
+			collectionsRoutes.POST("/reminders/:id/hold", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.HoldReminder)
+			collectionsRoutes.POST("/reminders/:id/skip", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.SkipReminder)
+			collectionsRoutes.POST("/reminders/:id/reopen", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.ReopenReminder)
 		}
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")

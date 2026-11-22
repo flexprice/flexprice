@@ -120,6 +120,8 @@ type Tx struct {
 	Product *ProductClient
 	// Refund is the client for interacting with the Refund builders.
 	Refund *RefundClient
+	// ReminderDecision is the client for interacting with the ReminderDecision builders.
+	ReminderDecision *ReminderDecisionClient
 	// RevenueFact is the client for interacting with the RevenueFact builders.
 	RevenueFact *RevenueFactClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
@@ -344,6 +346,7 @@ func (tx *Tx) init() {
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
 	tx.Product = NewProductClient(tx.config)
 	tx.Refund = NewRefundClient(tx.config)
+	tx.ReminderDecision = NewReminderDecisionClient(tx.config)
 	tx.RevenueFact = NewRevenueFactClient(tx.config)
 	tx.ScheduledTask = NewScheduledTaskClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)

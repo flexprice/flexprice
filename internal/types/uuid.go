@@ -151,6 +151,7 @@ const (
 	UUID_PREFIX_BILLING_TERM       = "bterm"
 	UUID_PREFIX_BILLING_INSTALMENT = "binst"
 	UUID_PREFIX_BILLING_ENTITY     = "be"
+	UUID_PREFIX_REMINDER_DECISION  = "rdec"
 
 	// UUID_PREFIX_EMAIL_LOG prefixes customer email log ids, also used as the provider idempotency key.
 	UUID_PREFIX_EMAIL_LOG = "email"

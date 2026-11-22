@@ -165,6 +165,9 @@ type Product func(*sql.Selector)
 // Refund is the predicate function for refund builders.
 type Refund func(*sql.Selector)
 
+// ReminderDecision is the predicate function for reminderdecision builders.
+type ReminderDecision func(*sql.Selector)
+
 // RevenueFact is the predicate function for revenuefact builders.
 type RevenueFact func(*sql.Selector)
 

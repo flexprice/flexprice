@@ -1863,6 +1863,36 @@ var (
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27]},
 			},
 			{
+				Name:    "idx_invoices_open_receivables",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[29]},
+				Annotation: &entsql.IndexAnnotation{
+					IncludeColumns: []string{
+						InvoicesColumns[0].Name,
+
+						InvoicesColumns[8].Name,
+
+						InvoicesColumns[14].Name,
+
+						InvoicesColumns[17].Name,
+
+						InvoicesColumns[42].Name,
+					},
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text <> 'SUCCEEDED'::text) AND (amount_remaining > (0)::numeric))",
+				},
+			},
+			{
+				Name:    "idx_invoices_paid_recent",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[30]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						InvoicesColumns[30].Name: true,
+					},
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text = 'SUCCEEDED'::text))",
+				},
+			},
+			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[36], InvoicesColumns[37]},
@@ -2656,6 +2686,47 @@ var (
 				Name:    "idx_refund_tenant_invoice",
 				Unique:  false,
 				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[9]},
+			},
+		},
+	}
+	// ReminderDecisionsColumns holds the columns for the "reminder_decisions" table.
+	ReminderDecisionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "draft_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "hold_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
+		{Name: "tone_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "subject_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "body_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "invoice_ids", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "invoice_set_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(64)"}},
+		{Name: "frozen_subject", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "frozen_body", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "frozen_tone", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+	}
+	// ReminderDecisionsTable holds the schema information for the "reminder_decisions" table.
+	ReminderDecisionsTable = &schema.Table{
+		Name:       "reminder_decisions",
+		Columns:    ReminderDecisionsColumns,
+		PrimaryKey: []*schema.Column{ReminderDecisionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_reminder_decision_tenant_env_customer_currency",
+				Unique:  true,
+				Columns: []*schema.Column{ReminderDecisionsColumns[1], ReminderDecisionsColumns[7], ReminderDecisionsColumns[8], ReminderDecisionsColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
 			},
 		},
 	}
@@ -3800,6 +3871,7 @@ var (
 		PriceUnitsTable,
 		ProductsTable,
 		RefundsTable,
+		ReminderDecisionsTable,
 		RevenueFactsTable,
 		ScheduledTasksTable,
 		SecretsTable,

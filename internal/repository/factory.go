@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -206,6 +207,14 @@ func NewBillingInstalmentRepository(p RepositoryParams) billingterm.InstalmentRe
 
 func NewBillingEntityRepository(p RepositoryParams) billingentity.Repository {
 	return entRepo.NewBillingEntityRepository(p.EntClient, p.Logger)
+}
+
+func NewReceivableSource(p RepositoryParams) collections.ReceivableSource {
+	return entRepo.NewReceivableSource(p.EntClient, p.Logger)
+}
+
+func NewReminderDecisionRepository(p RepositoryParams) collections.ReminderDecisionRepository {
+	return entRepo.NewReminderDecisionRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

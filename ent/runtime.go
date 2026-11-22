@@ -58,6 +58,7 @@ import (
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/reminderdecision"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/schema"
@@ -2663,6 +2664,55 @@ func init() {
 	refundDescIdempotencyKey := refundFields[15].Descriptor()
 	// refund.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	refund.IdempotencyKeyValidator = refundDescIdempotencyKey.Validators[0].(func(string) error)
+	reminderdecisionMixin := schema.ReminderDecision{}.Mixin()
+	reminderdecisionMixinFields0 := reminderdecisionMixin[0].Fields()
+	_ = reminderdecisionMixinFields0
+	reminderdecisionMixinFields1 := reminderdecisionMixin[1].Fields()
+	_ = reminderdecisionMixinFields1
+	reminderdecisionFields := schema.ReminderDecision{}.Fields()
+	_ = reminderdecisionFields
+	// reminderdecisionDescTenantID is the schema descriptor for tenant_id field.
+	reminderdecisionDescTenantID := reminderdecisionMixinFields0[0].Descriptor()
+	// reminderdecision.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	reminderdecision.TenantIDValidator = reminderdecisionDescTenantID.Validators[0].(func(string) error)
+	// reminderdecisionDescStatus is the schema descriptor for status field.
+	reminderdecisionDescStatus := reminderdecisionMixinFields0[1].Descriptor()
+	// reminderdecision.DefaultStatus holds the default value on creation for the status field.
+	reminderdecision.DefaultStatus = reminderdecisionDescStatus.Default.(string)
+	// reminderdecisionDescCreatedAt is the schema descriptor for created_at field.
+	reminderdecisionDescCreatedAt := reminderdecisionMixinFields0[2].Descriptor()
+	// reminderdecision.DefaultCreatedAt holds the default value on creation for the created_at field.
+	reminderdecision.DefaultCreatedAt = reminderdecisionDescCreatedAt.Default.(func() time.Time)
+	// reminderdecisionDescUpdatedAt is the schema descriptor for updated_at field.
+	reminderdecisionDescUpdatedAt := reminderdecisionMixinFields0[3].Descriptor()
+	// reminderdecision.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	reminderdecision.DefaultUpdatedAt = reminderdecisionDescUpdatedAt.Default.(func() time.Time)
+	// reminderdecision.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	reminderdecision.UpdateDefaultUpdatedAt = reminderdecisionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// reminderdecisionDescEnvironmentID is the schema descriptor for environment_id field.
+	reminderdecisionDescEnvironmentID := reminderdecisionMixinFields1[0].Descriptor()
+	// reminderdecision.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	reminderdecision.DefaultEnvironmentID = reminderdecisionDescEnvironmentID.Default.(string)
+	// reminderdecisionDescCustomerID is the schema descriptor for customer_id field.
+	reminderdecisionDescCustomerID := reminderdecisionFields[1].Descriptor()
+	// reminderdecision.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	reminderdecision.CustomerIDValidator = reminderdecisionDescCustomerID.Validators[0].(func(string) error)
+	// reminderdecisionDescCurrency is the schema descriptor for currency field.
+	reminderdecisionDescCurrency := reminderdecisionFields[2].Descriptor()
+	// reminderdecision.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	reminderdecision.CurrencyValidator = reminderdecisionDescCurrency.Validators[0].(func(string) error)
+	// reminderdecisionDescDraftStatus is the schema descriptor for draft_status field.
+	reminderdecisionDescDraftStatus := reminderdecisionFields[3].Descriptor()
+	// reminderdecision.DefaultDraftStatus holds the default value on creation for the draft_status field.
+	reminderdecision.DefaultDraftStatus = reminderdecisionDescDraftStatus.Default.(string)
+	// reminderdecisionDescInvoiceIds is the schema descriptor for invoice_ids field.
+	reminderdecisionDescInvoiceIds := reminderdecisionFields[9].Descriptor()
+	// reminderdecision.DefaultInvoiceIds holds the default value on creation for the invoice_ids field.
+	reminderdecision.DefaultInvoiceIds = reminderdecisionDescInvoiceIds.Default.([]string)
+	// reminderdecisionDescVersion is the schema descriptor for version field.
+	reminderdecisionDescVersion := reminderdecisionFields[14].Descriptor()
+	// reminderdecision.DefaultVersion holds the default value on creation for the version field.
+	reminderdecision.DefaultVersion = reminderdecisionDescVersion.Default.(int)
 	revenuefactFields := schema.RevenueFact{}.Fields()
 	_ = revenuefactFields
 	// revenuefactDescUsageAtListRate is the schema descriptor for usage_at_list_rate field.

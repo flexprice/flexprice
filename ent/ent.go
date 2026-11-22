@@ -65,6 +65,7 @@ import (
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
+	"github.com/flexprice/flexprice/ent/reminderdecision"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -198,6 +199,7 @@ func checkColumn(t, c string) error {
 			priceunit.Table:                        priceunit.ValidColumn,
 			product.Table:                          product.ValidColumn,
 			refund.Table:                           refund.ValidColumn,
+			reminderdecision.Table:                 reminderdecision.ValidColumn,
 			revenuefact.Table:                      revenuefact.ValidColumn,
 			scheduledtask.Table:                    scheduledtask.ValidColumn,
 			secret.Table:                           secret.ValidColumn,
