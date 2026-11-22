@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -362,4 +363,90 @@ func TestStartZohoBooksCreditNoteSync(t *testing.T) {
 
 		require.Error(t, startZohoBooksCreditNoteSync(context.Background(), temporalSvc, testLogger(), cn, event))
 	})
+}
+
+type cnPushMappingRepo struct {
+	entityintegrationmapping.Repository
+	mappings []*entityintegrationmapping.EntityIntegrationMapping
+	err      error
+	calls    int
+	listed   *types.EntityIntegrationMappingFilter
+}
+
+func (f *cnPushMappingRepo) List(_ context.Context, filter *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	f.calls++
+	f.listed = filter
+	return f.mappings, f.err
+}
+
+func TestPushCreditNoteToZohoBooks(t *testing.T) {
+	dbDown := errors.New("db down")
+	adjustment := func(status types.CreditNoteStatus) *creditnote.CreditNote {
+		return &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: status}
+	}
+	refundNote := &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeRefund, CreditNoteStatus: types.CreditNoteStatusFinalized}
+	synced := []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cn_1", ProviderEntityID: "zcn_1"}}
+	refundRow := func(id string, status types.RefundStatus) *refund.Refund {
+		return &refund.Refund{ID: id, CreditNoteID: lo.ToPtr("cn_1"), RefundStatus: status}
+	}
+
+	tests := []struct {
+		name           string
+		cn             *creditnote.CreditNote
+		conn           *connection.Connection
+		connErr        error
+		mappings       []*entityintegrationmapping.EntityIntegrationMapping
+		mappingErr     error
+		refunds        []*refund.Refund
+		refundErr      error
+		wantErr        error
+		wantValidation bool
+		wantConnCheck  bool
+		wantMapping    bool
+		wantRefunds    bool
+	}{
+		{name: "finalized adjustment not yet synced starts the sync", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, true), wantErr: errTemporalUnavailable, wantConnCheck: true, wantMapping: true},
+		{name: "voided credit note starts the sync even when synced", cn: adjustment(types.CreditNoteStatusVoided), conn: zohoConnection(true, true), mappings: synced, wantErr: errTemporalUnavailable, wantConnCheck: true},
+		{name: "draft credit note is rejected before any lookup", cn: adjustment(types.CreditNoteStatusDraft), conn: zohoConnection(true, true), wantValidation: true},
+		{name: "no Zoho Books connection is rejected", cn: adjustment(types.CreditNoteStatusFinalized), wantValidation: true, wantConnCheck: true},
+		{name: "credit note sync off is rejected", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, false), wantValidation: true, wantConnCheck: true},
+		{name: "invoice sync off is rejected", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(false, true), wantValidation: true, wantConnCheck: true},
+		{name: "connection lookup error is returned", cn: adjustment(types.CreditNoteStatusFinalized), connErr: dbDown, wantErr: dbDown, wantConnCheck: true},
+		{name: "credit note already synced is rejected", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, true), mappings: synced, wantValidation: true, wantConnCheck: true, wantMapping: true},
+		{name: "mapping lookup error is returned", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, true), mappingErr: dbDown, wantErr: dbDown, wantConnCheck: true, wantMapping: true},
+		{name: "refund credit note with finished refunds starts the sync", cn: refundNote, conn: zohoConnection(true, true),
+			refunds: []*refund.Refund{refundRow("ref_1", types.RefundStatusSucceeded), refundRow("ref_2", types.RefundStatusFailed)}, wantErr: errTemporalUnavailable, wantConnCheck: true, wantMapping: true, wantRefunds: true},
+		{name: "refund credit note with a refund in progress is rejected", cn: refundNote, conn: zohoConnection(true, true),
+			refunds: []*refund.Refund{refundRow("ref_1", types.RefundStatusSucceeded), refundRow("ref_2", types.RefundStatusProcessing)}, wantValidation: true, wantConnCheck: true, wantMapping: true, wantRefunds: true},
+		{name: "refund list error is returned", cn: refundNote, conn: zohoConnection(true, true), refundErr: dbDown, wantErr: dbDown, wantConnCheck: true, wantMapping: true, wantRefunds: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			connRepo := &cnDispatchConnectionRepo{conn: tt.conn, err: tt.connErr}
+			mappingRepo := &cnPushMappingRepo{mappings: tt.mappings, err: tt.mappingErr}
+			refundRepo := &cnDispatchRefundRepo{refunds: tt.refunds, listErr: tt.refundErr}
+
+			err := PushCreditNoteToZohoBooks(context.Background(), connRepo, mappingRepo, refundRepo, testLogger(), tt.cn, cnDispatchEvent(`{}`))
+
+			switch {
+			case tt.wantValidation:
+				require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
+			case tt.wantErr != nil:
+				require.ErrorIs(t, err, tt.wantErr)
+			default:
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantConnCheck, connRepo.calls > 0, "connection lookup")
+			require.Equal(t, tt.wantMapping, mappingRepo.calls > 0, "mapping lookup")
+			require.Equal(t, tt.wantRefunds, refundRepo.listCalls > 0, "refund list")
+			if tt.wantMapping {
+				require.Equal(t, types.IntegrationEntityTypeCreditNote, mappingRepo.listed.EntityType)
+				require.Equal(t, "cn_1", mappingRepo.listed.EntityID)
+			}
+			if tt.wantRefunds {
+				require.Equal(t, []string{"cn_1"}, refundRepo.listed.CreditNoteIDs)
+			}
+		})
+	}
 }

@@ -246,6 +246,11 @@ only once the final refund outcome is known, so Zoho never shows a refund that l
   be recorded in Zoho by hand.
 - A sync for a credit note that is still running makes a later event for the same credit note retry, since
   create and void share one workflow id. A void that arrives while the create is running waits for it.
+- A credit note whose sync failed before it reached Zoho (a rejection, or a price not yet synced) can be pushed
+  again from its page: `POST /integrations/sync` with `entity_type` `credit_note` starts the same workflow. The
+  push is refused, with the reason, for a draft, when credit note or invoice sync is off, when a finalized credit
+  note is already mapped, or while a refund credit note still has refunds in progress. A voided credit note can
+  be pushed to rerun its void.
 
 ### 5.6 Void
 

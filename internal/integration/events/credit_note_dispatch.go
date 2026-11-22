@@ -9,7 +9,9 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
+	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/refund"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
@@ -124,6 +126,73 @@ func DispatchRefundVendorSync(
 			"refund_id", settled.ID,
 		)
 		return nil
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return errTemporalUnavailable
+	}
+	return startZohoBooksCreditNoteSync(ctx, temporalSvc, log, cn, event)
+}
+
+// PushCreditNoteToZohoBooks starts the Zoho Books credit note sync for a manual push, with ctx
+// already scoped to the credit note's invoice. A credit note that cannot be pushed is reported
+// as a validation error instead of being skipped.
+func PushCreditNoteToZohoBooks(
+	ctx context.Context,
+	connRepo connection.Repository,
+	mappingRepo entityintegrationmapping.Repository,
+	refundRepo refund.Repository,
+	log *logger.Logger,
+	cn *creditnote.CreditNote,
+	event *types.WebhookEvent,
+) error {
+	if cn.CreditNoteStatus != types.CreditNoteStatusFinalized && cn.CreditNoteStatus != types.CreditNoteStatusVoided {
+		return ierr.NewError("credit note cannot be pushed").
+			WithHint("Only finalized or voided credit notes can be pushed to Zoho Books").
+			Mark(ierr.ErrValidation)
+	}
+
+	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderZohoBooks)
+	if err != nil {
+		return err
+	}
+	if conn == nil || !conn.IsInvoiceOutboundEnabled() || !conn.IsCreditNoteOutboundEnabled() {
+		return ierr.NewError("credit note sync is not enabled").
+			WithHint("Turn on credit note sync for the Zoho Books connection to push credit notes").
+			Mark(ierr.ErrValidation)
+	}
+
+	if cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
+		filter := types.NewEntityIntegrationMappingFilter()
+		filter.EntityType = types.IntegrationEntityTypeCreditNote
+		filter.EntityID = cn.ID
+		filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+		filter.ConnectionID = conn.ID
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		mappings, err := mappingRepo.List(ctx, filter)
+		if err != nil {
+			return err
+		}
+		if len(mappings) > 0 {
+			return ierr.NewError("credit note is already synced").
+				WithHint("This credit note is already in Zoho Books").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if cn.CreditNoteType == types.CreditNoteTypeRefund && cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
+		filter := types.NewNoLimitRefundFilter()
+		filter.CreditNoteIDs = []string{cn.ID}
+		refunds, err := refundRepo.List(ctx, filter)
+		if err != nil {
+			return err
+		}
+		if lo.ContainsBy(refunds, func(r *refund.Refund) bool { return !r.RefundStatus.IsTerminal() }) {
+			return ierr.NewError("credit note refunds are still in progress").
+				WithHint("Push the credit note once all its refunds have finished").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	temporalSvc := temporalservice.GetGlobalTemporalService()

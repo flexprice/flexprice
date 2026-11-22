@@ -59,6 +59,18 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 		return s.syncInvoice(ctx, req.EntityID, req.Resync, opts...)
 	case types.IntegrationEntityTypeCustomer:
 		return s.syncCustomer(ctx, req.EntityID, opts...)
+	case types.IntegrationEntityTypeCreditNote:
+		if req.Method == dto.IntegrationSyncMethodPull {
+			return ierr.NewError("credit notes cannot be pulled").
+				WithHint("Credit notes sync one way, from Flexprice to Zoho Books").
+				Mark(ierr.ErrValidation)
+		}
+		if only != nil && only.ProviderType != types.SecretProviderZohoBooks {
+			return ierr.NewError("credit notes sync only to Zoho Books").
+				WithHint("Push the credit note with a Zoho Books connection").
+				Mark(ierr.ErrValidation)
+		}
+		return s.syncCreditNote(ctx, req.EntityID)
 	default:
 		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
 	}
@@ -139,6 +151,33 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 	if ierr.IsAlreadyExists(err) {
 		return ierr.WithError(err).
 			WithHint("A sync of this invoice is already running. Try again once it finishes.").
+			Mark(ierr.ErrAlreadyExists)
+	}
+	return err
+}
+
+func (s *integrationSyncService) syncCreditNote(ctx context.Context, creditNoteID string) error {
+	cn, err := s.CreditNoteRepo.Get(ctx, creditNoteID)
+	if err != nil {
+		return err
+	}
+
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, cn.InvoiceID)
+	if err != nil {
+		return err
+	}
+
+	event := &types.WebhookEvent{
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+	}
+	err = integrationevents.PushCreditNoteToZohoBooks(
+		ctx, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.RefundRepo, s.Logger, cn, event,
+	)
+	if ierr.IsAlreadyExists(err) {
+		return ierr.WithError(err).
+			WithHint("A sync of this credit note is already running. Try again once it finishes.").
 			Mark(ierr.ErrAlreadyExists)
 	}
 	return err
