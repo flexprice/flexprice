@@ -506,6 +506,12 @@ func (s *SyncConfig) Validate() error {
 		return ierr.NewError("credit note inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
+	if s.CreditNote != nil && s.CreditNote.Outbound && (s.Invoice == nil || !s.Invoice.Outbound) {
+		return ierr.NewError("credit note sync requires invoice outbound sync").
+			WithHint("Enable invoice outbound sync to sync credit notes to Zoho Books").
+			Mark(ierr.ErrValidation)
+	}
+
 	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.IsSubmitForApprovalEnabled() {
 		return ierr.NewError("credit note sync requires submit for approval to be disabled").
 			WithHint("Disable submit_for_approval to sync credit notes to Zoho Books").
