@@ -394,8 +394,6 @@ func TestSyncCreditNoteToZoho_InvalidLineItemsFailBeforeCreate(t *testing.T) {
 		{"credit note line points to a missing invoice line", func(f *cnFixture) {
 			f.creditNote.LineItems[0].InvoiceLineItemID = "li_missing"
 		}},
-		{"invoice line has no price", func(f *cnFixture) { f.invoice.LineItems[1].PriceID = nil }},
-		{"invoice line has an empty price", func(f *cnFixture) { f.invoice.LineItems[1].PriceID = lo.ToPtr("") }},
 		{"price is not synced to Zoho", func(f *cnFixture) {
 			f.mappingRepo.mappings = lo.Reject(f.mappingRepo.mappings, func(m *entityintegrationmapping.EntityIntegrationMapping, _ int) bool {
 				return m.EntityID == "price_2"
@@ -784,6 +782,93 @@ func TestSyncCreditNoteToZoho_VoidFailures(t *testing.T) {
 		require.ErrorIs(t, f.sync(), failure)
 		assert.Equal(t, []string{"zcn_1"}, f.client.voidedIDs)
 	})
+}
+
+func TestSyncCreditNoteToZoho_UnpricedLines(t *testing.T) {
+	t.Run("a line without a price is sent without a Zoho item", func(t *testing.T) {
+		for name, price := range map[string]*string{"nil price": nil, "empty price": lo.ToPtr("")} {
+			t.Run(name, func(t *testing.T) {
+				f := newCreditNoteFixture(types.CreditNoteTypeAdjustment)
+				f.invoice.LineItems[1].PriceID = price
+
+				require.NoError(t, f.sync())
+
+				require.Len(t, f.client.createReq.LineItems, 1)
+				line := f.client.createReq.LineItems[0]
+				assert.Empty(t, line.ItemID)
+				assert.Equal(t, "Seats", line.Name)
+				assert.Equal(t, "zinv_1", line.InvoiceID)
+				assert.True(t, line.Rate.Equal(decimal.NewFromInt(100)))
+				priceLookups := lo.Filter(f.mappingRepo.listCalls, func(filter *types.EntityIntegrationMappingFilter, _ int) bool {
+					return filter.EntityType == types.IntegrationEntityTypePrice
+				})
+				assert.Empty(t, priceLookups, "no price lookup when no line is priced")
+			})
+		}
+	})
+
+	t.Run("priced and unpriced lines in one credit note", func(t *testing.T) {
+		f := newCreditNoteFixture(types.CreditNoteTypeAdjustment)
+		f.invoice.LineItems[0].PriceID = nil
+		f.creditNote.LineItems = []*creditnote.CreditNoteLineItem{
+			{ID: "cnli_1", InvoiceLineItemID: "li_1", DisplayName: "One-off", Amount: decimal.NewFromInt(40)},
+			{ID: "cnli_2", InvoiceLineItemID: "li_2", DisplayName: "Seats", Amount: decimal.NewFromInt(60)},
+		}
+
+		require.NoError(t, f.sync())
+
+		require.Len(t, f.client.createReq.LineItems, 2)
+		assert.Empty(t, f.client.createReq.LineItems[0].ItemID)
+		assert.Equal(t, "zitem_2", f.client.createReq.LineItems[1].ItemID)
+		priceLookups := lo.Filter(f.mappingRepo.listCalls, func(filter *types.EntityIntegrationMappingFilter, _ int) bool {
+			return filter.EntityType == types.IntegrationEntityTypePrice
+		})
+		require.Len(t, priceLookups, 1)
+		assert.Equal(t, []string{"price_2"}, priceLookups[0].EntityIDs)
+	})
+}
+
+func TestSyncCreditNoteToZoho_DraftZohoInvoice(t *testing.T) {
+	t.Run("a draft invoice fails before the credit note is created", func(t *testing.T) {
+		for _, status := range []string{"draft", " Draft "} {
+			for _, cnType := range []types.CreditNoteType{types.CreditNoteTypeAdjustment, types.CreditNoteTypeRefund} {
+				f := newCreditNoteFixture(cnType)
+				f.client.zohoInvoice.Status = status
+
+				err := f.sync(succeededRefund("ref_1", types.RefundDestinationWallet, nil))
+
+				require.Error(t, err)
+				assert.True(t, ierr.IsValidation(err), "want validation error, got %v", err)
+				assert.Equal(t, 0, f.client.createCalls)
+				assert.Empty(t, f.client.refundReqs)
+				assert.Empty(t, f.client.applyReqs)
+				assert.Empty(t, f.mappingRepo.createdIDs)
+			}
+		}
+	})
+
+	t.Run("an invoice out of draft gets its credit note", func(t *testing.T) {
+		for _, status := range []string{"sent", "paid", "overdue", "partially_paid"} {
+			f := newCreditNoteFixture(types.CreditNoteTypeAdjustment)
+			f.client.zohoInvoice.Status = status
+
+			require.NoError(t, f.sync(), status)
+			assert.Equal(t, 1, f.client.createCalls, status)
+		}
+	})
+}
+
+func TestClientCreditNoteLineWithoutItemOmitsItemID(t *testing.T) {
+	c, rt := newCreditNoteClient(`{"code":0,"creditnote":{"creditnote_id":"zcn_1"}}`)
+
+	_, err := c.CreateCreditNote(context.Background(), "zinv_1", &CreditNoteCreateRequest{
+		LineItems: []CreditNoteLineItem{{InvoiceID: "zinv_1", Name: "One-off", Rate: decimal.NewFromInt(40), Quantity: decimal.NewFromInt(1)}},
+	})
+	require.NoError(t, err)
+
+	line := rt.body["line_items"].([]any)[0].(map[string]any)
+	assert.NotContains(t, line, "item_id")
+	assert.Equal(t, "One-off", line["name"])
 }
 
 type creditNoteRT struct {

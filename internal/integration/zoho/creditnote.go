@@ -148,6 +148,18 @@ func (s *creditNoteService) createCreditNote(ctx context.Context, cn *creditnote
 			Mark(ierr.ErrNotFound)
 	}
 
+	// Zoho rejects a credit note on a draft invoice. Sending the invoice is the tenant's call.
+	if NormalizeInvoiceStatus(zohoInvoice.Status) == InvoiceStatusDraft {
+		return nil, ierr.NewError("zoho invoice is a draft").
+			WithHintf("Zoho invoice %s is still a draft. Mark it as sent in Zoho Books before its credit notes can sync", zohoInvoiceID).
+			WithReportableDetails(map[string]any{
+				"credit_note_id":  cn.ID,
+				"invoice_id":      cn.InvoiceID,
+				"zoho_invoice_id": zohoInvoiceID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	lineItems, err := s.buildCreditNoteLineItems(ctx, cn, flexInvoice, zohoInvoiceID, connectionID)
 	if err != nil {
 		return nil, err
@@ -201,7 +213,7 @@ func (s *creditNoteService) createCreditNote(ctx context.Context, cn *creditnote
 }
 
 // buildCreditNoteLineItems credits, per credit note line, the Zoho item mapped to the price of
-// the invoice line it credits.
+// the invoice line it credits. A line without a price is sent without an item, as invoice sync sends it.
 func (s *creditNoteService) buildCreditNoteLineItems(ctx context.Context, cn *creditnote.CreditNote, flexInvoice *invoice.Invoice, zohoInvoiceID, connectionID string) ([]CreditNoteLineItem, error) {
 	invoiceLineByID := lo.SliceToMap(flexInvoice.LineItems, func(li *invoice.InvoiceLineItem) (string, *invoice.InvoiceLineItem) {
 		return li.ID, li
@@ -210,33 +222,36 @@ func (s *creditNoteService) buildCreditNoteLineItems(ctx context.Context, cn *cr
 	priceIDs := make([]string, len(cn.LineItems))
 	for i, cnLine := range cn.LineItems {
 		invoiceLine, ok := invoiceLineByID[cnLine.InvoiceLineItemID]
-		if !ok || lo.FromPtr(invoiceLine.PriceID) == "" {
-			return nil, ierr.NewError("credit note line has no priced invoice line").
-				WithHintf("Invoice line %s of credit note %s has no price", cnLine.InvoiceLineItemID, cn.ID).
+		if !ok {
+			return nil, ierr.NewError("credit note line has no invoice line").
+				WithHintf("Invoice line %s of credit note %s was not found", cnLine.InvoiceLineItemID, cn.ID).
 				Mark(ierr.ErrValidation)
 		}
-		priceIDs[i] = *invoiceLine.PriceID
+		priceIDs[i] = lo.FromPtr(invoiceLine.PriceID)
 	}
 
-	filter := types.NewNoLimitEntityIntegrationMappingFilter()
-	filter.EntityType = types.IntegrationEntityTypePrice
-	filter.EntityIDs = lo.Uniq(priceIDs)
-	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
-	filter.ConnectionID = connectionID
-	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	mappings, err := s.mappingRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
+	zohoItemIDByPriceID := map[string]string{}
+	if pricedIDs := lo.Uniq(lo.Compact(priceIDs)); len(pricedIDs) > 0 {
+		filter := types.NewNoLimitEntityIntegrationMappingFilter()
+		filter.EntityType = types.IntegrationEntityTypePrice
+		filter.EntityIDs = pricedIDs
+		filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+		filter.ConnectionID = connectionID
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		mappings, err := s.mappingRepo.List(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		zohoItemIDByPriceID = lo.SliceToMap(mappings, func(m *entityintegrationmapping.EntityIntegrationMapping) (string, string) {
+			return m.EntityID, strings.TrimSpace(m.ProviderEntityID)
+		})
 	}
-	zohoItemIDByPriceID := lo.SliceToMap(mappings, func(m *entityintegrationmapping.EntityIntegrationMapping) (string, string) {
-		return m.EntityID, strings.TrimSpace(m.ProviderEntityID)
-	})
 
 	lineItems := make([]CreditNoteLineItem, 0, len(cn.LineItems))
 	for i, cnLine := range cn.LineItems {
 		priceID := priceIDs[i]
 		zohoItemID := zohoItemIDByPriceID[priceID]
-		if zohoItemID == "" {
+		if priceID != "" && zohoItemID == "" {
 			return nil, ierr.NewError("price is not synced to zoho").
 				WithHintf("Price %s of credit note %s has no Zoho item", priceID, cn.ID).
 				Mark(ierr.ErrValidation)

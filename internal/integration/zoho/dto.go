@@ -509,7 +509,7 @@ type CreditNoteCreateRequest struct {
 
 // CreditNoteLineItem credits the Zoho item of one invoice line.
 type CreditNoteLineItem struct {
-	ItemID    string          `json:"item_id"`
+	ItemID    string          `json:"item_id,omitempty"`
 	InvoiceID string          `json:"invoice_id"`
 	Name      string          `json:"name,omitempty"`
 	Rate      decimal.Decimal `json:"rate"`

@@ -204,10 +204,17 @@ the rate set in Zoho Settings → Currencies. The credit note and its refunds us
 The Zoho invoice id comes from the invoice's mapping (`entity_type = invoice`, `entity_id` = Flexprice
 invoice id, provider Zoho Books). Each credit note line takes its `item_id` from the price of the invoice
 line it credits: credit note line → invoice line → `price_id` → the price's mapping (`entity_type = price`).
-Invoice sync already created that item, so a missing mapping is an error. The `customer_id` is read from
+Invoice sync already created that item, so a missing mapping for a priced line is an error. An invoice line
+without a price (for example on a one-off invoice) was synced without an item, so its credit note line is
+sent without `item_id` too, with only its name, quantity and rate. The `customer_id` is read from
 the Zoho invoice (`GetInvoice`). `invoice_item_id` is optional in Zoho and is not sent.
 
 If the invoice has no Zoho mapping, it was never synced, and the credit note is skipped.
+
+Invoice sync leaves the Zoho invoice in draft, and Zoho rejects a credit note on a draft invoice (code 12055).
+Sending the invoice is the tenant's call, so the sync never marks it as sent. When the Zoho invoice is still
+a draft, the sync fails before calling Zoho with an error asking for the invoice to be marked as sent in Zoho
+Books.
 
 ### 5.3 When each credit note syncs
 
@@ -264,8 +271,9 @@ credit raises the Zoho invoice balance by the same amount, so the two stay in st
   migration is needed.
 - `from_account_id` is the existing `deposit_to_account_id` setting, the Zoho ledger account invoice
   payments are recorded into by mark-paid. The refund comes out of the same ledger the payment went into.
-  When the setting is empty, `from_account_id` is omitted and Zoho picks the account. It is used for both
-  gateway and wallet refunds.
+  It must be a Bank or Cash account. When it is empty, `from_account_id` is omitted and Zoho rejects the
+  refund (code 11016, "Involved account types are not applicable"). It is used for both gateway and wallet
+  refunds.
 - Credit note sync requires `submit_for_approval` to be off, so the credit note is created Open and can be
   refunded or applied right away. Approvals must also be off in the Zoho org for credit notes.
 - The sync scopes the context with `BillingEntityService.ScopeToInvoice` before it reads the connection, so
