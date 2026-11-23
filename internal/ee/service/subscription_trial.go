@@ -269,7 +269,8 @@ func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Cont
 	if parentSub.SubscriptionType != types.SubscriptionTypeParent {
 		return nil
 	}
-	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID)
+	// Trial end moved the inherited children to incomplete while payment was pending.
+	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID, types.SubscriptionStatusIncomplete)
 	if err != nil {
 		return err
 	}

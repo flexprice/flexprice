@@ -8594,16 +8594,16 @@ func (s *subscriptionService) ExternalCustomerIDsForSubscription(ctx context.Con
 	return lo.Uniq(out), nil
 }
 
-// getInheritedSubscriptions retrieves all INHERITED child subscriptions for a parent subscription.
-func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string) ([]*subscription.Subscription, error) {
+// getInheritedSubscriptions retrieves active, trialing, draft, and explicitly requested inherited children.
+func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string, additionalStatuses ...types.SubscriptionStatus) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.ParentSubscriptionIDs = []string{parentSubID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	filter.SubscriptionStatus = []types.SubscriptionStatus{
+	filter.SubscriptionStatus = append([]types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 		types.SubscriptionStatusDraft,
-	}
+	}, additionalStatuses...)
 
 	return s.SubRepo.List(ctx, filter)
 }

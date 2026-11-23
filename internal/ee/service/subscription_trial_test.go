@@ -21,6 +21,95 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() {
+	ctx := s.GetContext()
+	now := s.GetNow()
+	trialEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	trialStart := trialEnd.AddDate(0, 0, -14)
+	firstPeriodEnd := trialEnd.AddDate(0, 1, 0)
+	subscriptions := s.service.(*subscriptionService)
+	invoices := NewInvoiceService(subscriptions.ServiceParams)
+
+	cases := []struct {
+		name       string
+		monthlyFee int64
+	}{
+		{name: "paid plan activates after the parent invoice is paid", monthlyFee: 30},
+		{name: "zero-dollar plan activates at trial end"},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			fee := decimal.NewFromInt(tc.monthlyFee)
+			plan := s.seedFixedPricePlan("plan_"+s.GetUUID(), fee, 14)
+			childCustomer := &customer.Customer{
+				ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+				ExternalID: "child_" + s.GetUUID(),
+				Name:       "Child workspace",
+				BaseModel:  types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, childCustomer))
+
+			parent, err := subscriptions.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           plan.ID,
+				StartDate:        &trialStart,
+				Currency:         "usd",
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				BillingCycle:     types.BillingCycleAnniversary,
+				CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice),
+				PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultIncomplete),
+				Inheritance: &dto.SubscriptionInheritanceConfig{
+					ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+				},
+			})
+			s.Require().NoError(err)
+			s.Require().Equal(types.SubscriptionStatusTrialing, parent.SubscriptionStatus)
+
+			filter := types.NewNoLimitSubscriptionFilter()
+			filter.ParentSubscriptionIDs = []string{parent.ID}
+			filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+			filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusTrialing}
+			children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+			s.Require().NoError(err)
+			s.Require().Len(children, 1)
+			child := children[0]
+			s.Require().Equal(childCustomer.ID, child.CustomerID)
+
+			inv, err := subscriptions.ProcessSingleSubscriptionTrialEnd(ctx, parent.Subscription, now)
+			s.Require().NoError(err)
+			if fee.IsPositive() {
+				s.Require().NotNil(inv)
+				s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+				s.Equal(types.InvoiceBillingReasonSubscriptionTrialEnd, types.InvoiceBillingReason(inv.BillingReason))
+				s.True(fee.Equal(inv.AmountDue), "amount due: %s", inv.AmountDue)
+				for _, id := range []string{parent.ID, child.ID} {
+					sub, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+					s.Require().NoError(err)
+					s.Equal(types.SubscriptionStatusIncomplete, sub.SubscriptionStatus, id)
+				}
+
+				s.Require().NoError(invoices.UpdatePaymentStatus(ctx, inv.ID, types.PaymentStatusSucceeded, nil))
+				paid, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+				s.Require().NoError(err)
+				s.Equal(types.PaymentStatusSucceeded, paid.PaymentStatus)
+				s.True(fee.Equal(paid.AmountPaid), "amount paid: %s", paid.AmountPaid)
+				s.True(paid.AmountRemaining.IsZero(), "amount remaining: %s", paid.AmountRemaining)
+			} else {
+				s.Nil(inv, "a zero-dollar trial conversion has no invoice to collect")
+			}
+
+			for _, id := range []string{parent.ID, child.ID} {
+				sub, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+				s.Require().NoError(err)
+				s.Equal(types.SubscriptionStatusActive, sub.SubscriptionStatus, id)
+				s.Equal(trialEnd, sub.CurrentPeriodStart, id)
+				s.Equal(firstPeriodEnd, sub.CurrentPeriodEnd, id)
+			}
+		})
+	}
+}
+
 func TestSetCreateSubscriptionTrialWindow_UniformRecurringFixedFromPlan(t *testing.T) {
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	sub := &subscription.Subscription{StartDate: start}
