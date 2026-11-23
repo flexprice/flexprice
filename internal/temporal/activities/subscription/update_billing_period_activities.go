@@ -323,6 +323,16 @@ func (s *BillingActivities) TriggerInvoiceWorkflowActivity(
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
+	autoProcess, err := service.NewInvoiceService(s.serviceParams).IsAutoProcessingEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !autoProcess {
+		s.logger.Info(ctx, "auto processing off, invoice workflows not triggered",
+			"invoice_count", len(input.InvoiceIDs))
+		return &invoiceModels.TriggerInvoiceWorkflowActivityOutput{FailedInvoices: []string{}}, nil
+	}
+
 	temporalSvc := temporalService.GetGlobalTemporalService()
 
 	output := &invoiceModels.TriggerInvoiceWorkflowActivityOutput{

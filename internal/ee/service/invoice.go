@@ -109,6 +109,7 @@ type InvoiceService interface {
 	PublishInvoiceSyncWebhook(ctx context.Context, invoiceID string, provider types.SecretProvider, syncErr string)
 	PublishInvoicePaymentFailed(ctx context.Context, event webhookDto.InternalInvoicePaymentFailedEvent)
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
+	IsAutoProcessingEnabled(ctx context.Context) (bool, error)
 	IsInvoiceFinalizationDue(ctx context.Context, inv *invoice.Invoice) (bool, error)
 	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error)
 
@@ -1714,6 +1715,21 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	return nil
 }
 
+func (s *invoiceService) getInvoiceConfig(ctx context.Context) (types.InvoiceConfig, error) {
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	config, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+	if err != nil {
+		return config, ierr.WithError(err).WithHint("failed to load invoice config").Mark(ierr.ErrDatabase)
+	}
+	return config, nil
+}
+
+// IsAutoProcessingEnabled reports whether the environment auto-processes invoices; when false nothing runs until triggered manually.
+func (s *invoiceService) IsAutoProcessingEnabled(ctx context.Context) (bool, error) {
+	config, err := s.getInvoiceConfig(ctx)
+	return config.AutoFinalize, err
+}
+
 // IsFinalizationDue checks whether a draft invoice's finalization delay has elapsed.
 // Returns true if the invoice should be finalized now (delay elapsed or no delay configured).
 // Returns false if the invoice is not a draft, auto finalization is off, or the delay has not yet elapsed.
@@ -1746,11 +1762,10 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return false, nil
 	}
 
-	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+	// Fail-closed: if we can't load config, don't finalize — the cron will retry next cycle
+	invoiceConfig, err := s.getInvoiceConfig(ctx)
 	if err != nil {
-		// Fail-closed: if we can't load config, don't finalize — the cron will retry next cycle
-		return false, ierr.WithError(err).WithHint("failed to load invoice config for finalization check").Mark(ierr.ErrDatabase)
+		return false, err
 	}
 
 	// Without auto finalization the draft waits for the user to finalize it manually.
