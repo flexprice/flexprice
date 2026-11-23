@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 )
 
@@ -25,19 +24,14 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	raw := e2eprobe.NewSDKClient(host, key).Raw()
-	call := func(ctx context.Context, method, path string, body, out any) {
-		t.Helper()
-		if err := raw.Do(ctx, method, path, body, out); err != nil {
-			t.Fatalf("%s %s: %v", method, path, err)
-		}
-	}
+	api := newProbeHTTP(host)
+	api.headers.Set("X-API-Key", key)
 	create := func(path string, body map[string]any) string {
 		t.Helper()
 		var created struct {
 			ID string `json:"id"`
 		}
-		call(ctx, http.MethodPost, path, body, &created)
+		api.require(t, ctx, http.MethodPost, path, body, http.StatusCreated, &created)
 		if created.ID == "" {
 			t.Fatalf("POST %s returned no ID", path)
 		}
@@ -75,7 +69,7 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 				PriceID string `json:"price_id"`
 			} `json:"line_items"`
 		}
-		call(ctx, http.MethodGet, "/subscriptions/"+subscriptionID, nil, &subscription)
+		api.require(t, ctx, http.MethodGet, "/subscriptions/"+subscriptionID, nil, http.StatusOK, &subscription)
 		prices := make([]string, 0, len(subscription.LineItems))
 		for _, item := range subscription.LineItems {
 			prices = append(prices, item.PriceID)
@@ -88,20 +82,20 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 	}
 
 	var run models.TemporalWorkflowResult
-	call(ctx, http.MethodPost, "/plans/"+planID+"/sync/subscriptions", map[string]any{}, &run)
+	api.require(t, ctx, http.MethodPost, "/plans/"+planID+"/sync/subscriptions", nil, http.StatusOK, &run)
 	if run.WorkflowID == "" || run.RunID == "" {
 		t.Fatal("price sync trigger did not return a workflow ID and run ID")
 	}
 	t.Logf("Triggered plan price sync (run %s)", run.RunID)
 
-	waitForPriceSync(t, ctx, raw, run.WorkflowID, run.RunID)
+	waitForPriceSync(t, ctx, api, run.WorkflowID, run.RunID)
 
 	var summary struct {
 		Status           string `json:"status"`
 		ActivityCount    int    `json:"activity_count"`
 		FailedActivities *int   `json:"failed_activities"`
 	}
-	call(ctx, http.MethodGet, "/workflows/"+run.WorkflowID+"/"+run.RunID+"/summary", nil, &summary)
+	api.require(t, ctx, http.MethodGet, "/workflows/"+run.WorkflowID+"/"+run.RunID+"/summary", nil, http.StatusOK, &summary)
 	if summary.FailedActivities == nil {
 		t.Fatal("workflow summary did not report failed_activities")
 	}
@@ -115,7 +109,7 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 	t.Log("Completed price sync attached the metered price to the subscription")
 }
 
-func waitForPriceSync(t *testing.T, ctx context.Context, raw e2eprobe.RawOps, workflowID, runID string) {
+func waitForPriceSync(t *testing.T, ctx context.Context, api probeHTTP, workflowID, runID string) {
 	t.Helper()
 	poll, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -126,7 +120,7 @@ func waitForPriceSync(t *testing.T, ctx context.Context, raw e2eprobe.RawOps, wo
 	status := "absent"
 	for {
 		var workflows dto.ListWorkflowsResponse
-		if err := raw.Do(poll, http.MethodPost, "/workflows/search", filter, &workflows); err != nil {
+		if err := api.request(poll, http.MethodPost, "/workflows/search", filter, http.StatusOK, &workflows); err != nil {
 			if poll.Err() != nil {
 				t.Fatalf("plan price sync last seen as %s before poll deadline", status)
 			}
