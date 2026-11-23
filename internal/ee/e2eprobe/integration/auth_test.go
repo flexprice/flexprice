@@ -1,6 +1,6 @@
 //go:build e2eprobe_integration
 
-package main
+package integration
 
 import (
 	"bytes"

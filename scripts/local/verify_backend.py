@@ -71,7 +71,7 @@ def main():
 
         packages = []
         if suite != "billing":
-            packages.append("./cmd/e2eprobe")
+            packages.append("./internal/ee/e2eprobe/integration")
         if suite in {"all", "billing"}:
             packages.append("./internal/ee/e2eprobe/billingmatrix")
             probe_env.setdefault("BM_FAMILIES", "opening,validation")

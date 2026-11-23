@@ -180,7 +180,7 @@ With an API key for a dedicated test environment, run the wallet/event and Tempo
 
 ```bash
 # Set E2EPROBE_API_HOST (including /v1) and E2EPROBE_API_KEY in the environment first.
-go test -tags e2eprobe_integration -count=1 -v ./cmd/e2eprobe -run '^TestE2EProbe_Local(Smoke|Temporal)$'
+go test -tags e2eprobe_integration -count=1 -v ./internal/ee/e2eprobe/integration -run '^TestE2EProbe_Local(Smoke|Temporal)$'
 ```
 
 Use `make local-verify LOCAL_SUITE=auth` to check auth with credentials from a fresh signup.
