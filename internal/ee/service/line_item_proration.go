@@ -278,7 +278,8 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			at := req.EffectiveDate
 			if entry.Action == types.ProrationActionRemoveItem ||
 				entry.Action == types.ProrationActionCancellation ||
-				req.EffectiveDate.Equal(sub.CurrentPeriodEnd) {
+				((entry.Action == types.ProrationActionQuantityChange || entry.Action == types.ProrationActionPriceChange) &&
+					req.EffectiveDate.Equal(sub.CurrentPeriodEnd)) {
 				at = at.Add(-time.Nanosecond)
 			}
 			itemPeriod, err := longerItemPeriod(sub, item, at)
