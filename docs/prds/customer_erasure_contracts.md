@@ -183,8 +183,12 @@ Three rules follow, and all three are already violable in the current code:
 `disposition` is a claim; `verification_result` is what backs it.
 
 **Rule 1 — no status predicate, anywhere in an erasure path.** Every erasure read and
-write queries by `(tenant_id, environment_id, customer_id)` with **no `status` clause
-at all**, and does not go through the repositories' `ApplyStatusFilter` query builders.
+write queries by `(tenant_id, environment_id, <that store's customer key>)` with **no
+`status` clause at all**, and does not go through the repositories' `ApplyStatusFilter`
+query builders. The key is `customer_id` for Postgres and for ClickHouse `activity_logs`;
+it is `external_customer_id` for ClickHouse `events`, `raw_events`, `meter_usage` and
+`deleted_events_logs`, which carry no `customer_id` column (§2.5). The prohibition is on
+the `status` predicate, not on the choice of customer key.
 
 This is the rule that prevents the most likely false `purged` in the whole design, so
 the reason is worth stating. `ApplyStatusFilter` is not one function; it is a per-repository
@@ -804,7 +808,10 @@ No fence is needed, and none should be built. Events are deliberately never bloc
 "count expected 0" unsatisfiable — was a consequence of expecting an unbounded count.
 
 The ingestion-time cutoff removes the race. Verification counts rows for the customer
-**with `ingested_at < requested_at`** and expects 0; rows ingested after the request are
+**bounded by that table's own cutoff column** (§2.5: `ingested_at` for `events`,
+`raw_events` and `activity_logs`; the *source event's* `ingested_at` for the derived
+`meter_usage` row; `deleted_at` for `deleted_events_logs`, which has no `ingested_at`)
+and expects 0; rows ingested after the request are
 outside the request's scope by definition and must not be counted as failures. An
 unbounded count would fail the moment the tenant sent one more event, which is why the
 bound is part of the evidence rule and not an optimisation.
@@ -844,12 +851,12 @@ API in Phase 4.
 (`ent/schema/event_deletion_request.go`), so no Ent update can clear it, yet §5.2
 requires it redacted. Options: drop `Immutable()` on that field, or write a raw SQL
 update outside Ent for this one column. Both touch the event-deletion team's schema.
-There is a second half to this, independent of mutability. Rule 1 (§2.4) requires every
-erasure read and write to key on `(tenant_id, environment_id, customer_id)` with no
-status predicate, and this table has **no `customer_id` column** — only the immutable
-`external_customer_id` plus tenant and environment. So this touchpoint needs a stated,
-named exception to Rule 1 (query by external ID here, and why that is safe) or a
-`customer_id` added to the table. The fixed touchpoint registry (§2.2) also names no
+There is a second half to this, independent of mutability. Rule 1 (§2.4) names a
+per-store customer key, but only for the ClickHouse tables; this is a Postgres table
+with **no `customer_id` column** — only the immutable `external_customer_id` plus tenant
+and environment. So this touchpoint still needs either a stated exception extending that
+key rule to Postgres here (and why querying by external ID is safe once the customers row
+is redacted) or a `customer_id` added to the table. The fixed touchpoint registry (§2.2) also names no
 category for it, so today it is required to be redacted while belonging to nothing that
 would carry the disposition.
 
