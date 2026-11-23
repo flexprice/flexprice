@@ -3,8 +3,10 @@ package export
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -36,6 +38,17 @@ func TestExportFailure(t *testing.T) {
 			require.True(t, appErr.NonRetryable())
 		})
 	}
+}
+
+func TestExportFailure_ViewDeletedKeepsSafeMessage(t *testing.T) {
+	notFound := ierr.NewError("view not found").Mark(ierr.ErrNotFound)
+	err := exportFailure(fmt.Errorf("%w: %w", syncExport.ErrViewDeleted, notFound))
+
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, err, &appErr)
+	require.True(t, appErr.NonRetryable())
+	require.Equal(t, ErrTypeViewDeleted, appErr.Type())
+	require.Equal(t, syncExport.ViewDeletedMessage, appErr.Message())
 }
 
 func TestExportData_NilReportRunnerIsNonRetryable(t *testing.T) {

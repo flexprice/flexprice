@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
@@ -94,6 +95,15 @@ func TestReportExporter_ViewMetadata(t *testing.T) {
 	require.Equal(t, "view_1", runner.gotViewID)
 	require.Equal(t, "2026-11-01T10:00:00Z", exp.RunMetadata()["view_updated_at"])
 	require.Equal(t, "analytics_view", exp.GetFilenamePrefix())
+}
+
+func TestReportExporter_DeletedViewIsMarked(t *testing.T) {
+	runner := &fakeRunner{err: ierr.NewError("view not found").Mark(ierr.ErrNotFound)}
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeAnalyticsView)
+
+	_, _, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeAnalyticsView))
+
+	require.ErrorIs(t, err, ErrViewDeleted)
 }
 
 func TestReportExporter_ReportHasNoMetadata(t *testing.T) {

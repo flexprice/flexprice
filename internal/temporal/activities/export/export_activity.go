@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -105,9 +106,14 @@ type ExportDataOutput struct {
 	Metadata      map[string]string
 }
 
+// ErrTypeViewDeleted tags failures whose saved view is gone.
+const ErrTypeViewDeleted = "ViewDeleted"
+
 // Deterministic failures skip Temporal retries.
 func exportFailure(err error) error {
 	switch {
+	case errors.Is(err, syncExport.ErrViewDeleted):
+		return temporal.NewNonRetryableApplicationError(syncExport.ViewDeletedMessage, ErrTypeViewDeleted, err)
 	case ierr.IsValidation(err):
 		return temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
 	case ierr.IsNotFound(err):

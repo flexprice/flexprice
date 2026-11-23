@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -12,6 +14,12 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
+
+// ViewDeletedMessage is safe to show users.
+const ViewDeletedMessage = "The saved view used by this export was deleted"
+
+// ErrViewDeleted marks runs whose saved view is gone.
+var ErrViewDeleted = errors.New(ViewDeletedMessage)
 
 type ReportRunner interface {
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
@@ -57,6 +65,9 @@ func (e *ReportExporter) PrepareData(ctx context.Context, request *dto.ExportReq
 		result, viewUpdatedAt, err = e.runner.RunViewForExport(ctx, request.SourceConfig.ViewID, rng)
 		if err == nil {
 			e.metadata = map[string]string{"view_updated_at": viewUpdatedAt.UTC().Format(time.RFC3339)}
+		}
+		if ierr.IsNotFound(err) {
+			return nil, 0, fmt.Errorf("%w: %w", ErrViewDeleted, err)
 		}
 	} else {
 		result, err = e.runner.RunReportForExport(ctx, request.SourceConfig.ReportKey, request.SourceConfig.ReportParams, rng)
