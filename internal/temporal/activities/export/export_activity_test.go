@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/proto"
 	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -49,6 +50,32 @@ func TestExportFailure_ViewDeletedKeepsSafeMessage(t *testing.T) {
 	require.True(t, appErr.NonRetryable())
 	require.Equal(t, ErrTypeViewDeleted, appErr.Type())
 	require.Equal(t, syncExport.ViewDeletedMessage, appErr.Message())
+}
+
+func TestExportFailure_DestinationWriteHidesProviderText(t *testing.T) {
+	raw := errors.New("AccessDenied: acme-private-bucket")
+	tagged := ierr.WithError(fmt.Errorf("%w: %w", syncExport.ErrDestinationWrite, raw)).
+		WithHint("Failed to upload CSV export").
+		Mark(ierr.ErrHTTPClient)
+
+	var appErr *temporal.ApplicationError
+	require.ErrorAs(t, exportFailure(tagged), &appErr)
+	require.False(t, appErr.NonRetryable())
+	require.Equal(t, ErrTypeDestinationWrite, appErr.Type())
+	require.Equal(t, syncExport.DestinationWriteMessage, appErr.Message())
+	require.NotContains(t, appErr.Message(), "acme")
+}
+
+func TestExportFailure_Timeouts(t *testing.T) {
+	for _, err := range []error{
+		fmt.Errorf("query: %w", context.DeadlineExceeded),
+		ierr.WithError(&proto.Exception{Code: 159}).Mark(ierr.ErrValidation),
+	} {
+		var appErr *temporal.ApplicationError
+		require.ErrorAs(t, exportFailure(err), &appErr)
+		require.Equal(t, ErrTypeTimedOut, appErr.Type())
+	}
+	require.Equal(t, "boom timeout", exportFailure(errors.New("boom timeout")).Error())
 }
 
 func TestExportData_NilReportRunnerIsNonRetryable(t *testing.T) {

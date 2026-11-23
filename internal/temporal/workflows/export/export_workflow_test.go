@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	syncExport "github.com/flexprice/flexprice/internal/ee/service/sync/export"
 	"github.com/flexprice/flexprice/internal/temporal/activities/export"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/mock"
@@ -189,8 +190,9 @@ func TestExecuteExportWorkflow_FailureMessageHidesError(t *testing.T) {
 		want string
 	}{
 		{"generic", errors.New("dial tcp 10.0.0.1:9000: secret host"), "The export failed"},
-		{"deadline", errors.New("query: context deadline exceeded"), "The export took too long and was stopped"},
-		{"clickhouse timeout", errors.New("code: 159, Timeout exceeded: elapsed 600s"), "The export took too long and was stopped"},
+		{"timeout text is not a timeout", errors.New("code: 159, Timeout exceeded: elapsed 600s"), "The export failed"},
+		{"typed timeout", temporal.NewApplicationError("export timed out", export.ErrTypeTimedOut), "The export took too long and was stopped"},
+		{"destination write", temporal.NewApplicationError(syncExport.DestinationWriteMessage, export.ErrTypeDestinationWrite, errors.New("AccessDenied: secret-bucket")), syncExport.DestinationWriteMessage},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -216,6 +218,11 @@ func TestRunFailureMessage(t *testing.T) {
 	require.Equal(t, "The saved view used by this export was deleted", runFailureMessage(fmt.Errorf("activity: %w", deleted)))
 	other := temporal.NewNonRetryableApplicationError("secret bucket detail", "NotFound", nil)
 	require.Equal(t, runFailedMessage, runFailureMessage(other))
+
+	dest := temporal.NewApplicationErrorWithCause(syncExport.DestinationWriteMessage, export.ErrTypeDestinationWrite, errors.New("NoSuchBucket: acme-private"))
+	require.Equal(t, syncExport.DestinationWriteMessage, runFailureMessage(fmt.Errorf("activity: %w", dest)))
+	require.Equal(t, runTimedOutMessage, runFailureMessage(temporal.NewApplicationError("x", export.ErrTypeTimedOut)))
+	require.Equal(t, runFailedMessage, runFailureMessage(errors.New("timed out talking to secret host")))
 }
 
 func TestExecuteExportWorkflow_SubDailySendsNoEmail(t *testing.T) {

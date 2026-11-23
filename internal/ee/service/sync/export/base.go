@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,6 +31,22 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 )
+
+// DestinationWriteMessage is safe to show users.
+const DestinationWriteMessage = "Could not write to the destination. Check the connection and its permissions."
+
+// ErrDestinationWrite marks failed writes to a customer connection.
+var ErrDestinationWrite = errors.New(DestinationWriteMessage)
+
+// uploadFailure tags customer-connection upload errors.
+func uploadFailure(request *dto.ExportRequest, err error) error {
+	if !request.ManagedCopy {
+		err = fmt.Errorf("%w: %w", ErrDestinationWrite, err)
+	}
+	return ierr.WithError(err).
+		WithHint("Failed to upload CSV export").
+		Mark(ierr.ErrHTTPClient)
+}
 
 // Exporter defines the interface for entity-specific exporters
 type Exporter interface {
@@ -245,9 +262,7 @@ func (s *ExportService) streamToStorage(ctx context.Context, request *dto.Export
 		UncompressedSize: csvSize,
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to upload CSV export").
-			Mark(ierr.ErrHTTPClient)
+		return nil, uploadFailure(request, err)
 	}
 
 	return s.exportResponse(ctx, request, exporter, recordCount, uploadResponse), nil
@@ -433,9 +448,7 @@ func (s *ExportService) uploadToStorage(ctx context.Context, request *dto.Export
 		UncompressedSize: int64(len(csvBytes)),
 	})
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to upload CSV export").
-			Mark(ierr.ErrHTTPClient)
+		return nil, uploadFailure(request, err)
 	}
 
 	return s.exportResponse(ctx, request, exporter, recordCount, uploadResponse), nil

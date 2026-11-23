@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/proto"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -109,11 +110,28 @@ type ExportDataOutput struct {
 // ErrTypeViewDeleted tags failures whose saved view is gone.
 const ErrTypeViewDeleted = "ViewDeleted"
 
+// ErrTypeDestinationWrite tags failed customer destination writes.
+const ErrTypeDestinationWrite = "DestinationWrite"
+
+// ErrTypeTimedOut tags query or deadline timeouts.
+const ErrTypeTimedOut = "TimedOut"
+
+const chCodeTimeoutExceeded = 159
+
+func isTimeout(err error) bool {
+	var ex *proto.Exception
+	return errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ex) && ex.Code == chCodeTimeoutExceeded)
+}
+
 // Deterministic failures skip Temporal retries.
 func exportFailure(err error) error {
 	switch {
+	case isTimeout(err):
+		return temporal.NewApplicationErrorWithCause("export timed out", ErrTypeTimedOut, err)
 	case errors.Is(err, syncExport.ErrViewDeleted):
 		return temporal.NewNonRetryableApplicationError(syncExport.ViewDeletedMessage, ErrTypeViewDeleted, err)
+	case errors.Is(err, syncExport.ErrDestinationWrite):
+		return temporal.NewApplicationErrorWithCause(syncExport.DestinationWriteMessage, ErrTypeDestinationWrite, err)
 	case ierr.IsValidation(err):
 		return temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
 	case ierr.IsNotFound(err):

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/email"
@@ -371,14 +370,14 @@ func runFailureMessage(err error) string {
 		return runTimedOutMessage
 	}
 	var appErr *temporal.ApplicationError
-	if errors.As(err, &appErr) && appErr.Type() == export.ErrTypeViewDeleted {
-		return appErr.Message()
+	if !errors.As(err, &appErr) {
+		return runFailedMessage
 	}
-	msg := strings.ToLower(err.Error())
-	for _, s := range []string{"deadline exceeded", "timeout", "timed out"} {
-		if strings.Contains(msg, s) {
-			return runTimedOutMessage
-		}
+	switch appErr.Type() {
+	case export.ErrTypeTimedOut:
+		return runTimedOutMessage
+	case export.ErrTypeViewDeleted, export.ErrTypeDestinationWrite:
+		return appErr.Message()
 	}
 	return runFailedMessage
 }
