@@ -288,9 +288,9 @@ tickets get reworked.
 | `grants_pg` | redaction | — | no |
 | `usage_derived_pg` | redaction | Blocked on §9.2 — retain or delete is undecided | no |
 | `integrations_pg` | suppression | Must stop **future** disclosure before redaction runs (§7, webhooks) | no |
-| `events_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
+| `events_ch` | redaction | Blocked on §9.12 — the key and disposition for `event_deletion_request.external_customer_id` are undecided. No fence is required (§9.8 resolved) | yes |
 | `raw_events_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
-| `meter_usage_ch` | redaction | — | no (§9.8 resolved: the ingestion-time cutoff removes the race) |
+| `meter_usage_ch` | redaction | Blocked on §9.15 — the source-event cutoff and ordering are undecided. No fence is required (§9.8 resolved) | yes |
 | `activity_logs_ch` | redaction | Blocked on §6.3 — the minimal retained record must be defined first | no |
 | `deleted_events_ch` | redaction | — | no |
 | `invoice_pdfs` | suppression (revoke), redaction (delete) | Dispute window must be quantified (§8 line 7) | no |
@@ -925,9 +925,11 @@ PII-free. The same question applies to `commitment.invoice_description` (§5.2).
 - **FLE-1884 (Phase 2)** — one ticket per touchpoint from the §2.2.1 registry, each
   implementing §2's contract and its §5/§6 disposition. Tickets are parallelizable
   **only within the constraints of §2.5**: `customer_pg` redaction runs last,
-  `payments_pg` depends on `invoices_pg`, and the three event-table touchpoints are
-  unblocked: §9.8 is resolved and no fence is to be built. The three ClickHouse tables with no deletion path
-  (§6.2) are three of those tickets.
+  `payments_pg` depends on `invoices_pg`, and no fence is to be built for the event
+  tables (§9.8 resolved). Removing the fence is one dependency, not all of them:
+  `events_ch` still waits on §9.12 and `meter_usage_ch` on §9.15, so only
+  `raw_events_ch` of the three is ready to start. The three ClickHouse tables with no
+  deletion path (§6.2) are three of those tickets.
 - **FLE-1885 (Phase 3)** — orchestration against the §2.2 result contract and §2.3
   retry rules.
 - **FLE-1886 (Phase 4)** — the validation endpoint reports §2.4 evidence per category.
