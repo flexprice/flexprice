@@ -5,6 +5,8 @@
   "description": "Meters LLM calls and sends usage events to FlexPrice.",
   "license": "AGPL-3.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "engines": {
     "node": ">=22"
   },

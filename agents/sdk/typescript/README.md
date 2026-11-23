@@ -8,6 +8,7 @@ Meters calls to LLM providers and sends one usage event per call to FlexPrice, s
 
 - Node 22 or newer.
 - The package is ESM only. A CommonJS app can `require` it on Node 22.12 or newer. Before that, load it with `await import("@flexprice/agent-sdk")`.
+- A TypeScript project that compiles to CommonJS needs `module` set to `nodenext`. With `node16` or `node18`, TypeScript refuses to `require` an ESM-only package.
 
 ## Working on it
 
