@@ -385,3 +385,46 @@ func TestAcquireLocksLostReplyRealRetry(t *testing.T) {
 	require.True(t, mr.Exists("a"))
 	require.True(t, mr.Exists("b"))
 }
+
+func TestReleaseLocksPipelinedTokenChecked(t *testing.T) {
+	mr := miniredis.RunT(t)
+	locker := &redisLocker{client: redis.NewClient(&redis.Options{Addr: mr.Addr()})}
+	locks, err := locker.AcquireLocks(context.Background(), []string{"a", "b"}, time.Minute)
+	require.NoError(t, err)
+	foreign := &redisLock{client: locker.client, key: "c", token: "not-ours", success: true}
+	mr.Set("c", "other-owner")
+
+	require.NoError(t, ReleaseLocks(context.Background(), append(locks, nil, foreign)))
+	require.False(t, mr.Exists("a"))
+	require.False(t, mr.Exists("b"))
+	require.True(t, mr.Exists("c"), "foreign lock untouched")
+}
+
+func TestReleaseLocksOneDeadlineDuringOutage(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = c.Close() })
+		}
+	}()
+	prev := releaseTimeout
+	releaseTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { releaseTimeout = prev })
+
+	client := redis.NewClient(&redis.Options{Addr: ln.Addr().String(), MaxRetries: -1, ReadTimeout: time.Minute, ContextTimeoutEnabled: true})
+	t.Cleanup(func() { _ = client.Close() })
+	locks := make([]Lock, 50)
+	for i := range locks {
+		locks[i] = &redisLock{client: client, key: fmt.Sprintf("k%d", i), token: "t", success: true}
+	}
+
+	start := time.Now()
+	require.Error(t, ReleaseLocks(context.Background(), locks))
+	require.Less(t, time.Since(start), 2*time.Second, "one deadline, not one per lock")
+}

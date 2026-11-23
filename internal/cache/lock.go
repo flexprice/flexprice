@@ -59,6 +59,39 @@ func AcquireLocks(ctx context.Context, locker Locker, keys []string, ttl time.Du
 	return locks, firstErr
 }
 
+// releaseTimeout bounds one release call.
+var releaseTimeout = 5 * time.Second
+
+// ReleaseLocks pipelines token-checked releases under one deadline.
+func ReleaseLocks(ctx context.Context, locks []Lock) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+	defer cancel()
+	var firstErr error
+	var pipe redis.Pipeliner
+	for _, lock := range locks {
+		if lock == nil {
+			continue
+		}
+		rl, ok := lock.(*redisLock)
+		if !ok {
+			if err := lock.Release(ctx); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if pipe == nil {
+			pipe = rl.client.Pipeline()
+		}
+		releaseScript.Eval(ctx, pipe, []string{rl.key}, rl.token)
+	}
+	if pipe != nil {
+		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // It returns a nil Lock when locker is nil, and a Lock reporting AcquiredSuccessfully() ==
 // false when every attempt was exhausted; a non-nil error means the locker itself failed.
 // Callers decide whether to skip the work or proceed unserialized.
@@ -209,7 +242,7 @@ func (l *redisLock) AcquiredSuccessfully() bool {
 
 // Release detaches from ctx cancellation so a deferred release still runs after the caller's deadline.
 func (l *redisLock) Release(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
 	defer cancel()
 
 	_, err := releaseScript.Run(

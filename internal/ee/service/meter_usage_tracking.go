@@ -343,10 +343,8 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		if err == nil {
 			return
 		}
-		for _, lock := range dedupLocks {
-			if releaseErr := lock.Release(ctx); releaseErr != nil {
-				s.Logger.Error(ctx, "failed to release lock on bulk meter usage tracking event", "error", releaseErr)
-			}
+		if releaseErr := cache.ReleaseLocks(ctx, dedupLocks); releaseErr != nil {
+			s.Logger.Error(ctx, "failed to release locks on bulk meter usage tracking batch", "error", releaseErr, "locks", len(dedupLocks))
 		}
 	}()
 
