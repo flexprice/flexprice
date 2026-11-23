@@ -20,6 +20,7 @@ fi
 
 mkdir -p "$cache/bin" "$cache/runtime/internal"
 ln -sfn "$repo_root/internal/config" "$cache/runtime/internal/config"
+ln -sfn "$repo_root/.env.local" "$cache/runtime/.env"
 dbmate_version=v2.35.0
 dbmate_bin="$cache/$dbmate_version"
 if [[ ! -x "$dbmate_bin/dbmate" ]]; then
@@ -44,19 +45,10 @@ SELECT 'CREATE DATABASE flexprice_local'
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'flexprice_local') \gexec
 SQL
 
-set -a
-source ./.env.local
-set +a
 export PATH="$dbmate_bin:$PATH"
-export FLEXPRICE_SERVER_ADDRESS=127.0.0.1:8080 FLEXPRICE_DEPLOYMENT_MODE=local
-export FLEXPRICE_POSTGRES_HOST=127.0.0.1 FLEXPRICE_POSTGRES_READER_HOST=127.0.0.1 FLEXPRICE_POSTGRES_DBNAME=flexprice_local
-export FLEXPRICE_CLICKHOUSE_ADDRESS=127.0.0.1:9000 FLEXPRICE_KAFKA_BROKERS=127.0.0.1:29092
-export FLEXPRICE_KAFKA_TOPIC_DLQ=events_dlq FLEXPRICE_RAW_EVENTS_REPROCESSING_OUTPUT_TOPIC=events
-export FLEXPRICE_REDIS_HOST=127.0.0.1 FLEXPRICE_REDIS_CLUSTER_MODE=false
-export FLEXPRICE_TEMPORAL_ENABLED=true FLEXPRICE_TEMPORAL_ADDRESS=127.0.0.1:7233
-export FLEXPRICE_AUTH_PROVIDER=flexprice FLEXPRICE_OTEL_ENABLED=false FLEXPRICE_LOGGING_LEVEL=info
+export FLEXPRICE_POSTGRES_DBNAME=flexprice_local FLEXPRICE_TEMPORAL_ENABLED=true
 
-# Run outside the checkout so the config loader cannot pick up its .env.
+# The normal config loader reads .env.local through the runtime .env symlink.
 cd "$cache/runtime"
 "$cache/bin/migrate" postgres up --dir "$repo_root/migrations/versioned/postgres"
 "$cache/bin/migrate" clickhouse --clickhouse-dir "$repo_root/migrations/clickhouse"

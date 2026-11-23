@@ -116,7 +116,7 @@ Install the Go version in `go.mod`, Python 3, and local Docker with Compose 2.24
 make local-backend
 ```
 
-This starts PostgreSQL, Kafka, ClickHouse, Redis, and Temporal in Compose. It applies the versioned PostgreSQL migrations to `flexprice_local`, applies ClickHouse migrations, and creates the topics for the local broker. The backend runs in the foreground with the API, consumers, and Temporal workers enabled. It loads the checked-in `.env.local` with local overrides and uses Flexprice password auth.
+This starts PostgreSQL, Kafka, ClickHouse, Redis, and Temporal in Compose. It applies the versioned PostgreSQL migrations to `flexprice_local`, applies ClickHouse migrations, and creates the topics for the local broker. The backend runs in the foreground with the API, consumers, and Temporal workers enabled. The server and migrations use the shared app config and the checked-in `.env.local`. The startup command selects the database it bootstrapped and enables Temporal.
 
 Once the API is listening, use a second terminal:
 
