@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEvent } from "../../src/event/build.js";
+import { FIXED_PROPERTIES, RESERVED_COUNT_PROPERTIES } from "../../src/event/schema.js";
 import type { Observation } from "../../src/types.js";
 import { SDK_VERSION } from "../../src/version.js";
 
@@ -164,6 +165,107 @@ describe("buildEvent", () => {
       expect.stringContaining("cache_read_tokens"),
       expect.stringContaining("output_tokens"),
     ]);
+  });
+
+  it("describes a count that is not a number by its type", () => {
+    const call = openAiCall();
+    call.usage = { inputTokens: { tokens: 5 } as unknown as number };
+
+    const { event, problems } = buildEvent(call);
+
+    expect(event.properties.input_tokens).toBeUndefined();
+    expect(problems).toEqual([expect.stringContaining("input_tokens")]);
+    expect(problems[0]).toContain("object");
+    expect(problems[0]).not.toContain("[object Object]");
+  });
+
+  it("keeps a cost only when it is a plain positive decimal in text", () => {
+    const withCost = (costUsd: unknown) => {
+      const call = openAiCall();
+      call.usage.costUsd = costUsd as string;
+      return buildEvent(call);
+    };
+
+    const good = withCost("12.50");
+    expect(good.event.properties.cost_usd).toBe("12.50");
+    expect(good.problems).toEqual([]);
+
+    for (const bad of ["NaN", "abc", " ", "-1", "1e-7", 0.0123]) {
+      const { event, problems } = withCost(bad);
+      expect(event.properties.cost_usd).toBeUndefined();
+      expect(problems).toEqual([expect.stringContaining("cost_usd")]);
+    }
+  });
+
+  it("leaves out a cost of zero without a problem", () => {
+    for (const zero of ["0", "0.00", ""]) {
+      const call = openAiCall();
+      call.usage.costUsd = zero;
+
+      const { event, problems } = buildEvent(call);
+
+      expect(event.properties.cost_usd).toBeUndefined();
+      expect(problems).toEqual([]);
+    }
+  });
+
+  it("writes every field under its own property name", () => {
+    const { event, problems } = buildEvent({
+      labels: { customerId: "cust_42", agentId: "researcher" },
+      info: {
+        provider: "anthropic",
+        gateway: "openrouter",
+        api: "anthropic.messages",
+        type: "chat",
+        model: "claude-sonnet-5-5",
+        requestedModel: "claude-sonnet",
+        responseId: "msg_1",
+        streamed: true,
+      },
+      usage: {
+        inputTokens: 1,
+        cacheReadTokens: 2,
+        cacheWriteTokens: 3,
+        cacheWrite1hTokens: 4,
+        outputTokens: 5,
+        costUsd: "0.5",
+      },
+      sequence: 0,
+      final: true,
+      outcome: "max_tokens",
+      endedAt: new Date("2026-11-23T09:15:02.000Z"),
+    });
+
+    expect(event.properties).toStrictEqual({
+      provider: "anthropic",
+      gateway: "openrouter",
+      api: "anthropic.messages",
+      type: "chat",
+      model: "claude-sonnet-5-5",
+      requested_model: "claude-sonnet",
+      streamed: "true",
+      outcome: "max_tokens",
+      agent_id: "researcher",
+      input_tokens: "1",
+      cache_read_tokens: "2",
+      cache_write_tokens: "3",
+      cache_write_1h_tokens: "4",
+      output_tokens: "5",
+      cost_usd: "0.5",
+      sequence: "0",
+      is_final: "true",
+      flexprice_agent_sdk: "true",
+      sdk_language: "typescript",
+      sdk_version: SDK_VERSION,
+      schema_version: "1",
+    });
+
+    // The builder writes every fixed name except the counts reserved for later.
+    const reserved: readonly string[] = RESERVED_COUNT_PROPERTIES;
+    expect(Object.keys(event.properties).sort()).toEqual(
+      FIXED_PROPERTIES.filter((name) => !reserved.includes(name)).sort(),
+    );
+    expect(problems).toEqual([]);
   });
 
   it("drops a tag that uses a reserved name and reports it", () => {

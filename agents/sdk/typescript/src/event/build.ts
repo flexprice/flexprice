@@ -32,9 +32,10 @@ export type BuildResult = {
  * Turns one observed call into the event FlexPrice receives.
  *
  * It only reads its arguments and returns a result: no network, no clock, no
- * shared state. It never throws for bad data. A value that cannot be used is
- * left out of the event and described in `problems`, so a wrong number never
- * reaches a billing meter.
+ * shared state. A count, cost or tag that cannot be used is left out of the
+ * event and described in `problems`, so a wrong number never reaches a billing
+ * meter. An observation that is itself malformed is a bug in the caller, and
+ * the caller guards against it.
  */
 export function buildEvent(observation: Observation, options: BuildOptions = {}): BuildResult {
   const { labels, info, usage } = observation;
@@ -56,9 +57,7 @@ export function buildEvent(observation: Observation, options: BuildOptions = {})
 
   // What gets added up and priced.
   addCounts(properties, usage, problems);
-  if (typeof usage.costUsd === "string" && usage.costUsd !== "") {
-    properties[COST_PROPERTY] = usage.costUsd;
-  }
+  addCost(properties, usage.costUsd, problems);
 
   properties[CALL_PROPERTIES.sequence] = String(observation.sequence);
   properties[CALL_PROPERTIES.isFinal] = String(observation.final);
@@ -103,9 +102,36 @@ function addCounts(properties: Record<string, string>, usage: Usage, problems: s
     if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
       properties[property] = String(value);
     } else {
-      problems.push(`count ${property} is not a positive whole number: ${String(value)}`);
+      problems.push(`count ${property} is not a positive whole number: ${describeValue(value)}`);
     }
   }
+}
+
+/** A cost is kept only as plain decimal text, such as "0.0123". */
+const PLAIN_DECIMAL = /^\d+(\.\d+)?$/;
+
+/**
+ * Adds the gateway's cost, exactly as written, when it is a plain positive decimal.
+ * Anything else is left out: a negative or unreadable cost must not reach a meter
+ * that adds up money.
+ */
+function addCost(properties: Record<string, string>, cost: unknown, problems: string[]): void {
+  if (cost === undefined || cost === null || cost === "") return;
+
+  if (typeof cost === "string" && PLAIN_DECIMAL.test(cost)) {
+    // A cost of zero is nothing to bill, so it is left out like a count of zero.
+    if (Number(cost) > 0) properties[COST_PROPERTY] = cost;
+    return;
+  }
+
+  problems.push(`cost ${COST_PROPERTY} is not a plain decimal number in text: ${describeValue(cost)}`);
+}
+
+/** A bad value, for a problem message: a number or short text as it is, otherwise its kind. */
+function describeValue(value: unknown): string {
+  if (typeof value === "number") return String(value);
+  if (typeof value === "string") return JSON.stringify(value.slice(0, 20));
+  return typeof value;
 }
 
 /** Adds the app's own tags, skipping any that use a name the SDK owns. */
