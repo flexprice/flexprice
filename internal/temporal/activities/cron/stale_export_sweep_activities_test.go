@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/task"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -117,13 +118,65 @@ func TestSweepStaleExportRuns_ReturnsErrorAfterAttemptingAllRows(t *testing.T) {
 type fakeScheduledTasks struct {
 	scheduledtask.Repository
 	rows map[string]*scheduledtask.ScheduledTask
+	err  error
 }
 
 func (f fakeScheduledTasks) Get(_ context.Context, id string) (*scheduledtask.ScheduledTask, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
 	if st, ok := f.rows[id]; ok {
 		return st, nil
 	}
-	return nil, errors.New("not found")
+	return nil, ierr.NewError("not found").Mark(ierr.ErrNotFound)
+}
+
+func TestSweepStaleExportRuns_DeliveryErrorKeepsRowRetryable(t *testing.T) {
+	store := testutil.NewInMemoryTaskStore()
+	row := &task.Task{ID: "stuck", TaskType: types.TaskTypeExport, TaskStatus: types.TaskStatusProcessing, EnvironmentID: "e1", ScheduledTaskID: "st_s3"}
+	row.TenantID = "t1"
+	row.Status = types.StatusPublished
+	row.CreatedAt = clock.Now().Add(-3 * time.Hour)
+	require.NoError(t, store.Create(context.Background(), row))
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "t1"), "e1")
+
+	a := NewStaleExportSweepActivities(store, fakeScheduledTasks{err: errors.New("db down")}, logger.NewNoopLogger())
+	n, err := a.SweepStaleExportRunsActivity(context.Background())
+	require.Error(t, err)
+	require.Equal(t, 0, n)
+	got, err := store.Get(ctx, "stuck")
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusProcessing, got.TaskStatus)
+	require.NotContains(t, got.Metadata, "deliveries")
+
+	a.scheduledTaskRepo = fakeScheduledTasks{rows: map[string]*scheduledtask.ScheduledTask{"st_s3": {ID: "st_s3", ConnectionID: "conn_1", JobConfig: &types.S3JobConfig{Bucket: "b", KeyPrefix: "p/"}}}}
+	n, err = a.SweepStaleExportRunsActivity(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	got, err = store.Get(ctx, "stuck")
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, got.TaskStatus)
+	ds := got.Metadata["deliveries"].([]types.ExportDelivery)
+	require.Equal(t, types.ExportDeliveryTypeS3, ds[0].Type)
+	require.Equal(t, types.ExportDeliveryStatusFailed, ds[0].Status)
+}
+
+func TestSweepStaleExportRuns_DeletedExportStillFails(t *testing.T) {
+	store := testutil.NewInMemoryTaskStore()
+	row := &task.Task{ID: "orphan", TaskType: types.TaskTypeExport, TaskStatus: types.TaskStatusPending, EnvironmentID: "e1", ScheduledTaskID: "st_gone"}
+	row.TenantID = "t1"
+	row.Status = types.StatusPublished
+	row.CreatedAt = clock.Now().Add(-3 * time.Hour)
+	require.NoError(t, store.Create(context.Background(), row))
+
+	a := NewStaleExportSweepActivities(store, fakeScheduledTasks{}, logger.NewNoopLogger())
+	n, err := a.SweepStaleExportRunsActivity(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	got, err := store.Get(types.SetEnvironmentID(types.SetTenantID(context.Background(), "t1"), "e1"), "orphan")
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, got.TaskStatus)
+	require.Len(t, got.Metadata["deliveries"], 1)
 }
 
 func TestSweepStaleExportRuns_KeepsExistingDeliveries(t *testing.T) {
