@@ -128,9 +128,9 @@ make local-verify LOCAL_SUITE=billing BM_FAMILIES=opening,renewal,change,grants,
 make local-verify LOCAL_SUITE=billing BM_FAMILIES=change BM_FILTER=quarterly
 ```
 
-Each verification run creates a fresh test tenant. It mints a short-lived API key for the selected checks and revokes it afterward. The fixtures remain in the local database for inspection. The default suite checks:
+Each verification run creates a fresh test tenant, runs the selected Go E2E probe tests with a short-lived API key, and revokes the key afterward. The fixtures remain in the local database for inspection. The default suite checks:
 
-- Signup, login, authenticated user lookup, wrong password, and missing token. Use `LOCAL_SUITE=auth` to run only these checks.
+- Signup, login, authenticated user lookup, wrong password, missing token, and API-key authentication. Use `LOCAL_SUITE=auth` to run only these checks.
 - Wallet top-up, raw event visibility, usage aggregation, and manual debit with duplicate-request rejection. These checks exercise Kafka and ClickHouse.
 - A Temporal plan price sync that attaches a newly added metered price to an existing subscription. The run must appear as `Completed` in the workflow search and summary APIs.
 - The billing matrix's opening and validation families. The matrix prints known-issue skips and supports selecting families and scenario filters.
