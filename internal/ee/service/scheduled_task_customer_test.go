@@ -13,6 +13,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
@@ -376,7 +378,7 @@ func TestCreate_RunNow(t *testing.T) {
 	t.Run("no temporal fails and rolls back", func(t *testing.T) {
 		repo := &originRepoFake{}
 		s := customerExportService(repo, &customerCountFake{})
-		s.temporalClient = nil
+		s.scheduler = nil
 		req := customersReq()
 		req.RunNow = true
 		resp, err := s.CreateScheduledTask(exportCtx(), req)
@@ -387,7 +389,7 @@ func TestCreate_RunNow(t *testing.T) {
 	t.Run("start failure fails and rolls back", func(t *testing.T) {
 		repo := &originRepoFake{}
 		s := customerExportService(repo, &customerCountFake{})
-		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		s.scheduler = exportschedule.NewScheduler(&exportTemporalFake{runErr: errors.New("unavailable")}, logger.NewNoopLogger())
 		req := customersReq()
 		req.RunNow = true
 		resp, err := s.CreateScheduledTask(exportCtx(), req)
@@ -398,7 +400,7 @@ func TestCreate_RunNow(t *testing.T) {
 	t.Run("rollback survives request cancellation", func(t *testing.T) {
 		repo := &originRepoFake{}
 		s := customerExportService(repo, &customerCountFake{})
-		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		s.scheduler = exportschedule.NewScheduler(&exportTemporalFake{runErr: errors.New("unavailable")}, logger.NewNoopLogger())
 		ctx, cancel := context.WithCancel(exportCtx())
 		cancel()
 		req := customersReq()
@@ -411,7 +413,7 @@ func TestCreate_RunNow(t *testing.T) {
 	t.Run("failed rollback reports the export id", func(t *testing.T) {
 		repo := &originRepoFake{deleteErr: errors.New("db down")}
 		s := customerExportService(repo, &customerCountFake{})
-		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		s.scheduler = exportschedule.NewScheduler(&exportTemporalFake{runErr: errors.New("unavailable")}, logger.NewNoopLogger())
 		req := customersReq()
 		req.RunNow = true
 		resp, err := s.CreateScheduledTask(exportCtx(), req)

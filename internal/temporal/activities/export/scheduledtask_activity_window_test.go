@@ -58,7 +58,7 @@ func TestDetails_ReadsTaskFromWriter(t *testing.T) {
 	repo := &stubTaskRepo{row: &scheduledtask.ScheduledTask{ID: "st1", Interval: types.ScheduledTaskIntervalManual}}
 	log, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevelInfo}})
 	require.NoError(t, err)
-	a := NewScheduledTaskActivity(repo, nil, log, stubBoundary{})
+	a := NewScheduledTaskActivity(repo, nil, log)
 
 	_, err = a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{ScheduledTaskID: "st1"})
 	require.NoError(t, err)

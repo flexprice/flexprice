@@ -444,7 +444,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 }
 
 func (s *scheduledTaskService) runNow(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error) {
-	if s.temporalClient == nil {
+	if s.scheduler == nil {
 		return nil, ierr.NewError("temporal client not configured").
 			WithHint("The export could not be started. Try again later.").
 			Mark(ierr.ErrInternal)
@@ -799,6 +799,7 @@ func (s *scheduledTaskService) startForceRun(ctx context.Context, task *schedule
 	// Determine time range and mode
 	var startTime, endTime time.Time
 	var mode string
+	var err error
 
 	noWindow := customStart == nil && customEnd == nil &&
 		(task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual)
