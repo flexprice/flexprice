@@ -176,7 +176,7 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 
 Run `make local-verify` from the repository root to provision a fresh local tenant and run the auth, wallet/event, Temporal plan price sync, and billing integration tests. See the [local backend setup](../../../README.md#run-and-verify-the-local-backend) for suite selection and matrix filters.
 
-With an API key for a dedicated test environment, run the wallet/event and Temporal tests directly:
+With an API key for a dedicated test environment, run the wallet/event and Temporal tests directly. The combined command requires a backend with Temporal enabled, such as `make local-backend`. Use `-run '^TestE2EProbe_LocalSmoke$'` to run just the wallet and event checks.
 
 ```bash
 # Set E2EPROBE_API_HOST (including /v1) and E2EPROBE_API_KEY in the environment first.
