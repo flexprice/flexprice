@@ -1,0 +1,11 @@
+services:
+  postgres:
+    # Local behavior tests bootstrap via versioned migrations.
+    volumes: !override
+      - postgres-data:/var/lib/postgresql/data
+  temporal:
+    ports: !override
+      - "127.0.0.1:7233:7233"
+  temporal-ui:
+    ports: !override
+      - "127.0.0.1:8088:8080"

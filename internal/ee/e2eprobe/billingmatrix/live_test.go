@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,15 +28,21 @@ func TestLiveMatrix(t *testing.T) {
 	if v := os.Getenv("BM_FAMILIES"); v != "" {
 		families = nil
 		for _, f := range strings.Split(v, ",") {
-			families = append(families, Family(strings.TrimSpace(f)))
+			family := Family(strings.TrimSpace(f))
+			if !slices.Contains(Families, family) {
+				t.Fatalf("unknown billing matrix family %q", family)
+			}
+			families = append(families, family)
 		}
 	}
 	runID := fmt.Sprintf("bm-live-%d", time.Now().Unix())
 	engine := NewEngine(e2eprobe.NewSDKClient(host, key).Raw(), runID, os.Getenv("BM_ASSERT_KNOWN_ISSUES") == "true")
 
 	ctx := context.Background()
+	matched := 0
 	for _, f := range families {
 		results := engine.RunAll(ctx, f, os.Getenv("BM_FILTER"))
+		matched += len(results)
 		passed, skipped := 0, 0
 		for _, r := range results {
 			for _, f := range r.CleanupFailures {
@@ -53,6 +60,9 @@ func TestLiveMatrix(t *testing.T) {
 			}
 		}
 		t.Logf("family %s: %d passed, %d failed, %d skipped", f, passed, len(results)-passed-skipped, skipped)
+	}
+	if matched == 0 {
+		t.Fatalf("no billing scenarios matched BM_FILTER=%q", os.Getenv("BM_FILTER"))
 	}
 	if os.Getenv("BM_SWEEP") == "true" {
 		removed, failed := engine.SweepOrphans(ctx, time.Now())
