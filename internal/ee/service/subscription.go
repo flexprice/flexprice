@@ -8258,6 +8258,9 @@ func (s *subscriptionService) findInheritanceConflict(ctx context.Context, paren
 
 	for _, sub := range subs {
 		parent := parents[lo.FromPtr(sub.ParentSubscriptionID)]
+		if parent != nil && parent.CustomerID == parentCustomerID {
+			continue
+		}
 		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete {
 			// Only a live parent awaiting trial settlement reserves an incomplete child.
 			// An obsolete link left incomplete by settlement or cancellation must not block reassignment.
@@ -8266,10 +8269,15 @@ func (s *subscriptionService) findInheritanceConflict(ctx context.Context, paren
 				!parent.CurrentPeriodStart.Equal(*sub.TrialEnd) {
 				continue
 			}
+			released, err := s.isTrialInvoiceVoided(ctx, parent)
+			if err != nil {
+				return nil, err
+			}
+			if released {
+				continue
+			}
 		}
-		if parent == nil || parent.CustomerID != parentCustomerID {
-			return sub, nil
-		}
+		return sub, nil
 	}
 	return nil, nil
 }
@@ -8278,6 +8286,33 @@ func isIncompleteInheritedTrial(sub *subscription.Subscription) bool {
 	return sub.SubscriptionType == types.SubscriptionTypeInherited &&
 		sub.SubscriptionStatus == types.SubscriptionStatusIncomplete &&
 		sub.TrialEnd != nil && sub.CurrentPeriodStart.Equal(*sub.TrialEnd)
+}
+
+// A void releases the reservation only when there is no replacement invoice for the
+// conversion. No invoice can also mean a zero-dollar conversion is about to activate.
+func (s *subscriptionService) isTrialInvoiceVoided(ctx context.Context, parent *subscription.Subscription) (bool, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = parent.ID
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionTrialEnd
+	filter.SkipLineItems = true
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.PeriodStartGTE = &parent.CurrentPeriodStart
+	filter.PeriodStartLTE = &parent.CurrentPeriodStart
+	filter.PeriodEndGTE = &parent.CurrentPeriodEnd
+	filter.PeriodEndLTE = &parent.CurrentPeriodEnd
+	filter.InvoiceStatus = []types.InvoiceStatus{
+		types.InvoiceStatusVoided, types.InvoiceStatusDraft, types.InvoiceStatusFinalized, types.InvoiceStatusSkipped,
+	}
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+	for _, inv := range invoices {
+		if inv.InvoiceStatus != types.InvoiceStatusVoided {
+			return false, nil
+		}
+	}
+	return len(invoices) > 0, nil
 }
 
 // validateSubscriptionBillingCurrency checks the subscription can be converted to its invoicing

@@ -36,11 +36,13 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 		monthlyFee       int64
 		legacyLink       bool
 		sameOwnerOverdue bool
+		voidInvoice      bool
 	}{
 		{name: "paid plan activates after the parent invoice is paid", monthlyFee: 30},
 		{name: "zero-dollar plan activates at trial end"},
 		{name: "payment preserves a previously assigned second parent", monthlyFee: 30, legacyLink: true},
 		{name: "an overdue subscription of the same owner does not block trial activation", monthlyFee: 30, sameOwnerOverdue: true},
+		{name: "voiding the unpaid invoice releases the child for reassignment", monthlyFee: 30, voidInvoice: true},
 	}
 
 	for _, tc := range cases {
@@ -133,6 +135,27 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 					InheritanceParams: &dto.SubModifyInheritanceRequest{
 						ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
 					},
+				}
+				if tc.voidInvoice {
+					_, err := modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.Require().ErrorContains(err, "already has a parent subscription")
+					voided, err := invoices.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
+					s.Require().NoError(err)
+					s.Equal(types.InvoiceStatusVoided, voided.InvoiceStatus)
+					_, err = modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.Require().NoError(err)
+					reassigned, err := s.GetStores().SubscriptionRepo.Get(ctx, secondParent.ID)
+					s.Require().NoError(err)
+					usageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, reassigned)
+					s.Require().NoError(err)
+					s.Contains(usageCustomers, childCustomer.ExternalID)
+					oldChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+					s.Require().NoError(err)
+					s.Equal(types.SubscriptionStatusIncomplete, oldChild.SubscriptionStatus)
+					usageCustomers, err = subscriptions.ExternalCustomerIDsForSubscription(ctx, parent.Subscription)
+					s.Require().NoError(err)
+					s.NotContains(usageCustomers, childCustomer.ExternalID)
+					return
 				}
 				if tc.legacyLink {
 					// Persist the conflicting link that older versions could create while payment was pending.
