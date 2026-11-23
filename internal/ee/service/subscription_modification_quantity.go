@@ -1151,6 +1151,8 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
 // [lineItem.StartDate, lineItem.EndDate) for finite line items, or
 // [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
+// For longer-cadence advance items, effectiveDate == sub.CurrentPeriodEnd is only
+// allowed when sub.CurrentPeriodEnd coincides with the item's own billing period end.
 // Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
@@ -1179,9 +1181,7 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 				}).
 				Mark(ierr.ErrValidation)
 		}
-		return nil
-	}
-	if effectiveDate.After(sub.CurrentPeriodEnd) {
+	} else if effectiveDate.After(sub.CurrentPeriodEnd) {
 		return ierr.NewError("effective_date cannot be after the current period end").
 			WithHint("Set effective_date to a time within the current billing period or at the current period end").
 			WithReportableDetails(map[string]interface{}{
