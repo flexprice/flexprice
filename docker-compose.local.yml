@@ -1,3 +1,5 @@
+name: flexprice-local
+
 services:
   postgres:
     # Local behavior tests bootstrap via versioned migrations.

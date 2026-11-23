@@ -143,7 +143,7 @@ Local service URLs:
 - Temporal UI: http://localhost:8088
 - ClickHouse HTTP: http://localhost:8123
 
-To stop the local dependencies and preserve their volumes, run `docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.local.yml stop`. If you started with a custom `COMPOSE_PROJECT_NAME`, use the same value when stopping.
+The stack uses its own `flexprice-local` Compose project. To stop the dependencies and preserve their volumes, run `docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.local.yml stop`. If you started with a custom `COMPOSE_PROJECT_NAME`, use the same value when stopping.
 
 #### Run FlexPrice services in Docker
 
