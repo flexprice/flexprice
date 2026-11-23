@@ -274,7 +274,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 				alreadyCompleted := errors.As(statusErr, &appErr) && appErr.Type() == export.TaskAlreadyCompletedErrType
 				if !alreadyCompleted {
 					// File landed; only the status write failed.
-					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, nil)
+					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, exportOutput.RecordCount, nil)
 					return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
 				}
 				logger.Info("Task already completed; delivering as completed", "task_id", taskID)
@@ -341,6 +341,7 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 			WindowStart:     details.StartTime,
 			WindowEnd:       details.EndTime,
 			RecordCount:     recordCount,
+			FileDelivered:   runErr == nil,
 		}).Get(emailCtx, &out)
 		if err != nil {
 			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)

@@ -359,3 +359,16 @@ func TestRecordDeliveries_OnlyWritesDeliveriesKey(t *testing.T) {
 	require.Equal(t, "s", repo.stored.Metadata["start_time"])
 	require.Equal(t, types.TaskStatusCompleted, repo.stored.TaskStatus)
 }
+
+func TestSendExportEmails_DeliveredButStatusNotSaved(t *testing.T) {
+	sender := &fakeSender{}
+	a := newDeliveryActivity(sender, &fakeUsers{known: map[string]bool{"a@x.com": true}}, &fakeCounter{enabled: true, n: map[string]int64{}}, true, 5)
+	in := baseInput("a@x.com")
+	in.RunStatus = types.TaskStatusFailed
+	in.FileDelivered = true
+	_, err := a.SendExportEmails(context.Background(), in)
+	require.NoError(t, err)
+	require.Equal(t, "Flexprice export delivered", sender.sent[0].Subject)
+	require.Contains(t, sender.sent[0].Text, "Rows: 42")
+	require.Contains(t, sender.sent[0].Text, "Status: File delivered, but the run status could not be saved")
+}

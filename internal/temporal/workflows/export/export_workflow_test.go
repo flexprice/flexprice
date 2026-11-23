@@ -191,6 +191,7 @@ func TestExecuteExportWorkflow_FailedRunEmailsFailure(t *testing.T) {
 	require.Error(t, r.env.GetWorkflowError())
 	require.Len(t, r.emailIn, 1)
 	require.Equal(t, types.TaskStatusFailed, r.emailIn[0].RunStatus)
+	require.False(t, r.emailIn[0].FileDelivered)
 	require.Len(t, r.recorded, 1)
 	require.Equal(t, types.ExportDeliveryTypeFlexprice, r.recorded[0].Deliveries[0].Type)
 	require.Equal(t, types.ExportDeliveryStatusFailed, r.recorded[0].Deliveries[0].Status)
@@ -301,11 +302,17 @@ func TestExecuteExportWorkflow_DefaultVersionSkipsDeliveries(t *testing.T) {
 }
 
 func TestExecuteExportWorkflow_CompleteTaskFailureMarksRunFailed(t *testing.T) {
-	r := newDeliveryRun(export.ScheduledTaskDetails{Interval: types.ScheduledTaskIntervalDaily}, nil, nil)
+	r := newDeliveryRun(export.ScheduledTaskDetails{
+		Interval: types.ScheduledTaskIntervalDaily, EmailRecipients: []string{"a@x.com"},
+	}, nil, nil)
 	r.completeErr = errors.New("db down")
 	r.run()
 
 	require.Error(t, r.env.GetWorkflowError())
+	require.Len(t, r.emailIn, 1)
+	require.Equal(t, types.TaskStatusFailed, r.emailIn[0].RunStatus)
+	require.True(t, r.emailIn[0].FileDelivered)
+	require.Equal(t, 3, r.emailIn[0].RecordCount)
 	require.Len(t, r.statuses, 2)
 	require.Equal(t, types.TaskStatusProcessing, r.statuses[0].Status)
 	require.Equal(t, types.TaskStatusFailed, r.statuses[1].Status)
