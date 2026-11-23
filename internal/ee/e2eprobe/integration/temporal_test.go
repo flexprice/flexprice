@@ -96,11 +96,18 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 
 	waitForPriceSync(t, ctx, raw, run.WorkflowID, run.RunID)
 
-	var summary dto.WorkflowSummaryResponse
+	var summary struct {
+		Status           string `json:"status"`
+		ActivityCount    int    `json:"activity_count"`
+		FailedActivities *int   `json:"failed_activities"`
+	}
 	call(ctx, http.MethodGet, "/workflows/"+run.WorkflowID+"/"+run.RunID+"/summary", nil, &summary)
-	if summary.Status != "Completed" || summary.ActivityCount == 0 || summary.FailedActivities != 0 {
+	if summary.FailedActivities == nil {
+		t.Fatal("workflow summary did not report failed_activities")
+	}
+	if summary.Status != "Completed" || summary.ActivityCount <= 0 || *summary.FailedActivities != 0 {
 		t.Fatalf("unexpected workflow summary: status=%s activities=%d failed=%d",
-			summary.Status, summary.ActivityCount, summary.FailedActivities)
+			summary.Status, summary.ActivityCount, *summary.FailedActivities)
 	}
 	if !slices.Contains(linePrices(), meteredPriceID) {
 		t.Fatal("completed price sync did not attach the metered price")
