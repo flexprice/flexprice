@@ -24,8 +24,7 @@ func TestE2EProbe_LocalTemporal(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
-	api := newProbeHTTP(host)
-	api.headers.Set("X-API-Key", key)
+	api := newProbeHTTP(host).withAuth("X-API-Key", key)
 	create := func(path string, body map[string]any) string {
 		t.Helper()
 		var created struct {

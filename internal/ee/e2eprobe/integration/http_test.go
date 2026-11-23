@@ -14,9 +14,10 @@ import (
 )
 
 type probeHTTP struct {
-	host    string
-	client  *http.Client
-	headers http.Header
+	host      string
+	client    *http.Client
+	authName  string
+	authValue string
 }
 
 func newProbeHTTP(host string) probeHTTP {
@@ -28,18 +29,23 @@ func newProbeHTTP(host string) probeHTTP {
 				return http.ErrUseLastResponse
 			},
 		},
-		headers: make(http.Header),
 	}
 }
 
-func (api probeHTTP) require(t *testing.T, ctx context.Context, method, path string, body any, want int, out any) {
+func (p probeHTTP) withAuth(name, value string) probeHTTP {
+	p.authName = name
+	p.authValue = value
+	return p
+}
+
+func (p probeHTTP) require(t *testing.T, ctx context.Context, method, path string, body any, want int, out any) {
 	t.Helper()
-	if err := api.request(ctx, method, path, body, want, out); err != nil {
+	if err := p.request(ctx, method, path, body, want, out); err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
 }
 
-func (api probeHTTP) request(ctx context.Context, method, path string, body any, want int, out any) error {
+func (p probeHTTP) request(ctx context.Context, method, path string, body any, want int, out any) error {
 	var payload []byte
 	if body != nil {
 		var err error
@@ -48,15 +54,17 @@ func (api probeHTTP) request(ctx context.Context, method, path string, body any,
 			return fmt.Errorf("encode body: %w", err)
 		}
 	}
-	req, err := http.NewRequestWithContext(ctx, method, api.host+path, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, method, p.host+path, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
-	req.Header = api.headers.Clone()
+	if p.authName != "" {
+		req.Header.Set(p.authName, p.authValue)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := api.client.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return err
 	}

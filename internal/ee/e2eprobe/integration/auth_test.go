@@ -35,19 +35,18 @@ func TestE2EProbe_LocalAuth(t *testing.T) {
 	var user struct {
 		ID string `json:"id"`
 	}
-	api.headers.Set("Authorization", "Bearer "+login.Token)
-	api.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusOK, &user)
+	bearer := api.withAuth("Authorization", "Bearer "+login.Token)
+	bearer.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusOK, &user)
 	if user.ID != signupUserID {
 		t.Fatal("authenticated user lookup returned a different user from signup")
 	}
-	api.headers.Del("Authorization")
 	credentials["password"] = password + "-incorrect"
 	api.require(t, ctx, http.MethodPost, "/auth/login", credentials, http.StatusForbidden, nil)
 	api.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusUnauthorized, nil)
 
-	api.headers.Set("X-API-Key", key)
+	keyed := api.withAuth("X-API-Key", key)
 	user.ID = ""
-	api.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusOK, &user)
+	keyed.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusOK, &user)
 	if user.ID != signupUserID {
 		t.Fatal("API-key user lookup returned a different user from signup")
 	}
