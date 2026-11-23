@@ -31,6 +31,9 @@ func TestCreateScheduledTaskRequestValidate(t *testing.T) {
 		{"daily without schedule", `{"entity_type":"invoice","interval":"daily"}`, false},
 		{"custom no connection", `{"entity_type":"invoice","interval":"custom"}`, true},
 		{"15MIN no connection", `{"entity_type":"invoice","interval":"15MIN"}`, true},
+		{"15MIN with connection", `{"connection_id":"c1","entity_type":"invoice","interval":"15MIN","job_config":{"bucket":"b"}}`, true},
+		{"30MIN with connection", `{"connection_id":"c1","entity_type":"invoice","interval":"30MIN","job_config":{"bucket":"b"}}`, true},
+		{"hourly with connection", `{"connection_id":"c1","entity_type":"invoice","interval":"hourly","job_config":{"bucket":"b"}}`, false},
 		{"name too long", `{"name":"` + strings.Repeat("a", 121) + `","entity_type":"invoice","interval":"daily"}`, true},
 	}
 	for _, tt := range tests {

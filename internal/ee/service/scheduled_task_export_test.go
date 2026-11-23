@@ -510,3 +510,38 @@ func TestUpdate_RenameAndDisableMonthly(t *testing.T) {
 	require.Equal(t, 1, handle.pauses)
 	require.Empty(t, handle.updates)
 }
+
+func TestCreate_RejectsSubHourlyIntervals(t *testing.T) {
+	for _, interval := range []types.ScheduledTaskInterval{types.ScheduledTaskIntervalEvery15Minutes, types.ScheduledTaskIntervalEvery30Minutes} {
+		t.Run(string(interval), func(t *testing.T) {
+			repo, tc := &exportRepoFake{}, &exportTemporalFake{}
+			s := newExportService(repo, tc)
+
+			_, err := s.CreateScheduledTask(exportCtx(), dto.CreateScheduledTaskRequest{
+				ConnectionID: "conn_1",
+				EntityType:   types.ScheduledTaskEntityTypeInvoice,
+				Interval:     interval,
+				JobConfig:    &types.S3JobConfig{},
+			})
+			require.True(t, ierr.IsValidation(err))
+			require.Nil(t, repo.created)
+		})
+	}
+}
+
+func TestUpdate_RenameExisting15MinExport(t *testing.T) {
+	handle := &exportHandleFake{}
+	tc := &exportTemporalFake{handle: handle}
+	row := scheduledRow(nil)
+	row.ConnectionID = "conn_1"
+	row.Interval = types.ScheduledTaskIntervalEvery15Minutes
+	repo := &exportRepoFake{task: row}
+	s := newExportService(repo, tc)
+
+	name, enabled := "x", false
+	resp, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Name: &name, Enabled: &enabled})
+	require.NoError(t, err)
+	require.Equal(t, "x", repo.settings.Name)
+	require.Equal(t, types.ScheduledTaskIntervalEvery15Minutes, resp.Interval)
+	require.False(t, resp.Enabled)
+}

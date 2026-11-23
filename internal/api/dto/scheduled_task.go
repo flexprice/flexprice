@@ -17,7 +17,7 @@ type CreateScheduledTaskRequest struct {
 	Name         string                        `json:"name,omitempty"`
 	EntityType   types.ScheduledTaskEntityType `json:"entity_type" binding:"required" validate:"required"`
 	// "custom" is excluded from API.
-	Interval  types.ScheduledTaskInterval `json:"interval" binding:"required" validate:"required" enums:"15MIN,30MIN,hourly,daily,weekly,monthly,manual"`
+	Interval  types.ScheduledTaskInterval `json:"interval" binding:"required" validate:"required" enums:"hourly,daily,weekly,monthly,manual"`
 	Enabled   bool                        `json:"enabled"`
 	JobConfig *types.S3JobConfig          `json:"job_config,omitempty"`
 	Schedule  *types.ExportSchedule       `json:"schedule,omitempty"`
@@ -46,6 +46,13 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 		return err
 	}
 
+	switch r.Interval {
+	case types.ScheduledTaskIntervalEvery15Minutes, types.ScheduledTaskIntervalEvery30Minutes:
+		return ierr.NewError("interval is not available for exports").
+			WithHint("Exports run hourly at most. Use hourly, daily, weekly, monthly or manual.").
+			Mark(ierr.ErrValidation)
+	}
+
 	if len(r.Name) > maxScheduledTaskNameLength {
 		return ierr.NewError("name is too long").
 			WithHint("Name must be at most 120 characters").
@@ -63,13 +70,6 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 		return nil
-	}
-
-	switch r.Interval {
-	case types.ScheduledTaskIntervalEvery15Minutes, types.ScheduledTaskIntervalEvery30Minutes:
-		return ierr.NewError("interval is not available without a connection").
-			WithHint("Use hourly, daily, weekly, monthly or manual").
-			Mark(ierr.ErrValidation)
 	}
 
 	if jc := r.JobConfig; jc != nil {
