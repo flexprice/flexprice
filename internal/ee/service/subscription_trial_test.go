@@ -155,7 +155,6 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 				s.Equal(types.PaymentStatusSucceeded, paid.PaymentStatus)
 				s.True(fee.Equal(paid.AmountPaid), "amount paid: %s", paid.AmountPaid)
 				s.True(paid.AmountRemaining.IsZero(), "amount remaining: %s", paid.AmountRemaining)
-				s.Require().NoError(subscriptions.HandleSubscriptionActivatingInvoicePaid(ctx, paid))
 
 				firstUsageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, parent.Subscription)
 				s.Require().NoError(err)
