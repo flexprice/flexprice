@@ -41,10 +41,14 @@ func IsCustomerStatusReadable(status Status) bool {
 	}
 }
 
-// Fresh slice so callers cannot widen the allowlist
+// Derived from the switch so the two cannot drift
 func ReadableCustomerStatuses() []string {
-	return []string{
-		string(StatusPublished),
-		string(StatusArchived),
+	all := []Status{StatusPublished, StatusArchived, StatusDeleted, StatusSuppressed}
+	readable := make([]string, 0, len(all))
+	for _, s := range all {
+		if IsCustomerStatusReadable(s) {
+			readable = append(readable, string(s))
+		}
 	}
+	return readable
 }
