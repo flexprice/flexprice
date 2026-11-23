@@ -122,7 +122,7 @@ func reconcilePass(
 			envFilter.Offset = offset
 			envPage, err := envs.List(tenantCtx, envFilter)
 			if err != nil {
-				log.Error(ctx, "export schedule reconcile: list environments failed", "error", err, "tenant_id", tenantID)
+				log.Error(tenantCtx, "export schedule reconcile: list environments failed", "error", err)
 				listErr = err
 				break
 			}
@@ -138,7 +138,7 @@ func reconcilePass(
 			for {
 				page, err := scheduledTasks.List(envCtx, &scheduledtask.ListFilters{Limit: taskPageSize, KeysetByID: true, AfterID: afterID})
 				if err != nil {
-					log.Error(ctx, "export schedule reconcile: list scheduled tasks failed", "error", err, "tenant_id", tenantID, "env_id", env.ID)
+					log.Error(envCtx, "export schedule reconcile: list scheduled tasks failed", "error", err)
 					listErr = err
 					break
 				}
@@ -149,7 +149,7 @@ func reconcilePass(
 					changed, err := reconcileExportSchedule(ctx, tc, st.TemporalScheduleID)
 					switch {
 					case err != nil:
-						log.Error(ctx, "export schedule reconcile failed", "error", err, "scheduled_task_id", st.ID)
+						log.Error(envCtx, "export schedule reconcile failed", "error", err, "scheduled_task_id", st.ID)
 						failed++
 					case changed:
 						updated++
@@ -165,7 +165,7 @@ func reconcilePass(
 		}
 	}
 
-	log.Info(ctx, "export schedule timeouts reconciled", "updated", updated, "already_current", current, "failed", failed)
+	log.Info(ctx, "export_schedule.timeouts_reconciled", "updated", updated, "already_current", current, "failed", failed)
 	switch {
 	case listErr != nil:
 		return fmt.Errorf("listing failed: %w", listErr)
