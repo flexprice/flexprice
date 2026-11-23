@@ -587,6 +587,16 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrDatabase)
 	}
 
+	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
+		return "", time.Time{}, time.Time{}, "", ierr.NewError("cannot run archived or deleted scheduled task").
+			WithHint("This scheduled task has been archived or deleted and cannot be run").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": taskID,
+				"status":  task.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if !task.Enabled {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("export is paused").
 			WithHint("Turn the export on to run it.").

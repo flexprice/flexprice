@@ -447,6 +447,22 @@ func TestRun_RejectsPausedExport(t *testing.T) {
 	}
 }
 
+func TestRun_RejectsArchivedOrDeletedBeforePausedCheck(t *testing.T) {
+	for _, status := range []types.Status{types.StatusArchived, types.StatusDeleted} {
+		tc := &exportTemporalFake{}
+		row := scheduledRow(nil)
+		row.Status = status
+		row.Enabled = false
+		s := newExportService(&exportRepoFake{task: row}, tc)
+
+		_, err := s.TriggerForceRun(exportCtx(), "st_1", dto.TriggerForceRunRequest{})
+		require.Error(t, err, status)
+		require.True(t, ierr.IsValidation(err))
+		require.Contains(t, err.Error(), "cannot run archived or deleted")
+		require.Nil(t, tc.args)
+	}
+}
+
 func TestRun_OldRowUnchanged(t *testing.T) {
 	tc := &exportTemporalFake{}
 	repo := &exportRepoFake{task: scheduledRow(nil)}
