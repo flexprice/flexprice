@@ -269,12 +269,34 @@ func (s *subscriptionService) cascadeTrialActivationToInherited(ctx context.Cont
 	if parentSub.SubscriptionType != types.SubscriptionTypeParent {
 		return nil
 	}
-	// Trial end moved the inherited children to incomplete while payment was pending.
-	children, err := s.getInheritedSubscriptions(ctx, parentSub.ID, types.SubscriptionStatusIncomplete)
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.ParentSubscriptionIDs = []string{parentSub.ID}
+	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusIncomplete}
+	children, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		return err
 	}
+	children = lo.Filter(children, func(child *subscription.Subscription, _ int) bool {
+		return isIncompleteInheritedTrial(child)
+	})
+	customerIDs := lo.Map(children, func(child *subscription.Subscription, _ int) string {
+		return child.CustomerID
+	})
+	if err := s.lockInheritanceCustomers(ctx, customerIDs); err != nil {
+		return err
+	}
 	for _, child := range children {
+		// Older versions allowed another parent to take the child while this invoice was open.
+		conflict, err := s.findInheritanceConflict(ctx, parentSub.CustomerID, child.CustomerID, false)
+		if err != nil {
+			return err
+		}
+		if conflict != nil {
+			s.Logger.Info(ctx, "inherited trial subscription skipped on settlement due to an existing subscription",
+				"subscription_id", child.ID, "parent_subscription_id", parentSub.ID, "conflicting_subscription_id", conflict.ID)
+			continue
+		}
 		child.SubscriptionStatus = types.SubscriptionStatusActive
 		if err := s.SubRepo.Update(ctx, child); err != nil {
 			return err

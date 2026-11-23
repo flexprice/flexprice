@@ -28,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceTemporalModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
@@ -8141,113 +8142,142 @@ func (s *subscriptionService) cancelAllLineItemsForSubscription(
 	return nil
 }
 
-// resolveExternalCustomersForInheritance resolves published customers by external ID and validates
-// they may receive an inherited subscription (same rules as subscription create).
-func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string) ([]string, error) {
-	// Drop empty strings and short-circuit on empty input. Without this, the customer
-	// repo's `if len(ExternalIDs) > 0` guard treats an empty slice as "no filter" and,
-	// combined with NewNoLimitCustomerFilter, loads every customer in the tenant/env.
+func (s *subscriptionService) resolveExternalCustomersForInheritance(ctx context.Context, parentCustomerID string, externalIDs []string, lockCustomers bool) ([]string, error) {
+	// An empty ExternalIDs filter would list every customer.
 	externalIDs = lo.Compact(externalIDs)
-	if len(externalIDs) == 0 {
-		return nil, nil
-	}
-
-	// Step 1: fetch all subscription IDs belonging to the parent customer.
-	// These are used to distinguish "already under this parent" (allowed) from
-	// "under a different parent" (blocked).
-	parentSubFilter := types.NewNoLimitSubscriptionFilter()
-	parentSubFilter.CustomerID = parentCustomerID
-	parentSubFilter.Status = lo.ToPtr(types.StatusPublished)
-	parentSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusDraft,
-		types.SubscriptionStatusTrialing,
-	}
-	parentSubFilter.WithLineItems = false
-	parentSubs, err := s.SubRepo.List(ctx, parentSubFilter)
-	if err != nil {
-		return nil, err
-	}
-	parentSubIDs := make(map[string]bool, len(parentSubs))
-	for _, sub := range parentSubs {
-		parentSubIDs[sub.ID] = true
-	}
-
-	// Step 2: resolve child customers by external ID.
-	childFilter := types.NewNoLimitCustomerFilter()
-	childFilter.ExternalIDs = externalIDs
-	childFilter.Status = lo.ToPtr(types.StatusPublished)
-	customers, err := s.CustomerRepo.ListAll(ctx, childFilter)
-	if err != nil {
-		return nil, err
-	}
-
-	byExternalID := make(map[string]*customer.Customer, len(customers))
-	for _, cust := range customers {
-		byExternalID[cust.ExternalID] = cust
-	}
-
-	childCustomerIDs := make([]string, 0, len(externalIDs))
-	for _, extID := range externalIDs {
-		cust, ok := byExternalID[extID]
-		if !ok {
-			return nil, ierr.NewError("customer not found").
-				WithHint("No customer exists for the given external id in this environment").
-				WithReportableDetails(map[string]interface{}{"external_id": extID}).
-				Mark(ierr.ErrNotFound)
-		}
-		if cust.ID == parentCustomerID {
-			return nil, ierr.NewError("cannot inherit onto itself").
-				WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
-				WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
-				Mark(ierr.ErrValidation)
-		}
-		if cust.Status != types.StatusPublished {
-			return nil, ierr.NewError("customer is not active").
-				WithHint("The customer must be active").
-				WithReportableDetails(map[string]interface{}{"external_id": extID, "status": cust.Status}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Step 3: fetch all active/draft/trialing published subscriptions for the child.
-		childSubFilter := types.NewNoLimitSubscriptionFilter()
-		childSubFilter.CustomerID = cust.ID
-		childSubFilter.Status = lo.ToPtr(types.StatusPublished)
-		childSubFilter.SubscriptionStatus = []types.SubscriptionStatus{
-			types.SubscriptionStatusActive,
-			types.SubscriptionStatusDraft,
-			types.SubscriptionStatusTrialing,
-		}
-		childSubFilter.WithLineItems = false
-		childSubs, err := s.SubRepo.List(ctx, childSubFilter)
+	var childCustomerIDs []string
+	if len(externalIDs) > 0 {
+		childFilter := types.NewNoLimitCustomerFilter()
+		childFilter.ExternalIDs = externalIDs
+		childFilter.Status = lo.ToPtr(types.StatusPublished)
+		customers, err := s.CustomerRepo.ListAll(ctx, childFilter)
 		if err != nil {
 			return nil, err
 		}
+		byExternalID := lo.KeyBy(customers, func(cust *customer.Customer) string { return cust.ExternalID })
 
-		// Step 4: check each subscription of the child.
-		// Block if:
-		//   - subscription has no parent (child has their own standalone/parent subscription), OR
-		//   - subscription's parent belongs to a different parent customer (not parentSubIDs)
-		for _, childSub := range childSubs {
-			if childSub.ParentSubscriptionID == nil {
-				// Child has a standalone or parent subscription of their own
-				return nil, ierr.NewError("child customer has standalone or parent subscriptions").
-					WithHint("The child customer cannot have standalone or parent subscriptions").
+		for _, extID := range externalIDs {
+			cust, ok := byExternalID[extID]
+			if !ok {
+				return nil, ierr.NewError("customer not found").
+					WithHint("No customer exists for the given external id in this environment").
+					WithReportableDetails(map[string]interface{}{"external_id": extID}).
+					Mark(ierr.ErrNotFound)
+			}
+			if cust.ID == parentCustomerID {
+				return nil, ierr.NewError("cannot inherit onto itself").
+					WithHint("The subscriber cannot appear in external_customer_ids_to_inherit_subscription").
 					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
 					Mark(ierr.ErrValidation)
 			}
-			if !parentSubIDs[*childSub.ParentSubscriptionID] {
-				// Child is already inherited under a different parent
-				return nil, ierr.NewError("child customer already has a parent subscription").
-					WithHint("A customer can only be inherited under one parent").
-					WithReportableDetails(map[string]interface{}{"external_id": extID, "customer_id": cust.ID}).
-					Mark(ierr.ErrValidation)
-			}
+			childCustomerIDs = append(childCustomerIDs, cust.ID)
 		}
+	}
 
-		childCustomerIDs = append(childCustomerIDs, cust.ID)
+	if lockCustomers {
+		if err := s.lockInheritanceCustomers(ctx, append([]string{parentCustomerID}, childCustomerIDs...)); err != nil {
+			return nil, err
+		}
+	}
+	for i, childID := range childCustomerIDs {
+		if err := s.validateInheritanceForCustomer(ctx, parentCustomerID, childID, externalIDs[i]); err != nil {
+			return nil, err
+		}
 	}
 	return childCustomerIDs, nil
+}
+
+func (s *subscriptionService) lockInheritanceCustomers(ctx context.Context, customerIDs []string) error {
+	// Lock in a consistent order when a request affects several customers.
+	customerIDs = lo.Uniq(customerIDs)
+	sort.Strings(customerIDs)
+	for _, id := range customerIDs {
+		key := fmt.Sprintf("subscription-inheritance:%s:%s:%s", types.GetTenantID(ctx), types.GetEnvironmentID(ctx), id)
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: key}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *subscriptionService) validateInheritanceForCustomer(ctx context.Context, parentCustomerID, childCustomerID, externalID string) error {
+	conflict, err := s.findInheritanceConflict(ctx, parentCustomerID, childCustomerID, true)
+	if err != nil || conflict == nil {
+		return err
+	}
+	details := map[string]interface{}{"external_id": externalID, "customer_id": childCustomerID}
+	if conflict.ParentSubscriptionID == nil {
+		return ierr.NewError("child customer has standalone or parent subscriptions").
+			WithHint("The child customer cannot have standalone or parent subscriptions").
+			WithReportableDetails(details).
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.NewError("child customer already has a parent subscription").
+		WithHint("A customer can only be inherited under one parent").
+		WithReportableDetails(details).
+		Mark(ierr.ErrValidation)
+}
+
+// findInheritanceConflict checks ownership separately from the statuses eligible for usage attribution.
+// An empty parent customer checks whether the subscriber is already inherited.
+func (s *subscriptionService) findInheritanceConflict(ctx context.Context, parentCustomerID, childCustomerID string, reservePending bool) (*subscription.Subscription, error) {
+	statuses := []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusDraft, types.SubscriptionStatusTrialing}
+	if reservePending {
+		statuses = append(statuses, types.SubscriptionStatusIncomplete)
+	}
+	filter := types.NewNoLimitSubscriptionFilter()
+	filter.CustomerID = childCustomerID
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.SubscriptionStatus = statuses
+	if parentCustomerID == "" {
+		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+	}
+	subs, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var parentIDs []string
+	for _, sub := range subs {
+		if sub.ParentSubscriptionID != nil {
+			parentIDs = append(parentIDs, *sub.ParentSubscriptionID)
+		}
+	}
+	var parents map[string]*subscription.Subscription
+	if len(parentIDs) > 0 {
+		parentFilter := types.NewNoLimitSubscriptionFilter()
+		parentFilter.SubscriptionIDs = lo.Uniq(parentIDs)
+		parentFilter.Status = lo.ToPtr(types.StatusPublished)
+		parentFilter.SubscriptionStatus = statuses
+		rows, err := s.SubRepo.List(ctx, parentFilter)
+		if err != nil {
+			return nil, err
+		}
+		parents = lo.KeyBy(rows, func(sub *subscription.Subscription) string { return sub.ID })
+	}
+
+	for _, sub := range subs {
+		parent := parents[lo.FromPtr(sub.ParentSubscriptionID)]
+		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete {
+			// Only a live parent awaiting trial settlement reserves an incomplete child.
+			// An obsolete link left incomplete by settlement or cancellation must not block reassignment.
+			if !isIncompleteInheritedTrial(sub) || parent == nil ||
+				parent.SubscriptionStatus != types.SubscriptionStatusIncomplete ||
+				!parent.CurrentPeriodStart.Equal(*sub.TrialEnd) {
+				continue
+			}
+		}
+		if parent == nil || parent.CustomerID != parentCustomerID {
+			return sub, nil
+		}
+	}
+	return nil, nil
+}
+
+func isIncompleteInheritedTrial(sub *subscription.Subscription) bool {
+	return sub.SubscriptionType == types.SubscriptionTypeInherited &&
+		sub.SubscriptionStatus == types.SubscriptionStatusIncomplete &&
+		sub.TrialEnd != nil && sub.CurrentPeriodStart.Equal(*sub.TrialEnd)
 }
 
 // validateSubscriptionBillingCurrency checks the subscription can be converted to its invoicing
@@ -8358,6 +8388,9 @@ func (s *subscriptionService) validateAutoInvoiceThresholdForCreate(sub *subscri
 func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx context.Context, req *dto.CreateSubscriptionRequest, sub *subscription.Subscription) (groupedInvoicingSubIDs []string, childCustomerIDs []string, err error) {
 	if req.Inheritance == nil {
 		sub.SubscriptionType = types.SubscriptionTypeStandalone
+		if err := s.lockInheritanceCustomers(ctx, []string{sub.CustomerID}); err != nil {
+			return nil, nil, err
+		}
 		return nil, nil, s.validateNoInheritedSubForSubscriber(ctx, sub)
 	}
 
@@ -8391,6 +8424,12 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 		// Inherited.
 		if sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
 			sub.SubscriptionType = types.SubscriptionTypeInherited
+			if err := s.lockInheritanceCustomers(ctx, []string{sub.CustomerID}); err != nil {
+				return nil, nil, err
+			}
+			if err := s.validateInheritanceForCustomer(ctx, parentSub.CustomerID, sub.CustomerID, req.ExternalCustomerID); err != nil {
+				return nil, nil, err
+			}
 		} else if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, parentSub.CustomerID); err != nil {
 			return nil, nil, err
 		}
@@ -8414,11 +8453,15 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 	}
 
 	if len(inh.ExternalCustomerIDsToInheritSubscription) > 0 {
-		resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription)
+		resolved, err := s.resolveExternalCustomersForInheritance(ctx, sub.CustomerID, inh.ExternalCustomerIDsToInheritSubscription, true)
 		if err != nil {
 			return nil, nil, err
 		}
 		childCustomerIDs = resolved
+	} else if sub.SubscriptionType != types.SubscriptionTypeInherited && sub.SubscriptionType != types.SubscriptionTypeGroupedInvoicing {
+		if err := s.lockInheritanceCustomers(ctx, []string{sub.CustomerID}); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	// SubIDsForGroupedInvoicing are processed post-create (parent.ID not known yet at this point).
@@ -8436,29 +8479,14 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 // validateNoInheritedSubForSubscriber rejects standalone/parent/delegated creation when
 // the subscriber already has an inherited subscription under another parent.
 func (s *subscriptionService) validateNoInheritedSubForSubscriber(ctx context.Context, sub *subscription.Subscription) error {
-	skipTypes := map[types.SubscriptionType]bool{
-		types.SubscriptionTypeInherited:        true,
-		types.SubscriptionTypeGroupedInvoicing: true,
-	}
-	if skipTypes[sub.SubscriptionType] {
+	if sub.SubscriptionType == types.SubscriptionTypeInherited || sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
 		return nil
 	}
-	subscriberFilter := types.NewSubscriptionFilter()
-	subscriberFilter.CustomerID = sub.CustomerID
-	subscriberFilter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	subscriberFilter.Status = lo.ToPtr(types.StatusPublished)
-	subscriberFilter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusDraft,
-		types.SubscriptionStatusTrialing,
-	}
-	subscriberFilter.WithLineItems = false
-	subscriberFilter.Limit = lo.ToPtr(1)
-	count, err := s.SubRepo.Count(ctx, subscriberFilter)
+	conflict, err := s.findInheritanceConflict(ctx, "", sub.CustomerID, true)
 	if err != nil {
 		return err
 	}
-	if count > 0 {
+	if conflict != nil {
 		return ierr.NewError("customer already has an inherited subscription").
 			WithHint("A customer that receives a subscription through hierarchy cannot create a standalone, parent, or delegated subscription.").
 			WithReportableDetails(map[string]interface{}{"customer_id": sub.CustomerID}).
@@ -8594,16 +8622,16 @@ func (s *subscriptionService) ExternalCustomerIDsForSubscription(ctx context.Con
 	return lo.Uniq(out), nil
 }
 
-// getInheritedSubscriptions retrieves active, trialing, draft, and explicitly requested inherited children.
-func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string, additionalStatuses ...types.SubscriptionStatus) ([]*subscription.Subscription, error) {
+// getInheritedSubscriptions retrieves active, trialing and draft inherited children.
+func (s *subscriptionService) getInheritedSubscriptions(ctx context.Context, parentSubID string) ([]*subscription.Subscription, error) {
 	filter := types.NewNoLimitSubscriptionFilter()
 	filter.ParentSubscriptionIDs = []string{parentSubID}
 	filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	filter.SubscriptionStatus = append([]types.SubscriptionStatus{
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 		types.SubscriptionStatusDraft,
-	}, additionalStatuses...)
+	}
 
 	return s.SubRepo.List(ctx, filter)
 }

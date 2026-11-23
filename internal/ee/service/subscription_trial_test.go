@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -33,15 +34,23 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 	cases := []struct {
 		name       string
 		monthlyFee int64
+		legacyLink bool
 	}{
 		{name: "paid plan activates after the parent invoice is paid", monthlyFee: 30},
 		{name: "zero-dollar plan activates at trial end"},
+		{name: "payment preserves a previously assigned second parent", monthlyFee: 30, legacyLink: true},
 	}
 
 	for _, tc := range cases {
 		s.Run(tc.name, func() {
 			fee := decimal.NewFromInt(tc.monthlyFee)
 			plan := s.seedFixedPricePlan("plan_"+s.GetUUID(), fee, 14)
+			if tc.legacyLink {
+				usagePrice := *s.testData.prices.apiCalls
+				usagePrice.ID = "usage_" + plan.ID
+				usagePrice.EntityID = plan.ID
+				s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &usagePrice))
+			}
 			childCustomer := &customer.Customer{
 				ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
 				ExternalID: "child_" + s.GetUUID(),
@@ -89,12 +98,111 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 					s.Equal(types.SubscriptionStatusIncomplete, sub.SubscriptionStatus, id)
 				}
 
+				secondCustomer := &customer.Customer{
+					ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+					ExternalID: "second_" + s.GetUUID(),
+					Name:       "Second parent",
+					BaseModel:  types.GetDefaultBaseModel(ctx),
+				}
+				s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, secondCustomer))
+				secondRequest := dto.CreateSubscriptionRequest{
+					CustomerID:       secondCustomer.ID,
+					PlanID:           plan.ID,
+					StartDate:        &trialEnd,
+					Currency:         "usd",
+					BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+					BillingCycle:     types.BillingCycleAnniversary,
+					CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice),
+					PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultActive),
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						TrialPeriodDays: lo.ToPtr(0),
+					},
+				}
+				secondParent, err := subscriptions.CreateSubscription(ctx, secondRequest)
+				s.Require().NoError(err)
+				s.Require().Equal(types.SubscriptionStatusActive, secondParent.SubscriptionStatus)
+				if tc.legacyLink {
+					// Persist the conflicting link that older versions could create while payment was pending.
+					secondParent.SubscriptionType = types.SubscriptionTypeParent
+					s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, secondParent.Subscription))
+					s.Require().NoError(subscriptions.createInheritedSubscriptions(ctx, secondParent.Subscription, childCustomer.ID))
+				} else {
+					secondRequest.Inheritance = &dto.SubscriptionInheritanceConfig{
+						ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+					}
+					_, err := subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "already has a parent subscription")
+					modify := NewSubscriptionModificationService(subscriptions.ServiceParams)
+					_, err = modify.Execute(ctx, secondParent.ID, dto.ExecuteSubscriptionModifyRequest{
+						Type: dto.SubscriptionModifyTypeInheritance,
+						InheritanceParams: &dto.SubModifyInheritanceRequest{
+							ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+						},
+					})
+					s.ErrorContains(err, "already has a parent subscription")
+					secondRequest.CustomerID = childCustomer.ID
+					secondRequest.Inheritance = nil
+					_, err = subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "customer already has an inherited subscription")
+					secondRequest.Inheritance = &dto.SubscriptionInheritanceConfig{ParentSubscriptionID: secondParent.ID}
+					_, err = subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "already has a parent subscription")
+				}
+
 				s.Require().NoError(invoices.UpdatePaymentStatus(ctx, inv.ID, types.PaymentStatusSucceeded, nil))
 				paid, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
 				s.Require().NoError(err)
 				s.Equal(types.PaymentStatusSucceeded, paid.PaymentStatus)
 				s.True(fee.Equal(paid.AmountPaid), "amount paid: %s", paid.AmountPaid)
 				s.True(paid.AmountRemaining.IsZero(), "amount remaining: %s", paid.AmountRemaining)
+				s.Require().NoError(subscriptions.HandleSubscriptionActivatingInvoicePaid(ctx, paid))
+
+				firstUsageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, parent.Subscription)
+				s.Require().NoError(err)
+				secondUsageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, secondParent.Subscription)
+				s.Require().NoError(err)
+				if tc.legacyLink {
+					s.NotContains(firstUsageCustomers, childCustomer.ExternalID)
+					s.Contains(secondUsageCustomers, childCustomer.ExternalID)
+
+					meter := s.testData.meters.apiCalls
+					eventID := s.GetUUID()
+					usageTime := trialEnd.Add(time.Minute)
+					s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+						Event: events.Event{
+							ID:                 eventID,
+							TenantID:           parent.TenantID,
+							EnvironmentID:      parent.EnvironmentID,
+							EventName:          meter.EventName,
+							CustomerID:         childCustomer.ID,
+							ExternalCustomerID: childCustomer.ExternalID,
+							Timestamp:          usageTime,
+							IngestedAt:         usageTime,
+						},
+						MeterID:    meter.ID,
+						QtyTotal:   decimal.NewFromInt(1),
+						UniqueHash: eventID,
+					}}))
+					for id, want := range map[string]float64{parent.ID: 0, secondParent.ID: 1} {
+						usage, err := subscriptions.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+							SubscriptionID: id,
+							Source:         string(types.UsageSourceAnalytics),
+							StartTime:      trialEnd,
+							EndTime:        firstPeriodEnd,
+						})
+						s.Require().NoError(err)
+						var quantity float64
+						for _, charge := range usage.Charges {
+							if charge.MeterID == meter.ID {
+								quantity += charge.Quantity
+							}
+						}
+						s.Equal(want, quantity, "billable usage for subscription %s", id)
+					}
+				} else {
+					s.Contains(firstUsageCustomers, childCustomer.ExternalID)
+					s.NotContains(secondUsageCustomers, childCustomer.ExternalID)
+				}
 			} else {
 				s.Nil(inv, "a zero-dollar trial conversion has no invoice to collect")
 			}
@@ -102,7 +210,11 @@ func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() 
 			for _, id := range []string{parent.ID, child.ID} {
 				sub, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
 				s.Require().NoError(err)
-				s.Equal(types.SubscriptionStatusActive, sub.SubscriptionStatus, id)
+				want := types.SubscriptionStatusActive
+				if tc.legacyLink && id == child.ID {
+					want = types.SubscriptionStatusIncomplete
+				}
+				s.Equal(want, sub.SubscriptionStatus, id)
 				s.Equal(trialEnd, sub.CurrentPeriodStart, id)
 				s.Equal(firstPeriodEnd, sub.CurrentPeriodEnd, id)
 			}
