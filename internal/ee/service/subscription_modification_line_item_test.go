@@ -940,64 +940,38 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		s.Require().Error(err)
 	})
 
-	s.Run("longer_cadence_advance_successor_avoids_duplicate_mid_term_billing", func() {
+	s.Run("longer_cadence_advance_rejected_mid_term_allowed_at_item_boundary", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-longer-cadence-boundary")
+		sub := s.createActiveSub(cust.ID)
+		// Annual advance item on a monthly sub anchored Jan 1.
 		anchor := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		midTermStart := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
-		nextMonthEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
-		nextYearStart := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-		nextYearFeb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+		sub.BillingAnchor = anchor
+		sub.CurrentPeriodStart = time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+		sub.CurrentPeriodEnd = time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
-		midTermSuccessor := &subscription.SubscriptionLineItem{
-			ID:                    "sli_succ_mid",
-			BillingPeriod:         types.BILLING_PERIOD_ANNUAL,
-			BillingPeriodCount:    1,
-			InvoiceCadence:        types.InvoiceCadenceAdvance,
-			StartDate:             midTermStart,
-			PredecessorLineItemID: lo.ToPtr("sli_pred"),
-		}
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		stored := s.mustGetLineItem(li.ID)
+		stored.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+		stored.BillingPeriodCount = 1
+		stored.StartDate = anchor
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
 
-		res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
-			Item:           midTermSuccessor,
-			Anchor:         anchor,
-			PeriodStart:    midTermStart,
-			PeriodEnd:      nextMonthEnd,
-			InvoiceCadence: types.InvoiceCadenceAdvance,
-			Timezone:       "UTC",
-		})
+		newQty := decimal.NewFromInt(4)
+		// Mid-term subscription boundary (May 1) must be rejected to avoid duplicate billing.
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+
+		// At the annual item's own boundary (Dec 1 -> Jan 1), scheduling at Jan 1 succeeds with zero proration.
+		sub.CurrentPeriodStart = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+		sub.CurrentPeriodEnd = time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+		resp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
 		s.Require().NoError(err)
-		s.False(res.Ok, "mid-term advance successor already prorated must not bill again on monthly renewal")
-
-		resNextYear, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
-			Item:           midTermSuccessor,
-			Anchor:         anchor,
-			PeriodStart:    nextYearStart,
-			PeriodEnd:      nextYearFeb,
-			InvoiceCadence: types.InvoiceCadenceAdvance,
-			Timezone:       "UTC",
-		})
-		s.Require().NoError(err)
-		s.True(resNextYear.Ok, "mid-term advance successor must still bill on next annual boundary")
-		s.True(resNextYear.LineItemPeriodStart.Equal(nextYearStart))
-
-		boundarySuccessor := &subscription.SubscriptionLineItem{
-			ID:                    "sli_succ_boundary",
-			BillingPeriod:         types.BILLING_PERIOD_ANNUAL,
-			BillingPeriodCount:    1,
-			InvoiceCadence:        types.InvoiceCadenceAdvance,
-			StartDate:             nextYearStart,
-			PredecessorLineItemID: lo.ToPtr("sli_pred"),
-		}
-		resBoundary, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
-			Item:           boundarySuccessor,
-			Anchor:         anchor,
-			PeriodStart:    nextYearStart,
-			PeriodEnd:      nextYearFeb,
-			InvoiceCadence: types.InvoiceCadenceAdvance,
-			Timezone:       "UTC",
-		})
-		s.Require().NoError(err)
-		s.True(resBoundary.Ok, "grid-boundary advance successor must bill on its annual boundary")
-		s.True(resBoundary.LineItemPeriodStart.Equal(nextYearStart))
+		s.Empty(resp.ChangedResources.Invoices, "scheduling at the item's own period boundary must not raise a proration invoice")
 	})
 }
 
