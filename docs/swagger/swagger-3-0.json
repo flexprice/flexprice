@@ -31362,6 +31362,10 @@
       "ScheduledTaskCapabilitiesResponse": {
         "type": "object",
         "properties": {
+          "customer_filter": {
+            "type": "boolean",
+            "description": "CustomerFilter is true when customer_filter exports are enabled."
+          },
           "email": {
             "$ref": "#/components/schemas/ExportEmailCapability"
           }

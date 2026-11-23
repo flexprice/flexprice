@@ -239,6 +239,8 @@ type ExportEmailCapability struct {
 // ScheduledTaskCapabilitiesResponse lists export delivery capabilities.
 type ScheduledTaskCapabilitiesResponse struct {
 	Email ExportEmailCapability `json:"email"`
+	// CustomerFilter is true when customer_filter exports are enabled.
+	CustomerFilter bool `json:"customer_filter"`
 }
 
 // ScheduledTaskResponse represents a scheduled task response

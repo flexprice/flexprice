@@ -260,3 +260,12 @@ func TestGetCapabilities_EmailNeedsRedisCache(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, ierr.IsValidation(err))
 }
+
+func TestGetCapabilities_CustomerFilterFollowsConfig(t *testing.T) {
+	s, _ := emailService(&exportRepoFake{}, true)
+	s.config.Exports.CustomerFilterEnabled = false
+	require.False(t, s.GetCapabilities(exportCtx()).CustomerFilter)
+
+	s.config.Exports.CustomerFilterEnabled = true
+	require.True(t, s.GetCapabilities(exportCtx()).CustomerFilter)
+}

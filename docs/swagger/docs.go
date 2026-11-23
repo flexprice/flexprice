@@ -30265,6 +30265,10 @@ const docTemplate = `{
         "ScheduledTaskCapabilitiesResponse": {
             "type": "object",
             "properties": {
+                "customer_filter": {
+                    "description": "CustomerFilter is true when customer_filter exports are enabled.",
+                    "type": "boolean"
+                },
                 "email": {
                     "$ref": "#/definitions/ExportEmailCapability"
                 }

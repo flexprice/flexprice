@@ -868,5 +868,6 @@ func (s *scheduledTaskService) GetCapabilities(_ context.Context) *dto.Scheduled
 			Available:     s.config.ExportEmailAvailable(),
 			MaxRecipients: types.MaxExportEmailRecipients,
 		},
+		CustomerFilter: s.config.Exports.CustomerFilterEnabled,
 	}
 }
