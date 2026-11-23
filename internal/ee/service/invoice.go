@@ -1743,6 +1743,18 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return false, nil
 	}
 
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+	if err != nil {
+		// Fail-closed: if we can't load config, don't finalize — the cron will retry next cycle
+		return false, ierr.WithError(err).WithHint("failed to load invoice config for finalization check").Mark(ierr.ErrDatabase)
+	}
+
+	// Without auto finalization the draft waits for the user to finalize it manually.
+	if !invoiceConfig.AutoFinalize {
+		return false, nil
+	}
+
 	// A draft under an open checkout is the customer's to pay, not the cron's to finalize.
 	// Completion finalizes it; expiry voids it.
 	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, inv, "")
@@ -1776,18 +1788,6 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		if pending {
 			return false, nil
 		}
-	}
-
-	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
-	if err != nil {
-		// Fail-closed: if we can't load config, don't finalize — the cron will retry next cycle
-		return false, ierr.WithError(err).WithHint("failed to load invoice config for finalization check").Mark(ierr.ErrDatabase)
-	}
-
-	// Without auto finalization the draft waits for the user to finalize it manually.
-	if !invoiceConfig.AutoFinalize {
-		return false, nil
 	}
 
 	if invoiceConfig.FinalizationDelaySeconds == 0 {
