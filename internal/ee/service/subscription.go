@@ -8248,7 +8248,7 @@ func (s *subscriptionService) findInheritanceConflict(ctx context.Context, paren
 		parentFilter := types.NewNoLimitSubscriptionFilter()
 		parentFilter.SubscriptionIDs = lo.Uniq(parentIDs)
 		parentFilter.Status = lo.ToPtr(types.StatusPublished)
-		parentFilter.SubscriptionStatus = statuses
+		// Parent status is independent of ownership, including during overdue renewals.
 		rows, err := s.SubRepo.List(ctx, parentFilter)
 		if err != nil {
 			return nil, err
