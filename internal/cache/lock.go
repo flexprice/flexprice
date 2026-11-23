@@ -44,6 +44,11 @@ func AcquireLocks(ctx context.Context, locker Locker, keys []string, ttl time.Du
 	if bl, ok := locker.(BatchLocker); ok {
 		return bl.AcquireLocks(ctx, keys, ttl)
 	}
+	return AcquireLocksEach(ctx, locker, keys, ttl)
+}
+
+// AcquireLocksEach locks keys sequentially.
+func AcquireLocksEach(ctx context.Context, locker Locker, keys []string, ttl time.Duration) ([]Lock, error) {
 	locks := make([]Lock, len(keys))
 	var firstErr error
 	for i, key := range keys {
@@ -62,7 +67,7 @@ func AcquireLocks(ctx context.Context, locker Locker, keys []string, ttl time.Du
 // releaseTimeout bounds one release call.
 var releaseTimeout = 5 * time.Second
 
-// ReleaseLocks pipelines token-checked releases under one deadline.
+// ReleaseLocks pipelines releases, one deadline.
 func ReleaseLocks(ctx context.Context, locks []Lock) error {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
 	defer cancel()
@@ -172,7 +177,7 @@ else
 end
 `)
 
-// acquireScript sets the key, or succeeds if it already holds our token.
+// acquireScript: SET NX, token-idempotent.
 var acquireScript = redis.NewScript(`
 if redis.call("SET", KEYS[1], ARGV[1], "NX", "PX", ARGV[2]) then
 	return 1
@@ -206,8 +211,7 @@ func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Dura
 // batchLockChunk bounds one pipeline.
 const batchLockChunk = 1000
 
-// AcquireLocks pipelines the acquire script per key.
-// Unread replies count as held, so Release cleans up.
+// Unread replies count as held.
 func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error) {
 	locks := make([]Lock, len(keys))
 	var firstErr error
