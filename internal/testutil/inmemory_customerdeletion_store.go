@@ -149,14 +149,16 @@ func (s *InMemoryCustomerDeletionStore) Create(ctx context.Context, request *cus
 
 	existing, err := s.requests.List(ctx, nil, func(ctx context.Context, r *customerdeletion.CustomerDeletionRequest, _ interface{}) bool {
 		return deletionScoped(ctx, r.TenantID, r.EnvironmentID) &&
-			r.CustomerID == request.CustomerID
+			r.CustomerID == request.CustomerID &&
+			r.Status == types.StatusPublished &&
+			customerdeletion.IsOpenState(r.State)
 	}, nil)
 	if err != nil {
 		return err
 	}
 	if len(existing) > 0 {
 		return ierr.NewError("customer deletion request already exists").
-			WithHint("A deletion request already exists for this customer").
+			WithHint("An open deletion request already exists for this customer").
 			WithReportableDetails(map[string]any{
 				"customer_id": request.CustomerID,
 			}).

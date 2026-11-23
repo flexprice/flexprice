@@ -9,11 +9,31 @@ import (
 
 // Request states; later phases need no migration
 const (
-	StateSuppressed = "suppressed"
-	StateRedacting  = "redacting"
-	StateCompleted  = "completed"
-	StateFailed     = "failed"
+	StatePendingSuppression = "pending_suppression"
+	StateSuppressed         = "suppressed"
+	StateRedacting          = "redacting"
+	StateCompleted          = "completed"
+	StateFailed             = "failed"
+	StateCancelled          = "cancelled"
 )
+
+// Open states hold the one-request-per-customer slot
+var openStates = []string{StatePendingSuppression, StateSuppressed, StateRedacting}
+
+// OpenStates returns a fresh slice; callers cannot mutate policy
+func OpenStates() []string {
+	return append([]string(nil), openStates...)
+}
+
+// IsOpenState reports whether a request still occupies the slot
+func IsOpenState(state string) bool {
+	switch state {
+	case StatePendingSuppression, StateSuppressed, StateRedacting:
+		return true
+	default:
+		return false
+	}
+}
 
 // Channels a deletion request can arrive through.
 const (
@@ -38,7 +58,8 @@ const (
 type CustomerDeletionRequest struct {
 	ID                    string                 `db:"id" json:"id"`
 	CustomerID            string                 `db:"customer_id" json:"customer_id"`
-	ExternalID            string                 `db:"external_id" json:"external_id"`
+	ExternalID            string                 `db:"external_id" json:"external_id,omitempty"`
+	SubjectRef            string                 `db:"subject_ref" json:"subject_ref,omitempty"`
 	State                 string                 `db:"state" json:"state"`
 	RequestedAt           time.Time              `db:"requested_at" json:"requested_at"`
 	SuppressedAt          *time.Time             `db:"suppressed_at" json:"suppressed_at,omitempty"`
@@ -76,6 +97,7 @@ func FromEnt(r *ent.CustomerDeletionRequest) *CustomerDeletionRequest {
 		ID:                    r.ID,
 		CustomerID:            r.CustomerID,
 		ExternalID:            r.ExternalID,
+		SubjectRef:            r.SubjectRef,
 		State:                 r.State,
 		RequestedAt:           r.RequestedAt,
 		SuppressedAt:          r.SuppressedAt,

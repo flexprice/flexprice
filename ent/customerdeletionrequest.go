@@ -34,8 +34,10 @@ type CustomerDeletionRequest struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Internal customer ID; stable across later redaction
 	CustomerID string `json:"customer_id,omitempty"`
-	// External ID as of the request; reusable afterwards, so not unique
+	// Purge key snapshot; cleared on cancel or completion
 	ExternalID string `json:"external_id,omitempty"`
+	// HMAC-SHA256 hex of external_id; survives redaction
+	SubjectRef string `json:"subject_ref,omitempty"`
 	// Request lifecycle: suppressed, redacting, completed, failed. Unrelated to the status column
 	State string `json:"state,omitempty"`
 	// SLA clock start
@@ -64,7 +66,7 @@ func (*CustomerDeletionRequest) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customerdeletionrequest.FieldRetentionPolicy:
 			values[i] = new([]byte)
-		case customerdeletionrequest.FieldID, customerdeletionrequest.FieldTenantID, customerdeletionrequest.FieldStatus, customerdeletionrequest.FieldCreatedBy, customerdeletionrequest.FieldUpdatedBy, customerdeletionrequest.FieldEnvironmentID, customerdeletionrequest.FieldCustomerID, customerdeletionrequest.FieldExternalID, customerdeletionrequest.FieldState, customerdeletionrequest.FieldRequestedVia, customerdeletionrequest.FieldFailureReason:
+		case customerdeletionrequest.FieldID, customerdeletionrequest.FieldTenantID, customerdeletionrequest.FieldStatus, customerdeletionrequest.FieldCreatedBy, customerdeletionrequest.FieldUpdatedBy, customerdeletionrequest.FieldEnvironmentID, customerdeletionrequest.FieldCustomerID, customerdeletionrequest.FieldExternalID, customerdeletionrequest.FieldSubjectRef, customerdeletionrequest.FieldState, customerdeletionrequest.FieldRequestedVia, customerdeletionrequest.FieldFailureReason:
 			values[i] = new(sql.NullString)
 		case customerdeletionrequest.FieldCreatedAt, customerdeletionrequest.FieldUpdatedAt, customerdeletionrequest.FieldRequestedAt, customerdeletionrequest.FieldSuppressedAt, customerdeletionrequest.FieldRedactedAt, customerdeletionrequest.FieldCooldownUntil, customerdeletionrequest.FieldIrreversibleStartedAt:
 			values[i] = new(sql.NullTime)
@@ -142,6 +144,12 @@ func (_m *CustomerDeletionRequest) assignValues(columns []string, values []any) 
 				return fmt.Errorf("unexpected type %T for field external_id", values[i])
 			} else if value.Valid {
 				_m.ExternalID = value.String
+			}
+		case customerdeletionrequest.FieldSubjectRef:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subject_ref", values[i])
+			} else if value.Valid {
+				_m.SubjectRef = value.String
 			}
 		case customerdeletionrequest.FieldState:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -265,6 +273,9 @@ func (_m *CustomerDeletionRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("external_id=")
 	builder.WriteString(_m.ExternalID)
+	builder.WriteString(", ")
+	builder.WriteString("subject_ref=")
+	builder.WriteString(_m.SubjectRef)
 	builder.WriteString(", ")
 	builder.WriteString("state=")
 	builder.WriteString(_m.State)

@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -40,9 +41,14 @@ func (CustomerDeletionRequest) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty().
-			Immutable().
-			Comment("External ID as of the request; reusable afterwards, so not unique"),
+			Optional().
+			Comment("Purge key snapshot; cleared on cancel or completion"),
+		field.String("subject_ref").
+			SchemaType(map[string]string{
+				"postgres": "varchar(64)",
+			}).
+			Optional().
+			Comment("HMAC-SHA256 hex of external_id; survives redaction"),
 		field.String("state").
 			SchemaType(map[string]string{
 				"postgres": "varchar(30)",
@@ -84,11 +90,16 @@ func (CustomerDeletionRequest) Fields() []ent.Field {
 // Indexes of the CustomerDeletionRequest.
 func (CustomerDeletionRequest) Indexes() []ent.Index {
 	return []ent.Index{
-		// Idempotency backstop: one open request per customer
+		// Idempotency backstop: one OPEN request per customer
 		index.Fields("tenant_id", "environment_id", "customer_id").
-			Unique(),
+			Unique().
+			Annotations(entsql.IndexWhere(
+				"((state)::text = ANY (ARRAY['pending_suppression'::text, 'suppressed'::text, 'redacting'::text]) AND (status)::text = 'published'::text)",
+			)),
 		// Not unique: external IDs are reusable after erasure
 		index.Fields("tenant_id", "environment_id", "external_id"),
+		// Audit lookup by pseudonymous handle
+		index.Fields("tenant_id", "environment_id", "subject_ref"),
 		// Finding work to do
 		index.Fields("tenant_id", "environment_id", "state"),
 	}

@@ -1256,7 +1256,8 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "external_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "external_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "subject_ref", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(64)"}},
 		{Name: "state", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
 		{Name: "requested_at", Type: field.TypeTime},
 		{Name: "suppressed_at", Type: field.TypeTime, Nullable: true},
@@ -1277,6 +1278,9 @@ var (
 				Name:    "customerdeletionrequest_tenant_id_environment_id_customer_id",
 				Unique:  true,
 				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((state)::text = ANY (ARRAY['pending_suppression'::text, 'suppressed'::text, 'redacting'::text]) AND (status)::text = 'published'::text)",
+				},
 			},
 			{
 				Name:    "customerdeletionrequest_tenant_id_environment_id_external_id",
@@ -1284,9 +1288,14 @@ var (
 				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[9]},
 			},
 			{
-				Name:    "customerdeletionrequest_tenant_id_environment_id_state",
+				Name:    "customerdeletionrequest_tenant_id_environment_id_subject_ref",
 				Unique:  false,
 				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[10]},
+			},
+			{
+				Name:    "customerdeletionrequest_tenant_id_environment_id_state",
+				Unique:  false,
+				Columns: []*schema.Column{CustomerDeletionRequestsColumns[1], CustomerDeletionRequestsColumns[7], CustomerDeletionRequestsColumns[11]},
 			},
 		},
 	}

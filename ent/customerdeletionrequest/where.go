@@ -109,6 +109,11 @@ func ExternalID(v string) predicate.CustomerDeletionRequest {
 	return predicate.CustomerDeletionRequest(sql.FieldEQ(FieldExternalID, v))
 }
 
+// SubjectRef applies equality check predicate on the "subject_ref" field. It's identical to SubjectRefEQ.
+func SubjectRef(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldEQ(FieldSubjectRef, v))
+}
+
 // State applies equality check predicate on the "state" field. It's identical to StateEQ.
 func State(v string) predicate.CustomerDeletionRequest {
 	return predicate.CustomerDeletionRequest(sql.FieldEQ(FieldState, v))
@@ -704,6 +709,16 @@ func ExternalIDHasSuffix(v string) predicate.CustomerDeletionRequest {
 	return predicate.CustomerDeletionRequest(sql.FieldHasSuffix(FieldExternalID, v))
 }
 
+// ExternalIDIsNil applies the IsNil predicate on the "external_id" field.
+func ExternalIDIsNil() predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldIsNull(FieldExternalID))
+}
+
+// ExternalIDNotNil applies the NotNil predicate on the "external_id" field.
+func ExternalIDNotNil() predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldNotNull(FieldExternalID))
+}
+
 // ExternalIDEqualFold applies the EqualFold predicate on the "external_id" field.
 func ExternalIDEqualFold(v string) predicate.CustomerDeletionRequest {
 	return predicate.CustomerDeletionRequest(sql.FieldEqualFold(FieldExternalID, v))
@@ -712,6 +727,81 @@ func ExternalIDEqualFold(v string) predicate.CustomerDeletionRequest {
 // ExternalIDContainsFold applies the ContainsFold predicate on the "external_id" field.
 func ExternalIDContainsFold(v string) predicate.CustomerDeletionRequest {
 	return predicate.CustomerDeletionRequest(sql.FieldContainsFold(FieldExternalID, v))
+}
+
+// SubjectRefEQ applies the EQ predicate on the "subject_ref" field.
+func SubjectRefEQ(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldEQ(FieldSubjectRef, v))
+}
+
+// SubjectRefNEQ applies the NEQ predicate on the "subject_ref" field.
+func SubjectRefNEQ(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldNEQ(FieldSubjectRef, v))
+}
+
+// SubjectRefIn applies the In predicate on the "subject_ref" field.
+func SubjectRefIn(vs ...string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldIn(FieldSubjectRef, vs...))
+}
+
+// SubjectRefNotIn applies the NotIn predicate on the "subject_ref" field.
+func SubjectRefNotIn(vs ...string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldNotIn(FieldSubjectRef, vs...))
+}
+
+// SubjectRefGT applies the GT predicate on the "subject_ref" field.
+func SubjectRefGT(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldGT(FieldSubjectRef, v))
+}
+
+// SubjectRefGTE applies the GTE predicate on the "subject_ref" field.
+func SubjectRefGTE(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldGTE(FieldSubjectRef, v))
+}
+
+// SubjectRefLT applies the LT predicate on the "subject_ref" field.
+func SubjectRefLT(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldLT(FieldSubjectRef, v))
+}
+
+// SubjectRefLTE applies the LTE predicate on the "subject_ref" field.
+func SubjectRefLTE(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldLTE(FieldSubjectRef, v))
+}
+
+// SubjectRefContains applies the Contains predicate on the "subject_ref" field.
+func SubjectRefContains(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldContains(FieldSubjectRef, v))
+}
+
+// SubjectRefHasPrefix applies the HasPrefix predicate on the "subject_ref" field.
+func SubjectRefHasPrefix(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldHasPrefix(FieldSubjectRef, v))
+}
+
+// SubjectRefHasSuffix applies the HasSuffix predicate on the "subject_ref" field.
+func SubjectRefHasSuffix(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldHasSuffix(FieldSubjectRef, v))
+}
+
+// SubjectRefIsNil applies the IsNil predicate on the "subject_ref" field.
+func SubjectRefIsNil() predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldIsNull(FieldSubjectRef))
+}
+
+// SubjectRefNotNil applies the NotNil predicate on the "subject_ref" field.
+func SubjectRefNotNil() predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldNotNull(FieldSubjectRef))
+}
+
+// SubjectRefEqualFold applies the EqualFold predicate on the "subject_ref" field.
+func SubjectRefEqualFold(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldEqualFold(FieldSubjectRef, v))
+}
+
+// SubjectRefContainsFold applies the ContainsFold predicate on the "subject_ref" field.
+func SubjectRefContainsFold(v string) predicate.CustomerDeletionRequest {
+	return predicate.CustomerDeletionRequest(sql.FieldContainsFold(FieldSubjectRef, v))
 }
 
 // StateEQ applies the EQ predicate on the "state" field.

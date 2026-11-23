@@ -55,6 +55,7 @@ func (r *customerDeletionRepository) Create(ctx context.Context, request *domain
 			SetEnvironmentID(environmentID).
 			SetCustomerID(request.CustomerID).
 			SetExternalID(request.ExternalID).
+			SetSubjectRef(request.SubjectRef).
 			SetState(request.State).
 			SetRequestedAt(request.RequestedAt).
 			SetRequestedVia(request.RequestedVia).
@@ -172,7 +173,7 @@ func (r *customerDeletionRepository) GetByCustomerID(ctx context.Context, custom
 	return domaincd.FromEnt(request), nil
 }
 
-// GetByExternalID retrieves the most recent deletion request for an external ID
+// GetByExternalID finds latest; cleared snapshots are invisible
 func (r *customerDeletionRepository) GetByExternalID(ctx context.Context, externalID string) (*domaincd.CustomerDeletionRequest, error) {
 	client := r.client.Reader(ctx)
 	request, err := client.CustomerDeletionRequest.

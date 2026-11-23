@@ -36082,6 +36082,7 @@ type CustomerDeletionRequestMutation struct {
 	environment_id          *string
 	customer_id             *string
 	external_id             *string
+	subject_ref             *string
 	state                   *string
 	requested_at            *time.Time
 	suppressed_at           *time.Time
@@ -36559,9 +36560,71 @@ func (m *CustomerDeletionRequestMutation) OldExternalID(ctx context.Context) (v 
 	return oldValue.ExternalID, nil
 }
 
+// ClearExternalID clears the value of the "external_id" field.
+func (m *CustomerDeletionRequestMutation) ClearExternalID() {
+	m.external_id = nil
+	m.clearedFields[customerdeletionrequest.FieldExternalID] = struct{}{}
+}
+
+// ExternalIDCleared returns if the "external_id" field was cleared in this mutation.
+func (m *CustomerDeletionRequestMutation) ExternalIDCleared() bool {
+	_, ok := m.clearedFields[customerdeletionrequest.FieldExternalID]
+	return ok
+}
+
 // ResetExternalID resets all changes to the "external_id" field.
 func (m *CustomerDeletionRequestMutation) ResetExternalID() {
 	m.external_id = nil
+	delete(m.clearedFields, customerdeletionrequest.FieldExternalID)
+}
+
+// SetSubjectRef sets the "subject_ref" field.
+func (m *CustomerDeletionRequestMutation) SetSubjectRef(s string) {
+	m.subject_ref = &s
+}
+
+// SubjectRef returns the value of the "subject_ref" field in the mutation.
+func (m *CustomerDeletionRequestMutation) SubjectRef() (r string, exists bool) {
+	v := m.subject_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubjectRef returns the old "subject_ref" field's value of the CustomerDeletionRequest entity.
+// If the CustomerDeletionRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerDeletionRequestMutation) OldSubjectRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubjectRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubjectRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubjectRef: %w", err)
+	}
+	return oldValue.SubjectRef, nil
+}
+
+// ClearSubjectRef clears the value of the "subject_ref" field.
+func (m *CustomerDeletionRequestMutation) ClearSubjectRef() {
+	m.subject_ref = nil
+	m.clearedFields[customerdeletionrequest.FieldSubjectRef] = struct{}{}
+}
+
+// SubjectRefCleared returns if the "subject_ref" field was cleared in this mutation.
+func (m *CustomerDeletionRequestMutation) SubjectRefCleared() bool {
+	_, ok := m.clearedFields[customerdeletionrequest.FieldSubjectRef]
+	return ok
+}
+
+// ResetSubjectRef resets all changes to the "subject_ref" field.
+func (m *CustomerDeletionRequestMutation) ResetSubjectRef() {
+	m.subject_ref = nil
+	delete(m.clearedFields, customerdeletionrequest.FieldSubjectRef)
 }
 
 // SetState sets the "state" field.
@@ -37000,7 +37063,7 @@ func (m *CustomerDeletionRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerDeletionRequestMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.tenant_id != nil {
 		fields = append(fields, customerdeletionrequest.FieldTenantID)
 	}
@@ -37027,6 +37090,9 @@ func (m *CustomerDeletionRequestMutation) Fields() []string {
 	}
 	if m.external_id != nil {
 		fields = append(fields, customerdeletionrequest.FieldExternalID)
+	}
+	if m.subject_ref != nil {
+		fields = append(fields, customerdeletionrequest.FieldSubjectRef)
 	}
 	if m.state != nil {
 		fields = append(fields, customerdeletionrequest.FieldState)
@@ -37081,6 +37147,8 @@ func (m *CustomerDeletionRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomerID()
 	case customerdeletionrequest.FieldExternalID:
 		return m.ExternalID()
+	case customerdeletionrequest.FieldSubjectRef:
+		return m.SubjectRef()
 	case customerdeletionrequest.FieldState:
 		return m.State()
 	case customerdeletionrequest.FieldRequestedAt:
@@ -37126,6 +37194,8 @@ func (m *CustomerDeletionRequestMutation) OldField(ctx context.Context, name str
 		return m.OldCustomerID(ctx)
 	case customerdeletionrequest.FieldExternalID:
 		return m.OldExternalID(ctx)
+	case customerdeletionrequest.FieldSubjectRef:
+		return m.OldSubjectRef(ctx)
 	case customerdeletionrequest.FieldState:
 		return m.OldState(ctx)
 	case customerdeletionrequest.FieldRequestedAt:
@@ -37215,6 +37285,13 @@ func (m *CustomerDeletionRequestMutation) SetField(name string, value ent.Value)
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetExternalID(v)
+		return nil
+	case customerdeletionrequest.FieldSubjectRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubjectRef(v)
 		return nil
 	case customerdeletionrequest.FieldState:
 		v, ok := value.(string)
@@ -37318,6 +37395,12 @@ func (m *CustomerDeletionRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(customerdeletionrequest.FieldEnvironmentID) {
 		fields = append(fields, customerdeletionrequest.FieldEnvironmentID)
 	}
+	if m.FieldCleared(customerdeletionrequest.FieldExternalID) {
+		fields = append(fields, customerdeletionrequest.FieldExternalID)
+	}
+	if m.FieldCleared(customerdeletionrequest.FieldSubjectRef) {
+		fields = append(fields, customerdeletionrequest.FieldSubjectRef)
+	}
 	if m.FieldCleared(customerdeletionrequest.FieldSuppressedAt) {
 		fields = append(fields, customerdeletionrequest.FieldSuppressedAt)
 	}
@@ -37358,6 +37441,12 @@ func (m *CustomerDeletionRequestMutation) ClearField(name string) error {
 		return nil
 	case customerdeletionrequest.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case customerdeletionrequest.FieldExternalID:
+		m.ClearExternalID()
+		return nil
+	case customerdeletionrequest.FieldSubjectRef:
+		m.ClearSubjectRef()
 		return nil
 	case customerdeletionrequest.FieldSuppressedAt:
 		m.ClearSuppressedAt()
@@ -37411,6 +37500,9 @@ func (m *CustomerDeletionRequestMutation) ResetField(name string) error {
 		return nil
 	case customerdeletionrequest.FieldExternalID:
 		m.ResetExternalID()
+		return nil
+	case customerdeletionrequest.FieldSubjectRef:
+		m.ResetSubjectRef()
 		return nil
 	case customerdeletionrequest.FieldState:
 		m.ResetState()

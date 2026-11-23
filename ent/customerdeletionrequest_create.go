@@ -122,6 +122,28 @@ func (_c *CustomerDeletionRequestCreate) SetExternalID(v string) *CustomerDeleti
 	return _c
 }
 
+// SetNillableExternalID sets the "external_id" field if the given value is not nil.
+func (_c *CustomerDeletionRequestCreate) SetNillableExternalID(v *string) *CustomerDeletionRequestCreate {
+	if v != nil {
+		_c.SetExternalID(*v)
+	}
+	return _c
+}
+
+// SetSubjectRef sets the "subject_ref" field.
+func (_c *CustomerDeletionRequestCreate) SetSubjectRef(v string) *CustomerDeletionRequestCreate {
+	_c.mutation.SetSubjectRef(v)
+	return _c
+}
+
+// SetNillableSubjectRef sets the "subject_ref" field if the given value is not nil.
+func (_c *CustomerDeletionRequestCreate) SetNillableSubjectRef(v *string) *CustomerDeletionRequestCreate {
+	if v != nil {
+		_c.SetSubjectRef(*v)
+	}
+	return _c
+}
+
 // SetState sets the "state" field.
 func (_c *CustomerDeletionRequestCreate) SetState(v string) *CustomerDeletionRequestCreate {
 	_c.mutation.SetState(v)
@@ -302,14 +324,6 @@ func (_c *CustomerDeletionRequestCreate) check() error {
 			return &ValidationError{Name: "customer_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.customer_id": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.ExternalID(); !ok {
-		return &ValidationError{Name: "external_id", err: errors.New(`ent: missing required field "CustomerDeletionRequest.external_id"`)}
-	}
-	if v, ok := _c.mutation.ExternalID(); ok {
-		if err := customerdeletionrequest.ExternalIDValidator(v); err != nil {
-			return &ValidationError{Name: "external_id", err: fmt.Errorf(`ent: validator failed for field "CustomerDeletionRequest.external_id": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.State(); !ok {
 		return &ValidationError{Name: "state", err: errors.New(`ent: missing required field "CustomerDeletionRequest.state"`)}
 	}
@@ -399,6 +413,10 @@ func (_c *CustomerDeletionRequestCreate) createSpec() (*CustomerDeletionRequest,
 	if value, ok := _c.mutation.ExternalID(); ok {
 		_spec.SetField(customerdeletionrequest.FieldExternalID, field.TypeString, value)
 		_node.ExternalID = value
+	}
+	if value, ok := _c.mutation.SubjectRef(); ok {
+		_spec.SetField(customerdeletionrequest.FieldSubjectRef, field.TypeString, value)
+		_node.SubjectRef = value
 	}
 	if value, ok := _c.mutation.State(); ok {
 		_spec.SetField(customerdeletionrequest.FieldState, field.TypeString, value)

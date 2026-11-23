@@ -1315,16 +1315,12 @@ func init() {
 	customerdeletionrequestDescCustomerID := customerdeletionrequestFields[1].Descriptor()
 	// customerdeletionrequest.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	customerdeletionrequest.CustomerIDValidator = customerdeletionrequestDescCustomerID.Validators[0].(func(string) error)
-	// customerdeletionrequestDescExternalID is the schema descriptor for external_id field.
-	customerdeletionrequestDescExternalID := customerdeletionrequestFields[2].Descriptor()
-	// customerdeletionrequest.ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
-	customerdeletionrequest.ExternalIDValidator = customerdeletionrequestDescExternalID.Validators[0].(func(string) error)
 	// customerdeletionrequestDescState is the schema descriptor for state field.
-	customerdeletionrequestDescState := customerdeletionrequestFields[3].Descriptor()
+	customerdeletionrequestDescState := customerdeletionrequestFields[4].Descriptor()
 	// customerdeletionrequest.StateValidator is a validator for the "state" field. It is called by the builders before save.
 	customerdeletionrequest.StateValidator = customerdeletionrequestDescState.Validators[0].(func(string) error)
 	// customerdeletionrequestDescRequestedVia is the schema descriptor for requested_via field.
-	customerdeletionrequestDescRequestedVia := customerdeletionrequestFields[9].Descriptor()
+	customerdeletionrequestDescRequestedVia := customerdeletionrequestFields[10].Descriptor()
 	// customerdeletionrequest.RequestedViaValidator is a validator for the "requested_via" field. It is called by the builders before save.
 	customerdeletionrequest.RequestedViaValidator = customerdeletionrequestDescRequestedVia.Validators[0].(func(string) error)
 	emaillogMixin := schema.EmailLog{}.Mixin()

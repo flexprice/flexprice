@@ -85,6 +85,39 @@ func TestInMemoryCustomerDeletionStore_DuplicateCustomerRejected(t *testing.T) {
 	assert.Equal(t, "cdr_1", existing.ID)
 }
 
+func TestInMemoryCustomerDeletionStore_RepeatErasureAfterCompletionAccepted(t *testing.T) {
+	ctx := deletionCtx("tenant_a", "env_a")
+	store := NewInMemoryCustomerDeletionStore()
+
+	first, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "acme-1")
+	require.NoError(t, store.Create(ctx, first, categories))
+	require.NoError(t, store.UpdateState(ctx, "cdr_1",
+		customerdeletion.StateSuppressed, customerdeletion.StateCompleted))
+
+	// Ingestion is never fenced, so erased customers accrue new data
+	repeat, repeatCategories := newSuppressedRequest(ctx, "cdr_2", "cust_1", "acme-1")
+	repeat.RequestedAt = first.RequestedAt.Add(time.Hour)
+	require.NoError(t, store.Create(ctx, repeat, repeatCategories))
+}
+
+func TestInMemoryCustomerDeletionStore_SecondOpenRequestRejectedPerOpenState(t *testing.T) {
+	for _, state := range customerdeletion.OpenStates() {
+		t.Run(state, func(t *testing.T) {
+			ctx := deletionCtx("tenant_a", "env_a")
+			store := NewInMemoryCustomerDeletionStore()
+
+			first, categories := newSuppressedRequest(ctx, "cdr_1", "cust_1", "acme-1")
+			first.State = state
+			require.NoError(t, store.Create(ctx, first, categories))
+
+			second, secondCategories := newSuppressedRequest(ctx, "cdr_2", "cust_1", "acme-1")
+			err := store.Create(ctx, second, secondCategories)
+			require.Error(t, err)
+			assert.True(t, ierr.IsAlreadyExists(err))
+		})
+	}
+}
+
 func TestInMemoryCustomerDeletionStore_ReusedExternalIDAccepted(t *testing.T) {
 	ctx := deletionCtx("tenant_a", "env_a")
 	store := NewInMemoryCustomerDeletionStore()

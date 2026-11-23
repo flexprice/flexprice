@@ -31,6 +31,8 @@ const (
 	FieldCustomerID = "customer_id"
 	// FieldExternalID holds the string denoting the external_id field in the database.
 	FieldExternalID = "external_id"
+	// FieldSubjectRef holds the string denoting the subject_ref field in the database.
+	FieldSubjectRef = "subject_ref"
 	// FieldState holds the string denoting the state field in the database.
 	FieldState = "state"
 	// FieldRequestedAt holds the string denoting the requested_at field in the database.
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldEnvironmentID,
 	FieldCustomerID,
 	FieldExternalID,
+	FieldSubjectRef,
 	FieldState,
 	FieldRequestedAt,
 	FieldSuppressedAt,
@@ -101,8 +104,6 @@ var (
 	DefaultEnvironmentID string
 	// CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
 	CustomerIDValidator func(string) error
-	// ExternalIDValidator is a validator for the "external_id" field. It is called by the builders before save.
-	ExternalIDValidator func(string) error
 	// StateValidator is a validator for the "state" field. It is called by the builders before save.
 	StateValidator func(string) error
 	// RequestedViaValidator is a validator for the "requested_via" field. It is called by the builders before save.
@@ -160,6 +161,11 @@ func ByCustomerID(opts ...sql.OrderTermOption) OrderOption {
 // ByExternalID orders the results by the external_id field.
 func ByExternalID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExternalID, opts...).ToFunc()
+}
+
+// BySubjectRef orders the results by the subject_ref field.
+func BySubjectRef(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubjectRef, opts...).ToFunc()
 }
 
 // ByState orders the results by the state field.
