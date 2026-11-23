@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -170,4 +171,22 @@ func TestCustomersExporter_PagesAcrossBatches(t *testing.T) {
 	require.Equal(t, []string{"metadata_k0", "metadata_k1", "metadata_k2"}, h[16:])
 	require.Equal(t, "c00000", rows[0][0])
 	require.Equal(t, fmt.Sprintf("c%05d", total-1), rows[total-1][0])
+}
+
+func TestCustomersExporter_Cap(t *testing.T) {
+	e, store, ctx := newCustomersEnv(t)
+	for i := 0; i < types.MaxExportFilteredCustomers; i++ {
+		addCust(t, store, ctx, fmt.Sprintf("c%05d", i), "t1", "e1", types.StatusPublished, nil)
+	}
+	_, n, err := e.PrepareData(ctx, exportReq(nil))
+	require.NoError(t, err)
+	require.Equal(t, types.MaxExportFilteredCustomers, n)
+
+	addCust(t, store, ctx, "c99999", "t1", "e1", types.StatusPublished, nil)
+	_, _, err = e.PrepareData(ctx, exportReq(nil))
+	require.True(t, ierr.IsValidation(err))
+	require.Contains(t, err.Error(), "more than 10000 customers")
+
+	_, _, err = e.PrepareData(ctx, exportReq(&types.CustomerFilter{}))
+	require.True(t, ierr.IsValidation(err))
 }

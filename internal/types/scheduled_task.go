@@ -243,6 +243,13 @@ func FilteredCustomersCapError(max int) error {
 		Mark(ierr.ErrValidation)
 }
 
+// CustomersExportCapError fails customer exports over cap.
+func CustomersExportCapError(max int) error {
+	return ierr.NewErrorf("Export has more than %d customers; narrow the customer filter", max).
+		WithHintf("Export has more than %d customers; narrow the customer filter", max).
+		Mark(ierr.ErrValidation)
+}
+
 // ExportOrigin is where an export was created.
 type ExportOrigin string
 

@@ -27,6 +27,7 @@ func customersCSVHeaders() []string {
 const (
 	customersMetadataPrefix = "metadata_"
 	customersPageSize       = 1000
+	maxExportCustomers      = types.MaxExportFilteredCustomers
 )
 
 // CustomersExporter exports the saved customer filter as a snapshot.
@@ -57,13 +58,19 @@ func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRe
 	ctx = types.SetTenantID(ctx, request.TenantID)
 	ctx = types.SetEnvironmentID(ctx, request.EnvID)
 	filter := request.SourceConfig.GetCustomerFilter()
+	overCap := func(n int) bool { return n > maxExportCustomers }
 
 	keys := map[string]struct{}{}
 	afterID := ""
+	seen := 0
 	for {
 		page, err := e.customerRepo.ListMetadataPageByFilter(ctx, filter, afterID, customersPageSize)
 		if err != nil {
 			return 0, err
+		}
+		seen += len(page)
+		if overCap(seen) {
+			return 0, types.CustomersExportCapError(maxExportCustomers)
 		}
 		for _, c := range page {
 			for k := range c.Metadata {
@@ -112,6 +119,9 @@ func (e *CustomersExporter) WriteData(ctx context.Context, request *dto.ExportRe
 			}
 		}
 		total += len(page)
+		if overCap(total) {
+			return 0, types.CustomersExportCapError(maxExportCustomers)
+		}
 		if len(page) < customersPageSize {
 			break
 		}
