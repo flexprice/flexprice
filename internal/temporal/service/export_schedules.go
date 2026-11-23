@@ -95,7 +95,7 @@ func reconcileExportScheduleTimeouts(
 	return false
 }
 
-// reconcilePass returns an error when any listing failed so the caller can retry.
+// reconcilePass errors on any failure or cancellation.
 func reconcilePass(
 	ctx context.Context,
 	tc scheduleHandleGetter,
@@ -166,8 +166,13 @@ func reconcilePass(
 	}
 
 	log.Info(ctx, "export schedule timeouts reconciled", "updated", updated, "already_current", current, "failed", failed)
-	if listErr != nil {
+	switch {
+	case listErr != nil:
 		return fmt.Errorf("listing failed: %w", listErr)
+	case ctx.Err() != nil:
+		return fmt.Errorf("reconcile interrupted: %w", ctx.Err())
+	case failed > 0:
+		return fmt.Errorf("%d export schedules failed to reconcile", failed)
 	}
 	return nil
 }

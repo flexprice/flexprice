@@ -25,9 +25,13 @@ type fakeHandle struct {
 	describeErr error
 	updateErr   error
 	updates     int
+	onDescribe  func()
 }
 
 func (h *fakeHandle) Describe(context.Context) (*sdkclient.ScheduleDescription, error) {
+	if h.onDescribe != nil {
+		h.onDescribe()
+	}
 	if h.describeErr != nil {
 		return nil, h.describeErr
 	}
@@ -121,10 +125,10 @@ func TestReconcileExportScheduleTimeouts(t *testing.T) {
 		{ID: "f", TemporalScheduleID: "old", Interval: types.ScheduledTaskIntervalManual},
 	}
 
-	run := func() {
-		ReconcileExportScheduleTimeouts(context.Background(), handles, nil, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger())
+	run := func() bool {
+		return reconcileExportScheduleTimeouts(context.Background(), handles, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger(), 10, 10, time.Millisecond)
 	}
-	run()
+	require.False(t, run(), "a failed schedule fails the run")
 
 	action := old.schedule.Action.(*sdkclient.ScheduleWorkflowAction)
 	require.Equal(t, types.ExportWorkflowTimeout, action.WorkflowExecutionTimeout)
@@ -279,4 +283,28 @@ func TestReconcileExportScheduleTimeouts_RunsOncePerMarker(t *testing.T) {
 
 	run(context.Background(), tenants)
 	require.Equal(t, 2, calls, "second pod skips")
+}
+
+func TestReconcilePass_ErrorsOnFailureOrCancel(t *testing.T) {
+	rows := []*scheduledtask.ScheduledTask{{ID: "a", TemporalScheduleID: "s", Interval: types.ScheduledTaskIntervalDaily}}
+	pass := func(ctx context.Context, h *fakeHandle) error {
+		return reconcilePass(ctx, fakeHandles{"s": h}, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger(), 10, 10)
+	}
+
+	require.NoError(t, pass(context.Background(), &fakeHandle{schedule: scheduleWithTimeout(60 * time.Minute)}))
+	require.Error(t, pass(context.Background(), &fakeHandle{describeErr: errors.New("unavailable")}))
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.ErrorIs(t, pass(cancelled, &fakeHandle{schedule: scheduleWithTimeout(types.ExportWorkflowTimeout)}), context.Canceled)
+}
+
+func TestReconcileExportScheduleTimeouts_ScheduleFailureReleasesMarker(t *testing.T) {
+	locker := &fakeLocker{held: map[string]bool{}}
+	rows := []*scheduledtask.ScheduledTask{{ID: "a", TemporalScheduleID: "s", Interval: types.ScheduledTaskIntervalDaily}}
+	ctx, cancel := context.WithCancel(context.Background())
+	broken := &fakeHandle{describeErr: errors.New("unavailable")}
+	broken.onDescribe = cancel
+	ReconcileExportScheduleTimeouts(ctx, fakeHandles{"s": broken}, locker, fakeTenants{}, fakeEnvs{}, fakeScheduledTasks{rows: rows}, logger.NewNoopLogger())
+	require.Empty(t, locker.held)
 }
