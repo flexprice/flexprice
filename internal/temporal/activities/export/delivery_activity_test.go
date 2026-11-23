@@ -85,7 +85,7 @@ func newDeliveryActivity(sender *fakeSender, users *fakeUsers, c *fakeCounter, a
 	cfg := &config.Configuration{}
 	if available {
 		cfg.Email.Enabled = true
-		cfg.Email.ResendAPIKey = "k"
+		cfg.Email.Resend.APIKey = "k"
 		cfg.Email.FromAddress = "noreply@x.com"
 		cfg.Cache.Enabled = true
 		cfg.Cache.Redis.Enabled = true

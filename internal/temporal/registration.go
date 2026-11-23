@@ -149,7 +149,7 @@ func RegisterWorkflowsAndActivities(
 
 	deliveryActivity := exportActivities.NewDeliveryActivity(
 		email.NewEmail(
-			email.NewEmailClient(email.Config{Enabled: params.Config.Email.Enabled, APIKey: params.Config.Email.ResendAPIKey, FromAddress: params.Config.Email.FromAddress, ReplyTo: params.Config.Email.ReplyTo}),
+			email.NewEmailClient(email.Config{Enabled: params.Config.Email.Enabled, APIKey: params.Config.Email.Resend.APIKey, FromAddress: params.Config.Email.FromAddress, ReplyTo: params.Config.Email.ReplyTo}),
 			params.Logger.Desugar(),
 		),
 		params.UserRepo,
