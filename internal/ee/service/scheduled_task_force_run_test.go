@@ -107,7 +107,7 @@ func TestTriggerForceRun_ReportWindowMustBeWholeUTCDays(t *testing.T) {
 	}
 
 	starter := &workflowStarter{}
-	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, scheduler: exportschedule.NewScheduler(starter, logger.NewNoopLogger()), logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
 	ctx := withRoles(context.Background(), roleWithAnalytics)
 	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
 		StartTime: at("2026-11-09T05:00:00Z"), EndTime: at("2026-11-10T00:00:00Z"),
@@ -137,7 +137,7 @@ func TestTriggerForceRun_ReportWindowCappedByMaxRangeDays(t *testing.T) {
 		return &v
 	}
 	starter := &workflowStarter{}
-	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, scheduler: exportschedule.NewScheduler(starter, logger.NewNoopLogger()), logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
 	ctx := withRoles(context.Background(), roleWithAnalytics)
 
 	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, dto.TriggerForceRunRequest{
@@ -171,7 +171,7 @@ func TestTriggerForceRun_ViewWindowValidatedAgainstView(t *testing.T) {
 
 	starter := &workflowStarter{}
 	fake := &sourceValidatorFake{viewErr: ierr.NewError("too wide").Mark(ierr.ErrValidation)}
-	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, analytics: fake, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, scheduler: exportschedule.NewScheduler(starter, logger.NewNoopLogger()), analytics: fake, logger: logger.NewNoopLogger(), rbac: testRBAC(t)}
 	_, _, _, _, err := s.triggerForceRun(ctx, task.ID, req)
 	require.True(t, ierr.IsValidation(err), "got %v", err)
 	require.Equal(t, "view_1", fake.viewID)
