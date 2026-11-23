@@ -8200,8 +8200,8 @@ func (s *subscriptionService) lockInheritanceCustomers(ctx context.Context, cust
 	return nil
 }
 
-func (s *subscriptionService) validateInheritanceForCustomer(ctx context.Context, parentCustomerID, childCustomerID, externalID string) error {
-	conflict, err := s.findInheritanceConflict(ctx, parentCustomerID, childCustomerID, true)
+func (s *subscriptionService) validateInheritanceForCustomer(ctx context.Context, parentCustomerID, childCustomerID, externalID string, subscriptionTypes ...types.SubscriptionType) error {
+	conflict, err := s.findInheritanceConflict(ctx, parentCustomerID, childCustomerID, true, subscriptionTypes...)
 	if err != nil || conflict == nil {
 		return err
 	}
@@ -8220,7 +8220,7 @@ func (s *subscriptionService) validateInheritanceForCustomer(ctx context.Context
 
 // findInheritanceConflict checks ownership separately from the statuses eligible for usage attribution.
 // An empty parent customer checks whether the subscriber is already inherited.
-func (s *subscriptionService) findInheritanceConflict(ctx context.Context, parentCustomerID, childCustomerID string, reservePending bool) (*subscription.Subscription, error) {
+func (s *subscriptionService) findInheritanceConflict(ctx context.Context, parentCustomerID, childCustomerID string, reservePending bool, subscriptionTypes ...types.SubscriptionType) (*subscription.Subscription, error) {
 	statuses := []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusDraft, types.SubscriptionStatusTrialing}
 	if reservePending {
 		statuses = append(statuses, types.SubscriptionStatusIncomplete)
@@ -8229,9 +8229,7 @@ func (s *subscriptionService) findInheritanceConflict(ctx context.Context, paren
 	filter.CustomerID = childCustomerID
 	filter.Status = lo.ToPtr(types.StatusPublished)
 	filter.SubscriptionStatus = statuses
-	if parentCustomerID == "" {
-		filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
-	}
+	filter.SubscriptionTypes = subscriptionTypes
 	subs, err := s.SubRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
@@ -8462,7 +8460,7 @@ func (s *subscriptionService) prepareSubscriptionInheritanceForCreate(ctx contex
 			if err := s.lockInheritanceCustomers(ctx, []string{sub.CustomerID}); err != nil {
 				return nil, nil, err
 			}
-			if err := s.validateInheritanceForCustomer(ctx, parentSub.CustomerID, sub.CustomerID, req.ExternalCustomerID); err != nil {
+			if err := s.validateInheritanceForCustomer(ctx, parentSub.CustomerID, sub.CustomerID, req.ExternalCustomerID, types.SubscriptionTypeInherited); err != nil {
 				return nil, nil, err
 			}
 		} else if err := requireSameBillingEntity(ctx, s.ServiceParams, sub.CustomerID, parentSub.CustomerID); err != nil {
@@ -8517,7 +8515,7 @@ func (s *subscriptionService) validateNoInheritedSubForSubscriber(ctx context.Co
 	if sub.SubscriptionType == types.SubscriptionTypeInherited || sub.SubscriptionType == types.SubscriptionTypeGroupedInvoicing {
 		return nil
 	}
-	conflict, err := s.findInheritanceConflict(ctx, "", sub.CustomerID, true)
+	conflict, err := s.findInheritanceConflict(ctx, "", sub.CustomerID, true, types.SubscriptionTypeInherited)
 	if err != nil {
 		return err
 	}
