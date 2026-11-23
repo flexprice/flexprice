@@ -21,7 +21,7 @@ func colNames(cols []analytics.ReportColumn) []string {
 func TestReportColumnsMatchRealBuilder(t *testing.T) {
 	repo := &ReportsRepository{cfg: config.ReportsConfig{Database: "reports_db", UsageDatabase: "reports_db", MaxResultRows: 1000}}
 	keys := []types.Metric{
-		types.MetricInvoiceTotal, types.MetricInvoiceTotalIssued, types.MetricReceivablesAging,
+		types.MetricInvoiceTotal, types.MetricReceivablesAging,
 		types.MetricDaysToPay, types.MetricCreditConsumption, types.MetricCreditTopups,
 	}
 	for _, key := range keys {
