@@ -185,20 +185,6 @@ func (_c *ScheduledTaskCreate) SetNillableName(v *string) *ScheduledTaskCreate {
 	return _c
 }
 
-// SetManagedCopy sets the "managed_copy" field.
-func (_c *ScheduledTaskCreate) SetManagedCopy(v bool) *ScheduledTaskCreate {
-	_c.mutation.SetManagedCopy(v)
-	return _c
-}
-
-// SetNillableManagedCopy sets the "managed_copy" field if the given value is not nil.
-func (_c *ScheduledTaskCreate) SetNillableManagedCopy(v *bool) *ScheduledTaskCreate {
-	if v != nil {
-		_c.SetManagedCopy(*v)
-	}
-	return _c
-}
-
 // SetSchedule sets the "schedule" field.
 func (_c *ScheduledTaskCreate) SetSchedule(v *types.ExportSchedule) *ScheduledTaskCreate {
 	_c.mutation.SetSchedule(v)
@@ -270,10 +256,6 @@ func (_c *ScheduledTaskCreate) defaults() {
 		v := scheduledtask.DefaultEnabled
 		_c.mutation.SetEnabled(v)
 	}
-	if _, ok := _c.mutation.ManagedCopy(); !ok {
-		v := scheduledtask.DefaultManagedCopy
-		_c.mutation.SetManagedCopy(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -318,9 +300,6 @@ func (_c *ScheduledTaskCreate) check() error {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
 		}
-	}
-	if _, ok := _c.mutation.ManagedCopy(); !ok {
-		return &ValidationError{Name: "managed_copy", err: errors.New(`ent: missing required field "ScheduledTask.managed_copy"`)}
 	}
 	return nil
 }
@@ -412,10 +391,6 @@ func (_c *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(scheduledtask.FieldName, field.TypeString, value)
 		_node.Name = &value
-	}
-	if value, ok := _c.mutation.ManagedCopy(); ok {
-		_spec.SetField(scheduledtask.FieldManagedCopy, field.TypeBool, value)
-		_node.ManagedCopy = value
 	}
 	if value, ok := _c.mutation.Schedule(); ok {
 		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)

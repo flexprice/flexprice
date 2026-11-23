@@ -42,7 +42,6 @@ func (r *ScheduledTaskRepository) Create(ctx context.Context, task *domainst.Sch
 		SetEntityType(task.EntityType).
 		SetInterval(task.Interval).
 		SetEnabled(task.Enabled).
-		SetManagedCopy(task.ManagedCopy).
 		SetStatus(string(task.Status)).
 		SetCreatedBy(task.CreatedBy).
 		SetUpdatedBy(task.UpdatedBy)
@@ -307,7 +306,6 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		JobConfig:          entTask.JobConfig,
 		TemporalScheduleID: entTask.TemporalScheduleID,
 		Name:               lo.FromPtr(entTask.Name),
-		ManagedCopy:        entTask.ManagedCopy,
 		Schedule:           entTask.Schedule,
 		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,

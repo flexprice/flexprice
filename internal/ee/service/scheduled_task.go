@@ -89,8 +89,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 
 	var jobConfig *types.S3JobConfig
 	var err error
-	managedCopy := req.ConnectionID == ""
-	if managedCopy {
+	if req.ConnectionID == "" {
 		jobConfig, err = s.flexpriceJobConfig(ctx, req, taskID)
 	} else {
 		jobConfig, err = s.connectionJobConfig(ctx, req)
@@ -116,7 +115,6 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		JobConfig:          jobConfig,
 		TemporalScheduleID: temporalScheduleID,
 		Name:               req.Name,
-		ManagedCopy:        managedCopy,
 		Schedule:           req.Schedule,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,

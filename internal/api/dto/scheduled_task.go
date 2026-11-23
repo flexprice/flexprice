@@ -143,7 +143,7 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 		Enabled:       task.Enabled,
 		JobConfig:     responseJobConfig(task),
 		Name:          task.Name,
-		ManagedCopy:   task.ManagedCopy,
+		ManagedCopy:   task.IsManagedCopy(),
 		Schedule:      task.Schedule,
 		Status:        string(task.Status),
 		CreatedAt:     task.CreatedAt,
@@ -153,7 +153,7 @@ func ToScheduledTaskResponse(task *scheduledtask.ScheduledTask) *ScheduledTaskRe
 
 // responseJobConfig hides Flexprice storage from managed exports.
 func responseJobConfig(task *scheduledtask.ScheduledTask) *types.S3JobConfig {
-	if !task.ManagedCopy || task.JobConfig == nil {
+	if !task.IsManagedCopy() || task.JobConfig == nil {
 		return task.JobConfig
 	}
 	return &types.S3JobConfig{

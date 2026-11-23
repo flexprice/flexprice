@@ -47,8 +47,6 @@ type ScheduledTask struct {
 	TemporalScheduleID string `json:"temporal_schedule_id,omitempty"`
 	// Display name of the export
 	Name *string `json:"name,omitempty"`
-	// Export to Flexprice managed bucket instead of a connection
-	ManagedCopy bool `json:"managed_copy,omitempty"`
 	// Run time of the export
 	Schedule     *types.ExportSchedule `json:"schedule,omitempty"`
 	selectValues sql.SelectValues
@@ -61,7 +59,7 @@ func (*ScheduledTask) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case scheduledtask.FieldJobConfig, scheduledtask.FieldSchedule:
 			values[i] = new([]byte)
-		case scheduledtask.FieldEnabled, scheduledtask.FieldManagedCopy:
+		case scheduledtask.FieldEnabled:
 			values[i] = new(sql.NullBool)
 		case scheduledtask.FieldID, scheduledtask.FieldTenantID, scheduledtask.FieldStatus, scheduledtask.FieldCreatedBy, scheduledtask.FieldUpdatedBy, scheduledtask.FieldEnvironmentID, scheduledtask.FieldConnectionID, scheduledtask.FieldEntityType, scheduledtask.FieldInterval, scheduledtask.FieldTemporalScheduleID, scheduledtask.FieldName:
 			values[i] = new(sql.NullString)
@@ -175,12 +173,6 @@ func (_m *ScheduledTask) assignValues(columns []string, values []any) error {
 				_m.Name = new(string)
 				*_m.Name = value.String
 			}
-		case scheduledtask.FieldManagedCopy:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field managed_copy", values[i])
-			} else if value.Valid {
-				_m.ManagedCopy = value.Bool
-			}
 		case scheduledtask.FieldSchedule:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field schedule", values[i])
@@ -268,9 +260,6 @@ func (_m *ScheduledTask) String() string {
 		builder.WriteString("name=")
 		builder.WriteString(*v)
 	}
-	builder.WriteString(", ")
-	builder.WriteString("managed_copy=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ManagedCopy))
 	builder.WriteString(", ")
 	builder.WriteString("schedule=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Schedule))

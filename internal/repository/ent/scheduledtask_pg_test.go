@@ -41,7 +41,6 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 		Interval:           types.ScheduledTaskIntervalDaily,
 		Enabled:            true,
 		Name:               "Daily usage",
-		ManagedCopy:        true,
 		Schedule:           schedule,
 		TemporalScheduleID: "sched_" + runID,
 		Status:             types.StatusPublished,
@@ -63,26 +62,25 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.NoError(t, repo.Create(ctx, oldRow))
 
 	otherEnvRow := &scheduledtask.ScheduledTask{
-		ID:          "st_" + runID + "_other",
-		EntityType:  types.ScheduledTaskEntityTypeEvents,
-		Interval:    types.ScheduledTaskIntervalDaily,
-		Enabled:     true,
-		ManagedCopy: true,
-		Status:      types.StatusPublished,
+		ID:         "st_" + runID + "_other",
+		EntityType: types.ScheduledTaskEntityTypeEvents,
+		Interval:   types.ScheduledTaskIntervalDaily,
+		Enabled:    true,
+		Status:     types.StatusPublished,
 	}
 	require.NoError(t, repo.Create(otherCtx, otherEnvRow))
 
 	got, err := repo.Get(ctx, newRow.ID)
 	require.NoError(t, err)
 	require.Equal(t, "", got.ConnectionID)
-	require.True(t, got.ManagedCopy)
+	require.True(t, got.IsManagedCopy())
 	require.Equal(t, "Daily usage", got.Name)
 	require.Equal(t, schedule, got.Schedule)
 
 	gotOld, err := repo.Get(ctx, oldRow.ID)
 	require.NoError(t, err)
 	require.Equal(t, "", gotOld.Name)
-	require.False(t, gotOld.ManagedCopy)
+	require.False(t, gotOld.IsManagedCopy())
 	require.Nil(t, gotOld.Schedule)
 
 	rows, err := repo.List(ctx, &scheduledtask.ListFilters{})
@@ -105,7 +103,7 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.Equal(t, "sched_"+runID, updated.TemporalScheduleID)
 	require.Equal(t, "user_other", updated.UpdatedBy)
 	require.True(t, updated.UpdatedAt.Equal(got.UpdatedAt))
-	require.True(t, updated.ManagedCopy)
+	require.True(t, updated.IsManagedCopy())
 
 	otherEnvRow.Name = "hijack"
 	err = repo.UpdateSettings(ctx, otherEnvRow)

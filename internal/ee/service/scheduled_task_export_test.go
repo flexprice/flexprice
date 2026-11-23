@@ -206,7 +206,7 @@ func TestCreate_OldPayloadUnchanged(t *testing.T) {
 		JobConfig:    &types.S3JobConfig{},
 	})
 	require.NoError(t, err)
-	require.False(t, repo.created.ManagedCopy)
+	require.False(t, repo.created.IsManagedCopy())
 	require.Equal(t, "conn_1", repo.created.ConnectionID)
 	require.Equal(t, "fp-bucket", repo.created.JobConfig.Bucket)
 	require.Equal(t, []string{"15 0 * * *"}, tc.created.Spec.CronExpressions)
@@ -226,7 +226,7 @@ func TestCreate_NoConnectionIsManagedCopy(t *testing.T) {
 	})
 	require.NoError(t, err)
 	task := repo.created
-	require.True(t, task.ManagedCopy)
+	require.True(t, task.IsManagedCopy())
 	require.Empty(t, task.ConnectionID)
 	require.Equal(t, types.SecretProviderS3, task.JobConfig.Provider)
 	require.Equal(t, "fp-bucket", task.JobConfig.Bucket)

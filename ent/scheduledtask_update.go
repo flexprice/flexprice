@@ -183,20 +183,6 @@ func (_u *ScheduledTaskUpdate) ClearName() *ScheduledTaskUpdate {
 	return _u
 }
 
-// SetManagedCopy sets the "managed_copy" field.
-func (_u *ScheduledTaskUpdate) SetManagedCopy(v bool) *ScheduledTaskUpdate {
-	_u.mutation.SetManagedCopy(v)
-	return _u
-}
-
-// SetNillableManagedCopy sets the "managed_copy" field if the given value is not nil.
-func (_u *ScheduledTaskUpdate) SetNillableManagedCopy(v *bool) *ScheduledTaskUpdate {
-	if v != nil {
-		_u.SetManagedCopy(*v)
-	}
-	return _u
-}
-
 // SetSchedule sets the "schedule" field.
 func (_u *ScheduledTaskUpdate) SetSchedule(v *types.ExportSchedule) *ScheduledTaskUpdate {
 	_u.mutation.SetSchedule(v)
@@ -332,9 +318,6 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.NameCleared() {
 		_spec.ClearField(scheduledtask.FieldName, field.TypeString)
-	}
-	if value, ok := _u.mutation.ManagedCopy(); ok {
-		_spec.SetField(scheduledtask.FieldManagedCopy, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Schedule(); ok {
 		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)
@@ -516,20 +499,6 @@ func (_u *ScheduledTaskUpdateOne) ClearName() *ScheduledTaskUpdateOne {
 	return _u
 }
 
-// SetManagedCopy sets the "managed_copy" field.
-func (_u *ScheduledTaskUpdateOne) SetManagedCopy(v bool) *ScheduledTaskUpdateOne {
-	_u.mutation.SetManagedCopy(v)
-	return _u
-}
-
-// SetNillableManagedCopy sets the "managed_copy" field if the given value is not nil.
-func (_u *ScheduledTaskUpdateOne) SetNillableManagedCopy(v *bool) *ScheduledTaskUpdateOne {
-	if v != nil {
-		_u.SetManagedCopy(*v)
-	}
-	return _u
-}
-
 // SetSchedule sets the "schedule" field.
 func (_u *ScheduledTaskUpdateOne) SetSchedule(v *types.ExportSchedule) *ScheduledTaskUpdateOne {
 	_u.mutation.SetSchedule(v)
@@ -695,9 +664,6 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	}
 	if _u.mutation.NameCleared() {
 		_spec.ClearField(scheduledtask.FieldName, field.TypeString)
-	}
-	if value, ok := _u.mutation.ManagedCopy(); ok {
-		_spec.SetField(scheduledtask.FieldManagedCopy, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Schedule(); ok {
 		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)

@@ -132,11 +132,6 @@ func Name(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldName, v))
 }
 
-// ManagedCopy applies equality check predicate on the "managed_copy" field. It's identical to ManagedCopyEQ.
-func ManagedCopy(v bool) predicate.ScheduledTask {
-	return predicate.ScheduledTask(sql.FieldEQ(FieldManagedCopy, v))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldEQ(FieldTenantID, v))
@@ -983,16 +978,6 @@ func NameEqualFold(v string) predicate.ScheduledTask {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.ScheduledTask {
 	return predicate.ScheduledTask(sql.FieldContainsFold(FieldName, v))
-}
-
-// ManagedCopyEQ applies the EQ predicate on the "managed_copy" field.
-func ManagedCopyEQ(v bool) predicate.ScheduledTask {
-	return predicate.ScheduledTask(sql.FieldEQ(FieldManagedCopy, v))
-}
-
-// ManagedCopyNEQ applies the NEQ predicate on the "managed_copy" field.
-func ManagedCopyNEQ(v bool) predicate.ScheduledTask {
-	return predicate.ScheduledTask(sql.FieldNEQ(FieldManagedCopy, v))
 }
 
 // ScheduleIsNil applies the IsNil predicate on the "schedule" field.

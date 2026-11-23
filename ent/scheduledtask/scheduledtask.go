@@ -41,8 +41,6 @@ const (
 	FieldTemporalScheduleID = "temporal_schedule_id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
-	// FieldManagedCopy holds the string denoting the managed_copy field in the database.
-	FieldManagedCopy = "managed_copy"
 	// FieldSchedule holds the string denoting the schedule field in the database.
 	FieldSchedule = "schedule"
 	// Table holds the table name of the scheduledtask in the database.
@@ -66,7 +64,6 @@ var Columns = []string{
 	FieldJobConfig,
 	FieldTemporalScheduleID,
 	FieldName,
-	FieldManagedCopy,
 	FieldSchedule,
 }
 
@@ -101,8 +98,6 @@ var (
 	IntervalValidator func(string) error
 	// DefaultEnabled holds the default value on creation for the "enabled" field.
 	DefaultEnabled bool
-	// DefaultManagedCopy holds the default value on creation for the "managed_copy" field.
-	DefaultManagedCopy bool
 )
 
 // OrderOption defines the ordering options for the ScheduledTask queries.
@@ -176,9 +171,4 @@ func ByTemporalScheduleID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
-}
-
-// ByManagedCopy orders the results by the managed_copy field.
-func ByManagedCopy(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldManagedCopy, opts...).ToFunc()
 }

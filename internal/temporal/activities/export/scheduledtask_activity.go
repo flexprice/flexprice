@@ -146,7 +146,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		StartTime:       startTime,
 		EndTime:         endTime,
 		JobConfig:       jobConfig,
-		ManagedCopy:     task.ManagedCopy,
+		ManagedCopy:     task.IsManagedCopy(),
 	}, nil
 }
 

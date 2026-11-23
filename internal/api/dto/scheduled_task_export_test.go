@@ -77,8 +77,7 @@ func TestUpdateScheduledTaskRequestValidate(t *testing.T) {
 
 func TestScheduledTaskResponse_ManagedCopyHidesStorage(t *testing.T) {
 	task := &scheduledtask.ScheduledTask{
-		ID:          "st1",
-		ManagedCopy: true,
+		ID: "st1",
 		JobConfig: &types.S3JobConfig{
 			Bucket:               "fp-bucket",
 			Region:               "us-west-2",

@@ -45,10 +45,9 @@ func mustTime(t *testing.T, s string) time.Time {
 
 func TestDetails_ScheduledRowUsesScheduleWindow(t *testing.T) {
 	a := newDetailsActivity(t, &scheduledtask.ScheduledTask{
-		ID:          "st1",
-		Interval:    types.ScheduledTaskIntervalDaily,
-		Schedule:    &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"},
-		ManagedCopy: true,
+		ID:       "st1",
+		Interval: types.ScheduledTaskIntervalDaily,
+		Schedule: &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"},
 	})
 	got, err := a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{
 		ScheduledTaskID:       "st1",
@@ -61,7 +60,7 @@ func TestDetails_ScheduledRowUsesScheduleWindow(t *testing.T) {
 }
 
 func TestDetails_OldRowUnchanged(t *testing.T) {
-	a := newDetailsActivity(t, &scheduledtask.ScheduledTask{ID: "st1", Interval: types.ScheduledTaskIntervalDaily})
+	a := newDetailsActivity(t, &scheduledtask.ScheduledTask{ID: "st1", ConnectionID: "conn_1", Interval: types.ScheduledTaskIntervalDaily})
 	got, err := a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{
 		ScheduledTaskID:       "st1",
 		WorkflowExecutionTime: mustTime(t, "2026-11-09T19:00:00Z"),

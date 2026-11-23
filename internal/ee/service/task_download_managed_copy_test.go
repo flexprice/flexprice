@@ -98,9 +98,8 @@ func (s *TaskServiceSuite) newDownloadFixture(st *scheduledtask.ScheduledTask, t
 
 func managedScheduledTask(bucket string) *scheduledtask.ScheduledTask {
 	return &scheduledtask.ScheduledTask{
-		ID:          "sched_1",
-		ManagedCopy: true,
-		JobConfig:   &types.S3JobConfig{Bucket: bucket, Region: "us-east-1"},
+		ID:        "sched_1",
+		JobConfig: &types.S3JobConfig{Bucket: bucket, Region: "us-east-1"},
 	}
 }
 

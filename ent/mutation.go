@@ -80573,7 +80573,6 @@ type ScheduledTaskMutation struct {
 	job_config           **types.S3JobConfig
 	temporal_schedule_id *string
 	name                 *string
-	managed_copy         *bool
 	schedule             **types.ExportSchedule
 	clearedFields        map[string]struct{}
 	done                 bool
@@ -81280,42 +81279,6 @@ func (m *ScheduledTaskMutation) ResetName() {
 	delete(m.clearedFields, scheduledtask.FieldName)
 }
 
-// SetManagedCopy sets the "managed_copy" field.
-func (m *ScheduledTaskMutation) SetManagedCopy(b bool) {
-	m.managed_copy = &b
-}
-
-// ManagedCopy returns the value of the "managed_copy" field in the mutation.
-func (m *ScheduledTaskMutation) ManagedCopy() (r bool, exists bool) {
-	v := m.managed_copy
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldManagedCopy returns the old "managed_copy" field's value of the ScheduledTask entity.
-// If the ScheduledTask object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ScheduledTaskMutation) OldManagedCopy(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldManagedCopy is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldManagedCopy requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldManagedCopy: %w", err)
-	}
-	return oldValue.ManagedCopy, nil
-}
-
-// ResetManagedCopy resets all changes to the "managed_copy" field.
-func (m *ScheduledTaskMutation) ResetManagedCopy() {
-	m.managed_copy = nil
-}
-
 // SetSchedule sets the "schedule" field.
 func (m *ScheduledTaskMutation) SetSchedule(ts *types.ExportSchedule) {
 	m.schedule = &ts
@@ -81399,7 +81362,7 @@ func (m *ScheduledTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ScheduledTaskMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, scheduledtask.FieldTenantID)
 	}
@@ -81442,9 +81405,6 @@ func (m *ScheduledTaskMutation) Fields() []string {
 	if m.name != nil {
 		fields = append(fields, scheduledtask.FieldName)
 	}
-	if m.managed_copy != nil {
-		fields = append(fields, scheduledtask.FieldManagedCopy)
-	}
 	if m.schedule != nil {
 		fields = append(fields, scheduledtask.FieldSchedule)
 	}
@@ -81484,8 +81444,6 @@ func (m *ScheduledTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.TemporalScheduleID()
 	case scheduledtask.FieldName:
 		return m.Name()
-	case scheduledtask.FieldManagedCopy:
-		return m.ManagedCopy()
 	case scheduledtask.FieldSchedule:
 		return m.Schedule()
 	}
@@ -81525,8 +81483,6 @@ func (m *ScheduledTaskMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldTemporalScheduleID(ctx)
 	case scheduledtask.FieldName:
 		return m.OldName(ctx)
-	case scheduledtask.FieldManagedCopy:
-		return m.OldManagedCopy(ctx)
 	case scheduledtask.FieldSchedule:
 		return m.OldSchedule(ctx)
 	}
@@ -81635,13 +81591,6 @@ func (m *ScheduledTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
-		return nil
-	case scheduledtask.FieldManagedCopy:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetManagedCopy(v)
 		return nil
 	case scheduledtask.FieldSchedule:
 		v, ok := value.(*types.ExportSchedule)
@@ -81791,9 +81740,6 @@ func (m *ScheduledTaskMutation) ResetField(name string) error {
 		return nil
 	case scheduledtask.FieldName:
 		m.ResetName()
-		return nil
-	case scheduledtask.FieldManagedCopy:
-		m.ResetManagedCopy()
 		return nil
 	case scheduledtask.FieldSchedule:
 		m.ResetSchedule()

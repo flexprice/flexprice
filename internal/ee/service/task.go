@@ -1275,7 +1275,7 @@ func (s *taskService) GenerateDownloadURL(ctx context.Context, id string) (strin
 			Mark(ierr.ErrNotFound)
 	}
 
-	if scheduledTask.ManagedCopy {
+	if scheduledTask.IsManagedCopy() {
 		return s.presignManagedCopy(ctx, t, scheduledTask, bucket, key)
 	}
 

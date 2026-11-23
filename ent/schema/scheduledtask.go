@@ -68,9 +68,6 @@ func (ScheduledTask) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Display name of the export"),
-		field.Bool("managed_copy").
-			Default(false).
-			Comment("Export to Flexprice managed bucket instead of a connection"),
 		field.JSON("schedule", &types.ExportSchedule{}).
 			Optional().
 			Comment("Run time of the export"),
