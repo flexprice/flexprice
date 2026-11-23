@@ -871,6 +871,76 @@ func (s *SubscriptionModificationServiceSuite) TestApply_RejectedWhenVersionSche
 	})
 }
 
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() {
+	for _, cadence := range []types.InvoiceCadence{types.InvoiceCadenceAdvance, types.InvoiceCadenceArrear} {
+		s.Run(string(cadence), func() {
+			ctx := s.GetContext()
+			cust := s.createCustomer("lic-period-end-" + string(cadence))
+			sub := s.createActiveSub(cust.ID)
+			periodEnd := sub.CurrentPeriodEnd
+			p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+			li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), cadence, p.ID)
+			newQty := decimal.NewFromInt(5)
+
+			preview, err := s.service.Preview(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+			s.Require().NoError(err)
+			s.Empty(preview.ChangedResources.Invoices, "scheduling at period end must not invoice the current period")
+			s.Require().Len(preview.ChangedResources.LineItems, 2)
+			s.Equal(dto.ChangedLineItemActionEnded, preview.ChangedResources.LineItems[0].ChangeAction)
+			s.Require().NotNil(preview.ChangedResources.LineItems[0].EndDate)
+			s.True(preview.ChangedResources.LineItems[0].EndDate.Equal(periodEnd))
+			s.Equal(dto.ChangedLineItemActionCreated, preview.ChangedResources.LineItems[1].ChangeAction)
+			s.Require().NotNil(preview.ChangedResources.LineItems[1].StartDate)
+			s.True(preview.ChangedResources.LineItems[1].StartDate.Equal(periodEnd))
+			s.Nil(preview.ChangedResources.LineItems[1].EndDate, "open-ended successor scheduled at period end must stay open-ended")
+
+			resp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+			s.Require().NoError(err)
+			s.Empty(resp.ChangedResources.Invoices, "executing at period end must not invoice or credit the current period")
+			s.Require().Len(resp.ChangedResources.LineItems, 2)
+			s.Nil(resp.ChangedResources.LineItems[1].EndDate)
+
+			oldItem := s.mustGetLineItem(li.ID)
+			s.True(oldItem.EndDate.Equal(periodEnd))
+			s.Require().NotNil(oldItem.SuccessorLineItemID)
+
+			newItem := s.mustGetLineItem(*oldItem.SuccessorLineItemID)
+			s.True(newItem.StartDate.Equal(periodEnd))
+			s.True(newItem.EndDate.IsZero())
+			s.True(newItem.Quantity.Equal(newQty))
+			s.Require().NotNil(newItem.PredecessorLineItemID)
+			s.Equal(oldItem.ID, *newItem.PredecessorLineItemID)
+		})
+	}
+
+	s.Run("rejects_after_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-after-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		newQty := decimal.NewFromInt(5)
+
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd.Add(time.Nanosecond)))
+		s.Require().Error(err)
+	})
+
+	s.Run("rejects_at_finite_line_item_end_equal_to_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-finite-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		stored := s.mustGetLineItem(li.ID)
+		stored.EndDate = sub.CurrentPeriodEnd
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(5)
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+	})
+}
+
 func (s *SubscriptionModificationServiceSuite) mustGetLineItem(id string) *subscription.SubscriptionLineItem {
 	s.T().Helper()
 	item, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), id)

@@ -274,9 +274,11 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 		gridSub := sub
 		var windows []periodWindow
 		if types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
-			// A removal on an item boundary closes the period ending there, not the next unbilled one.
+			// A removal or period-end change on an item boundary closes the period ending there, not the next unbilled one.
 			at := req.EffectiveDate
-			if entry.Action == types.ProrationActionRemoveItem || entry.Action == types.ProrationActionCancellation {
+			if entry.Action == types.ProrationActionRemoveItem ||
+				entry.Action == types.ProrationActionCancellation ||
+				req.EffectiveDate.Equal(sub.CurrentPeriodEnd) {
 				at = at.Add(-time.Nanosecond)
 			}
 			itemPeriod, err := longerItemPeriod(sub, item, at)

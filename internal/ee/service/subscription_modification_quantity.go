@@ -134,9 +134,11 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			}
 		}
 
-		newEndDate := sub.CurrentPeriodEnd
+		var newEndDate time.Time
 		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 			newEndDate = lineItem.EndDate
+		} else if effectiveDate.Before(sub.CurrentPeriodEnd) {
+			newEndDate = sub.CurrentPeriodEnd
 		}
 
 		quantity := lineItem.Quantity
@@ -204,6 +206,10 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 		endDate := effectiveDate
 		startDate := effectiveDate
 		newEndDate := m.getNewEndDate()
+		var createdEnd *time.Time
+		if !newEndDate.IsZero() {
+			createdEnd = &newEndDate
+		}
 		out = append(out,
 			dto.ChangedLineItem{
 				ID:           previewEndedLineItemID,
@@ -218,7 +224,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 				PriceID:      old.PriceID,
 				Quantity:     m.getQuantity(),
 				StartDate:    &startDate,
-				EndDate:      &newEndDate,
+				EndDate:      createdEnd,
 				ChangeAction: dto.ChangedLineItemActionCreated,
 			},
 		)
@@ -329,23 +335,8 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 		if change.EffectiveDate != nil {
 			effectiveDate = change.EffectiveDate.UTC()
 		}
-		if effectiveDate.Before(sub.CurrentPeriodStart) {
-			return nil, ierr.NewError("effective_date cannot be before the current period start").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":       effectiveDate,
-					"current_period_start": sub.CurrentPeriodStart,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if !effectiveDate.Before(sub.CurrentPeriodEnd) {
-			return nil, ierr.NewError("effective_date must be before the current period end").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":     effectiveDate,
-					"current_period_end": sub.CurrentPeriodEnd,
-				}).
-				Mark(ierr.ErrValidation)
+		if err := validateEffectiveDateWithinCurrentPeriod(effectiveDate, sub); err != nil {
+			return nil, err
 		}
 
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, change.ID)
@@ -390,9 +381,11 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			continue
 		}
 
-		newEndDate := sub.CurrentPeriodEnd
-		if !lineItem.EndDate.IsZero() {
+		var newEndDate time.Time
+		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 			newEndDate = lineItem.EndDate
+		} else if effectiveDate.Before(sub.CurrentPeriodEnd) {
+			newEndDate = sub.CurrentPeriodEnd
 		}
 
 		// we will create a new line item following change.ID but different line item id to change.Quantity at effectiveDate till newEndDate
@@ -685,6 +678,10 @@ func (s *subscriptionModificationService) applyQuantityChange(
 			endDate := effectiveDate
 			startDate := effectiveDate
 			newEndDate := mod.getNewEndDate()
+			var createdEnd *time.Time
+			if !newEndDate.IsZero() {
+				createdEnd = &newEndDate
+			}
 			changedLineItems = append(changedLineItems,
 				dto.ChangedLineItem{
 					ID:           endedItem.ID,
@@ -699,7 +696,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					PriceID:      newItem.PriceID,
 					Quantity:     newItem.Quantity,
 					StartDate:    &startDate,
-					EndDate:      &newEndDate,
+					EndDate:      createdEnd,
 					ChangeAction: dto.ChangedLineItemActionCreated,
 				},
 			)
@@ -1152,8 +1149,9 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 }
 
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
-// [lineItem.StartDate, lineEnd), where lineEnd is lineItem.EndDate when set, otherwise
-// sub.CurrentPeriodEnd (open-ended line item). Subscription period bounds are validated separately.
+// [lineItem.StartDate, lineItem.EndDate) for finite line items, or
+// [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
+// Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
 	sub *subscription.Subscription,
@@ -1170,17 +1168,26 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	lineEnd := sub.CurrentPeriodEnd
 	if !lineItem.EndDate.IsZero() {
-		lineEnd = lineItem.EndDate
+		if !effectiveDate.Before(lineItem.EndDate) {
+			return ierr.NewError("effective_date must be before the line item end date").
+				WithHint("Set effective_date to a time before the line item's active window ends").
+				WithReportableDetails(map[string]interface{}{
+					"effective_date": effectiveDate,
+					"line_item_id":   lineItemID,
+					"line_item_end":  lineItem.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 	}
-	if !effectiveDate.Before(lineEnd) {
-		return ierr.NewError("effective_date must be before the line item end date").
-			WithHint("Set effective_date to a time before the line item's active window ends").
+	if effectiveDate.After(sub.CurrentPeriodEnd) {
+		return ierr.NewError("effective_date cannot be after the current period end").
+			WithHint("Set effective_date to a time within the current billing period or at the current period end").
 			WithReportableDetails(map[string]interface{}{
 				"effective_date": effectiveDate,
 				"line_item_id":   lineItemID,
-				"line_item_end":  lineEnd,
+				"line_item_end":  sub.CurrentPeriodEnd,
 			}).
 			Mark(ierr.ErrValidation)
 	}
