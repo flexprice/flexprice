@@ -209,12 +209,12 @@ func NewBillingEntityRepository(p RepositoryParams) billingentity.Repository {
 	return entRepo.NewBillingEntityRepository(p.EntClient, p.Logger)
 }
 
-func NewReceivableSource(p RepositoryParams) collections.ReceivableSource {
-	return entRepo.NewReceivableSource(p.EntClient, p.Logger)
+func NewInvoiceReminderRepository(p RepositoryParams) collections.InvoiceReminderRepository {
+	return entRepo.NewInvoiceReminderRepository(p.EntClient, p.Logger)
 }
 
-func NewReminderDecisionRepository(p RepositoryParams) collections.ReminderDecisionRepository {
-	return entRepo.NewReminderDecisionRepository(p.EntClient, p.Logger)
+func NewBoardRepository(p RepositoryParams) collections.BoardRepository {
+	return entRepo.NewBoardRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

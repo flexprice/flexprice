@@ -47,6 +47,7 @@ import (
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/journalentry"
 	"github.com/flexprice/flexprice/ent/journalline"
@@ -62,7 +63,6 @@ import (
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
-	"github.com/flexprice/flexprice/ent/reminderdecision"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -2531,6 +2531,68 @@ func scanReturningInvoiceLineItem(rows *sql.Rows) ([]*InvoiceLineItem, error) {
 	return out, rows.Err()
 }
 
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*InvoiceReminder.
+func (_u *InvoiceReminderUpdate) SaveReturning(ctx context.Context) ([]*InvoiceReminder, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *InvoiceReminderUpdate) sqlSaveReturning(ctx context.Context) ([]*InvoiceReminder, error) {
+	var out []*InvoiceReminder
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", invoicereminder.Table, invoicereminder.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningInvoiceReminder(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*InvoiceReminder.
+func (_d *InvoiceReminderDelete) ExecReturning(ctx context.Context) ([]*InvoiceReminder, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *InvoiceReminderDelete) sqlExecReturning(ctx context.Context) ([]*InvoiceReminder, error) {
+	var out []*InvoiceReminder
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", invoicereminder.Table, invoicereminder.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningInvoiceReminder(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningInvoiceReminder(rows *sql.Rows) ([]*InvoiceReminder, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*InvoiceReminder
+	for rows.Next() {
+		node := &InvoiceReminder{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
 // SaveReturning is like Save but returns the updated rows. Hooks receive []*InvoiceSequence.
 func (_u *InvoiceSequenceUpdate) SaveReturning(ctx context.Context) ([]*InvoiceSequence, error) {
 	_u.defaults()
@@ -3446,68 +3508,6 @@ func scanReturningRefund(rows *sql.Rows) ([]*Refund, error) {
 	var out []*Refund
 	for rows.Next() {
 		node := &Refund{}
-		values, err := node.scanValues(cols)
-		if err != nil {
-			return nil, err
-		}
-		if err := rows.Scan(values...); err != nil {
-			return nil, err
-		}
-		if err := node.assignValues(cols, values); err != nil {
-			return nil, err
-		}
-		out = append(out, node)
-	}
-	return out, rows.Err()
-}
-
-// SaveReturning is like Save but returns the updated rows. Hooks receive []*ReminderDecision.
-func (_u *ReminderDecisionUpdate) SaveReturning(ctx context.Context) ([]*ReminderDecision, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
-}
-
-func (_u *ReminderDecisionUpdate) sqlSaveReturning(ctx context.Context) ([]*ReminderDecision, error) {
-	var out []*ReminderDecision
-	c := *_u
-	c.driver = newReturning(_u.driver, "UPDATE", reminderdecision.Table, reminderdecision.Columns, func(rows *sql.Rows) (int, error) {
-		var err error
-		out, err = scanReturningReminderDecision(rows)
-		return len(out), err
-	})
-	if _, err := c.sqlSave(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*ReminderDecision.
-func (_d *ReminderDecisionDelete) ExecReturning(ctx context.Context) ([]*ReminderDecision, error) {
-	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
-}
-
-func (_d *ReminderDecisionDelete) sqlExecReturning(ctx context.Context) ([]*ReminderDecision, error) {
-	var out []*ReminderDecision
-	c := *_d
-	c.driver = newReturning(_d.driver, "DELETE FROM", reminderdecision.Table, reminderdecision.Columns, func(rows *sql.Rows) (int, error) {
-		var err error
-		out, err = scanReturningReminderDecision(rows)
-		return len(out), err
-	})
-	if _, err := c.sqlExec(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func scanReturningReminderDecision(rows *sql.Rows) ([]*ReminderDecision, error) {
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	var out []*ReminderDecision
-	for rows.Next() {
-		node := &ReminderDecision{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

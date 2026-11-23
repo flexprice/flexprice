@@ -120,6 +120,9 @@ type Invoice func(*sql.Selector)
 // InvoiceLineItem is the predicate function for invoicelineitem builders.
 type InvoiceLineItem func(*sql.Selector)
 
+// InvoiceReminder is the predicate function for invoicereminder builders.
+type InvoiceReminder func(*sql.Selector)
+
 // InvoiceSequence is the predicate function for invoicesequence builders.
 type InvoiceSequence func(*sql.Selector)
 
@@ -164,9 +167,6 @@ type Product func(*sql.Selector)
 
 // Refund is the predicate function for refund builders.
 type Refund func(*sql.Selector)
-
-// ReminderDecision is the predicate function for reminderdecision builders.
-type ReminderDecision func(*sql.Selector)
 
 // RevenueFact is the predicate function for revenuefact builders.
 type RevenueFact func(*sql.Selector)

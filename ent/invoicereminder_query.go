@@ -11,68 +11,68 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/reminderdecision"
 )
 
-// ReminderDecisionQuery is the builder for querying ReminderDecision entities.
-type ReminderDecisionQuery struct {
+// InvoiceReminderQuery is the builder for querying InvoiceReminder entities.
+type InvoiceReminderQuery struct {
 	config
 	ctx        *QueryContext
-	order      []reminderdecision.OrderOption
+	order      []invoicereminder.OrderOption
 	inters     []Interceptor
-	predicates []predicate.ReminderDecision
+	predicates []predicate.InvoiceReminder
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the ReminderDecisionQuery builder.
-func (_q *ReminderDecisionQuery) Where(ps ...predicate.ReminderDecision) *ReminderDecisionQuery {
+// Where adds a new predicate for the InvoiceReminderQuery builder.
+func (_q *InvoiceReminderQuery) Where(ps ...predicate.InvoiceReminder) *InvoiceReminderQuery {
 	_q.predicates = append(_q.predicates, ps...)
 	return _q
 }
 
 // Limit the number of records to be returned by this query.
-func (_q *ReminderDecisionQuery) Limit(limit int) *ReminderDecisionQuery {
+func (_q *InvoiceReminderQuery) Limit(limit int) *InvoiceReminderQuery {
 	_q.ctx.Limit = &limit
 	return _q
 }
 
 // Offset to start from.
-func (_q *ReminderDecisionQuery) Offset(offset int) *ReminderDecisionQuery {
+func (_q *InvoiceReminderQuery) Offset(offset int) *InvoiceReminderQuery {
 	_q.ctx.Offset = &offset
 	return _q
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (_q *ReminderDecisionQuery) Unique(unique bool) *ReminderDecisionQuery {
+func (_q *InvoiceReminderQuery) Unique(unique bool) *InvoiceReminderQuery {
 	_q.ctx.Unique = &unique
 	return _q
 }
 
 // Order specifies how the records should be ordered.
-func (_q *ReminderDecisionQuery) Order(o ...reminderdecision.OrderOption) *ReminderDecisionQuery {
+func (_q *InvoiceReminderQuery) Order(o ...invoicereminder.OrderOption) *InvoiceReminderQuery {
 	_q.order = append(_q.order, o...)
 	return _q
 }
 
-// First returns the first ReminderDecision entity from the query.
-// Returns a *NotFoundError when no ReminderDecision was found.
-func (_q *ReminderDecisionQuery) First(ctx context.Context) (*ReminderDecision, error) {
+// First returns the first InvoiceReminder entity from the query.
+// Returns a *NotFoundError when no InvoiceReminder was found.
+func (_q *InvoiceReminderQuery) First(ctx context.Context) (*InvoiceReminder, error) {
 	nodes, err := _q.Limit(1).All(setContextOp(ctx, _q.ctx, ent.OpQueryFirst))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{reminderdecision.Label}
+		return nil, &NotFoundError{invoicereminder.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) FirstX(ctx context.Context) *ReminderDecision {
+func (_q *InvoiceReminderQuery) FirstX(ctx context.Context) *InvoiceReminder {
 	node, err := _q.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -80,22 +80,22 @@ func (_q *ReminderDecisionQuery) FirstX(ctx context.Context) *ReminderDecision {
 	return node
 }
 
-// FirstID returns the first ReminderDecision ID from the query.
-// Returns a *NotFoundError when no ReminderDecision ID was found.
-func (_q *ReminderDecisionQuery) FirstID(ctx context.Context) (id string, err error) {
+// FirstID returns the first InvoiceReminder ID from the query.
+// Returns a *NotFoundError when no InvoiceReminder ID was found.
+func (_q *InvoiceReminderQuery) FirstID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(1).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryFirstID)); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{reminderdecision.Label}
+		err = &NotFoundError{invoicereminder.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) FirstIDX(ctx context.Context) string {
+func (_q *InvoiceReminderQuery) FirstIDX(ctx context.Context) string {
 	id, err := _q.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -103,10 +103,10 @@ func (_q *ReminderDecisionQuery) FirstIDX(ctx context.Context) string {
 	return id
 }
 
-// Only returns a single ReminderDecision entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one ReminderDecision entity is found.
-// Returns a *NotFoundError when no ReminderDecision entities are found.
-func (_q *ReminderDecisionQuery) Only(ctx context.Context) (*ReminderDecision, error) {
+// Only returns a single InvoiceReminder entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one InvoiceReminder entity is found.
+// Returns a *NotFoundError when no InvoiceReminder entities are found.
+func (_q *InvoiceReminderQuery) Only(ctx context.Context) (*InvoiceReminder, error) {
 	nodes, err := _q.Limit(2).All(setContextOp(ctx, _q.ctx, ent.OpQueryOnly))
 	if err != nil {
 		return nil, err
@@ -115,14 +115,14 @@ func (_q *ReminderDecisionQuery) Only(ctx context.Context) (*ReminderDecision, e
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{reminderdecision.Label}
+		return nil, &NotFoundError{invoicereminder.Label}
 	default:
-		return nil, &NotSingularError{reminderdecision.Label}
+		return nil, &NotSingularError{invoicereminder.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) OnlyX(ctx context.Context) *ReminderDecision {
+func (_q *InvoiceReminderQuery) OnlyX(ctx context.Context) *InvoiceReminder {
 	node, err := _q.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -130,10 +130,10 @@ func (_q *ReminderDecisionQuery) OnlyX(ctx context.Context) *ReminderDecision {
 	return node
 }
 
-// OnlyID is like Only, but returns the only ReminderDecision ID in the query.
-// Returns a *NotSingularError when more than one ReminderDecision ID is found.
+// OnlyID is like Only, but returns the only InvoiceReminder ID in the query.
+// Returns a *NotSingularError when more than one InvoiceReminder ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (_q *ReminderDecisionQuery) OnlyID(ctx context.Context) (id string, err error) {
+func (_q *InvoiceReminderQuery) OnlyID(ctx context.Context) (id string, err error) {
 	var ids []string
 	if ids, err = _q.Limit(2).IDs(setContextOp(ctx, _q.ctx, ent.OpQueryOnlyID)); err != nil {
 		return
@@ -142,15 +142,15 @@ func (_q *ReminderDecisionQuery) OnlyID(ctx context.Context) (id string, err err
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{reminderdecision.Label}
+		err = &NotFoundError{invoicereminder.Label}
 	default:
-		err = &NotSingularError{reminderdecision.Label}
+		err = &NotSingularError{invoicereminder.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) OnlyIDX(ctx context.Context) string {
+func (_q *InvoiceReminderQuery) OnlyIDX(ctx context.Context) string {
 	id, err := _q.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -158,18 +158,18 @@ func (_q *ReminderDecisionQuery) OnlyIDX(ctx context.Context) string {
 	return id
 }
 
-// All executes the query and returns a list of ReminderDecisions.
-func (_q *ReminderDecisionQuery) All(ctx context.Context) ([]*ReminderDecision, error) {
+// All executes the query and returns a list of InvoiceReminders.
+func (_q *InvoiceReminderQuery) All(ctx context.Context) ([]*InvoiceReminder, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryAll)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*ReminderDecision, *ReminderDecisionQuery]()
-	return withInterceptors[[]*ReminderDecision](ctx, _q, qr, _q.inters)
+	qr := querierAll[[]*InvoiceReminder, *InvoiceReminderQuery]()
+	return withInterceptors[[]*InvoiceReminder](ctx, _q, qr, _q.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) AllX(ctx context.Context) []*ReminderDecision {
+func (_q *InvoiceReminderQuery) AllX(ctx context.Context) []*InvoiceReminder {
 	nodes, err := _q.All(ctx)
 	if err != nil {
 		panic(err)
@@ -177,20 +177,20 @@ func (_q *ReminderDecisionQuery) AllX(ctx context.Context) []*ReminderDecision {
 	return nodes
 }
 
-// IDs executes the query and returns a list of ReminderDecision IDs.
-func (_q *ReminderDecisionQuery) IDs(ctx context.Context) (ids []string, err error) {
+// IDs executes the query and returns a list of InvoiceReminder IDs.
+func (_q *InvoiceReminderQuery) IDs(ctx context.Context) (ids []string, err error) {
 	if _q.ctx.Unique == nil && _q.path != nil {
 		_q.Unique(true)
 	}
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryIDs)
-	if err = _q.Select(reminderdecision.FieldID).Scan(ctx, &ids); err != nil {
+	if err = _q.Select(invoicereminder.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) IDsX(ctx context.Context) []string {
+func (_q *InvoiceReminderQuery) IDsX(ctx context.Context) []string {
 	ids, err := _q.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -199,16 +199,16 @@ func (_q *ReminderDecisionQuery) IDsX(ctx context.Context) []string {
 }
 
 // Count returns the count of the given query.
-func (_q *ReminderDecisionQuery) Count(ctx context.Context) (int, error) {
+func (_q *InvoiceReminderQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryCount)
 	if err := _q.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, _q, querierCount[*ReminderDecisionQuery](), _q.inters)
+	return withInterceptors[int](ctx, _q, querierCount[*InvoiceReminderQuery](), _q.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) CountX(ctx context.Context) int {
+func (_q *InvoiceReminderQuery) CountX(ctx context.Context) int {
 	count, err := _q.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -217,7 +217,7 @@ func (_q *ReminderDecisionQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (_q *ReminderDecisionQuery) Exist(ctx context.Context) (bool, error) {
+func (_q *InvoiceReminderQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, _q.ctx, ent.OpQueryExist)
 	switch _, err := _q.FirstID(ctx); {
 	case IsNotFound(err):
@@ -230,7 +230,7 @@ func (_q *ReminderDecisionQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (_q *ReminderDecisionQuery) ExistX(ctx context.Context) bool {
+func (_q *InvoiceReminderQuery) ExistX(ctx context.Context) bool {
 	exist, err := _q.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -238,18 +238,18 @@ func (_q *ReminderDecisionQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the ReminderDecisionQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the InvoiceReminderQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (_q *ReminderDecisionQuery) Clone() *ReminderDecisionQuery {
+func (_q *InvoiceReminderQuery) Clone() *InvoiceReminderQuery {
 	if _q == nil {
 		return nil
 	}
-	return &ReminderDecisionQuery{
+	return &InvoiceReminderQuery{
 		config:     _q.config,
 		ctx:        _q.ctx.Clone(),
-		order:      append([]reminderdecision.OrderOption{}, _q.order...),
+		order:      append([]invoicereminder.OrderOption{}, _q.order...),
 		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.ReminderDecision{}, _q.predicates...),
+		predicates: append([]predicate.InvoiceReminder{}, _q.predicates...),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
@@ -266,15 +266,15 @@ func (_q *ReminderDecisionQuery) Clone() *ReminderDecisionQuery {
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.ReminderDecision.Query().
-//		GroupBy(reminderdecision.FieldTenantID).
+//	client.InvoiceReminder.Query().
+//		GroupBy(invoicereminder.FieldTenantID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (_q *ReminderDecisionQuery) GroupBy(field string, fields ...string) *ReminderDecisionGroupBy {
+func (_q *InvoiceReminderQuery) GroupBy(field string, fields ...string) *InvoiceReminderGroupBy {
 	_q.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &ReminderDecisionGroupBy{build: _q}
+	grbuild := &InvoiceReminderGroupBy{build: _q}
 	grbuild.flds = &_q.ctx.Fields
-	grbuild.label = reminderdecision.Label
+	grbuild.label = invoicereminder.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -288,23 +288,23 @@ func (_q *ReminderDecisionQuery) GroupBy(field string, fields ...string) *Remind
 //		TenantID string `json:"tenant_id,omitempty"`
 //	}
 //
-//	client.ReminderDecision.Query().
-//		Select(reminderdecision.FieldTenantID).
+//	client.InvoiceReminder.Query().
+//		Select(invoicereminder.FieldTenantID).
 //		Scan(ctx, &v)
-func (_q *ReminderDecisionQuery) Select(fields ...string) *ReminderDecisionSelect {
+func (_q *InvoiceReminderQuery) Select(fields ...string) *InvoiceReminderSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
-	sbuild := &ReminderDecisionSelect{ReminderDecisionQuery: _q}
-	sbuild.label = reminderdecision.Label
+	sbuild := &InvoiceReminderSelect{InvoiceReminderQuery: _q}
+	sbuild.label = invoicereminder.Label
 	sbuild.flds, sbuild.scan = &_q.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a ReminderDecisionSelect configured with the given aggregations.
-func (_q *ReminderDecisionQuery) Aggregate(fns ...AggregateFunc) *ReminderDecisionSelect {
+// Aggregate returns a InvoiceReminderSelect configured with the given aggregations.
+func (_q *InvoiceReminderQuery) Aggregate(fns ...AggregateFunc) *InvoiceReminderSelect {
 	return _q.Select().Aggregate(fns...)
 }
 
-func (_q *ReminderDecisionQuery) prepareQuery(ctx context.Context) error {
+func (_q *InvoiceReminderQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range _q.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -316,7 +316,7 @@ func (_q *ReminderDecisionQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range _q.ctx.Fields {
-		if !reminderdecision.ValidColumn(f) {
+		if !invoicereminder.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -330,16 +330,16 @@ func (_q *ReminderDecisionQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (_q *ReminderDecisionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*ReminderDecision, error) {
+func (_q *InvoiceReminderQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*InvoiceReminder, error) {
 	var (
-		nodes = []*ReminderDecision{}
+		nodes = []*InvoiceReminder{}
 		_spec = _q.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*ReminderDecision).scanValues(nil, columns)
+		return (*InvoiceReminder).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &ReminderDecision{config: _q.config}
+		node := &InvoiceReminder{config: _q.config}
 		nodes = append(nodes, node)
 		return node.assignValues(columns, values)
 	}
@@ -355,7 +355,7 @@ func (_q *ReminderDecisionQuery) sqlAll(ctx context.Context, hooks ...queryHook)
 	return nodes, nil
 }
 
-func (_q *ReminderDecisionQuery) sqlCount(ctx context.Context) (int, error) {
+func (_q *InvoiceReminderQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := _q.querySpec()
 	_spec.Node.Columns = _q.ctx.Fields
 	if len(_q.ctx.Fields) > 0 {
@@ -364,8 +364,8 @@ func (_q *ReminderDecisionQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, _q.driver, _spec)
 }
 
-func (_q *ReminderDecisionQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(reminderdecision.Table, reminderdecision.Columns, sqlgraph.NewFieldSpec(reminderdecision.FieldID, field.TypeString))
+func (_q *InvoiceReminderQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(invoicereminder.Table, invoicereminder.Columns, sqlgraph.NewFieldSpec(invoicereminder.FieldID, field.TypeString))
 	_spec.From = _q.sql
 	if unique := _q.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -374,9 +374,9 @@ func (_q *ReminderDecisionQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := _q.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, reminderdecision.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, invoicereminder.FieldID)
 		for i := range fields {
-			if fields[i] != reminderdecision.FieldID {
+			if fields[i] != invoicereminder.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -404,12 +404,12 @@ func (_q *ReminderDecisionQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (_q *ReminderDecisionQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (_q *InvoiceReminderQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(_q.driver.Dialect())
-	t1 := builder.Table(reminderdecision.Table)
+	t1 := builder.Table(invoicereminder.Table)
 	columns := _q.ctx.Fields
 	if len(columns) == 0 {
-		columns = reminderdecision.Columns
+		columns = invoicereminder.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if _q.sql != nil {
@@ -436,28 +436,28 @@ func (_q *ReminderDecisionQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// ReminderDecisionGroupBy is the group-by builder for ReminderDecision entities.
-type ReminderDecisionGroupBy struct {
+// InvoiceReminderGroupBy is the group-by builder for InvoiceReminder entities.
+type InvoiceReminderGroupBy struct {
 	selector
-	build *ReminderDecisionQuery
+	build *InvoiceReminderQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (_g *ReminderDecisionGroupBy) Aggregate(fns ...AggregateFunc) *ReminderDecisionGroupBy {
+func (_g *InvoiceReminderGroupBy) Aggregate(fns ...AggregateFunc) *InvoiceReminderGroupBy {
 	_g.fns = append(_g.fns, fns...)
 	return _g
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_g *ReminderDecisionGroupBy) Scan(ctx context.Context, v any) error {
+func (_g *InvoiceReminderGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _g.build.ctx, ent.OpQueryGroupBy)
 	if err := _g.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ReminderDecisionQuery, *ReminderDecisionGroupBy](ctx, _g.build, _g, _g.build.inters, v)
+	return scanWithInterceptors[*InvoiceReminderQuery, *InvoiceReminderGroupBy](ctx, _g.build, _g, _g.build.inters, v)
 }
 
-func (_g *ReminderDecisionGroupBy) sqlScan(ctx context.Context, root *ReminderDecisionQuery, v any) error {
+func (_g *InvoiceReminderGroupBy) sqlScan(ctx context.Context, root *InvoiceReminderQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(_g.fns))
 	for _, fn := range _g.fns {
@@ -484,28 +484,28 @@ func (_g *ReminderDecisionGroupBy) sqlScan(ctx context.Context, root *ReminderDe
 	return sql.ScanSlice(rows, v)
 }
 
-// ReminderDecisionSelect is the builder for selecting fields of ReminderDecision entities.
-type ReminderDecisionSelect struct {
-	*ReminderDecisionQuery
+// InvoiceReminderSelect is the builder for selecting fields of InvoiceReminder entities.
+type InvoiceReminderSelect struct {
+	*InvoiceReminderQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (_s *ReminderDecisionSelect) Aggregate(fns ...AggregateFunc) *ReminderDecisionSelect {
+func (_s *InvoiceReminderSelect) Aggregate(fns ...AggregateFunc) *InvoiceReminderSelect {
 	_s.fns = append(_s.fns, fns...)
 	return _s
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (_s *ReminderDecisionSelect) Scan(ctx context.Context, v any) error {
+func (_s *InvoiceReminderSelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, _s.ctx, ent.OpQuerySelect)
 	if err := _s.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*ReminderDecisionQuery, *ReminderDecisionSelect](ctx, _s.ReminderDecisionQuery, _s, _s.inters, v)
+	return scanWithInterceptors[*InvoiceReminderQuery, *InvoiceReminderSelect](ctx, _s.InvoiceReminderQuery, _s, _s.inters, v)
 }
 
-func (_s *ReminderDecisionSelect) sqlScan(ctx context.Context, root *ReminderDecisionQuery, v any) error {
+func (_s *InvoiceReminderSelect) sqlScan(ctx context.Context, root *InvoiceReminderQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(_s.fns))
 	for _, fn := range _s.fns {

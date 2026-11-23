@@ -53,6 +53,7 @@ import (
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/journalentry"
 	"github.com/flexprice/flexprice/ent/journalline"
@@ -68,7 +69,6 @@ import (
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/product"
 	"github.com/flexprice/flexprice/ent/refund"
-	"github.com/flexprice/flexprice/ent/reminderdecision"
 	"github.com/flexprice/flexprice/ent/revenuefact"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -174,6 +174,8 @@ type Client struct {
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
 	InvoiceLineItem *InvoiceLineItemClient
+	// InvoiceReminder is the client for interacting with the InvoiceReminder builders.
+	InvoiceReminder *InvoiceReminderClient
 	// InvoiceSequence is the client for interacting with the InvoiceSequence builders.
 	InvoiceSequence *InvoiceSequenceClient
 	// JournalEntry is the client for interacting with the JournalEntry builders.
@@ -204,8 +206,6 @@ type Client struct {
 	Product *ProductClient
 	// Refund is the client for interacting with the Refund builders.
 	Refund *RefundClient
-	// ReminderDecision is the client for interacting with the ReminderDecision builders.
-	ReminderDecision *ReminderDecisionClient
 	// RevenueFact is the client for interacting with the RevenueFact builders.
 	RevenueFact *RevenueFactClient
 	// ScheduledTask is the client for interacting with the ScheduledTask builders.
@@ -295,6 +295,7 @@ func (c *Client) init() {
 	c.IncomingWebhookEvent = NewIncomingWebhookEventClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
+	c.InvoiceReminder = NewInvoiceReminderClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
 	c.JournalEntry = NewJournalEntryClient(c.config)
 	c.JournalLine = NewJournalLineClient(c.config)
@@ -310,7 +311,6 @@ func (c *Client) init() {
 	c.PriceUnit = NewPriceUnitClient(c.config)
 	c.Product = NewProductClient(c.config)
 	c.Refund = NewRefundClient(c.config)
-	c.ReminderDecision = NewReminderDecisionClient(c.config)
 	c.RevenueFact = NewRevenueFactClient(c.config)
 	c.ScheduledTask = NewScheduledTaskClient(c.config)
 	c.Secret = NewSecretClient(c.config)
@@ -461,6 +461,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IncomingWebhookEvent:             NewIncomingWebhookEventClient(cfg),
 		Invoice:                          NewInvoiceClient(cfg),
 		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
+		InvoiceReminder:                  NewInvoiceReminderClient(cfg),
 		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
 		JournalEntry:                     NewJournalEntryClient(cfg),
 		JournalLine:                      NewJournalLineClient(cfg),
@@ -476,7 +477,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PriceUnit:                        NewPriceUnitClient(cfg),
 		Product:                          NewProductClient(cfg),
 		Refund:                           NewRefundClient(cfg),
-		ReminderDecision:                 NewReminderDecisionClient(cfg),
 		RevenueFact:                      NewRevenueFactClient(cfg),
 		ScheduledTask:                    NewScheduledTaskClient(cfg),
 		Secret:                           NewSecretClient(cfg),
@@ -554,6 +554,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IncomingWebhookEvent:             NewIncomingWebhookEventClient(cfg),
 		Invoice:                          NewInvoiceClient(cfg),
 		InvoiceLineItem:                  NewInvoiceLineItemClient(cfg),
+		InvoiceReminder:                  NewInvoiceReminderClient(cfg),
 		InvoiceSequence:                  NewInvoiceSequenceClient(cfg),
 		JournalEntry:                     NewJournalEntryClient(cfg),
 		JournalLine:                      NewJournalLineClient(cfg),
@@ -569,7 +570,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PriceUnit:                        NewPriceUnitClient(cfg),
 		Product:                          NewProductClient(cfg),
 		Refund:                           NewRefundClient(cfg),
-		ReminderDecision:                 NewReminderDecisionClient(cfg),
 		RevenueFact:                      NewRevenueFactClient(cfg),
 		ScheduledTask:                    NewScheduledTaskClient(cfg),
 		Secret:                           NewSecretClient(cfg),
@@ -628,14 +628,14 @@ func (c *Client) Use(hooks ...Hook) {
 		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
 		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
 		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
+		c.InvoiceReminder, c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
 		c.MeterUsageCheckpoint, c.Payment, c.PaymentAttempt, c.PaymentMethod,
 		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
-		c.PriceUnit, c.Product, c.Refund, c.ReminderDecision, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -654,14 +654,14 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
 		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
 		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
-		c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
+		c.InvoiceReminder, c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
 		c.MeterUsageCheckpoint, c.Payment, c.PaymentAttempt, c.PaymentMethod,
 		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
-		c.PriceUnit, c.Product, c.Refund, c.ReminderDecision, c.RevenueFact,
-		c.ScheduledTask, c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.SubscriptionPhase, c.SubscriptionSchedule,
-		c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant,
-		c.UsageRecord, c.User, c.Wallet, c.WalletTransaction, c.WorkflowExecution,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -746,6 +746,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
 		return c.InvoiceLineItem.mutate(ctx, m)
+	case *InvoiceReminderMutation:
+		return c.InvoiceReminder.mutate(ctx, m)
 	case *InvoiceSequenceMutation:
 		return c.InvoiceSequence.mutate(ctx, m)
 	case *JournalEntryMutation:
@@ -776,8 +778,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Product.mutate(ctx, m)
 	case *RefundMutation:
 		return c.Refund.mutate(ctx, m)
-	case *ReminderDecisionMutation:
-		return c.ReminderDecision.mutate(ctx, m)
 	case *RevenueFactMutation:
 		return c.RevenueFact.mutate(ctx, m)
 	case *ScheduledTaskMutation:
@@ -6229,6 +6229,139 @@ func (c *InvoiceLineItemClient) mutate(ctx context.Context, m *InvoiceLineItemMu
 	}
 }
 
+// InvoiceReminderClient is a client for the InvoiceReminder schema.
+type InvoiceReminderClient struct {
+	config
+}
+
+// NewInvoiceReminderClient returns a client for the InvoiceReminder from the given config.
+func NewInvoiceReminderClient(c config) *InvoiceReminderClient {
+	return &InvoiceReminderClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `invoicereminder.Hooks(f(g(h())))`.
+func (c *InvoiceReminderClient) Use(hooks ...Hook) {
+	c.hooks.InvoiceReminder = append(c.hooks.InvoiceReminder, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `invoicereminder.Intercept(f(g(h())))`.
+func (c *InvoiceReminderClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InvoiceReminder = append(c.inters.InvoiceReminder, interceptors...)
+}
+
+// Create returns a builder for creating a InvoiceReminder entity.
+func (c *InvoiceReminderClient) Create() *InvoiceReminderCreate {
+	mutation := newInvoiceReminderMutation(c.config, OpCreate)
+	return &InvoiceReminderCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InvoiceReminder entities.
+func (c *InvoiceReminderClient) CreateBulk(builders ...*InvoiceReminderCreate) *InvoiceReminderCreateBulk {
+	return &InvoiceReminderCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InvoiceReminderClient) MapCreateBulk(slice any, setFunc func(*InvoiceReminderCreate, int)) *InvoiceReminderCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InvoiceReminderCreateBulk{err: fmt.Errorf("calling to InvoiceReminderClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InvoiceReminderCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InvoiceReminderCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InvoiceReminder.
+func (c *InvoiceReminderClient) Update() *InvoiceReminderUpdate {
+	mutation := newInvoiceReminderMutation(c.config, OpUpdate)
+	return &InvoiceReminderUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InvoiceReminderClient) UpdateOne(_m *InvoiceReminder) *InvoiceReminderUpdateOne {
+	mutation := newInvoiceReminderMutation(c.config, OpUpdateOne, withInvoiceReminder(_m))
+	return &InvoiceReminderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InvoiceReminderClient) UpdateOneID(id string) *InvoiceReminderUpdateOne {
+	mutation := newInvoiceReminderMutation(c.config, OpUpdateOne, withInvoiceReminderID(id))
+	return &InvoiceReminderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InvoiceReminder.
+func (c *InvoiceReminderClient) Delete() *InvoiceReminderDelete {
+	mutation := newInvoiceReminderMutation(c.config, OpDelete)
+	return &InvoiceReminderDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InvoiceReminderClient) DeleteOne(_m *InvoiceReminder) *InvoiceReminderDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InvoiceReminderClient) DeleteOneID(id string) *InvoiceReminderDeleteOne {
+	builder := c.Delete().Where(invoicereminder.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InvoiceReminderDeleteOne{builder}
+}
+
+// Query returns a query builder for InvoiceReminder.
+func (c *InvoiceReminderClient) Query() *InvoiceReminderQuery {
+	return &InvoiceReminderQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInvoiceReminder},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InvoiceReminder entity by its id.
+func (c *InvoiceReminderClient) Get(ctx context.Context, id string) (*InvoiceReminder, error) {
+	return c.Query().Where(invoicereminder.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InvoiceReminderClient) GetX(ctx context.Context, id string) *InvoiceReminder {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InvoiceReminderClient) Hooks() []Hook {
+	return c.hooks.InvoiceReminder
+}
+
+// Interceptors returns the client interceptors.
+func (c *InvoiceReminderClient) Interceptors() []Interceptor {
+	return c.inters.InvoiceReminder
+}
+
+func (c *InvoiceReminderClient) mutate(ctx context.Context, m *InvoiceReminderMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InvoiceReminderCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InvoiceReminderUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InvoiceReminderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InvoiceReminderDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InvoiceReminder mutation op: %q", m.Op())
+	}
+}
+
 // InvoiceSequenceClient is a client for the InvoiceSequence schema.
 type InvoiceSequenceClient struct {
 	config
@@ -8317,139 +8450,6 @@ func (c *RefundClient) mutate(ctx context.Context, m *RefundMutation) (Value, er
 		return (&RefundDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Refund mutation op: %q", m.Op())
-	}
-}
-
-// ReminderDecisionClient is a client for the ReminderDecision schema.
-type ReminderDecisionClient struct {
-	config
-}
-
-// NewReminderDecisionClient returns a client for the ReminderDecision from the given config.
-func NewReminderDecisionClient(c config) *ReminderDecisionClient {
-	return &ReminderDecisionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `reminderdecision.Hooks(f(g(h())))`.
-func (c *ReminderDecisionClient) Use(hooks ...Hook) {
-	c.hooks.ReminderDecision = append(c.hooks.ReminderDecision, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `reminderdecision.Intercept(f(g(h())))`.
-func (c *ReminderDecisionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.ReminderDecision = append(c.inters.ReminderDecision, interceptors...)
-}
-
-// Create returns a builder for creating a ReminderDecision entity.
-func (c *ReminderDecisionClient) Create() *ReminderDecisionCreate {
-	mutation := newReminderDecisionMutation(c.config, OpCreate)
-	return &ReminderDecisionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of ReminderDecision entities.
-func (c *ReminderDecisionClient) CreateBulk(builders ...*ReminderDecisionCreate) *ReminderDecisionCreateBulk {
-	return &ReminderDecisionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *ReminderDecisionClient) MapCreateBulk(slice any, setFunc func(*ReminderDecisionCreate, int)) *ReminderDecisionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &ReminderDecisionCreateBulk{err: fmt.Errorf("calling to ReminderDecisionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*ReminderDecisionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &ReminderDecisionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for ReminderDecision.
-func (c *ReminderDecisionClient) Update() *ReminderDecisionUpdate {
-	mutation := newReminderDecisionMutation(c.config, OpUpdate)
-	return &ReminderDecisionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *ReminderDecisionClient) UpdateOne(_m *ReminderDecision) *ReminderDecisionUpdateOne {
-	mutation := newReminderDecisionMutation(c.config, OpUpdateOne, withReminderDecision(_m))
-	return &ReminderDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *ReminderDecisionClient) UpdateOneID(id string) *ReminderDecisionUpdateOne {
-	mutation := newReminderDecisionMutation(c.config, OpUpdateOne, withReminderDecisionID(id))
-	return &ReminderDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for ReminderDecision.
-func (c *ReminderDecisionClient) Delete() *ReminderDecisionDelete {
-	mutation := newReminderDecisionMutation(c.config, OpDelete)
-	return &ReminderDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *ReminderDecisionClient) DeleteOne(_m *ReminderDecision) *ReminderDecisionDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *ReminderDecisionClient) DeleteOneID(id string) *ReminderDecisionDeleteOne {
-	builder := c.Delete().Where(reminderdecision.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &ReminderDecisionDeleteOne{builder}
-}
-
-// Query returns a query builder for ReminderDecision.
-func (c *ReminderDecisionClient) Query() *ReminderDecisionQuery {
-	return &ReminderDecisionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeReminderDecision},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a ReminderDecision entity by its id.
-func (c *ReminderDecisionClient) Get(ctx context.Context, id string) (*ReminderDecision, error) {
-	return c.Query().Where(reminderdecision.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *ReminderDecisionClient) GetX(ctx context.Context, id string) *ReminderDecision {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *ReminderDecisionClient) Hooks() []Hook {
-	return c.hooks.ReminderDecision
-}
-
-// Interceptors returns the client interceptors.
-func (c *ReminderDecisionClient) Interceptors() []Interceptor {
-	return c.inters.ReminderDecision
-}
-
-func (c *ReminderDecisionClient) mutate(ctx context.Context, m *ReminderDecisionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&ReminderDecisionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&ReminderDecisionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&ReminderDecisionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&ReminderDecisionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown ReminderDecision mutation op: %q", m.Op())
 	}
 }
 
@@ -11331,14 +11331,15 @@ type (
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
 		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
 		EventDeletionRequest, FXRate, Feature, Group, HostedInvoiceToken,
-		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, JournalEntry,
-		JournalLine, Meter, MeterUsageCheckpoint, Payment, PaymentAttempt,
-		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
-		Price, PriceUnit, Product, Refund, ReminderDecision, RevenueFact,
-		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
-		WalletTransaction, WorkflowExecution []ent.Hook
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceReminder,
+		InvoiceSequence, JournalEntry, JournalLine, Meter, MeterUsageCheckpoint,
+		Payment, PaymentAttempt, PaymentMethod, PerformanceObligation,
+		PerformanceObligationAssociation, Plan, Price, PriceUnit, Product, Refund,
+		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		WorkflowExecution []ent.Hook
 	}
 	inters struct {
 		AccountingPeriod, Addon, AddonAssociation, AlertLogs, AlertSettings,
@@ -11348,14 +11349,15 @@ type (
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
 		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
 		EventDeletionRequest, FXRate, Feature, Group, HostedInvoiceToken,
-		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, JournalEntry,
-		JournalLine, Meter, MeterUsageCheckpoint, Payment, PaymentAttempt,
-		PaymentMethod, PerformanceObligation, PerformanceObligationAssociation, Plan,
-		Price, PriceUnit, Product, Refund, ReminderDecision, RevenueFact,
-		ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, SubscriptionPhase, SubscriptionSchedule, SystemEvent, Task,
-		TaxApplied, TaxAssociation, TaxRate, Tenant, UsageRecord, User, Wallet,
-		WalletTransaction, WorkflowExecution []ent.Interceptor
+		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceReminder,
+		InvoiceSequence, JournalEntry, JournalLine, Meter, MeterUsageCheckpoint,
+		Payment, PaymentAttempt, PaymentMethod, PerformanceObligation,
+		PerformanceObligationAssociation, Plan, Price, PriceUnit, Product, Refund,
+		RevenueFact, ScheduledTask, Secret, Settings, Subscription,
+		SubscriptionLineItem, SubscriptionPause, SubscriptionPhase,
+		SubscriptionSchedule, SystemEvent, Task, TaxApplied, TaxAssociation, TaxRate,
+		Tenant, UsageRecord, User, Wallet, WalletTransaction,
+		WorkflowExecution []ent.Interceptor
 	}
 )
 

@@ -2011,6 +2011,43 @@ var (
 			},
 		},
 	}
+	// InvoiceRemindersColumns holds the columns for the "invoice_reminders" table.
+	InvoiceRemindersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "reminder_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "status_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "approved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "original_tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "original_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "original_body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "mail_tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "mail_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "mail_body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// InvoiceRemindersTable holds the schema information for the "invoice_reminders" table.
+	InvoiceRemindersTable = &schema.Table{
+		Name:       "invoice_reminders",
+		Columns:    InvoiceRemindersColumns,
+		PrimaryKey: []*schema.Column{InvoiceRemindersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_invoice_reminder_tenant_env_invoice",
+				Unique:  true,
+				Columns: []*schema.Column{InvoiceRemindersColumns[1], InvoiceRemindersColumns[7], InvoiceRemindersColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+		},
+	}
 	// InvoiceSequencesColumns holds the columns for the "invoice_sequences" table.
 	InvoiceSequencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -2686,47 +2723,6 @@ var (
 				Name:    "idx_refund_tenant_invoice",
 				Unique:  false,
 				Columns: []*schema.Column{RefundsColumns[1], RefundsColumns[7], RefundsColumns[9]},
-			},
-		},
-	}
-	// ReminderDecisionsColumns holds the columns for the "reminder_decisions" table.
-	ReminderDecisionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
-		{Name: "draft_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "hold_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "decided_at", Type: field.TypeTime, Nullable: true},
-		{Name: "tone_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "subject_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "body_override", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "invoice_ids", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "invoice_set_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(64)"}},
-		{Name: "frozen_subject", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "frozen_body", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "frozen_tone", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "version", Type: field.TypeInt, Default: 1},
-	}
-	// ReminderDecisionsTable holds the schema information for the "reminder_decisions" table.
-	ReminderDecisionsTable = &schema.Table{
-		Name:       "reminder_decisions",
-		Columns:    ReminderDecisionsColumns,
-		PrimaryKey: []*schema.Column{ReminderDecisionsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "idx_reminder_decision_tenant_env_customer_currency",
-				Unique:  true,
-				Columns: []*schema.Column{ReminderDecisionsColumns[1], ReminderDecisionsColumns[7], ReminderDecisionsColumns[8], ReminderDecisionsColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text)",
-				},
 			},
 		},
 	}
@@ -3856,6 +3852,7 @@ var (
 		IncomingWebhookEventsTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
+		InvoiceRemindersTable,
 		InvoiceSequencesTable,
 		JournalEntriesTable,
 		JournalLinesTable,
@@ -3871,7 +3868,6 @@ var (
 		PriceUnitsTable,
 		ProductsTable,
 		RefundsTable,
-		ReminderDecisionsTable,
 		RevenueFactsTable,
 		ScheduledTasksTable,
 		SecretsTable,

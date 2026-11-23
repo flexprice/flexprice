@@ -103,26 +103,22 @@ type CollectionsCurrencyTotal struct {
 	Amount   decimal.Decimal `json:"amount" swaggertype:"string"`
 }
 
-// CollectionsBoardCard is one invoice (not_due, paid_this_week) or one customer and currency (overdue).
+// CollectionsBoardCard is one invoice. Overdue-type cards carry the reminder fields; ReminderStatus is pending until someone acts.
 type CollectionsBoardCard struct {
-	CustomerID   string                     `json:"customer_id"`
-	CustomerName string                     `json:"customer_name"`
-	Source       types.ReceivableSourceType `json:"source"`
-	// ExternalID is the source's invoice id; empty when the card groups several invoices.
-	ExternalID     string   `json:"external_id,omitempty"`
-	InvoiceCount   int      `json:"invoice_count"`
-	InvoiceNumbers []string `json:"invoice_numbers"`
-	// Amount is the remaining balance (not_due, overdue) or the invoice total (paid_this_week).
-	Amount      decimal.Decimal `json:"amount" swaggertype:"string"`
-	Currency    string          `json:"currency"`
-	DaysOverdue *int            `json:"days_overdue,omitempty"`
-	DueInDays   *int            `json:"due_in_days,omitempty"`
-	DueDate     *time.Time      `json:"due_date,omitempty"`
-	PaidAt      *time.Time      `json:"paid_at,omitempty"`
-	// ReminderID, ReminderStatus and ReminderHoldReason describe the reminder of an overdue card; ReminderStatus is pending until someone acts.
-	ReminderID         string               `json:"reminder_id,omitempty"`
-	ReminderStatus     types.ReminderStatus `json:"reminder_status,omitempty"`
-	ReminderHoldReason string               `json:"reminder_hold_reason,omitempty"`
+	InvoiceID     string `json:"invoice_id"`
+	InvoiceNumber string `json:"invoice_number"`
+	CustomerID    string `json:"customer_id"`
+	CustomerName  string `json:"customer_name"`
+	// Amount is the remaining balance (not_due, overdue, chasing, held) or the invoice total (paid_this_week).
+	Amount               decimal.Decimal      `json:"amount" swaggertype:"string"`
+	Currency             string               `json:"currency"`
+	DueDate              *time.Time           `json:"due_date,omitempty"`
+	DaysOverdue          *int                 `json:"days_overdue,omitempty"`
+	DueInDays            *int                 `json:"due_in_days,omitempty"`
+	PaidAt               *time.Time           `json:"paid_at,omitempty"`
+	ReminderStatus       types.ReminderStatus `json:"reminder_status,omitempty"`
+	ReminderTone         types.ReminderTone   `json:"reminder_tone,omitempty"`
+	ReminderStatusReason string               `json:"reminder_status_reason,omitempty"`
 }
 
 // CollectionsBoardColumn is one board column with whole-column count and totals and a capped card list.
@@ -130,12 +126,10 @@ type CollectionsBoardColumn struct {
 	Key   types.CollectionsColumnKey `json:"key"`
 	Title string                     `json:"title"`
 	Hint  string                     `json:"hint"`
-	// Count is the number of cards in the whole column.
-	Count int `json:"count"`
-	// InvoiceCount is the number of invoices in the whole column.
-	InvoiceCount int                        `json:"invoice_count"`
-	Totals       []CollectionsCurrencyTotal `json:"totals"`
-	Cards        []CollectionsBoardCard     `json:"cards"`
+	// Count is the number of invoices in the whole column.
+	Count  int                        `json:"count"`
+	Totals []CollectionsCurrencyTotal `json:"totals"`
+	Cards  []CollectionsBoardCard     `json:"cards"`
 	// HasMore is true when the column has cards beyond the ones in this response.
 	HasMore bool `json:"has_more"`
 }
@@ -157,42 +151,36 @@ type CollectionsColumnPageResponse struct {
 	HasMore bool                       `json:"has_more"`
 }
 
-// ReminderInvoice is one overdue invoice covered by a reminder draft.
-type ReminderInvoice struct {
-	ID              string          `json:"id"`
-	Number          string          `json:"number"`
-	AmountRemaining decimal.Decimal `json:"amount_remaining" swaggertype:"string"`
-	DueDate         *time.Time      `json:"due_date,omitempty"`
-	DaysOverdue     int             `json:"days_overdue"`
-}
-
-// ReminderDraftResponse is a reminder draft with its decision and the live state of its invoices.
-type ReminderDraftResponse struct {
-	ID                string               `json:"id"`
-	CustomerID        string               `json:"customer_id"`
-	CustomerName      string               `json:"customer_name"`
-	CustomerEmail     string               `json:"customer_email"`
-	Currency          string               `json:"currency"`
-	Status            types.ReminderStatus `json:"status"`
-	Tone              types.ReminderTone   `json:"tone"`
-	Subject           string               `json:"subject"`
-	Body              string               `json:"body"`
-	Amount            decimal.Decimal      `json:"amount" swaggertype:"string"`
-	InvoiceCount      int                  `json:"invoice_count"`
-	OldestDaysOverdue int                  `json:"oldest_days_overdue"`
-	Invoices          []ReminderInvoice    `json:"invoices"`
-	HoldReason        string               `json:"hold_reason,omitempty"`
-	DecidedAt         *time.Time           `json:"decided_at,omitempty"`
-	Edited            bool                 `json:"edited"`
-	// Stale is true when the invoices changed after the text was written and the draft was not rewritten.
-	Stale bool     `json:"stale"`
-	Why   []string `json:"why"`
+// InvoiceReminderResponse is the reminder of one overdue invoice; its id is the invoice id.
+type InvoiceReminderResponse struct {
+	ID            string               `json:"id"`
+	InvoiceID     string               `json:"invoice_id"`
+	InvoiceNumber string               `json:"invoice_number"`
+	CustomerID    string               `json:"customer_id"`
+	CustomerName  string               `json:"customer_name"`
+	CustomerEmail string               `json:"customer_email"`
+	Currency      string               `json:"currency"`
+	Amount        decimal.Decimal      `json:"amount" swaggertype:"string"`
+	DueDate       *time.Time           `json:"due_date,omitempty"`
+	DaysOverdue   int                  `json:"days_overdue"`
+	Status        types.ReminderStatus `json:"status"`
+	Tone          types.ReminderTone   `json:"tone"`
+	Subject       string               `json:"subject"`
+	Body          string               `json:"body"`
+	StatusReason  string               `json:"status_reason,omitempty"`
+	ApprovedAt    *time.Time           `json:"approved_at,omitempty"`
+	// Edited is true when the mail differs from what the system wrote; the Original fields then hold the system's version.
+	Edited          bool               `json:"edited"`
+	OriginalTone    types.ReminderTone `json:"original_tone,omitempty"`
+	OriginalSubject string             `json:"original_subject,omitempty"`
+	OriginalBody    string             `json:"original_body,omitempty"`
+	Why             []string           `json:"why"`
 	// CreatedAt and UpdatedAt are omitted until a person acts on the reminder.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
-// ReminderSummary totals all overdue invoices and counts drafts by decision, ignoring list filters.
+// ReminderSummary totals all overdue invoices and counts reminders by status, ignoring list filters.
 type ReminderSummary struct {
 	OverdueTotals []CollectionsCurrencyTotal `json:"overdue_totals"`
 	InvoiceCount  int                        `json:"invoice_count"`
@@ -206,7 +194,6 @@ type ReminderSummary struct {
 // ListRemindersRequest filters the reminder draft list; every field is optional.
 type ListRemindersRequest struct {
 	Status     string `form:"status" json:"status,omitempty"`
-	Tone       string `form:"tone" json:"tone,omitempty"`
 	Q          string `form:"q" json:"q,omitempty"`
 	CustomerID string `form:"customer_id" json:"customer_id,omitempty"`
 	Currency   string `form:"currency" json:"currency,omitempty"`
@@ -219,10 +206,8 @@ type ListRemindersRequest struct {
 const (
 	RemindersDefaultLimit = 15
 	RemindersMaxLimit     = 100
-	// RemindersMaxBulk caps the ids of one bulk approval.
+	// RemindersMaxBulk caps the invoices of one bulk update.
 	RemindersMaxBulk = 200
-	// ReminderListInvoiceCap caps the invoices shown per draft in the list; the detail view returns all.
-	ReminderListInvoiceCap = 25
 )
 
 // PageNumber is the 1-based page requested, 1 when unset.
@@ -263,30 +248,42 @@ func (r *ListRemindersRequest) Validate() error {
 	if r.Status != "" && !types.ReminderStatus(r.Status).Valid() {
 		return ierr.NewError("invalid status").WithHint("status must be pending, approved, held or skipped.").Mark(ierr.ErrValidation)
 	}
-	if r.Tone != "" && !types.ReminderTone(r.Tone).Valid() {
-		return ierr.NewError("invalid tone").WithHint("tone must be friendly, firm or final.").Mark(ierr.ErrValidation)
-	}
 	return nil
 }
 
 type ListRemindersResponse struct {
-	AsOf    time.Time               `json:"as_of"`
-	Summary ReminderSummary         `json:"summary"`
-	Drafts  []ReminderDraftResponse `json:"drafts"`
-	Page    int                     `json:"page"`
-	HasMore bool                    `json:"has_more"`
+	AsOf    time.Time                 `json:"as_of"`
+	Summary ReminderSummary           `json:"summary"`
+	Drafts  []InvoiceReminderResponse `json:"drafts"`
+	Page    int                       `json:"page"`
+	HasMore bool                      `json:"has_more"`
 }
 
-// UpdateReminderRequest edits a pending or held draft. A tone change rewrites subject and body from that tone's template.
+// UpdateReminderRequest moves a reminder to a status and/or edits its mail; the request decides which. Status is
+// pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional
+// for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same
+// request is applied on top.
 type UpdateReminderRequest struct {
-	Subject *string `json:"subject,omitempty"`
-	Body    *string `json:"body,omitempty"`
-	Tone    *string `json:"tone,omitempty"`
+	Status       types.ReminderStatus `json:"status,omitempty"`
+	StatusReason string               `json:"status_reason,omitempty"`
+	Tone         *string              `json:"tone,omitempty"`
+	Subject      *string              `json:"subject,omitempty"`
+	Body         *string              `json:"body,omitempty"`
 }
 
 func (r *UpdateReminderRequest) Validate() error {
-	if r.Subject == nil && r.Body == nil && r.Tone == nil {
-		return ierr.NewError("nothing to update").WithHint("Send subject, body or tone.").Mark(ierr.ErrValidation)
+	r.StatusReason = strings.TrimSpace(r.StatusReason)
+	if r.Status == "" && r.StatusReason == "" && r.Subject == nil && r.Body == nil && r.Tone == nil {
+		return ierr.NewError("nothing to update").WithHint("Send status, tone, subject or body.").Mark(ierr.ErrValidation)
+	}
+	if r.Status != "" && !r.Status.Valid() {
+		return ierr.NewError("invalid status").WithHint("status must be pending, approved, held or skipped.").Mark(ierr.ErrValidation)
+	}
+	switch {
+	case r.Status == types.ReminderStatusHeld && r.StatusReason == "":
+		return ierr.NewError("reason required").WithHint("Say why this reminder is held with status_reason.").Mark(ierr.ErrValidation)
+	case r.StatusReason != "" && r.Status != types.ReminderStatusHeld && r.Status != types.ReminderStatusSkipped:
+		return ierr.NewError("unexpected reason").WithHint("status_reason only goes with status held or skipped.").Mark(ierr.ErrValidation)
 	}
 	if r.Tone != nil && !types.ReminderTone(*r.Tone).Valid() {
 		return ierr.NewError("invalid tone").WithHint("tone must be friendly, firm or final.").Mark(ierr.ErrValidation)
@@ -300,32 +297,26 @@ func (r *UpdateReminderRequest) Validate() error {
 	return nil
 }
 
-type HoldReminderRequest struct {
-	Reason string `json:"reason"`
+// BulkUpdateRemindersRequest applies the same status and tone change to up to 200 invoices. Subject and body are
+// per reminder, so they are rejected here.
+type BulkUpdateRemindersRequest struct {
+	InvoiceIDs []string `json:"invoice_ids"`
+	UpdateReminderRequest
 }
 
-func (r *HoldReminderRequest) Validate() error {
-	r.Reason = strings.TrimSpace(r.Reason)
-	if r.Reason == "" {
-		return ierr.NewError("reason required").WithHint("Say why this reminder is held.").Mark(ierr.ErrValidation)
+func (r *BulkUpdateRemindersRequest) Validate() error {
+	if len(r.InvoiceIDs) == 0 {
+		return ierr.NewError("invoice_ids required").WithHint("Send at least one invoice id.").Mark(ierr.ErrValidation)
 	}
-	return nil
-}
-
-type BulkApproveRemindersRequest struct {
-	IDs []string `json:"ids"`
-}
-
-func (r *BulkApproveRemindersRequest) Validate() error {
-	if len(r.IDs) == 0 {
-		return ierr.NewError("ids required").WithHint("Send at least one reminder id.").Mark(ierr.ErrValidation)
+	if len(r.InvoiceIDs) > RemindersMaxBulk {
+		return ierr.NewError("too many invoices").WithHint("Update at most 200 invoices at a time.").Mark(ierr.ErrValidation)
 	}
-	if len(r.IDs) > RemindersMaxBulk {
-		return ierr.NewError("too many ids").WithHint("Approve at most 200 reminders at a time.").Mark(ierr.ErrValidation)
+	if r.Subject != nil || r.Body != nil {
+		return ierr.NewError("subject and body not allowed").WithHint("Edit the subject or body of one reminder at a time.").Mark(ierr.ErrValidation)
 	}
-	return nil
+	return r.UpdateReminderRequest.Validate()
 }
 
-type BulkApproveRemindersResponse struct {
-	Drafts []ReminderDraftResponse `json:"drafts"`
+type BulkUpdateRemindersResponse struct {
+	Drafts []InvoiceReminderResponse `json:"drafts"`
 }

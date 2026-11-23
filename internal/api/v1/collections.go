@@ -22,7 +22,7 @@ func NewCollectionsHandler(service service.CollectionsService, log *logger.Logge
 // GetBoard godoc
 // @Summary Get collections board
 // @ID getCollectionsBoard
-// @Description Use when you need every open invoice by where it stands: sent but not due, overdue (one card per customer and currency), and paid in the last 7 days. Counts and per-currency totals cover whole columns and follow the q and currency filters; by default no cards are returned (limit 0): each column carries count, invoice_count and totals, and has_more is true when the column has cards to fetch with GET /collections/board/columns/{key}. With limit above 0 the first page of cards is returned too, and has_more says more cards follow. available_currencies lists the currencies present before filtering.
+// @Description Use when you need every open invoice by where it stands: sent but not due, overdue (one card per invoice, split by reminder status), and paid in the last 7 days. Counts and per-currency totals cover whole columns and follow the q and currency filters; by default no cards are returned (limit 0): each column carries count and totals, and has_more is true when the column has cards to fetch with GET /collections/board/columns/{key}. With limit above 0 the first page of cards is returned too, and has_more says more cards follow. available_currencies lists the currencies present before filtering.
 // @Tags Collections
 // @Produce json
 // @Security ApiKeyAuth

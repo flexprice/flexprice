@@ -18,7 +18,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	pdf "github.com/flexprice/flexprice/internal/domain/pdf"
@@ -3387,7 +3386,7 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		summary.UnpaidInvoiceCount++
 
 		// Check if invoice is overdue
-		if collections.IsOverdue(inv.DueDate, now) {
+		if types.IsOverdue(inv.DueDate, now) {
 			summary.TotalOverdueAmount = summary.TotalOverdueAmount.Add(inv.AmountRemaining)
 			summary.OverdueInvoiceCount++
 

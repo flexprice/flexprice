@@ -168,8 +168,8 @@ type ServiceParams struct {
 	JournalRepo                  journalRepo.Repository
 	JournalService               journalsvc.JournalService
 	BillingEntityRepo            billingentity.Repository
-	ReminderDecisionRepo         collections.ReminderDecisionRepository
-	ReceivableSource             collections.ReceivableSource
+	InvoiceReminderRepo          collections.InvoiceReminderRepository
+	BoardRepo                    collections.BoardRepository
 	EventDeletionRequestRepo     events.DeletionRequestRepository
 	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
@@ -302,8 +302,8 @@ func NewServiceParams(
 	journalRepo journalRepo.Repository,
 	journalService journalsvc.JournalService,
 	billingEntityRepo billingentity.Repository,
-	reminderDecisionRepo collections.ReminderDecisionRepository,
-	receivableSource collections.ReceivableSource,
+	invoiceReminderRepo collections.InvoiceReminderRepository,
+	boardRepo collections.BoardRepository,
 	eventDeletionRequestRepo events.DeletionRequestRepository,
 	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
@@ -399,8 +399,8 @@ func NewServiceParams(
 		JournalRepo:                  journalRepo,
 		JournalService:               journalService,
 		BillingEntityRepo:            billingEntityRepo,
-		ReminderDecisionRepo:         reminderDecisionRepo,
-		ReceivableSource:             receivableSource,
+		InvoiceReminderRepo:          invoiceReminderRepo,
+		BoardRepo:                    boardRepo,
 		EventDeletionRequestRepo:     eventDeletionRequestRepo,
 		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}

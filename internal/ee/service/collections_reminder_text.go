@@ -17,19 +17,13 @@ const (
 	reminderFirmMaxDays     = 60
 )
 
-type reminderLine struct {
+type reminderTextInput struct {
+	Greeting    string
+	Tenant      string
 	Number      string
 	Amount      string
 	Due         string
 	DaysOverdue int
-}
-
-type reminderTextInput struct {
-	Greeting string
-	Tenant   string
-	Count    int
-	Total    string
-	Lines    []reminderLine
 }
 
 var reminderFuncs = template.FuncMap{"overdue": overdueLabel}
@@ -37,39 +31,33 @@ var reminderFuncs = template.FuncMap{"overdue": overdueLabel}
 var reminderTemplates = map[types.ReminderTone]*template.Template{
 	types.ReminderToneFriendly: template.Must(template.New("friendly").Funcs(reminderFuncs).Parse(`Hi {{.Greeting}},
 
-A quick note that {{if eq .Count 1}}the invoice below is{{else}}the invoices below are{{end}} past due:
+A quick note that invoice {{.Number}} is past due:
 
-{{range .Lines}}  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
-{{end}}
-Total outstanding: {{.Total}}
+  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
 
-Could you reply with the date we can expect payment, or pay by bank transfer using the details on the {{if eq .Count 1}}invoice{{else}}invoices{{end}}? If you have already paid, please ignore this note and let us know the payment date.
+Could you reply with the date we can expect payment, or pay by bank transfer using the details on the invoice? If you have already paid, please ignore this note and let us know the payment date.
 
 Thanks,
 {{.Tenant}} Billing
 `)),
 	types.ReminderToneFirm: template.Must(template.New("firm").Funcs(reminderFuncs).Parse(`Hi {{.Greeting}},
 
-Our records show {{if eq .Count 1}}this invoice is{{else}}these invoices are{{end}} still unpaid after the due date:
+Our records show invoice {{.Number}} is still unpaid after the due date:
 
-{{range .Lines}}  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
-{{end}}
-Total outstanding: {{.Total}}
+  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
 
-Please reply with the date we will receive payment, or pay by bank transfer using the details on the {{if eq .Count 1}}invoice{{else}}invoices{{end}}, so we can keep your account in good standing. If something is wrong with {{if eq .Count 1}}the invoice{{else}}any of them{{end}}, tell us and we will sort it out.
+Please reply with the date we will receive payment, or pay by bank transfer using the details on the invoice, so we can keep your account in good standing. If something is wrong with the invoice, tell us and we will sort it out.
 
 Thanks,
 {{.Tenant}} Billing
 `)),
 	types.ReminderToneFinal: template.Must(template.New("final").Funcs(reminderFuncs).Parse(`Hi {{.Greeting}},
 
-This is a final notice. {{if eq .Count 1}}The invoice below has{{else}}The invoices below have{{end}} been overdue for a long time and we have not received payment:
+This is a final notice. Invoice {{.Number}} has been overdue for a long time and we have not received payment:
 
-{{range .Lines}}  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
-{{end}}
-Total outstanding: {{.Total}}
+  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{overdue .DaysOverdue}})
 
-Please pay by bank transfer using the details on the {{if eq .Count 1}}invoice{{else}}invoices{{end}}, or reply today with a confirmed payment date. If we do not hear from you, we may have to pause service or take further collection steps.
+Please pay by bank transfer using the details on the invoice, or reply today with a confirmed payment date. If we do not hear from you, we may have to pause service or take further collection steps.
 
 Thanks,
 {{.Tenant}} Billing
@@ -115,32 +103,30 @@ func reminderMoney(amount decimal.Decimal, currency string) string {
 	return text
 }
 
-// renderReminder writes the subject and body of a reminder for a group of overdue receivables.
-func renderReminder(tone types.ReminderTone, greeting, tenant string, g overdueGroup, now time.Time) (subject, body string, err error) {
-	lines := make([]reminderLine, len(g.rows))
-	for i, r := range g.rows {
-		lines[i] = reminderLine{
-			Number:      r.Number,
-			Amount:      reminderMoney(r.AmountRemaining, g.currency),
-			Due:         r.DueDate.UTC().Format("Jan 2"),
-			DaysOverdue: calendarDaysBetween(*r.DueDate, now),
-		}
-	}
-	total := reminderMoney(g.amount(), g.currency)
-	input := reminderTextInput{Greeting: greeting, Tenant: tenant, Count: len(g.rows), Total: total, Lines: lines}
+// reminderInvoice is what a reminder says about its invoice.
+type reminderInvoice struct {
+	number    string
+	currency  string
+	remaining decimal.Decimal
+	due       time.Time
+}
 
+// renderReminder writes the subject and body of the reminder of one overdue invoice in a tone.
+func renderReminder(tone types.ReminderTone, greeting, tenant string, inv reminderInvoice, now time.Time) (subject, body string, err error) {
+	amount := reminderMoney(inv.remaining, inv.currency)
+	input := reminderTextInput{
+		Greeting: greeting, Tenant: tenant, Number: inv.number, Amount: amount,
+		Due: inv.due.UTC().Format("Jan 2"), DaysOverdue: calendarDaysBetween(inv.due, now),
+	}
 	var buf bytes.Buffer
 	if err := reminderTemplates[tone].Execute(&buf, input); err != nil {
 		return "", "", err
 	}
-	return reminderSubject(tone, g, total), buf.String(), nil
+	return reminderSubject(tone, inv.number, amount), buf.String(), nil
 }
 
-func reminderSubject(tone types.ReminderTone, g overdueGroup, total string) string {
-	base := fmt.Sprintf("%d invoices past due: %s", len(g.rows), total)
-	if len(g.rows) == 1 {
-		base = fmt.Sprintf("Invoice %s is past due: %s", g.rows[0].Number, total)
-	}
+func reminderSubject(tone types.ReminderTone, number, amount string) string {
+	base := fmt.Sprintf("Invoice %s is past due: %s", number, amount)
 	switch tone {
 	case types.ReminderToneFirm:
 		return "Reminder: " + base

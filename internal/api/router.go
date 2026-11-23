@@ -571,13 +571,9 @@ func NewRouter(
 			collectionsRoutes.GET("/board", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoard)
 			collectionsRoutes.GET("/board/columns/:key", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoardColumn)
 			collectionsRoutes.GET("/reminders", read(types.EntityCollections, types.ActionRead), handlers.Reminders.ListReminders)
-			collectionsRoutes.POST("/reminders/approve", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.BulkApproveReminders)
 			collectionsRoutes.GET("/reminders/:id", read(types.EntityCollections, types.ActionRead), handlers.Reminders.GetReminder)
-			collectionsRoutes.PUT("/reminders/:id", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.UpdateReminder)
-			collectionsRoutes.POST("/reminders/:id/approve", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.ApproveReminder)
-			collectionsRoutes.POST("/reminders/:id/hold", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.HoldReminder)
-			collectionsRoutes.POST("/reminders/:id/skip", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.SkipReminder)
-			collectionsRoutes.POST("/reminders/:id/reopen", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.ReopenReminder)
+			collectionsRoutes.PUT("/reminders/update/:id", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.UpdateReminder)
+			collectionsRoutes.PUT("/reminders/bulk-update", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.BulkUpdateReminders)
 		}
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")

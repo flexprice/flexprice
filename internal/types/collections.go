@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // CollectionsColumnKey identifies a column on the collections board.
 type CollectionsColumnKey string
 
@@ -11,23 +13,7 @@ const (
 	CollectionsColumnPaidThisWeek CollectionsColumnKey = "paid_this_week"
 )
 
-// ReceivableSourceType names the system a receivable comes from.
-type ReceivableSourceType string
-
-const (
-	ReceivableSourceFlexprice ReceivableSourceType = "flexprice"
-)
-
-// ReceivableStatus is the normalized state of a receivable.
-type ReceivableStatus string
-
-const (
-	ReceivableStatusOpen ReceivableStatus = "open"
-	ReceivableStatusPaid ReceivableStatus = "paid"
-	ReceivableStatusVoid ReceivableStatus = "void"
-)
-
-// ReminderStatus is the decision recorded on a reminder draft.
+// ReminderStatus is the state of an invoice reminder; an invoice nobody acted on is pending.
 type ReminderStatus string
 
 const (
@@ -37,7 +23,7 @@ const (
 	ReminderStatusSkipped  ReminderStatus = "skipped"
 )
 
-// ReminderTone is the wording level of a reminder, set by how overdue the oldest invoice is.
+// ReminderTone is the wording level of a reminder, set by how overdue the invoice is.
 type ReminderTone string
 
 const (
@@ -45,6 +31,8 @@ const (
 	ReminderToneFirm     ReminderTone = "firm"
 	ReminderToneFinal    ReminderTone = "final"
 )
+
+const CollectionsPaidWindow = 7 * 24 * time.Hour
 
 func (s ReminderStatus) Valid() bool {
 	switch s {
@@ -60,4 +48,20 @@ func (t ReminderTone) Valid() bool {
 		return true
 	}
 	return false
+}
+
+func IsOverdue(dueDate *time.Time, now time.Time) bool {
+	return dueDate != nil && dueDate.Before(now)
+}
+
+func ColumnStatuses(column CollectionsColumnKey) []ReminderStatus {
+	switch column {
+	case CollectionsColumnOverdue:
+		return []ReminderStatus{ReminderStatusPending}
+	case CollectionsColumnChasing:
+		return []ReminderStatus{ReminderStatusApproved}
+	case CollectionsColumnHeld:
+		return []ReminderStatus{ReminderStatusHeld, ReminderStatusSkipped}
+	}
+	return nil
 }
