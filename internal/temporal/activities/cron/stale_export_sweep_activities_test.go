@@ -125,3 +125,30 @@ func (f fakeScheduledTasks) Get(_ context.Context, id string) (*scheduledtask.Sc
 	}
 	return nil, errors.New("not found")
 }
+
+func TestSweepStaleExportRuns_KeepsExistingDeliveries(t *testing.T) {
+	store := testutil.NewInMemoryTaskStore()
+	row := &task.Task{ID: "stuck", TaskType: types.TaskTypeExport, TaskStatus: types.TaskStatusProcessing, EnvironmentID: "e1",
+		Metadata: map[string]interface{}{"view_updated_at": "x"}}
+	row.TenantID = "t1"
+	row.Status = types.StatusPublished
+	row.CreatedAt = clock.Now().Add(-3 * time.Hour)
+	require.NoError(t, store.Create(context.Background(), row))
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "t1"), "e1")
+	existing := []types.ExportDelivery{
+		{Type: types.ExportDeliveryTypeS3, Status: types.ExportDeliveryStatusDelivered},
+		{Type: types.ExportDeliveryTypeEmail, Status: types.ExportDeliveryStatusDelivered},
+	}
+	require.NoError(t, store.SetTaskMetadataKey(ctx, "stuck", "deliveries", existing))
+
+	a := NewStaleExportSweepActivities(store, fakeScheduledTasks{}, logger.NewNoopLogger())
+	n, err := a.SweepStaleExportRunsActivity(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+
+	got, err := store.Get(ctx, "stuck")
+	require.NoError(t, err)
+	require.Equal(t, types.TaskStatusFailed, got.TaskStatus)
+	require.Equal(t, existing, got.Metadata["deliveries"])
+	require.Equal(t, "x", got.Metadata["view_updated_at"])
+}

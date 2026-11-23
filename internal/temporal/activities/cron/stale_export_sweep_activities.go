@@ -79,11 +79,14 @@ func (a *StaleExportSweepActivities) SweepStaleExportRunsActivity(ctx context.Co
 	return total, nil
 }
 
-// recordFailedDelivery logs and drops its own errors.
+// recordFailedDelivery keeps existing deliveries; logs its errors.
 func (a *StaleExportSweepActivities) recordFailedDelivery(ctx context.Context, taskID string) {
 	run, err := a.taskRepo.Get(ctx, taskID)
 	if err != nil {
 		a.logger.Error(ctx, "stale export sweep: get run failed", "error", err, "task_id", taskID)
+		return
+	}
+	if existing, ok := run.Metadata["deliveries"]; ok && existing != nil {
 		return
 	}
 	var connectionID string
