@@ -211,6 +211,11 @@ func TestRunFailureMessage(t *testing.T) {
 	require.Equal(t, runTimedOutMessage, runFailureMessage(temporal.NewTimeoutError(enumspb.TIMEOUT_TYPE_START_TO_CLOSE, nil)))
 	require.Equal(t, runTimedOutMessage, runFailureMessage(fmt.Errorf("wrap: %w", context.DeadlineExceeded)))
 	require.Equal(t, runFailedMessage, runFailureMessage(errors.New("bucket access denied")))
+
+	deleted := temporal.NewNonRetryableApplicationError("The saved view used by this export was deleted", export.ErrTypeViewDeleted, nil)
+	require.Equal(t, "The saved view used by this export was deleted", runFailureMessage(fmt.Errorf("activity: %w", deleted)))
+	other := temporal.NewNonRetryableApplicationError("secret bucket detail", "NotFound", nil)
+	require.Equal(t, runFailedMessage, runFailureMessage(other))
 }
 
 func TestExecuteExportWorkflow_SubDailySendsNoEmail(t *testing.T) {

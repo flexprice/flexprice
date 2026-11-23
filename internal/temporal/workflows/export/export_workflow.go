@@ -370,6 +370,10 @@ func runFailureMessage(err error) string {
 	if temporal.IsTimeoutError(err) || errors.Is(err, context.DeadlineExceeded) {
 		return runTimedOutMessage
 	}
+	var appErr *temporal.ApplicationError
+	if errors.As(err, &appErr) && appErr.Type() == export.ErrTypeViewDeleted {
+		return appErr.Message()
+	}
 	msg := strings.ToLower(err.Error())
 	for _, s := range []string{"deadline exceeded", "timeout", "timed out"} {
 		if strings.Contains(msg, s) {
