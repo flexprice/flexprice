@@ -39,9 +39,11 @@ func TestLiveMatrix(t *testing.T) {
 	engine := NewEngine(e2eprobe.NewSDKClient(host, key).Raw(), runID, os.Getenv("BM_ASSERT_KNOWN_ISSUES") == "true")
 
 	ctx := context.Background()
+	filter := os.Getenv("BM_FILTER")
 	matched := 0
+	executed := 0
 	for _, f := range families {
-		results := engine.RunAll(ctx, f, os.Getenv("BM_FILTER"))
+		results := engine.RunAll(ctx, f, filter)
 		matched += len(results)
 		passed, skipped := 0, 0
 		for _, r := range results {
@@ -59,10 +61,14 @@ func TestLiveMatrix(t *testing.T) {
 				passed++
 			}
 		}
+		executed += len(results) - skipped
 		t.Logf("family %s: %d passed, %d failed, %d skipped", f, passed, len(results)-passed-skipped, skipped)
 	}
 	if matched == 0 {
-		t.Fatalf("no billing scenarios matched BM_FILTER=%q", os.Getenv("BM_FILTER"))
+		t.Fatalf("no billing scenarios matched BM_FILTER=%q", filter)
+	}
+	if executed == 0 {
+		t.Fatalf("all billing scenarios matching BM_FILTER=%q were skipped as known issues", filter)
 	}
 	if os.Getenv("BM_SWEEP") == "true" {
 		removed, failed := engine.SweepOrphans(ctx, time.Now())
