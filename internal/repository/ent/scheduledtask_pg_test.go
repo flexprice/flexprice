@@ -90,7 +90,6 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 		EntityType:   types.ScheduledTaskEntityTypeReport,
 		Interval:     types.ScheduledTaskIntervalManual,
 		Enabled:      true,
-		ManagedCopy:  true,
 		SourceConfig: srcCfg,
 		Status:       types.StatusPublished,
 	}
@@ -101,11 +100,10 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 
 	for _, status := range []types.Status{types.StatusDeleted, types.StatusArchived} {
 		hidden := &scheduledtask.ScheduledTask{
-			ID:          "st_" + runID + "_" + string(status),
-			EntityType:  types.ScheduledTaskEntityTypeReport,
-			Interval:    types.ScheduledTaskIntervalManual,
-			ManagedCopy: true,
-			Status:      status,
+			ID:         "st_" + runID + "_" + string(status),
+			EntityType: types.ScheduledTaskEntityTypeReport,
+			Interval:   types.ScheduledTaskIntervalManual,
+			Status:     status,
 		}
 		require.NoError(t, repo.Create(ctx, hidden))
 		_, err = repo.Get(ctx, hidden.ID)
