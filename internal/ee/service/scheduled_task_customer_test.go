@@ -20,14 +20,17 @@ import (
 
 type originRepoFake struct {
 	scheduledtask.Repository
-	created *scheduledtask.ScheduledTask
-	listed  *scheduledtask.ListFilters
-	deleted string
+	created      *scheduledtask.ScheduledTask
+	listed       *scheduledtask.ListFilters
+	deleted      string
+	deleteErr    error
+	deleteCtxErr error
 }
 
-func (r *originRepoFake) Delete(_ context.Context, id string) error {
+func (r *originRepoFake) Delete(ctx context.Context, id string) error {
 	r.deleted = id
-	return nil
+	r.deleteCtxErr = ctx.Err()
+	return r.deleteErr
 }
 
 func (r *originRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTask) error {
@@ -391,6 +394,31 @@ func TestCreate_RunNow(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, resp)
 		require.Equal(t, repo.created.ID, repo.deleted)
+	})
+	t.Run("rollback survives request cancellation", func(t *testing.T) {
+		repo := &originRepoFake{}
+		s := customerExportService(repo, &customerCountFake{})
+		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		ctx, cancel := context.WithCancel(exportCtx())
+		cancel()
+		req := customersReq()
+		req.RunNow = true
+		_, err := s.CreateScheduledTask(ctx, req)
+		require.Error(t, err)
+		require.Equal(t, repo.created.ID, repo.deleted)
+		require.NoError(t, repo.deleteCtxErr)
+	})
+	t.Run("failed rollback reports the export id", func(t *testing.T) {
+		repo := &originRepoFake{deleteErr: errors.New("db down")}
+		s := customerExportService(repo, &customerCountFake{})
+		s.temporalClient = &exportTemporalFake{runErr: errors.New("unavailable")}
+		req := customersReq()
+		req.RunNow = true
+		resp, err := s.CreateScheduledTask(exportCtx(), req)
+		require.Nil(t, resp)
+		require.True(t, ierr.IsInternal(err), "got %v", err)
+		require.Contains(t, errText(err), repo.created.ID)
+		require.Contains(t, errText(err), "may still exist")
 	})
 }
 

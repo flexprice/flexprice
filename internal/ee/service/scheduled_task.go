@@ -427,8 +427,15 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		run, err := s.runNow(ctx, task, req.ForceRunRequest())
 		if err != nil {
 			s.logger.Error(ctx, "run_now failed", "error", err, "scheduled_task_id", task.ID)
-			// Rollback: delete the created task
-			_ = s.repo.Delete(ctx, task.ID)
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), runNowRollbackTimeout)
+			defer cancel()
+			if delErr := s.repo.Delete(cleanupCtx, task.ID); delErr != nil {
+				s.logger.Error(ctx, "run_now rollback failed", "error", delErr, "scheduled_task_id", task.ID)
+				return nil, ierr.WithError(err).
+					WithHintf("The export could not start, and export %s may still exist. Delete it before retrying.", task.ID).
+					WithReportableDetails(map[string]interface{}{"scheduled_task_id": task.ID}).
+					Mark(ierr.ErrInternal)
+			}
 			return nil, err
 		}
 		resp.Run = run

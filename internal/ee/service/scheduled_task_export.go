@@ -12,6 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+const runNowRollbackTimeout = 10 * time.Second
+
 // connectionJobConfig validates connection-backed job config.
 func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.CreateScheduledTaskRequest) (*types.S3JobConfig, error) {
 	tenantID := types.GetTenantID(ctx)
