@@ -78,11 +78,6 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
 			Mark(ierr.ErrValidation)
 	}
-	if interval != ScheduledTaskIntervalHourly && skippedByDST(loc, s.Hour, s.Minute, clock.Now()) {
-		return ierr.NewError("schedule time is skipped by daylight saving").
-			WithHintf("%02d:%02d does not exist on some days in %s. Pick a time outside the clock change.", s.Hour, s.Minute, s.Timezone).
-			Mark(ierr.ErrValidation)
-	}
 	if interval == ScheduledTaskIntervalWeekly {
 		if s.DayOfWeek == nil || *s.DayOfWeek < 0 || *s.DayOfWeek > 6 {
 			return ierr.NewError("invalid schedule day_of_week").
@@ -105,15 +100,27 @@ func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
 			WithHint("day_of_month is only allowed for monthly schedules").
 			Mark(ierr.ErrValidation)
 	}
+	if interval != ScheduledTaskIntervalHourly && s.skippedByDST(loc, interval, clock.Now()) {
+		return ierr.NewError("schedule time is skipped by daylight saving").
+			WithHintf("%02d:%02d does not exist on some run days in %s. Pick a time outside the clock change.", s.Hour, s.Minute, s.Timezone).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
-// skippedByDST reports a local time missing within two years.
-func skippedByDST(loc *time.Location, hour, minute int, from time.Time) bool {
+// skippedByDST reports a missing run time within two years.
+func (s *ExportSchedule) skippedByDST(loc *time.Location, interval ScheduledTaskInterval, from time.Time) bool {
 	day := from.In(loc)
 	for i := 0; i < 2*366; i++ {
-		t := time.Date(day.Year(), day.Month(), day.Day()+i, hour, minute, 0, 0, loc)
-		if t.Hour() != hour || t.Minute() != minute {
+		date := time.Date(day.Year(), day.Month(), day.Day()+i, 12, 0, 0, 0, loc)
+		if interval == ScheduledTaskIntervalWeekly && int(date.Weekday()) != *s.DayOfWeek {
+			continue
+		}
+		if interval == ScheduledTaskIntervalMonthly && date.Day() != *s.DayOfMonth {
+			continue
+		}
+		t := time.Date(date.Year(), date.Month(), date.Day(), s.Hour, s.Minute, 0, 0, loc)
+		if t.Hour() != s.Hour || t.Minute() != s.Minute {
 			return true
 		}
 	}

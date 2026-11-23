@@ -34,6 +34,9 @@ func TestExportScheduleValidate(t *testing.T) {
 		{"daily outside dst gap", ScheduledTaskIntervalDaily, ExportSchedule{Hour: 3, Timezone: "America/Los_Angeles"}, false},
 		{"daily repeated hour ok", ScheduledTaskIntervalDaily, ExportSchedule{Hour: 1, Minute: 30, Timezone: "America/Los_Angeles"}, false},
 		{"hourly ignores dst gap", ScheduledTaskIntervalHourly, ExportSchedule{Hour: 2, Minute: 30, Timezone: "America/Los_Angeles"}, false},
+		{"weekly monday skips sunday gap", ScheduledTaskIntervalWeekly, ExportSchedule{Hour: 2, Minute: 30, DayOfWeek: intPtr(1), Timezone: "America/Los_Angeles"}, false},
+		{"monthly day 1 skips gap", ScheduledTaskIntervalMonthly, ExportSchedule{Hour: 2, Minute: 30, DayOfMonth: intPtr(1), Timezone: "America/Los_Angeles"}, false},
+		{"weekly missing dow in gap zone", ScheduledTaskIntervalWeekly, ExportSchedule{Hour: 2, Minute: 30, Timezone: "America/Los_Angeles"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -83,23 +86,31 @@ func TestSkippedByDST(t *testing.T) {
 		t.Fatal(err)
 	}
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	daily := ScheduledTaskIntervalDaily
+	weekly := ScheduledTaskIntervalWeekly
+	monthly := ScheduledTaskIntervalMonthly
 	tests := []struct {
-		name   string
-		loc    *time.Location
-		hour   int
-		minute int
-		want   bool
+		name     string
+		loc      *time.Location
+		interval ScheduledTaskInterval
+		s        ExportSchedule
+		want     bool
 	}{
-		{"la 02:00 spring forward", la, 2, 0, true},
-		{"la 02:59 spring forward", la, 2, 59, true},
-		{"la 03:00", la, 3, 0, false},
-		{"la 01:59", la, 1, 59, false},
-		{"kolkata no dst", kolkata, 2, 30, false},
-		{"utc", time.UTC, 2, 30, false},
+		{"la 02:00 spring forward", la, daily, ExportSchedule{Hour: 2}, true},
+		{"la 02:59 spring forward", la, daily, ExportSchedule{Hour: 2, Minute: 59}, true},
+		{"la 03:00", la, daily, ExportSchedule{Hour: 3}, false},
+		{"la 01:59", la, daily, ExportSchedule{Hour: 1, Minute: 59}, false},
+		{"kolkata no dst", kolkata, daily, ExportSchedule{Hour: 2, Minute: 30}, false},
+		{"utc", time.UTC, daily, ExportSchedule{Hour: 2, Minute: 30}, false},
+		{"la weekly monday 02:30", la, weekly, ExportSchedule{Hour: 2, Minute: 30, DayOfWeek: intPtr(1)}, false},
+		{"la weekly sunday 02:30", la, weekly, ExportSchedule{Hour: 2, Minute: 30, DayOfWeek: intPtr(0)}, true},
+		{"la monthly day 1 02:30", la, monthly, ExportSchedule{Hour: 2, Minute: 30, DayOfMonth: intPtr(1)}, false},
+		{"la monthly day 8 02:30 hits 2026-03-08", la, monthly, ExportSchedule{Hour: 2, Minute: 30, DayOfMonth: intPtr(8)}, true},
+		{"la monthly day 8 03:00", la, monthly, ExportSchedule{Hour: 3, DayOfMonth: intPtr(8)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := skippedByDST(tt.loc, tt.hour, tt.minute, from); got != tt.want {
+			if got := tt.s.skippedByDST(tt.loc, tt.interval, from); got != tt.want {
 				t.Fatalf("got %v want %v", got, tt.want)
 			}
 		})
