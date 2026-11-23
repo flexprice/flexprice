@@ -632,6 +632,9 @@ func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string
 		return "", ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
 	}
 	def := exportDefinition(*v.Definition, "2026-01-01..2026-01-02")
+	if err := rejectUsageView(def); err != nil {
+		return "", err
+	}
 	grain := viewGrain(def)
 	if def.Family == types.FamilyReport {
 		if err := s.requireReports(); err != nil {
@@ -654,6 +657,16 @@ func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string
 		}
 	}
 	return grain, nil
+}
+
+// Usage views need one customer to return rows.
+func rejectUsageView(def *analytics.ViewDefinition) error {
+	if def.Family != "" && def.Family != types.FamilyUsage {
+		return nil
+	}
+	return ierr.NewError("usage views cannot be exported").
+		WithHint("Usage views need a single customer and would export no rows; export a billing or report view instead").
+		Mark(ierr.ErrValidation)
 }
 
 func viewGrain(def *analytics.ViewDefinition) types.Grain {
@@ -706,6 +719,9 @@ func (s *analyticsService) RunViewForExport(ctx context.Context, viewID, rng str
 		return nil, time.Time{}, ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
 	}
 	def := exportDefinition(*v.Definition, rng)
+	if err := rejectUsageView(def); err != nil {
+		return nil, time.Time{}, err
+	}
 
 	if def.Family == types.FamilyReport {
 		res, err := s.runReportView(ctx, def)

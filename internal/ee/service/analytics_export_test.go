@@ -273,6 +273,25 @@ func TestReportViewVariables(t *testing.T) {
 	assert.Equal(t, []string{"SUBSCRIPTION"}, repo.Last.Filters[0].Value)
 }
 
+func TestViewSource_RejectsUsageViews(t *testing.T) {
+	svc, views := exportSvc(&testutil.InMemoryReportsRepo{On: true})
+	ctx := userCtx("env_1")
+	v := &analytics.View{Name: "usage", Definition: &analytics.ViewDefinition{
+		Shape:   types.ShapeTimeseries,
+		Metrics: []types.Metric{types.MetricUsageQuantity},
+		Time:    analytics.TimeSpecRaw{Range: "last_7_days", Grain: types.GrainDay},
+	}}
+	require.NoError(t, views.Create(ctx, v))
+
+	err := validateView(svc, ctx, v.ID, 1)
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+
+	_, _, err = svc.RunViewForExport(ctx, v.ID, "2026-11-09..2026-11-10")
+	require.Error(t, err)
+	assert.True(t, ierr.IsValidation(err))
+}
+
 func TestValidateViewSource_ReturnsTimeseriesGrain(t *testing.T) {
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
 	ctx := userCtx("env_1")
