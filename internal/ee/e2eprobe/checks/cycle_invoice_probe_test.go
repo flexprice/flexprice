@@ -45,6 +45,16 @@ func TestCycleInvoiceProbe_QueriesInvoicesByCustomerID(t *testing.T) {
 	if fc.invoices.lastFilter.SubscriptionID != nil {
 		t.Errorf("expected invoice query NOT to use SubscriptionID filter (unreliable), but SubscriptionID was set")
 	}
+	f := fc.invoices.lastFilter
+	if f.InvoiceType == nil || *f.InvoiceType != sdktypes.InvoiceTypeSubscription {
+		t.Errorf("expected subscription invoice type filter, got %v", f.InvoiceType)
+	}
+	if f.Limit == nil || *f.Limit != cycleInvoiceScanLimit {
+		t.Errorf("expected limit %d, got %v", cycleInvoiceScanLimit, f.Limit)
+	}
+	if f.Order == nil || *f.Order != sdktypes.InvoiceFilterOrderDesc {
+		t.Errorf("expected desc order, got %v", f.Order)
+	}
 }
 
 // TestCycleInvoiceProbe_ChecksFreshness verifies the full happy path: sub with a
@@ -192,5 +202,23 @@ func TestCycleInvoiceProbe_NoCustomerIDSkips(t *testing.T) {
 	}
 	if fc.invoices.queries != 0 {
 		t.Errorf("expected 0 invoice queries when customer_id absent, got %d", fc.invoices.queries)
+	}
+}
+
+func TestCycleInvoiceProbe_NonActiveSubSkips(t *testing.T) {
+	fc := newFakeClient()
+	subID, cust := "sub_cancelled", "cust_1"
+	status := sdktypes.SubscriptionStatusCancelled
+	created := time.Now().Add(-90 * 24 * time.Hour)
+	fc.subs.subs = map[string]sdktypes.SubscriptionResponse{
+		subID: {ID: &subID, CustomerID: &cust, SubscriptionStatus: &status, CreatedAt: &created},
+	}
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{PersistentSubIDs: []string{subID}})
+	if err := NewCycleInvoiceProbe(fc, reg, "run-1").Run(context.Background()); err != nil {
+		t.Fatalf("expected skip for cancelled sub, got: %v", err)
+	}
+	if fc.invoices.queries != 0 {
+		t.Errorf("expected 0 invoice queries, got %d", fc.invoices.queries)
 	}
 }
