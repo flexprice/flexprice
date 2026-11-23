@@ -390,12 +390,14 @@ Scope comes from the cutoff instead: a request erases rows whose `ingested_at` i
 
 The consequence is tenant-facing and must not be softened: a suppressed customer can still accrue new data. Verification therefore proves **zero in-scope rows**, never zero rows outright.
 
-Four questions the cutoff alone does not settle, all open:
+Five questions the cutoff alone does not settle, all open:
 
 - **In flight at the cutoff.** `ingested_at` is assigned when the row is written, not when the event was accepted, so an event accepted before the instruction can land after the cutoff and escape the purge. That is data Flexprice held at receipt which verification would not catch, and clause 7.2(b) covers it. No adjustment of the cutoff fixes this: moving it earlier excludes more rows, and moving it later starts deleting genuinely post-instruction events. It needs an acceptance timestamp carried on the event through the pipeline and compared instead of the write time. Until then the guarantee is bounded by write latency rather than by receipt.
 - **Telling a retry from a new instruction.** A repeat call is currently indistinguishable from a second instruction, and the two want opposite treatment. A new instruction arriving while a request is open is given that request's cutoff and so misses everything since; a retry after completion opens a new request whose cutoff reaches past the instruction it is retrying. Requests need an instruction identity of their own — `instruction_ref` already exists for the written route — and a rule for whether a later instruction queues behind an open request or supersedes it.
 - **The conflict path can find nothing.** On a unique-index conflict the winning request may complete or be cancelled before the losing call looks it up, which leaves that call returning success with no record to return. It needs to recheck and either create or answer with a defined conflict.
 - **Verification across customer generations.** BR6 lets a different person reuse an `external_id`, and `subject_ref` is derived from that identifier alone. A match therefore proves that data for the identifier was erased, not that a particular person's was. Either the handle binds the customer generation, or the claim narrows to the identifier and says so wherever it is reported.
+
+- **Analytics reads span customer generations.** The ClickHouse read paths filter on `external_customer_id` alone (`usage_analytics_sql.go`, `aggregators.go`, `event.go`, `processed_event.go`). After a confirmed reuse under BR6, the old subject's post-cutoff rows — which this request never erases — carry the same identifier as the replacement customer, so a usage read attributes them to the new person. R7 suppresses reads for a suppressed customer, but says nothing about the generation boundary once suppression is lifted. Either those reads take a generation key, or the post-cutoff remainder is purged as a precondition of lifting suppression.
 
 ---
 
@@ -639,7 +641,7 @@ Checked in the order listed (R15). The lifecycle API implementation must add the
 | Suppression write fails on create | `503` with the request id. The workflow retries the write before anything else. |
 | Events arrive after suppression | Ingested normally. Their `ingested_at` is later than `requested_at`, so they fall outside this request's scope and are not erased by it. |
 | Bulk call with one suppressed customer | Unaffected. Nothing is rejected on suppression grounds. |
-| Events already in flight when suppression lands | Ingested before `requested_at`, so in scope and purged in redaction. Verification catches anything that lands late. |
+| Events already in flight when suppression lands | In scope only if written before the cutoff. `ingested_at` is the write time, not the acceptance time, so an event accepted before the instruction can land after the cutoff and escape both the purge and verification. Open (§7): it needs an acceptance timestamp carried through the pipeline. |
 | Raw-event reprocessing after the purge | Re-ingests, and lands after the cutoff, so it survives this request. A tenant replaying erased data is re-supplying it as controller. |
 | Same `external_id` used for a new customer | `409` while the old purge is pending/running/failed. After verified completion, explicit confirmation and replay isolation are required before lifting suppression (BR6). |
 | Dispute window already passed at cooldown end | Invoice documents are deleted together with everything else. |
