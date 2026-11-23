@@ -307,12 +307,12 @@ func TestAcquireLocksKeepsTokensOnReplyReadFailure(t *testing.T) {
 }
 
 // dropReplyProxy applies the first EVAL upstream, then drops the connection.
-func dropReplyProxy(t *testing.T, upstream string) (addr string, drops *atomic.Int32) {
+func dropReplyProxy(t *testing.T, upstream string) (addr string, drops, evals *atomic.Int32) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ln.Close() })
-	drops = &atomic.Int32{}
+	drops, evals = &atomic.Int32{}, &atomic.Int32{}
 	go func() {
 		for {
 			client, err := ln.Accept()
@@ -346,9 +346,17 @@ func dropReplyProxy(t *testing.T, upstream string) (addr string, drops *atomic.I
 					if err != nil {
 						return
 					}
-					_, _ = up.Write(buf[:n])
-					if bytes.Contains(bytes.ToUpper(buf[:n]), []byte("EVAL")) && drops.CompareAndSwap(0, 1) {
+					isEval := bytes.Contains(bytes.ToUpper(buf[:n]), []byte("EVAL"))
+					drop := isEval && drops.CompareAndSwap(0, 1)
+					// Mute before forwarding.
+					if drop {
 						muted.Store(true)
+					}
+					if isEval {
+						evals.Add(1)
+					}
+					_, _ = up.Write(buf[:n])
+					if drop {
 						time.Sleep(100 * time.Millisecond)
 						return
 					}
@@ -356,12 +364,12 @@ func dropReplyProxy(t *testing.T, upstream string) (addr string, drops *atomic.I
 			}()
 		}
 	}()
-	return ln.Addr().String(), drops
+	return ln.Addr().String(), drops, evals
 }
 
 func TestAcquireLocksLostReplyRealRetry(t *testing.T) {
 	mr := miniredis.RunT(t)
-	addr, drops := dropReplyProxy(t, mr.Addr())
+	addr, drops, evals := dropReplyProxy(t, mr.Addr())
 	client := redis.NewClient(&redis.Options{Addr: addr, MaxRetries: 3, MinRetryBackoff: time.Millisecond, MaxRetryBackoff: 5 * time.Millisecond})
 	t.Cleanup(func() { _ = client.Close() })
 	locker := &redisLocker{client: client}
@@ -369,6 +377,7 @@ func TestAcquireLocksLostReplyRealRetry(t *testing.T) {
 	locks, err := locker.AcquireLocks(context.Background(), []string{"a", "b"}, time.Minute)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, drops.Load(), "reply was dropped once")
+	require.GreaterOrEqual(t, evals.Load(), int32(2), "retry reached upstream")
 	for i, l := range locks {
 		require.NotNil(t, l, "key %d", i)
 		require.True(t, l.AcquiredSuccessfully(), "key %d", i)

@@ -662,7 +662,7 @@ func TestProcessBulkMessage_BatchDedupLocks(t *testing.T) {
 
 	assert.Equal(t, 1, locker.batchCalls, "one round trip per batch")
 	assert.Empty(t, locker.ttls, "no per-event AcquireLock")
-	assert.Len(t, locker.batchKeys, 4)
+	assert.Len(t, locker.batchKeys, 3, "repeat ID not sent to Redis")
 	assert.Equal(t, []int{5000}, store.chunks)
 	got, err := store.GetUsage(ctx, &events.MeterUsageQueryParams{
 		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
@@ -730,6 +730,20 @@ func TestProcessBulkMessage_BatchDedupLocksFailOpenPerKey(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint64(2), got.EventCount, "failed key still processed")
+}
+
+func TestProcessBulkMessage_BatchDedupLocksRepeatSkippedOnRedisError(t *testing.T) {
+	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), types.DefaultTenantID), "env_test")
+	locker := &failingBatchLocker{}
+	store := &chunkRecordingStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()}
+	svc := newBulkBatchingService(t, locker, store, true, 100)
+
+	require.NoError(t, svc.processBulkMessage(ctx, bulkMessage(t, "e1", "e1")))
+	got, err := store.GetUsage(ctx, &events.MeterUsageQueryParams{
+		TenantID: types.DefaultTenantID, EnvironmentID: "env_test", MeterID: "meter_api", AggregationType: types.AggregationCount,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1), got.EventCount, "in-batch repeat skipped without Redis")
 }
 
 func TestProcessBulkMessage_BatchDedupLocksSkipsUnkeyedEvents(t *testing.T) {

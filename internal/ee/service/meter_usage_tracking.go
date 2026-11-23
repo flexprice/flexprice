@@ -241,6 +241,8 @@ func (s *meterUsageTrackingService) acquireBulkDedupLocks(
 ) (map[int]bool, []cache.Lock, error) {
 	keys := make([]string, 0, len(batch))
 	idx := make([]int, 0, len(batch))
+	skip := make(map[int]bool)
+	seen := make(map[string]bool, len(batch))
 	for i, evt := range batch {
 		if evt == nil {
 			continue
@@ -249,7 +251,14 @@ func (s *meterUsageTrackingService) acquireBulkDedupLocks(
 			return nil, nil, err
 		}
 		if evt.ID != "" && !evt.ForceReprocess {
-			keys = append(keys, cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID))
+			key := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
+			// Repeats skip even if Redis fails.
+			if seen[key] {
+				skip[i] = true
+				continue
+			}
+			seen[key] = true
+			keys = append(keys, key)
 			idx = append(idx, i)
 		}
 	}
@@ -260,7 +269,6 @@ func (s *meterUsageTrackingService) acquireBulkDedupLocks(
 		s.Logger.Error(ctx, "failed to acquire some bulk meter usage dedup locks", "error", err, "keys", len(keys))
 	}
 
-	skip := make(map[int]bool)
 	held := make([]cache.Lock, 0, len(locks))
 	for j, i := range idx {
 		if j >= len(locks) || locks[j] == nil {
