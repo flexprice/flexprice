@@ -789,8 +789,16 @@ func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (F
 
 	// Exact grid periods, the same ones attach-time proration (longerItemPeriod) measures.
 	// e.g. annual item from Jan 15 09:00 on a Jan 15 17:00 grid → [Jan 15 09:00, Jan 15 17:00), then yearly.
+	start := item.StartDate
+	if invoiceCadence == types.InvoiceCadenceAdvance &&
+		item.PredecessorLineItemID != nil &&
+		!types.FullBillingPeriod(start, grid).Start.Equal(start) {
+		// A mid-term successor of a prepaid longer-cadence item already settled
+		// the remainder of its containing item period via proration at change time.
+		start = types.FullBillingPeriod(start, grid).End
+	}
 	var periods []types.Period
-	for start := item.StartDate; start.Before(endDate); {
+	for start.Before(endDate) {
 		end := types.FullBillingPeriod(start, grid).End
 		if !item.EndDate.IsZero() && item.EndDate.Before(end) {
 			end = item.EndDate

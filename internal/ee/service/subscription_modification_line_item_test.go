@@ -939,6 +939,66 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
 		s.Require().Error(err)
 	})
+
+	s.Run("longer_cadence_advance_successor_avoids_duplicate_mid_term_billing", func() {
+		anchor := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		midTermStart := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+		nextMonthEnd := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
+		nextYearStart := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+		nextYearFeb := time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)
+
+		midTermSuccessor := &subscription.SubscriptionLineItem{
+			ID:                    "sli_succ_mid",
+			BillingPeriod:         types.BILLING_PERIOD_ANNUAL,
+			BillingPeriodCount:    1,
+			InvoiceCadence:        types.InvoiceCadenceAdvance,
+			StartDate:             midTermStart,
+			PredecessorLineItemID: lo.ToPtr("sli_pred"),
+		}
+
+		res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+			Item:           midTermSuccessor,
+			Anchor:         anchor,
+			PeriodStart:    midTermStart,
+			PeriodEnd:      nextMonthEnd,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+			Timezone:       "UTC",
+		})
+		s.Require().NoError(err)
+		s.False(res.Ok, "mid-term advance successor already prorated must not bill again on monthly renewal")
+
+		resNextYear, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+			Item:           midTermSuccessor,
+			Anchor:         anchor,
+			PeriodStart:    nextYearStart,
+			PeriodEnd:      nextYearFeb,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+			Timezone:       "UTC",
+		})
+		s.Require().NoError(err)
+		s.True(resNextYear.Ok, "mid-term advance successor must still bill on next annual boundary")
+		s.True(resNextYear.LineItemPeriodStart.Equal(nextYearStart))
+
+		boundarySuccessor := &subscription.SubscriptionLineItem{
+			ID:                    "sli_succ_boundary",
+			BillingPeriod:         types.BILLING_PERIOD_ANNUAL,
+			BillingPeriodCount:    1,
+			InvoiceCadence:        types.InvoiceCadenceAdvance,
+			StartDate:             nextYearStart,
+			PredecessorLineItemID: lo.ToPtr("sli_pred"),
+		}
+		resBoundary, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+			Item:           boundarySuccessor,
+			Anchor:         anchor,
+			PeriodStart:    nextYearStart,
+			PeriodEnd:      nextYearFeb,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+			Timezone:       "UTC",
+		})
+		s.Require().NoError(err)
+		s.True(resBoundary.Ok, "grid-boundary advance successor must bill on its annual boundary")
+		s.True(resBoundary.LineItemPeriodStart.Equal(nextYearStart))
+	})
 }
 
 func (s *SubscriptionModificationServiceSuite) mustGetLineItem(id string) *subscription.SubscriptionLineItem {
