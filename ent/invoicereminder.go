@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -39,18 +40,14 @@ type InvoiceReminder struct {
 	StatusReason string `json:"status_reason,omitempty"`
 	// ApprovedAt holds the value of the "approved_at" field.
 	ApprovedAt *time.Time `json:"approved_at,omitempty"`
-	// OriginalTone holds the value of the "original_tone" field.
-	OriginalTone string `json:"original_tone,omitempty"`
-	// OriginalSubject holds the value of the "original_subject" field.
-	OriginalSubject string `json:"original_subject,omitempty"`
-	// OriginalBody holds the value of the "original_body" field.
-	OriginalBody string `json:"original_body,omitempty"`
-	// MailTone holds the value of the "mail_tone" field.
-	MailTone string `json:"mail_tone,omitempty"`
-	// MailSubject holds the value of the "mail_subject" field.
-	MailSubject string `json:"mail_subject,omitempty"`
-	// MailBody holds the value of the "mail_body" field.
-	MailBody     string `json:"mail_body,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// Tone holds the value of the "tone" field.
+	Tone string `json:"tone,omitempty"`
+	// Subject holds the value of the "subject" field.
+	Subject string `json:"subject,omitempty"`
+	// Body holds the value of the "body" field.
+	Body         string `json:"body,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -59,7 +56,9 @@ func (*InvoiceReminder) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicereminder.FieldID, invoicereminder.FieldTenantID, invoicereminder.FieldStatus, invoicereminder.FieldCreatedBy, invoicereminder.FieldUpdatedBy, invoicereminder.FieldEnvironmentID, invoicereminder.FieldInvoiceID, invoicereminder.FieldReminderStatus, invoicereminder.FieldStatusReason, invoicereminder.FieldOriginalTone, invoicereminder.FieldOriginalSubject, invoicereminder.FieldOriginalBody, invoicereminder.FieldMailTone, invoicereminder.FieldMailSubject, invoicereminder.FieldMailBody:
+		case invoicereminder.FieldMetadata:
+			values[i] = new([]byte)
+		case invoicereminder.FieldID, invoicereminder.FieldTenantID, invoicereminder.FieldStatus, invoicereminder.FieldCreatedBy, invoicereminder.FieldUpdatedBy, invoicereminder.FieldEnvironmentID, invoicereminder.FieldInvoiceID, invoicereminder.FieldReminderStatus, invoicereminder.FieldStatusReason, invoicereminder.FieldTone, invoicereminder.FieldSubject, invoicereminder.FieldBody:
 			values[i] = new(sql.NullString)
 		case invoicereminder.FieldCreatedAt, invoicereminder.FieldUpdatedAt, invoicereminder.FieldApprovedAt:
 			values[i] = new(sql.NullTime)
@@ -151,41 +150,31 @@ func (_m *InvoiceReminder) assignValues(columns []string, values []any) error {
 				_m.ApprovedAt = new(time.Time)
 				*_m.ApprovedAt = value.Time
 			}
-		case invoicereminder.FieldOriginalTone:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field original_tone", values[i])
-			} else if value.Valid {
-				_m.OriginalTone = value.String
+		case invoicereminder.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
 			}
-		case invoicereminder.FieldOriginalSubject:
+		case invoicereminder.FieldTone:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field original_subject", values[i])
+				return fmt.Errorf("unexpected type %T for field tone", values[i])
 			} else if value.Valid {
-				_m.OriginalSubject = value.String
+				_m.Tone = value.String
 			}
-		case invoicereminder.FieldOriginalBody:
+		case invoicereminder.FieldSubject:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field original_body", values[i])
+				return fmt.Errorf("unexpected type %T for field subject", values[i])
 			} else if value.Valid {
-				_m.OriginalBody = value.String
+				_m.Subject = value.String
 			}
-		case invoicereminder.FieldMailTone:
+		case invoicereminder.FieldBody:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field mail_tone", values[i])
+				return fmt.Errorf("unexpected type %T for field body", values[i])
 			} else if value.Valid {
-				_m.MailTone = value.String
-			}
-		case invoicereminder.FieldMailSubject:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field mail_subject", values[i])
-			} else if value.Valid {
-				_m.MailSubject = value.String
-			}
-		case invoicereminder.FieldMailBody:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field mail_body", values[i])
-			} else if value.Valid {
-				_m.MailBody = value.String
+				_m.Body = value.String
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -258,23 +247,17 @@ func (_m *InvoiceReminder) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("original_tone=")
-	builder.WriteString(_m.OriginalTone)
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
-	builder.WriteString("original_subject=")
-	builder.WriteString(_m.OriginalSubject)
+	builder.WriteString("tone=")
+	builder.WriteString(_m.Tone)
 	builder.WriteString(", ")
-	builder.WriteString("original_body=")
-	builder.WriteString(_m.OriginalBody)
+	builder.WriteString("subject=")
+	builder.WriteString(_m.Subject)
 	builder.WriteString(", ")
-	builder.WriteString("mail_tone=")
-	builder.WriteString(_m.MailTone)
-	builder.WriteString(", ")
-	builder.WriteString("mail_subject=")
-	builder.WriteString(_m.MailSubject)
-	builder.WriteString(", ")
-	builder.WriteString("mail_body=")
-	builder.WriteString(_m.MailBody)
+	builder.WriteString("body=")
+	builder.WriteString(_m.Body)
 	builder.WriteByte(')')
 	return builder.String()
 }

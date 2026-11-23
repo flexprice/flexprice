@@ -3,6 +3,7 @@ package collections
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -10,24 +11,40 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// Metadata is what the system wrote before a person edited the reminder.
+type Metadata struct {
+	OriginalTone    types.ReminderTone `json:"original_tone"`
+	OriginalSubject string             `json:"original_subject"`
+	OriginalBody    string             `json:"original_body"`
+}
+
 type InvoiceReminder struct {
-	ID              string
-	InvoiceID       string
-	ReminderStatus  types.ReminderStatus
-	StatusReason    string
-	ApprovedAt      *time.Time
-	OriginalTone    types.ReminderTone
-	OriginalSubject string
-	OriginalBody    string
-	MailTone        types.ReminderTone
-	MailSubject     string
-	MailBody        string
-	EnvironmentID   string
+	ID             string
+	InvoiceID      string
+	ReminderStatus types.ReminderStatus
+	StatusReason   string
+	ApprovedAt     *time.Time
+	Metadata       map[string]interface{}
+	Tone           types.ReminderTone
+	Subject        string
+	Body           string
+	EnvironmentID  string
 	types.BaseModel
 }
 
+// Original returns what the system wrote, read from the metadata map.
+func (r *InvoiceReminder) Original() Metadata {
+	var original Metadata
+	if raw, err := json.Marshal(r.Metadata); err == nil {
+		_ = json.Unmarshal(raw, &original)
+	}
+	return original
+}
+
+// Edited reports whether the text differs from what the system wrote.
 func (r *InvoiceReminder) Edited() bool {
-	return r.MailTone != r.OriginalTone || r.MailSubject != r.OriginalSubject || r.MailBody != r.OriginalBody
+	original := r.Original()
+	return r.Tone != original.OriginalTone || r.Subject != original.OriginalSubject || r.Body != original.OriginalBody
 }
 
 type invoiceReminderBuilder struct {
@@ -48,14 +65,19 @@ func (b *invoiceReminderBuilder) WithStatus(status types.ReminderStatus, reason 
 	return b
 }
 
-func (b *invoiceReminderBuilder) WithMail(tone types.ReminderTone, subject, body string) *invoiceReminderBuilder {
-	b.r.MailTone, b.r.MailSubject, b.r.MailBody = tone, subject, body
+func (b *invoiceReminderBuilder) WithText(tone types.ReminderTone, subject, body string) *invoiceReminderBuilder {
+	b.r.Tone, b.r.Subject, b.r.Body = tone, subject, body
 	return b
 }
 
-// WithOriginal sets what the system wrote; the mail is set separately.
+// WithOriginal records what the system wrote in the metadata; the text is set separately.
 func (b *invoiceReminderBuilder) WithOriginal(tone types.ReminderTone, subject, body string) *invoiceReminderBuilder {
-	b.r.OriginalTone, b.r.OriginalSubject, b.r.OriginalBody = tone, subject, body
+	b.r.Metadata = map[string]interface{}{"original_tone": string(tone), "original_subject": subject, "original_body": body}
+	return b
+}
+
+func (b *invoiceReminderBuilder) WithMetadata(metadata map[string]interface{}) *invoiceReminderBuilder {
+	b.r.Metadata = metadata
 	return b
 }
 

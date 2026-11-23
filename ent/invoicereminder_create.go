@@ -158,39 +158,27 @@ func (_c *InvoiceReminderCreate) SetNillableApprovedAt(v *time.Time) *InvoiceRem
 	return _c
 }
 
-// SetOriginalTone sets the "original_tone" field.
-func (_c *InvoiceReminderCreate) SetOriginalTone(v string) *InvoiceReminderCreate {
-	_c.mutation.SetOriginalTone(v)
+// SetMetadata sets the "metadata" field.
+func (_c *InvoiceReminderCreate) SetMetadata(v map[string]interface{}) *InvoiceReminderCreate {
+	_c.mutation.SetMetadata(v)
 	return _c
 }
 
-// SetOriginalSubject sets the "original_subject" field.
-func (_c *InvoiceReminderCreate) SetOriginalSubject(v string) *InvoiceReminderCreate {
-	_c.mutation.SetOriginalSubject(v)
+// SetTone sets the "tone" field.
+func (_c *InvoiceReminderCreate) SetTone(v string) *InvoiceReminderCreate {
+	_c.mutation.SetTone(v)
 	return _c
 }
 
-// SetOriginalBody sets the "original_body" field.
-func (_c *InvoiceReminderCreate) SetOriginalBody(v string) *InvoiceReminderCreate {
-	_c.mutation.SetOriginalBody(v)
+// SetSubject sets the "subject" field.
+func (_c *InvoiceReminderCreate) SetSubject(v string) *InvoiceReminderCreate {
+	_c.mutation.SetSubject(v)
 	return _c
 }
 
-// SetMailTone sets the "mail_tone" field.
-func (_c *InvoiceReminderCreate) SetMailTone(v string) *InvoiceReminderCreate {
-	_c.mutation.SetMailTone(v)
-	return _c
-}
-
-// SetMailSubject sets the "mail_subject" field.
-func (_c *InvoiceReminderCreate) SetMailSubject(v string) *InvoiceReminderCreate {
-	_c.mutation.SetMailSubject(v)
-	return _c
-}
-
-// SetMailBody sets the "mail_body" field.
-func (_c *InvoiceReminderCreate) SetMailBody(v string) *InvoiceReminderCreate {
-	_c.mutation.SetMailBody(v)
+// SetBody sets the "body" field.
+func (_c *InvoiceReminderCreate) SetBody(v string) *InvoiceReminderCreate {
+	_c.mutation.SetBody(v)
 	return _c
 }
 
@@ -287,23 +275,14 @@ func (_c *InvoiceReminderCreate) check() error {
 	if _, ok := _c.mutation.ReminderStatus(); !ok {
 		return &ValidationError{Name: "reminder_status", err: errors.New(`ent: missing required field "InvoiceReminder.reminder_status"`)}
 	}
-	if _, ok := _c.mutation.OriginalTone(); !ok {
-		return &ValidationError{Name: "original_tone", err: errors.New(`ent: missing required field "InvoiceReminder.original_tone"`)}
+	if _, ok := _c.mutation.Tone(); !ok {
+		return &ValidationError{Name: "tone", err: errors.New(`ent: missing required field "InvoiceReminder.tone"`)}
 	}
-	if _, ok := _c.mutation.OriginalSubject(); !ok {
-		return &ValidationError{Name: "original_subject", err: errors.New(`ent: missing required field "InvoiceReminder.original_subject"`)}
+	if _, ok := _c.mutation.Subject(); !ok {
+		return &ValidationError{Name: "subject", err: errors.New(`ent: missing required field "InvoiceReminder.subject"`)}
 	}
-	if _, ok := _c.mutation.OriginalBody(); !ok {
-		return &ValidationError{Name: "original_body", err: errors.New(`ent: missing required field "InvoiceReminder.original_body"`)}
-	}
-	if _, ok := _c.mutation.MailTone(); !ok {
-		return &ValidationError{Name: "mail_tone", err: errors.New(`ent: missing required field "InvoiceReminder.mail_tone"`)}
-	}
-	if _, ok := _c.mutation.MailSubject(); !ok {
-		return &ValidationError{Name: "mail_subject", err: errors.New(`ent: missing required field "InvoiceReminder.mail_subject"`)}
-	}
-	if _, ok := _c.mutation.MailBody(); !ok {
-		return &ValidationError{Name: "mail_body", err: errors.New(`ent: missing required field "InvoiceReminder.mail_body"`)}
+	if _, ok := _c.mutation.Body(); !ok {
+		return &ValidationError{Name: "body", err: errors.New(`ent: missing required field "InvoiceReminder.body"`)}
 	}
 	return nil
 }
@@ -384,29 +363,21 @@ func (_c *InvoiceReminderCreate) createSpec() (*InvoiceReminder, *sqlgraph.Creat
 		_spec.SetField(invoicereminder.FieldApprovedAt, field.TypeTime, value)
 		_node.ApprovedAt = &value
 	}
-	if value, ok := _c.mutation.OriginalTone(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalTone, field.TypeString, value)
-		_node.OriginalTone = value
+	if value, ok := _c.mutation.Metadata(); ok {
+		_spec.SetField(invoicereminder.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
-	if value, ok := _c.mutation.OriginalSubject(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalSubject, field.TypeString, value)
-		_node.OriginalSubject = value
+	if value, ok := _c.mutation.Tone(); ok {
+		_spec.SetField(invoicereminder.FieldTone, field.TypeString, value)
+		_node.Tone = value
 	}
-	if value, ok := _c.mutation.OriginalBody(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalBody, field.TypeString, value)
-		_node.OriginalBody = value
+	if value, ok := _c.mutation.Subject(); ok {
+		_spec.SetField(invoicereminder.FieldSubject, field.TypeString, value)
+		_node.Subject = value
 	}
-	if value, ok := _c.mutation.MailTone(); ok {
-		_spec.SetField(invoicereminder.FieldMailTone, field.TypeString, value)
-		_node.MailTone = value
-	}
-	if value, ok := _c.mutation.MailSubject(); ok {
-		_spec.SetField(invoicereminder.FieldMailSubject, field.TypeString, value)
-		_node.MailSubject = value
-	}
-	if value, ok := _c.mutation.MailBody(); ok {
-		_spec.SetField(invoicereminder.FieldMailBody, field.TypeString, value)
-		_node.MailBody = value
+	if value, ok := _c.mutation.Body(); ok {
+		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
+		_node.Body = value
 	}
 	return _node, _spec
 }

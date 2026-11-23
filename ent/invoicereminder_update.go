@@ -122,86 +122,56 @@ func (_u *InvoiceReminderUpdate) ClearApprovedAt() *InvoiceReminderUpdate {
 	return _u
 }
 
-// SetOriginalTone sets the "original_tone" field.
-func (_u *InvoiceReminderUpdate) SetOriginalTone(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetOriginalTone(v)
+// SetMetadata sets the "metadata" field.
+func (_u *InvoiceReminderUpdate) SetMetadata(v map[string]interface{}) *InvoiceReminderUpdate {
+	_u.mutation.SetMetadata(v)
 	return _u
 }
 
-// SetNillableOriginalTone sets the "original_tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableOriginalTone(v *string) *InvoiceReminderUpdate {
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *InvoiceReminderUpdate) ClearMetadata() *InvoiceReminderUpdate {
+	_u.mutation.ClearMetadata()
+	return _u
+}
+
+// SetTone sets the "tone" field.
+func (_u *InvoiceReminderUpdate) SetTone(v string) *InvoiceReminderUpdate {
+	_u.mutation.SetTone(v)
+	return _u
+}
+
+// SetNillableTone sets the "tone" field if the given value is not nil.
+func (_u *InvoiceReminderUpdate) SetNillableTone(v *string) *InvoiceReminderUpdate {
 	if v != nil {
-		_u.SetOriginalTone(*v)
+		_u.SetTone(*v)
 	}
 	return _u
 }
 
-// SetOriginalSubject sets the "original_subject" field.
-func (_u *InvoiceReminderUpdate) SetOriginalSubject(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetOriginalSubject(v)
+// SetSubject sets the "subject" field.
+func (_u *InvoiceReminderUpdate) SetSubject(v string) *InvoiceReminderUpdate {
+	_u.mutation.SetSubject(v)
 	return _u
 }
 
-// SetNillableOriginalSubject sets the "original_subject" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableOriginalSubject(v *string) *InvoiceReminderUpdate {
+// SetNillableSubject sets the "subject" field if the given value is not nil.
+func (_u *InvoiceReminderUpdate) SetNillableSubject(v *string) *InvoiceReminderUpdate {
 	if v != nil {
-		_u.SetOriginalSubject(*v)
+		_u.SetSubject(*v)
 	}
 	return _u
 }
 
-// SetOriginalBody sets the "original_body" field.
-func (_u *InvoiceReminderUpdate) SetOriginalBody(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetOriginalBody(v)
+// SetBody sets the "body" field.
+func (_u *InvoiceReminderUpdate) SetBody(v string) *InvoiceReminderUpdate {
+	_u.mutation.SetBody(v)
 	return _u
 }
 
-// SetNillableOriginalBody sets the "original_body" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableOriginalBody(v *string) *InvoiceReminderUpdate {
+// SetNillableBody sets the "body" field if the given value is not nil.
+func (_u *InvoiceReminderUpdate) SetNillableBody(v *string) *InvoiceReminderUpdate {
 	if v != nil {
-		_u.SetOriginalBody(*v)
-	}
-	return _u
-}
-
-// SetMailTone sets the "mail_tone" field.
-func (_u *InvoiceReminderUpdate) SetMailTone(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetMailTone(v)
-	return _u
-}
-
-// SetNillableMailTone sets the "mail_tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableMailTone(v *string) *InvoiceReminderUpdate {
-	if v != nil {
-		_u.SetMailTone(*v)
-	}
-	return _u
-}
-
-// SetMailSubject sets the "mail_subject" field.
-func (_u *InvoiceReminderUpdate) SetMailSubject(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetMailSubject(v)
-	return _u
-}
-
-// SetNillableMailSubject sets the "mail_subject" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableMailSubject(v *string) *InvoiceReminderUpdate {
-	if v != nil {
-		_u.SetMailSubject(*v)
-	}
-	return _u
-}
-
-// SetMailBody sets the "mail_body" field.
-func (_u *InvoiceReminderUpdate) SetMailBody(v string) *InvoiceReminderUpdate {
-	_u.mutation.SetMailBody(v)
-	return _u
-}
-
-// SetNillableMailBody sets the "mail_body" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableMailBody(v *string) *InvoiceReminderUpdate {
-	if v != nil {
-		_u.SetMailBody(*v)
+		_u.SetBody(*v)
 	}
 	return _u
 }
@@ -289,23 +259,20 @@ func (_u *InvoiceReminderUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if _u.mutation.ApprovedAtCleared() {
 		_spec.ClearField(invoicereminder.FieldApprovedAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.OriginalTone(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalTone, field.TypeString, value)
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(invoicereminder.FieldMetadata, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.OriginalSubject(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalSubject, field.TypeString, value)
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(invoicereminder.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.OriginalBody(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalBody, field.TypeString, value)
+	if value, ok := _u.mutation.Tone(); ok {
+		_spec.SetField(invoicereminder.FieldTone, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.MailTone(); ok {
-		_spec.SetField(invoicereminder.FieldMailTone, field.TypeString, value)
+	if value, ok := _u.mutation.Subject(); ok {
+		_spec.SetField(invoicereminder.FieldSubject, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.MailSubject(); ok {
-		_spec.SetField(invoicereminder.FieldMailSubject, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.MailBody(); ok {
-		_spec.SetField(invoicereminder.FieldMailBody, field.TypeString, value)
+	if value, ok := _u.mutation.Body(); ok {
+		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -421,86 +388,56 @@ func (_u *InvoiceReminderUpdateOne) ClearApprovedAt() *InvoiceReminderUpdateOne 
 	return _u
 }
 
-// SetOriginalTone sets the "original_tone" field.
-func (_u *InvoiceReminderUpdateOne) SetOriginalTone(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetOriginalTone(v)
+// SetMetadata sets the "metadata" field.
+func (_u *InvoiceReminderUpdateOne) SetMetadata(v map[string]interface{}) *InvoiceReminderUpdateOne {
+	_u.mutation.SetMetadata(v)
 	return _u
 }
 
-// SetNillableOriginalTone sets the "original_tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableOriginalTone(v *string) *InvoiceReminderUpdateOne {
+// ClearMetadata clears the value of the "metadata" field.
+func (_u *InvoiceReminderUpdateOne) ClearMetadata() *InvoiceReminderUpdateOne {
+	_u.mutation.ClearMetadata()
+	return _u
+}
+
+// SetTone sets the "tone" field.
+func (_u *InvoiceReminderUpdateOne) SetTone(v string) *InvoiceReminderUpdateOne {
+	_u.mutation.SetTone(v)
+	return _u
+}
+
+// SetNillableTone sets the "tone" field if the given value is not nil.
+func (_u *InvoiceReminderUpdateOne) SetNillableTone(v *string) *InvoiceReminderUpdateOne {
 	if v != nil {
-		_u.SetOriginalTone(*v)
+		_u.SetTone(*v)
 	}
 	return _u
 }
 
-// SetOriginalSubject sets the "original_subject" field.
-func (_u *InvoiceReminderUpdateOne) SetOriginalSubject(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetOriginalSubject(v)
+// SetSubject sets the "subject" field.
+func (_u *InvoiceReminderUpdateOne) SetSubject(v string) *InvoiceReminderUpdateOne {
+	_u.mutation.SetSubject(v)
 	return _u
 }
 
-// SetNillableOriginalSubject sets the "original_subject" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableOriginalSubject(v *string) *InvoiceReminderUpdateOne {
+// SetNillableSubject sets the "subject" field if the given value is not nil.
+func (_u *InvoiceReminderUpdateOne) SetNillableSubject(v *string) *InvoiceReminderUpdateOne {
 	if v != nil {
-		_u.SetOriginalSubject(*v)
+		_u.SetSubject(*v)
 	}
 	return _u
 }
 
-// SetOriginalBody sets the "original_body" field.
-func (_u *InvoiceReminderUpdateOne) SetOriginalBody(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetOriginalBody(v)
+// SetBody sets the "body" field.
+func (_u *InvoiceReminderUpdateOne) SetBody(v string) *InvoiceReminderUpdateOne {
+	_u.mutation.SetBody(v)
 	return _u
 }
 
-// SetNillableOriginalBody sets the "original_body" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableOriginalBody(v *string) *InvoiceReminderUpdateOne {
+// SetNillableBody sets the "body" field if the given value is not nil.
+func (_u *InvoiceReminderUpdateOne) SetNillableBody(v *string) *InvoiceReminderUpdateOne {
 	if v != nil {
-		_u.SetOriginalBody(*v)
-	}
-	return _u
-}
-
-// SetMailTone sets the "mail_tone" field.
-func (_u *InvoiceReminderUpdateOne) SetMailTone(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetMailTone(v)
-	return _u
-}
-
-// SetNillableMailTone sets the "mail_tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableMailTone(v *string) *InvoiceReminderUpdateOne {
-	if v != nil {
-		_u.SetMailTone(*v)
-	}
-	return _u
-}
-
-// SetMailSubject sets the "mail_subject" field.
-func (_u *InvoiceReminderUpdateOne) SetMailSubject(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetMailSubject(v)
-	return _u
-}
-
-// SetNillableMailSubject sets the "mail_subject" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableMailSubject(v *string) *InvoiceReminderUpdateOne {
-	if v != nil {
-		_u.SetMailSubject(*v)
-	}
-	return _u
-}
-
-// SetMailBody sets the "mail_body" field.
-func (_u *InvoiceReminderUpdateOne) SetMailBody(v string) *InvoiceReminderUpdateOne {
-	_u.mutation.SetMailBody(v)
-	return _u
-}
-
-// SetNillableMailBody sets the "mail_body" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableMailBody(v *string) *InvoiceReminderUpdateOne {
-	if v != nil {
-		_u.SetMailBody(*v)
+		_u.SetBody(*v)
 	}
 	return _u
 }
@@ -618,23 +555,20 @@ func (_u *InvoiceReminderUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	if _u.mutation.ApprovedAtCleared() {
 		_spec.ClearField(invoicereminder.FieldApprovedAt, field.TypeTime)
 	}
-	if value, ok := _u.mutation.OriginalTone(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalTone, field.TypeString, value)
+	if value, ok := _u.mutation.Metadata(); ok {
+		_spec.SetField(invoicereminder.FieldMetadata, field.TypeJSON, value)
 	}
-	if value, ok := _u.mutation.OriginalSubject(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalSubject, field.TypeString, value)
+	if _u.mutation.MetadataCleared() {
+		_spec.ClearField(invoicereminder.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.OriginalBody(); ok {
-		_spec.SetField(invoicereminder.FieldOriginalBody, field.TypeString, value)
+	if value, ok := _u.mutation.Tone(); ok {
+		_spec.SetField(invoicereminder.FieldTone, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.MailTone(); ok {
-		_spec.SetField(invoicereminder.FieldMailTone, field.TypeString, value)
+	if value, ok := _u.mutation.Subject(); ok {
+		_spec.SetField(invoicereminder.FieldSubject, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.MailSubject(); ok {
-		_spec.SetField(invoicereminder.FieldMailSubject, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.MailBody(); ok {
-		_spec.SetField(invoicereminder.FieldMailBody, field.TypeString, value)
+	if value, ok := _u.mutation.Body(); ok {
+		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
 	}
 	_node = &InvoiceReminder{config: _u.config}
 	_spec.Assign = _node.assignValues

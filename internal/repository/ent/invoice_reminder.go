@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -122,9 +123,9 @@ func paidWindow(asOfP, sinceP string) string {
 func rowColumns(joined bool) string {
 	invoice := `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), i.amount_due, i.amount_remaining, i.due_date, i.paid_at`
 	if !joined {
-		return invoice + `, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::timestamptz`
+		return invoice + `, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::jsonb, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::timestamptz`
 	}
-	return invoice + `, r.id, r.reminder_status, r.status_reason, r.approved_at, r.original_tone, r.original_subject, r.original_body, r.mail_tone, r.mail_subject, r.mail_body, r.created_at, r.updated_at`
+	return invoice + `, r.id, r.reminder_status, r.status_reason, r.approved_at, r.metadata, r.tone, r.subject, r.body, r.created_at, r.updated_at`
 }
 
 func nullTime(t sql.NullTime) *time.Time {
@@ -140,11 +141,11 @@ func scanRow(ctx context.Context, rows *sql.Rows) (collections.Row, error) {
 		total, remaining                        decimal.Decimal
 		due, paid, approved, created, updated   sql.NullTime
 		rid, status, reason                     sql.NullString
-		oTone, oSubject, oBody                  sql.NullString
-		mTone, mSubject, mBody                  sql.NullString
+		tone, subject, body                     sql.NullString
+		metadata                                []byte
 	)
 	if err := rows.Scan(&invoiceID, &number, &customerID, &currency, &total, &remaining, &due, &paid,
-		&rid, &status, &reason, &approved, &oTone, &oSubject, &oBody, &mTone, &mSubject, &mBody, &created, &updated); err != nil {
+		&rid, &status, &reason, &approved, &metadata, &tone, &subject, &body, &created, &updated); err != nil {
 		return collections.Row{}, err
 	}
 	row := collections.NewRowBuilder(&collections.Row{InvoiceID: invoiceID}).
@@ -159,11 +160,20 @@ func scanRow(ctx context.Context, rows *sql.Rows) (collections.Row, error) {
 			BaseModel:     types.BaseModel{TenantID: types.GetTenantID(ctx), Status: types.StatusPublished, CreatedAt: created.Time, UpdatedAt: updated.Time},
 		}).
 			WithStatus(types.ReminderStatus(status.String), reason.String, nullTime(approved)).
-			WithOriginal(types.ReminderTone(oTone.String), oSubject.String, oBody.String).
-			WithMail(types.ReminderTone(mTone.String), mSubject.String, mBody.String).
+			WithMetadata(decodeMetadata(metadata)).
+			WithText(types.ReminderTone(tone.String), subject.String, body.String).
 			Build())
 	}
 	return *row.Build(), nil
+}
+
+// decodeMetadata reads the nullable metadata jsonb column; an empty or invalid value gives nil.
+func decodeMetadata(raw []byte) map[string]interface{} {
+	var metadata map[string]interface{}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &metadata)
+	}
+	return metadata
 }
 
 func scanRowList(ctx context.Context, rows *sql.Rows) ([]collections.Row, error) {
@@ -573,12 +583,10 @@ func (r *invoiceReminderRepository) createBuilder(ctx context.Context, d *collec
 		SetReminderStatus(string(d.ReminderStatus)).
 		SetStatusReason(d.StatusReason).
 		SetNillableApprovedAt(d.ApprovedAt).
-		SetOriginalTone(string(d.OriginalTone)).
-		SetOriginalSubject(d.OriginalSubject).
-		SetOriginalBody(d.OriginalBody).
-		SetMailTone(string(d.MailTone)).
-		SetMailSubject(d.MailSubject).
-		SetMailBody(d.MailBody).
+		SetMetadata(d.Metadata).
+		SetTone(string(d.Tone)).
+		SetSubject(d.Subject).
+		SetBody(d.Body).
 		SetTenantID(d.TenantID).
 		SetEnvironmentID(d.EnvironmentID).
 		SetStatus(string(types.StatusPublished)).
@@ -656,12 +664,10 @@ func (r *invoiceReminderRepository) Update(ctx context.Context, d *collections.I
 		SetReminderStatus(string(d.ReminderStatus)).
 		SetStatusReason(d.StatusReason).
 		SetNillableApprovedAt(d.ApprovedAt).
-		SetOriginalTone(string(d.OriginalTone)).
-		SetOriginalSubject(d.OriginalSubject).
-		SetOriginalBody(d.OriginalBody).
-		SetMailTone(string(d.MailTone)).
-		SetMailSubject(d.MailSubject).
-		SetMailBody(d.MailBody).
+		SetMetadata(d.Metadata).
+		SetTone(string(d.Tone)).
+		SetSubject(d.Subject).
+		SetBody(d.Body).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if d.ApprovedAt == nil {
@@ -695,7 +701,7 @@ func reminderFromEnt(e *ent.InvoiceReminder) *collections.InvoiceReminder {
 		},
 	}).
 		WithStatus(types.ReminderStatus(e.ReminderStatus), e.StatusReason, e.ApprovedAt).
-		WithOriginal(types.ReminderTone(e.OriginalTone), e.OriginalSubject, e.OriginalBody).
-		WithMail(types.ReminderTone(e.MailTone), e.MailSubject, e.MailBody).
+		WithMetadata(e.Metadata).
+		WithText(types.ReminderTone(e.Tone), e.Subject, e.Body).
 		Build()
 }

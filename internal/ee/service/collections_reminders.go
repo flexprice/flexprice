@@ -275,11 +275,11 @@ func (s *reminderService) plan(ctx context.Context, row collections.Row, c *cust
 				BaseModel: types.GetDefaultBaseModel(ctx),
 			}).WithStatus(types.ReminderStatusPending, "", nil).
 				WithOriginal(written.tone, written.subject, written.body).
-				WithMail(written.tone, written.subject, written.body).Build()
+				WithText(written.tone, written.subject, written.body).Build()
 		} else {
 			cur = collections.NewInvoiceReminderBuilder(cur).
 				WithOriginal(written.tone, written.subject, written.body).
-				WithMail(written.tone, written.subject, written.body).Build()
+				WithText(written.tone, written.subject, written.body).Build()
 		}
 		if !editsMail {
 			mail = written
@@ -298,7 +298,7 @@ func (s *reminderService) plan(ctx context.Context, row collections.Row, c *cust
 	}
 	next := collections.NewInvoiceReminderBuilder(cur)
 	if mail != shown {
-		next = next.WithMail(mail.tone, mail.subject, mail.body)
+		next = next.WithText(mail.tone, mail.subject, mail.body)
 	}
 	return next.WithStatus(target, reason, approvedAt).Build(), nil
 }
@@ -333,14 +333,14 @@ func (s *reminderService) render(r collections.Row, c *customer.Customer, rc rem
 
 func (s *reminderService) shown(r collections.Row, c *customer.Customer, rc reminderCtx) (reminderMail, error) {
 	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.ReminderStatus == types.ReminderStatusApproved) {
-		return reminderMail{tone: rem.MailTone, subject: rem.MailSubject, body: rem.MailBody}, nil
+		return reminderMail{tone: rem.Tone, subject: rem.Subject, body: rem.Body}, nil
 	}
 	return s.render(r, c, rc, "")
 }
 
 func shownTone(r collections.Row, days int) types.ReminderTone {
 	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.ReminderStatus == types.ReminderStatusApproved) {
-		return rem.MailTone
+		return rem.Tone
 	}
 	return reminderToneForDays(days)
 }
@@ -363,7 +363,8 @@ func (s *reminderService) view(r collections.Row, c *customer.Customer, rc remin
 		v.StatusReason, v.ApprovedAt = rem.StatusReason, rem.ApprovedAt
 		v.CreatedAt, v.UpdatedAt = &rem.CreatedAt, &rem.UpdatedAt
 		if v.Edited = rem.Edited(); v.Edited {
-			v.OriginalTone, v.OriginalSubject, v.OriginalBody = rem.OriginalTone, rem.OriginalSubject, rem.OriginalBody
+			original := rem.Original()
+			v.OriginalTone, v.OriginalSubject, v.OriginalBody = original.OriginalTone, original.OriginalSubject, original.OriginalBody
 		}
 	}
 	v.Why = reminderWhy(v, days)

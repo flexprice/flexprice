@@ -35,18 +35,14 @@ const (
 	FieldStatusReason = "status_reason"
 	// FieldApprovedAt holds the string denoting the approved_at field in the database.
 	FieldApprovedAt = "approved_at"
-	// FieldOriginalTone holds the string denoting the original_tone field in the database.
-	FieldOriginalTone = "original_tone"
-	// FieldOriginalSubject holds the string denoting the original_subject field in the database.
-	FieldOriginalSubject = "original_subject"
-	// FieldOriginalBody holds the string denoting the original_body field in the database.
-	FieldOriginalBody = "original_body"
-	// FieldMailTone holds the string denoting the mail_tone field in the database.
-	FieldMailTone = "mail_tone"
-	// FieldMailSubject holds the string denoting the mail_subject field in the database.
-	FieldMailSubject = "mail_subject"
-	// FieldMailBody holds the string denoting the mail_body field in the database.
-	FieldMailBody = "mail_body"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
+	// FieldTone holds the string denoting the tone field in the database.
+	FieldTone = "tone"
+	// FieldSubject holds the string denoting the subject field in the database.
+	FieldSubject = "subject"
+	// FieldBody holds the string denoting the body field in the database.
+	FieldBody = "body"
 	// Table holds the table name of the invoicereminder in the database.
 	Table = "invoice_reminders"
 )
@@ -65,12 +61,10 @@ var Columns = []string{
 	FieldReminderStatus,
 	FieldStatusReason,
 	FieldApprovedAt,
-	FieldOriginalTone,
-	FieldOriginalSubject,
-	FieldOriginalBody,
-	FieldMailTone,
-	FieldMailSubject,
-	FieldMailBody,
+	FieldMetadata,
+	FieldTone,
+	FieldSubject,
+	FieldBody,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -165,32 +159,17 @@ func ByApprovedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldApprovedAt, opts...).ToFunc()
 }
 
-// ByOriginalTone orders the results by the original_tone field.
-func ByOriginalTone(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldOriginalTone, opts...).ToFunc()
+// ByTone orders the results by the tone field.
+func ByTone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTone, opts...).ToFunc()
 }
 
-// ByOriginalSubject orders the results by the original_subject field.
-func ByOriginalSubject(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldOriginalSubject, opts...).ToFunc()
+// BySubject orders the results by the subject field.
+func BySubject(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubject, opts...).ToFunc()
 }
 
-// ByOriginalBody orders the results by the original_body field.
-func ByOriginalBody(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldOriginalBody, opts...).ToFunc()
-}
-
-// ByMailTone orders the results by the mail_tone field.
-func ByMailTone(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMailTone, opts...).ToFunc()
-}
-
-// ByMailSubject orders the results by the mail_subject field.
-func ByMailSubject(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMailSubject, opts...).ToFunc()
-}
-
-// ByMailBody orders the results by the mail_body field.
-func ByMailBody(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMailBody, opts...).ToFunc()
+// ByBody orders the results by the body field.
+func ByBody(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBody, opts...).ToFunc()
 }

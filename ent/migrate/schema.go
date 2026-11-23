@@ -2025,12 +2025,10 @@ var (
 		{Name: "reminder_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "status_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "approved_at", Type: field.TypeTime, Nullable: true},
-		{Name: "original_tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "original_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "original_body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "mail_tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "mail_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "mail_body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
 	}
 	// InvoiceRemindersTable holds the schema information for the "invoice_reminders" table.
 	InvoiceRemindersTable = &schema.Table{

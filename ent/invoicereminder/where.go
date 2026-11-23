@@ -119,34 +119,19 @@ func ApprovedAt(v time.Time) predicate.InvoiceReminder {
 	return predicate.InvoiceReminder(sql.FieldEQ(FieldApprovedAt, v))
 }
 
-// OriginalTone applies equality check predicate on the "original_tone" field. It's identical to OriginalToneEQ.
-func OriginalTone(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalTone, v))
+// Tone applies equality check predicate on the "tone" field. It's identical to ToneEQ.
+func Tone(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, v))
 }
 
-// OriginalSubject applies equality check predicate on the "original_subject" field. It's identical to OriginalSubjectEQ.
-func OriginalSubject(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalSubject, v))
+// Subject applies equality check predicate on the "subject" field. It's identical to SubjectEQ.
+func Subject(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldSubject, v))
 }
 
-// OriginalBody applies equality check predicate on the "original_body" field. It's identical to OriginalBodyEQ.
-func OriginalBody(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalBody, v))
-}
-
-// MailTone applies equality check predicate on the "mail_tone" field. It's identical to MailToneEQ.
-func MailTone(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailTone, v))
-}
-
-// MailSubject applies equality check predicate on the "mail_subject" field. It's identical to MailSubjectEQ.
-func MailSubject(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailSubject, v))
-}
-
-// MailBody applies equality check predicate on the "mail_body" field. It's identical to MailBodyEQ.
-func MailBody(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailBody, v))
+// Body applies equality check predicate on the "body" field. It's identical to BodyEQ.
+func Body(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldBody, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -839,394 +824,209 @@ func ApprovedAtNotNil() predicate.InvoiceReminder {
 	return predicate.InvoiceReminder(sql.FieldNotNull(FieldApprovedAt))
 }
 
-// OriginalToneEQ applies the EQ predicate on the "original_tone" field.
-func OriginalToneEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalTone, v))
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIsNull(FieldMetadata))
 }
 
-// OriginalToneNEQ applies the NEQ predicate on the "original_tone" field.
-func OriginalToneNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldOriginalTone, v))
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotNull(FieldMetadata))
 }
 
-// OriginalToneIn applies the In predicate on the "original_tone" field.
-func OriginalToneIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldOriginalTone, vs...))
+// ToneEQ applies the EQ predicate on the "tone" field.
+func ToneEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, v))
 }
 
-// OriginalToneNotIn applies the NotIn predicate on the "original_tone" field.
-func OriginalToneNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldOriginalTone, vs...))
+// ToneNEQ applies the NEQ predicate on the "tone" field.
+func ToneNEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldTone, v))
 }
 
-// OriginalToneGT applies the GT predicate on the "original_tone" field.
-func OriginalToneGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldOriginalTone, v))
+// ToneIn applies the In predicate on the "tone" field.
+func ToneIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIn(FieldTone, vs...))
 }
 
-// OriginalToneGTE applies the GTE predicate on the "original_tone" field.
-func OriginalToneGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldOriginalTone, v))
+// ToneNotIn applies the NotIn predicate on the "tone" field.
+func ToneNotIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldTone, vs...))
 }
 
-// OriginalToneLT applies the LT predicate on the "original_tone" field.
-func OriginalToneLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldOriginalTone, v))
+// ToneGT applies the GT predicate on the "tone" field.
+func ToneGT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGT(FieldTone, v))
 }
 
-// OriginalToneLTE applies the LTE predicate on the "original_tone" field.
-func OriginalToneLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldOriginalTone, v))
+// ToneGTE applies the GTE predicate on the "tone" field.
+func ToneGTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldTone, v))
 }
 
-// OriginalToneContains applies the Contains predicate on the "original_tone" field.
-func OriginalToneContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldOriginalTone, v))
+// ToneLT applies the LT predicate on the "tone" field.
+func ToneLT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLT(FieldTone, v))
 }
 
-// OriginalToneHasPrefix applies the HasPrefix predicate on the "original_tone" field.
-func OriginalToneHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldOriginalTone, v))
+// ToneLTE applies the LTE predicate on the "tone" field.
+func ToneLTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldTone, v))
 }
 
-// OriginalToneHasSuffix applies the HasSuffix predicate on the "original_tone" field.
-func OriginalToneHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldOriginalTone, v))
+// ToneContains applies the Contains predicate on the "tone" field.
+func ToneContains(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContains(FieldTone, v))
 }
 
-// OriginalToneEqualFold applies the EqualFold predicate on the "original_tone" field.
-func OriginalToneEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldOriginalTone, v))
+// ToneHasPrefix applies the HasPrefix predicate on the "tone" field.
+func ToneHasPrefix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldTone, v))
 }
 
-// OriginalToneContainsFold applies the ContainsFold predicate on the "original_tone" field.
-func OriginalToneContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldOriginalTone, v))
+// ToneHasSuffix applies the HasSuffix predicate on the "tone" field.
+func ToneHasSuffix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldTone, v))
 }
 
-// OriginalSubjectEQ applies the EQ predicate on the "original_subject" field.
-func OriginalSubjectEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalSubject, v))
+// ToneEqualFold applies the EqualFold predicate on the "tone" field.
+func ToneEqualFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldTone, v))
 }
 
-// OriginalSubjectNEQ applies the NEQ predicate on the "original_subject" field.
-func OriginalSubjectNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldOriginalSubject, v))
+// ToneContainsFold applies the ContainsFold predicate on the "tone" field.
+func ToneContainsFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldTone, v))
 }
 
-// OriginalSubjectIn applies the In predicate on the "original_subject" field.
-func OriginalSubjectIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldOriginalSubject, vs...))
+// SubjectEQ applies the EQ predicate on the "subject" field.
+func SubjectEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldSubject, v))
 }
 
-// OriginalSubjectNotIn applies the NotIn predicate on the "original_subject" field.
-func OriginalSubjectNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldOriginalSubject, vs...))
+// SubjectNEQ applies the NEQ predicate on the "subject" field.
+func SubjectNEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldSubject, v))
 }
 
-// OriginalSubjectGT applies the GT predicate on the "original_subject" field.
-func OriginalSubjectGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldOriginalSubject, v))
+// SubjectIn applies the In predicate on the "subject" field.
+func SubjectIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIn(FieldSubject, vs...))
 }
 
-// OriginalSubjectGTE applies the GTE predicate on the "original_subject" field.
-func OriginalSubjectGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldOriginalSubject, v))
+// SubjectNotIn applies the NotIn predicate on the "subject" field.
+func SubjectNotIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldSubject, vs...))
 }
 
-// OriginalSubjectLT applies the LT predicate on the "original_subject" field.
-func OriginalSubjectLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldOriginalSubject, v))
+// SubjectGT applies the GT predicate on the "subject" field.
+func SubjectGT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGT(FieldSubject, v))
 }
 
-// OriginalSubjectLTE applies the LTE predicate on the "original_subject" field.
-func OriginalSubjectLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldOriginalSubject, v))
+// SubjectGTE applies the GTE predicate on the "subject" field.
+func SubjectGTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldSubject, v))
 }
 
-// OriginalSubjectContains applies the Contains predicate on the "original_subject" field.
-func OriginalSubjectContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldOriginalSubject, v))
+// SubjectLT applies the LT predicate on the "subject" field.
+func SubjectLT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLT(FieldSubject, v))
 }
 
-// OriginalSubjectHasPrefix applies the HasPrefix predicate on the "original_subject" field.
-func OriginalSubjectHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldOriginalSubject, v))
+// SubjectLTE applies the LTE predicate on the "subject" field.
+func SubjectLTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldSubject, v))
 }
 
-// OriginalSubjectHasSuffix applies the HasSuffix predicate on the "original_subject" field.
-func OriginalSubjectHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldOriginalSubject, v))
+// SubjectContains applies the Contains predicate on the "subject" field.
+func SubjectContains(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContains(FieldSubject, v))
 }
 
-// OriginalSubjectEqualFold applies the EqualFold predicate on the "original_subject" field.
-func OriginalSubjectEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldOriginalSubject, v))
+// SubjectHasPrefix applies the HasPrefix predicate on the "subject" field.
+func SubjectHasPrefix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldSubject, v))
 }
 
-// OriginalSubjectContainsFold applies the ContainsFold predicate on the "original_subject" field.
-func OriginalSubjectContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldOriginalSubject, v))
+// SubjectHasSuffix applies the HasSuffix predicate on the "subject" field.
+func SubjectHasSuffix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldSubject, v))
 }
 
-// OriginalBodyEQ applies the EQ predicate on the "original_body" field.
-func OriginalBodyEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldOriginalBody, v))
+// SubjectEqualFold applies the EqualFold predicate on the "subject" field.
+func SubjectEqualFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldSubject, v))
 }
 
-// OriginalBodyNEQ applies the NEQ predicate on the "original_body" field.
-func OriginalBodyNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldOriginalBody, v))
+// SubjectContainsFold applies the ContainsFold predicate on the "subject" field.
+func SubjectContainsFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldSubject, v))
 }
 
-// OriginalBodyIn applies the In predicate on the "original_body" field.
-func OriginalBodyIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldOriginalBody, vs...))
+// BodyEQ applies the EQ predicate on the "body" field.
+func BodyEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldBody, v))
 }
 
-// OriginalBodyNotIn applies the NotIn predicate on the "original_body" field.
-func OriginalBodyNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldOriginalBody, vs...))
+// BodyNEQ applies the NEQ predicate on the "body" field.
+func BodyNEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldBody, v))
 }
 
-// OriginalBodyGT applies the GT predicate on the "original_body" field.
-func OriginalBodyGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldOriginalBody, v))
+// BodyIn applies the In predicate on the "body" field.
+func BodyIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIn(FieldBody, vs...))
 }
 
-// OriginalBodyGTE applies the GTE predicate on the "original_body" field.
-func OriginalBodyGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldOriginalBody, v))
+// BodyNotIn applies the NotIn predicate on the "body" field.
+func BodyNotIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldBody, vs...))
 }
 
-// OriginalBodyLT applies the LT predicate on the "original_body" field.
-func OriginalBodyLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldOriginalBody, v))
+// BodyGT applies the GT predicate on the "body" field.
+func BodyGT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGT(FieldBody, v))
 }
 
-// OriginalBodyLTE applies the LTE predicate on the "original_body" field.
-func OriginalBodyLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldOriginalBody, v))
+// BodyGTE applies the GTE predicate on the "body" field.
+func BodyGTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldBody, v))
 }
 
-// OriginalBodyContains applies the Contains predicate on the "original_body" field.
-func OriginalBodyContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldOriginalBody, v))
+// BodyLT applies the LT predicate on the "body" field.
+func BodyLT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLT(FieldBody, v))
 }
 
-// OriginalBodyHasPrefix applies the HasPrefix predicate on the "original_body" field.
-func OriginalBodyHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldOriginalBody, v))
+// BodyLTE applies the LTE predicate on the "body" field.
+func BodyLTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldBody, v))
 }
 
-// OriginalBodyHasSuffix applies the HasSuffix predicate on the "original_body" field.
-func OriginalBodyHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldOriginalBody, v))
+// BodyContains applies the Contains predicate on the "body" field.
+func BodyContains(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContains(FieldBody, v))
 }
 
-// OriginalBodyEqualFold applies the EqualFold predicate on the "original_body" field.
-func OriginalBodyEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldOriginalBody, v))
+// BodyHasPrefix applies the HasPrefix predicate on the "body" field.
+func BodyHasPrefix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldBody, v))
 }
 
-// OriginalBodyContainsFold applies the ContainsFold predicate on the "original_body" field.
-func OriginalBodyContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldOriginalBody, v))
+// BodyHasSuffix applies the HasSuffix predicate on the "body" field.
+func BodyHasSuffix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldBody, v))
 }
 
-// MailToneEQ applies the EQ predicate on the "mail_tone" field.
-func MailToneEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailTone, v))
+// BodyEqualFold applies the EqualFold predicate on the "body" field.
+func BodyEqualFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldBody, v))
 }
 
-// MailToneNEQ applies the NEQ predicate on the "mail_tone" field.
-func MailToneNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldMailTone, v))
-}
-
-// MailToneIn applies the In predicate on the "mail_tone" field.
-func MailToneIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldMailTone, vs...))
-}
-
-// MailToneNotIn applies the NotIn predicate on the "mail_tone" field.
-func MailToneNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldMailTone, vs...))
-}
-
-// MailToneGT applies the GT predicate on the "mail_tone" field.
-func MailToneGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldMailTone, v))
-}
-
-// MailToneGTE applies the GTE predicate on the "mail_tone" field.
-func MailToneGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldMailTone, v))
-}
-
-// MailToneLT applies the LT predicate on the "mail_tone" field.
-func MailToneLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldMailTone, v))
-}
-
-// MailToneLTE applies the LTE predicate on the "mail_tone" field.
-func MailToneLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldMailTone, v))
-}
-
-// MailToneContains applies the Contains predicate on the "mail_tone" field.
-func MailToneContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldMailTone, v))
-}
-
-// MailToneHasPrefix applies the HasPrefix predicate on the "mail_tone" field.
-func MailToneHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldMailTone, v))
-}
-
-// MailToneHasSuffix applies the HasSuffix predicate on the "mail_tone" field.
-func MailToneHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldMailTone, v))
-}
-
-// MailToneEqualFold applies the EqualFold predicate on the "mail_tone" field.
-func MailToneEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldMailTone, v))
-}
-
-// MailToneContainsFold applies the ContainsFold predicate on the "mail_tone" field.
-func MailToneContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldMailTone, v))
-}
-
-// MailSubjectEQ applies the EQ predicate on the "mail_subject" field.
-func MailSubjectEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailSubject, v))
-}
-
-// MailSubjectNEQ applies the NEQ predicate on the "mail_subject" field.
-func MailSubjectNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldMailSubject, v))
-}
-
-// MailSubjectIn applies the In predicate on the "mail_subject" field.
-func MailSubjectIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldMailSubject, vs...))
-}
-
-// MailSubjectNotIn applies the NotIn predicate on the "mail_subject" field.
-func MailSubjectNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldMailSubject, vs...))
-}
-
-// MailSubjectGT applies the GT predicate on the "mail_subject" field.
-func MailSubjectGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldMailSubject, v))
-}
-
-// MailSubjectGTE applies the GTE predicate on the "mail_subject" field.
-func MailSubjectGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldMailSubject, v))
-}
-
-// MailSubjectLT applies the LT predicate on the "mail_subject" field.
-func MailSubjectLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldMailSubject, v))
-}
-
-// MailSubjectLTE applies the LTE predicate on the "mail_subject" field.
-func MailSubjectLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldMailSubject, v))
-}
-
-// MailSubjectContains applies the Contains predicate on the "mail_subject" field.
-func MailSubjectContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldMailSubject, v))
-}
-
-// MailSubjectHasPrefix applies the HasPrefix predicate on the "mail_subject" field.
-func MailSubjectHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldMailSubject, v))
-}
-
-// MailSubjectHasSuffix applies the HasSuffix predicate on the "mail_subject" field.
-func MailSubjectHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldMailSubject, v))
-}
-
-// MailSubjectEqualFold applies the EqualFold predicate on the "mail_subject" field.
-func MailSubjectEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldMailSubject, v))
-}
-
-// MailSubjectContainsFold applies the ContainsFold predicate on the "mail_subject" field.
-func MailSubjectContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldMailSubject, v))
-}
-
-// MailBodyEQ applies the EQ predicate on the "mail_body" field.
-func MailBodyEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldMailBody, v))
-}
-
-// MailBodyNEQ applies the NEQ predicate on the "mail_body" field.
-func MailBodyNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldMailBody, v))
-}
-
-// MailBodyIn applies the In predicate on the "mail_body" field.
-func MailBodyIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldMailBody, vs...))
-}
-
-// MailBodyNotIn applies the NotIn predicate on the "mail_body" field.
-func MailBodyNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldMailBody, vs...))
-}
-
-// MailBodyGT applies the GT predicate on the "mail_body" field.
-func MailBodyGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldMailBody, v))
-}
-
-// MailBodyGTE applies the GTE predicate on the "mail_body" field.
-func MailBodyGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldMailBody, v))
-}
-
-// MailBodyLT applies the LT predicate on the "mail_body" field.
-func MailBodyLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldMailBody, v))
-}
-
-// MailBodyLTE applies the LTE predicate on the "mail_body" field.
-func MailBodyLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldMailBody, v))
-}
-
-// MailBodyContains applies the Contains predicate on the "mail_body" field.
-func MailBodyContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldMailBody, v))
-}
-
-// MailBodyHasPrefix applies the HasPrefix predicate on the "mail_body" field.
-func MailBodyHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldMailBody, v))
-}
-
-// MailBodyHasSuffix applies the HasSuffix predicate on the "mail_body" field.
-func MailBodyHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldMailBody, v))
-}
-
-// MailBodyEqualFold applies the EqualFold predicate on the "mail_body" field.
-func MailBodyEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldMailBody, v))
-}
-
-// MailBodyContainsFold applies the ContainsFold predicate on the "mail_body" field.
-func MailBodyContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldMailBody, v))
+// BodyContainsFold applies the ContainsFold predicate on the "body" field.
+func BodyContainsFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldBody, v))
 }
 
 // And groups predicates with the AND operator between them.

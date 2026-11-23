@@ -108,7 +108,7 @@ func TestBoard_PositiveLimitReturnsTheFirstPage(t *testing.T) {
 	held := collections.NewInvoiceReminderBuilder(nil).
 		WithStatus(types.ReminderStatusHeld, "Promised Friday", nil).
 		WithOriginal(types.ReminderToneFriendly, "", "").
-		WithMail(types.ReminderToneFinal, "", "").
+		WithText(types.ReminderToneFinal, "", "").
 		Build()
 	rows := []collections.Row{rowDue("a1", 100, &due, nil), rowDue("a2", 50, &due, held)}
 	board.Columns[types.CollectionsColumnOverdue] = *collections.NewBoardColumnBuilder(&col).WithRows(rows, true).Build()

@@ -56498,30 +56498,28 @@ func (m *InvoiceLineItemMutation) ResetEdge(name string) error {
 // InvoiceReminderMutation represents an operation that mutates the InvoiceReminder nodes in the graph.
 type InvoiceReminderMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *string
-	tenant_id        *string
-	status           *string
-	created_at       *time.Time
-	updated_at       *time.Time
-	created_by       *string
-	updated_by       *string
-	environment_id   *string
-	invoice_id       *string
-	reminder_status  *string
-	status_reason    *string
-	approved_at      *time.Time
-	original_tone    *string
-	original_subject *string
-	original_body    *string
-	mail_tone        *string
-	mail_subject     *string
-	mail_body        *string
-	clearedFields    map[string]struct{}
-	done             bool
-	oldValue         func(context.Context) (*InvoiceReminder, error)
-	predicates       []predicate.InvoiceReminder
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	invoice_id      *string
+	reminder_status *string
+	status_reason   *string
+	approved_at     *time.Time
+	metadata        *map[string]interface{}
+	tone            *string
+	subject         *string
+	body            *string
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*InvoiceReminder, error)
+	predicates      []predicate.InvoiceReminder
 }
 
 var _ ent.Mutation = (*InvoiceReminderMutation)(nil)
@@ -57089,220 +57087,161 @@ func (m *InvoiceReminderMutation) ResetApprovedAt() {
 	delete(m.clearedFields, invoicereminder.FieldApprovedAt)
 }
 
-// SetOriginalTone sets the "original_tone" field.
-func (m *InvoiceReminderMutation) SetOriginalTone(s string) {
-	m.original_tone = &s
+// SetMetadata sets the "metadata" field.
+func (m *InvoiceReminderMutation) SetMetadata(value map[string]interface{}) {
+	m.metadata = &value
 }
 
-// OriginalTone returns the value of the "original_tone" field in the mutation.
-func (m *InvoiceReminderMutation) OriginalTone() (r string, exists bool) {
-	v := m.original_tone
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *InvoiceReminderMutation) Metadata() (r map[string]interface{}, exists bool) {
+	v := m.metadata
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldOriginalTone returns the old "original_tone" field's value of the InvoiceReminder entity.
+// OldMetadata returns the old "metadata" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldOriginalTone(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldOriginalTone is only allowed on UpdateOne operations")
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldOriginalTone requires an ID field in the mutation")
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldOriginalTone: %w", err)
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
 	}
-	return oldValue.OriginalTone, nil
+	return oldValue.Metadata, nil
 }
 
-// ResetOriginalTone resets all changes to the "original_tone" field.
-func (m *InvoiceReminderMutation) ResetOriginalTone() {
-	m.original_tone = nil
+// ClearMetadata clears the value of the "metadata" field.
+func (m *InvoiceReminderMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[invoicereminder.FieldMetadata] = struct{}{}
 }
 
-// SetOriginalSubject sets the "original_subject" field.
-func (m *InvoiceReminderMutation) SetOriginalSubject(s string) {
-	m.original_subject = &s
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *InvoiceReminderMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[invoicereminder.FieldMetadata]
+	return ok
 }
 
-// OriginalSubject returns the value of the "original_subject" field in the mutation.
-func (m *InvoiceReminderMutation) OriginalSubject() (r string, exists bool) {
-	v := m.original_subject
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *InvoiceReminderMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, invoicereminder.FieldMetadata)
+}
+
+// SetTone sets the "tone" field.
+func (m *InvoiceReminderMutation) SetTone(s string) {
+	m.tone = &s
+}
+
+// Tone returns the value of the "tone" field in the mutation.
+func (m *InvoiceReminderMutation) Tone() (r string, exists bool) {
+	v := m.tone
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldOriginalSubject returns the old "original_subject" field's value of the InvoiceReminder entity.
+// OldTone returns the old "tone" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldOriginalSubject(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldTone(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldOriginalSubject is only allowed on UpdateOne operations")
+		return v, errors.New("OldTone is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldOriginalSubject requires an ID field in the mutation")
+		return v, errors.New("OldTone requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldOriginalSubject: %w", err)
+		return v, fmt.Errorf("querying old value for OldTone: %w", err)
 	}
-	return oldValue.OriginalSubject, nil
+	return oldValue.Tone, nil
 }
 
-// ResetOriginalSubject resets all changes to the "original_subject" field.
-func (m *InvoiceReminderMutation) ResetOriginalSubject() {
-	m.original_subject = nil
+// ResetTone resets all changes to the "tone" field.
+func (m *InvoiceReminderMutation) ResetTone() {
+	m.tone = nil
 }
 
-// SetOriginalBody sets the "original_body" field.
-func (m *InvoiceReminderMutation) SetOriginalBody(s string) {
-	m.original_body = &s
+// SetSubject sets the "subject" field.
+func (m *InvoiceReminderMutation) SetSubject(s string) {
+	m.subject = &s
 }
 
-// OriginalBody returns the value of the "original_body" field in the mutation.
-func (m *InvoiceReminderMutation) OriginalBody() (r string, exists bool) {
-	v := m.original_body
+// Subject returns the value of the "subject" field in the mutation.
+func (m *InvoiceReminderMutation) Subject() (r string, exists bool) {
+	v := m.subject
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldOriginalBody returns the old "original_body" field's value of the InvoiceReminder entity.
+// OldSubject returns the old "subject" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldOriginalBody(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldSubject(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldOriginalBody is only allowed on UpdateOne operations")
+		return v, errors.New("OldSubject is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldOriginalBody requires an ID field in the mutation")
+		return v, errors.New("OldSubject requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldOriginalBody: %w", err)
+		return v, fmt.Errorf("querying old value for OldSubject: %w", err)
 	}
-	return oldValue.OriginalBody, nil
+	return oldValue.Subject, nil
 }
 
-// ResetOriginalBody resets all changes to the "original_body" field.
-func (m *InvoiceReminderMutation) ResetOriginalBody() {
-	m.original_body = nil
+// ResetSubject resets all changes to the "subject" field.
+func (m *InvoiceReminderMutation) ResetSubject() {
+	m.subject = nil
 }
 
-// SetMailTone sets the "mail_tone" field.
-func (m *InvoiceReminderMutation) SetMailTone(s string) {
-	m.mail_tone = &s
+// SetBody sets the "body" field.
+func (m *InvoiceReminderMutation) SetBody(s string) {
+	m.body = &s
 }
 
-// MailTone returns the value of the "mail_tone" field in the mutation.
-func (m *InvoiceReminderMutation) MailTone() (r string, exists bool) {
-	v := m.mail_tone
+// Body returns the value of the "body" field in the mutation.
+func (m *InvoiceReminderMutation) Body() (r string, exists bool) {
+	v := m.body
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldMailTone returns the old "mail_tone" field's value of the InvoiceReminder entity.
+// OldBody returns the old "body" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldMailTone(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldBody(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMailTone is only allowed on UpdateOne operations")
+		return v, errors.New("OldBody is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMailTone requires an ID field in the mutation")
+		return v, errors.New("OldBody requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMailTone: %w", err)
+		return v, fmt.Errorf("querying old value for OldBody: %w", err)
 	}
-	return oldValue.MailTone, nil
+	return oldValue.Body, nil
 }
 
-// ResetMailTone resets all changes to the "mail_tone" field.
-func (m *InvoiceReminderMutation) ResetMailTone() {
-	m.mail_tone = nil
-}
-
-// SetMailSubject sets the "mail_subject" field.
-func (m *InvoiceReminderMutation) SetMailSubject(s string) {
-	m.mail_subject = &s
-}
-
-// MailSubject returns the value of the "mail_subject" field in the mutation.
-func (m *InvoiceReminderMutation) MailSubject() (r string, exists bool) {
-	v := m.mail_subject
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMailSubject returns the old "mail_subject" field's value of the InvoiceReminder entity.
-// If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldMailSubject(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMailSubject is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMailSubject requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMailSubject: %w", err)
-	}
-	return oldValue.MailSubject, nil
-}
-
-// ResetMailSubject resets all changes to the "mail_subject" field.
-func (m *InvoiceReminderMutation) ResetMailSubject() {
-	m.mail_subject = nil
-}
-
-// SetMailBody sets the "mail_body" field.
-func (m *InvoiceReminderMutation) SetMailBody(s string) {
-	m.mail_body = &s
-}
-
-// MailBody returns the value of the "mail_body" field in the mutation.
-func (m *InvoiceReminderMutation) MailBody() (r string, exists bool) {
-	v := m.mail_body
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMailBody returns the old "mail_body" field's value of the InvoiceReminder entity.
-// If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldMailBody(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMailBody is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMailBody requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMailBody: %w", err)
-	}
-	return oldValue.MailBody, nil
-}
-
-// ResetMailBody resets all changes to the "mail_body" field.
-func (m *InvoiceReminderMutation) ResetMailBody() {
-	m.mail_body = nil
+// ResetBody resets all changes to the "body" field.
+func (m *InvoiceReminderMutation) ResetBody() {
+	m.body = nil
 }
 
 // Where appends a list predicates to the InvoiceReminderMutation builder.
@@ -57339,7 +57278,7 @@ func (m *InvoiceReminderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceReminderMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicereminder.FieldTenantID)
 	}
@@ -57373,23 +57312,17 @@ func (m *InvoiceReminderMutation) Fields() []string {
 	if m.approved_at != nil {
 		fields = append(fields, invoicereminder.FieldApprovedAt)
 	}
-	if m.original_tone != nil {
-		fields = append(fields, invoicereminder.FieldOriginalTone)
+	if m.metadata != nil {
+		fields = append(fields, invoicereminder.FieldMetadata)
 	}
-	if m.original_subject != nil {
-		fields = append(fields, invoicereminder.FieldOriginalSubject)
+	if m.tone != nil {
+		fields = append(fields, invoicereminder.FieldTone)
 	}
-	if m.original_body != nil {
-		fields = append(fields, invoicereminder.FieldOriginalBody)
+	if m.subject != nil {
+		fields = append(fields, invoicereminder.FieldSubject)
 	}
-	if m.mail_tone != nil {
-		fields = append(fields, invoicereminder.FieldMailTone)
-	}
-	if m.mail_subject != nil {
-		fields = append(fields, invoicereminder.FieldMailSubject)
-	}
-	if m.mail_body != nil {
-		fields = append(fields, invoicereminder.FieldMailBody)
+	if m.body != nil {
+		fields = append(fields, invoicereminder.FieldBody)
 	}
 	return fields
 }
@@ -57421,18 +57354,14 @@ func (m *InvoiceReminderMutation) Field(name string) (ent.Value, bool) {
 		return m.StatusReason()
 	case invoicereminder.FieldApprovedAt:
 		return m.ApprovedAt()
-	case invoicereminder.FieldOriginalTone:
-		return m.OriginalTone()
-	case invoicereminder.FieldOriginalSubject:
-		return m.OriginalSubject()
-	case invoicereminder.FieldOriginalBody:
-		return m.OriginalBody()
-	case invoicereminder.FieldMailTone:
-		return m.MailTone()
-	case invoicereminder.FieldMailSubject:
-		return m.MailSubject()
-	case invoicereminder.FieldMailBody:
-		return m.MailBody()
+	case invoicereminder.FieldMetadata:
+		return m.Metadata()
+	case invoicereminder.FieldTone:
+		return m.Tone()
+	case invoicereminder.FieldSubject:
+		return m.Subject()
+	case invoicereminder.FieldBody:
+		return m.Body()
 	}
 	return nil, false
 }
@@ -57464,18 +57393,14 @@ func (m *InvoiceReminderMutation) OldField(ctx context.Context, name string) (en
 		return m.OldStatusReason(ctx)
 	case invoicereminder.FieldApprovedAt:
 		return m.OldApprovedAt(ctx)
-	case invoicereminder.FieldOriginalTone:
-		return m.OldOriginalTone(ctx)
-	case invoicereminder.FieldOriginalSubject:
-		return m.OldOriginalSubject(ctx)
-	case invoicereminder.FieldOriginalBody:
-		return m.OldOriginalBody(ctx)
-	case invoicereminder.FieldMailTone:
-		return m.OldMailTone(ctx)
-	case invoicereminder.FieldMailSubject:
-		return m.OldMailSubject(ctx)
-	case invoicereminder.FieldMailBody:
-		return m.OldMailBody(ctx)
+	case invoicereminder.FieldMetadata:
+		return m.OldMetadata(ctx)
+	case invoicereminder.FieldTone:
+		return m.OldTone(ctx)
+	case invoicereminder.FieldSubject:
+		return m.OldSubject(ctx)
+	case invoicereminder.FieldBody:
+		return m.OldBody(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceReminder field %s", name)
 }
@@ -57562,47 +57487,33 @@ func (m *InvoiceReminderMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetApprovedAt(v)
 		return nil
-	case invoicereminder.FieldOriginalTone:
-		v, ok := value.(string)
+	case invoicereminder.FieldMetadata:
+		v, ok := value.(map[string]interface{})
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetOriginalTone(v)
+		m.SetMetadata(v)
 		return nil
-	case invoicereminder.FieldOriginalSubject:
+	case invoicereminder.FieldTone:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetOriginalSubject(v)
+		m.SetTone(v)
 		return nil
-	case invoicereminder.FieldOriginalBody:
+	case invoicereminder.FieldSubject:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetOriginalBody(v)
+		m.SetSubject(v)
 		return nil
-	case invoicereminder.FieldMailTone:
+	case invoicereminder.FieldBody:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetMailTone(v)
-		return nil
-	case invoicereminder.FieldMailSubject:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMailSubject(v)
-		return nil
-	case invoicereminder.FieldMailBody:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMailBody(v)
+		m.SetBody(v)
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder field %s", name)
@@ -57649,6 +57560,9 @@ func (m *InvoiceReminderMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicereminder.FieldApprovedAt) {
 		fields = append(fields, invoicereminder.FieldApprovedAt)
 	}
+	if m.FieldCleared(invoicereminder.FieldMetadata) {
+		fields = append(fields, invoicereminder.FieldMetadata)
+	}
 	return fields
 }
 
@@ -57677,6 +57591,9 @@ func (m *InvoiceReminderMutation) ClearField(name string) error {
 		return nil
 	case invoicereminder.FieldApprovedAt:
 		m.ClearApprovedAt()
+		return nil
+	case invoicereminder.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder nullable field %s", name)
@@ -57719,23 +57636,17 @@ func (m *InvoiceReminderMutation) ResetField(name string) error {
 	case invoicereminder.FieldApprovedAt:
 		m.ResetApprovedAt()
 		return nil
-	case invoicereminder.FieldOriginalTone:
-		m.ResetOriginalTone()
+	case invoicereminder.FieldMetadata:
+		m.ResetMetadata()
 		return nil
-	case invoicereminder.FieldOriginalSubject:
-		m.ResetOriginalSubject()
+	case invoicereminder.FieldTone:
+		m.ResetTone()
 		return nil
-	case invoicereminder.FieldOriginalBody:
-		m.ResetOriginalBody()
+	case invoicereminder.FieldSubject:
+		m.ResetSubject()
 		return nil
-	case invoicereminder.FieldMailTone:
-		m.ResetMailTone()
-		return nil
-	case invoicereminder.FieldMailSubject:
-		m.ResetMailSubject()
-		return nil
-	case invoicereminder.FieldMailBody:
-		m.ResetMailBody()
+	case invoicereminder.FieldBody:
+		m.ResetBody()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder field %s", name)

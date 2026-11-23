@@ -18,6 +18,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/collections"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -72,7 +73,7 @@ func newReminderFixture(t *testing.T) *reminderFixture {
 		asOf: time.Now().UTC().Truncate(time.Microsecond), run: run,
 	}
 	t.Cleanup(func() {
-		for _, table := range []string{"invoice_reminders", "invoices", "customers"} {
+		for _, table := range []string{"email_logs", "invoice_reminders", "invoices", "customers"} {
 			_, err := client.Writer(context.Background()).ExecContext(context.Background(),
 				"DELETE FROM "+table+" WHERE tenant_id = ANY($1)", pq.Array([]string{types.GetTenantID(f.ctx), types.GetTenantID(f.other)}))
 			require.NoError(t, err)
@@ -114,7 +115,7 @@ func (f *reminderFixture) remind(t *testing.T, ctx context.Context, invoiceID st
 	t.Helper()
 	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
 		ID: "irem_" + f.run + "_" + invoiceID, InvoiceID: invoiceID, BaseModel: types.GetDefaultBaseModel(ctx),
-	}).WithOriginal(types.ReminderToneFriendly, "subject", "body").WithMail(types.ReminderToneFriendly, "subject", "body").
+	}).WithOriginal(types.ReminderToneFriendly, "subject", "body").WithText(types.ReminderToneFriendly, "subject", "body").
 		WithStatus(status, reason, nil).Build()
 	require.NoError(t, f.reminders.Create(ctx, r))
 	return r
@@ -184,7 +185,7 @@ func (f *reminderFixture) seed(t *testing.T) {
 			number: "INV-ISO", remaining: 999999, total: 999999, due: f.at(-24 * time.Hour)})
 	}
 	t.Cleanup(func() {
-		for _, table := range []string{"invoice_reminders", "invoices", "customers"} {
+		for _, table := range []string{"email_logs", "invoice_reminders", "invoices", "customers"} {
 			_, err := f.client.Writer(context.Background()).ExecContext(context.Background(), "DELETE FROM "+table+" WHERE environment_id = $1", types.GetEnvironmentID(f.otherEnv))
 			require.NoError(t, err)
 		}
@@ -530,7 +531,7 @@ func TestInvoiceReminderRepository_UpdateComparesStatusAndTimestamp(t *testing.T
 	approved := collections.NewInvoiceReminderBuilder(stale).WithStatus(types.ReminderStatusApproved, "", lo.ToPtr(f.asOf)).Build()
 	require.True(t, errors.Is(f.reminders.Update(f.ctx, approved, stale), ierr.ErrVersionConflict), "an update from an older read is refused")
 
-	sameStatusStale := collections.NewInvoiceReminderBuilder(held).WithMail(types.ReminderToneFirm, "s", "b").Build()
+	sameStatusStale := collections.NewInvoiceReminderBuilder(held).WithText(types.ReminderToneFirm, "s", "b").Build()
 	previous := collections.NewInvoiceReminderBuilder(held).Build()
 	previous.UpdatedAt = previous.UpdatedAt.Add(-time.Second)
 	require.True(t, errors.Is(f.reminders.Update(f.ctx, sameStatusStale, previous), ierr.ErrVersionConflict), "the timestamp is compared as well as the status")
@@ -552,7 +553,7 @@ func TestInvoiceReminderRepository_CreateManySkipsInvoicesThatHaveOne(t *testing
 	now := f.asOf
 	batch := lo.Map(pending[:3], func(id string, _ int) *collections.InvoiceReminder {
 		return collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{ID: "irem_bulk_" + f.run + "_" + id, InvoiceID: id, BaseModel: types.GetDefaultBaseModel(f.ctx)}).
-			WithOriginal(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").WithMail(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").
+			WithOriginal(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").WithText(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").
 			WithStatus(types.ReminderStatusApproved, "", &now).Build()
 	})
 	created, err := f.reminders.CreateMany(f.ctx, batch)
@@ -568,11 +569,86 @@ func TestInvoiceReminderRepository_CreateManySkipsInvoicesThatHaveOne(t *testing
 		require.Equal(t, types.ReminderStatusApproved, r.ReminderStatus)
 		require.NotNil(t, r.ApprovedAt)
 		require.True(t, r.ApprovedAt.Equal(now))
-		require.Equal(t, "s\nwith newline", r.MailSubject)
-		require.Equal(t, "b, with \"quotes\"", r.OriginalBody)
+		require.Equal(t, "s\nwith newline", r.Subject)
+		require.Equal(t, "b, with \"quotes\"", r.Original().OriginalBody)
 		require.False(t, r.Edited())
 	}
 	none, err := f.reminders.CreateMany(f.ctx, nil)
 	require.NoError(t, err)
 	require.Empty(t, none)
+}
+
+func TestInvoiceReminderRepository_StoresMetadataAndText(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	id := f.untouched()[0]
+	created := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: "irem_meta_" + f.run, InvoiceID: id, BaseModel: types.GetDefaultBaseModel(f.ctx),
+	}).
+		WithStatus(types.ReminderStatusApproved, "", lo.ToPtr(f.asOf)).
+		WithOriginal(types.ReminderToneFirm, "orig subject", "orig body").
+		WithText(types.ReminderToneFinal, "new subject", "new body").
+		Build()
+	require.NoError(t, f.reminders.Create(f.ctx, created))
+
+	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{id})
+	require.NoError(t, err)
+	got := rows[0].Reminder
+	require.Equal(t, collections.Metadata{OriginalTone: types.ReminderToneFirm, OriginalSubject: "orig subject", OriginalBody: "orig body"}, got.Original())
+	require.Equal(t, "new subject", got.Subject)
+	require.True(t, got.Edited())
+
+	listed, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnChasing), 0, 500)
+	require.NoError(t, err)
+	row, ok := lo.Find(listed, func(r collections.Row) bool { return r.InvoiceID == id })
+	require.True(t, ok)
+	require.Equal(t, got.Original(), row.Reminder.Original(), "the joined board query decodes the same metadata")
+	require.Equal(t, "new body", row.Reminder.Body)
+}
+
+// A reminder write and its email share one transaction: when the email insert fails, the reminder is rolled back too.
+func TestInvoiceReminderRepository_ReminderAndEmailShareATransaction(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	cfg, err := config.NewConfig()
+	require.NoError(t, err)
+	log, err := logger.NewLogger(cfg)
+	require.NoError(t, err)
+	emails := entrepo.NewEmailLogRepository(f.client, log)
+
+	key := "reminder:" + f.run
+	email := func(id string) *emaillog.EmailLog {
+		return &emaillog.EmailLog{
+			ID: id, EnvironmentID: types.GetEnvironmentID(f.ctx), EntityType: types.SystemEntityTypeInvoice, EntityID: "inv", CustomerID: "cust",
+			TemplateKey: types.EmailTemplateInvoicePaymentReminder, Trigger: types.EmailTriggerManual, FromAddress: "a@b.test", ReplyTo: "r@b.test",
+			ToAddresses: []string{"to@b.test"}, Subject: "s", Provider: types.EmailProviderLocal, DeliveryStatus: types.EmailDeliveryStatusQueued,
+			IdempotencyKey: &key, Metadata: types.Metadata{"reminder_body": "frozen"}, BaseModel: types.GetDefaultBaseModel(f.ctx),
+		}
+	}
+	require.NoError(t, emails.Create(f.ctx, email("email_a_"+f.run)))
+
+	ids := f.untouched()
+	err = f.client.WithTx(f.ctx, func(txCtx context.Context) error {
+		f.remind(t, txCtx, ids[0], types.ReminderStatusApproved, "")
+		return emails.Create(txCtx, email("email_b_"+f.run))
+	})
+	require.Error(t, err, "the second email repeats the idempotency key")
+	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{ids[0]})
+	require.NoError(t, err)
+	require.Nil(t, rows[0].Reminder, "the reminder was rolled back with the email")
+
+	err = f.client.WithTx(f.ctx, func(txCtx context.Context) error {
+		f.remind(t, txCtx, ids[1], types.ReminderStatusApproved, "")
+		other := "other:" + f.run
+		e := email("email_c_" + f.run)
+		e.IdempotencyKey = &other
+		return emails.Create(txCtx, e)
+	})
+	require.NoError(t, err)
+	rows, err = f.reminders.GetRows(f.ctx, f.asOf, []string{ids[1]})
+	require.NoError(t, err)
+	require.NotNil(t, rows[0].Reminder)
+	stored, err := emails.GetByIdempotencyKey(f.ctx, "other:"+f.run)
+	require.NoError(t, err)
+	require.Equal(t, "frozen", stored.Metadata["reminder_body"])
 }

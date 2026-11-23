@@ -46,17 +46,14 @@ func (InvoiceReminder) Fields() []ent.Field {
 		field.Time("approved_at").
 			Optional().
 			Nillable(),
-		field.String("original_tone").
+		field.JSON("metadata", map[string]interface{}{}).
+			Optional().
+			SchemaType(map[string]string{"postgres": "jsonb"}),
+		field.String("tone").
 			SchemaType(varchar("20")),
-		field.String("original_subject").
+		field.String("subject").
 			SchemaType(text),
-		field.String("original_body").
-			SchemaType(text),
-		field.String("mail_tone").
-			SchemaType(varchar("20")),
-		field.String("mail_subject").
-			SchemaType(text),
-		field.String("mail_body").
+		field.String("body").
 			SchemaType(text),
 	}
 }

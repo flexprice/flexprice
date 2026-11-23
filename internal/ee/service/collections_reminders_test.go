@@ -225,7 +225,7 @@ func TestReminder_EditStoresOriginalAndMail(t *testing.T) {
 	require.Len(t, stored, 1)
 	require.Equal(t, "a1", stored[0].InvoiceID)
 	require.True(t, strings.HasPrefix(stored[0].ID, "irem"))
-	require.Equal(t, before.Subject, stored[0].OriginalSubject)
+	require.Equal(t, before.Subject, stored[0].Original().OriginalSubject)
 
 	again, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
@@ -284,7 +284,7 @@ func TestReminder_Transitions(t *testing.T) {
 	require.NotNil(t, approved.ApprovedAt)
 	require.False(t, approved.Edited)
 	stored := f.reminders.All(ctx)[0]
-	require.Equal(t, stored.OriginalBody, stored.MailBody, "approving an untouched reminder stores the approved text as both")
+	require.Equal(t, stored.Original().OriginalBody, stored.Body, "approving an untouched reminder stores the approved text as both")
 
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrVersionConflict)
@@ -354,7 +354,8 @@ func TestReminder_ApproveKeepsEditsAndRewritesAnUneditedHeldReminder(t *testing.
 	}
 	require.NotNil(t, stored)
 	stale := *stored
-	stale.OriginalBody, stale.MailBody = "snapshot taken long ago", "snapshot taken long ago"
+	stale.Metadata = collections.NewInvoiceReminderBuilder(&stale).WithOriginal(stale.Tone, stale.Subject, "snapshot taken long ago").Build().Metadata
+	stale.Body = "snapshot taken long ago"
 	require.NoError(t, f.reminders.Update(ctx, &stale, stored))
 
 	rewritten, err := f.svc.UpdateReminder(ctx, "plain", setStatus(types.ReminderStatusApproved, ""))
@@ -696,7 +697,7 @@ func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T)
 		return collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{ID: "irem_x"}).
 			WithStatus(status, "", nil).
 			WithOriginal(types.ReminderToneFriendly, "orig", "orig body").
-			WithMail(types.ReminderToneFriendly, "orig", mailBody).
+			WithText(types.ReminderToneFriendly, "orig", mailBody).
 			Build()
 	}
 	f.board.rows = []collections.Row{
