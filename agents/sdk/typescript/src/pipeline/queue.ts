@@ -31,7 +31,11 @@ export type QueueOptions = {
 export type EventQueue = {
   /** Adds an event. Never throws, never waits. */
   push(event: UsageEvent): void;
-  /** Sends everything now. Resolves when nothing is left. Never rejects. */
+  /**
+   * Sends everything now. Resolves when nothing is left, or when the timeout
+   * passes, whichever comes first. Never rejects. Events that could not be
+   * sent in time stay in the queue.
+   */
   flush(timeoutMs?: number): Promise<void>;
   /** Events held and not yet accepted, the batch in flight included. */
   size(): number;
@@ -123,7 +127,8 @@ export function createEventQueue(options: QueueOptions): EventQueue {
     }
 
     try {
-      while (waiting.length > 0 && (sendAnyway || waiting.length >= flushAt)) {
+      // While a flush waits, keep going until nothing is left.
+      while (waiting.length > 0 && (sendAnyway || waiting.length >= flushAt || flushWaiters.size > 0)) {
         sendAnyway = false;
         inFlight = waiting.splice(0, maxBatchSize);
         const kept = await deliver(inFlight);
@@ -234,15 +239,21 @@ export function createEventQueue(options: QueueOptions): EventQueue {
     );
   }
 
-  function flush(): Promise<void> {
+  function flush(timeoutMs: number = FLUSH_TIMEOUT_MS): Promise<void> {
     if (size() === 0) return Promise.resolve();
 
     return new Promise<void>((resolve) => {
       const done = () => {
+        clearTimeout(giveUp);
         flushWaiters.delete(done);
         resolve();
       };
+      // Not unref'd, unlike the queue's own timer: the app is waiting on this
+      // flush, so the process should stay up until it ends.
+      const giveUp = setTimeout(done, timeoutMs);
       flushWaiters.add(done);
+
+      // While the queue waits before a retry, the flush waits with it.
       if (!sending && !pausedForRetry) startSending(true);
     });
   }

@@ -20,6 +20,8 @@ export type ScriptedSend = {
   send: SendEvents;
   /** The event ids of each batch, in the order the batches were sent. */
   batches: string[][];
+  /** The batches themselves, in the order they were sent. */
+  sent: UsageEvent[][];
 };
 
 /**
@@ -29,9 +31,11 @@ export type ScriptedSend = {
 export function scriptedSend(steps: Step[] = []): ScriptedSend {
   const remaining = [...steps];
   const batches: string[][] = [];
+  const sent: UsageEvent[][] = [];
 
   const send: SendEvents = (events) => {
     batches.push(events.map((event) => event.event_id));
+    sent.push([...events]);
     const step = remaining.shift() ?? "ok";
 
     if (step === "ok") return Promise.resolve();
@@ -46,7 +50,7 @@ export function scriptedSend(steps: Step[] = []): ScriptedSend {
     return Promise.reject(new SendError(`FlexPrice answered ${step.status}`, step));
   };
 
-  return { send, batches };
+  return { send, batches, sent };
 }
 
 /** A usage event with the given id. */
