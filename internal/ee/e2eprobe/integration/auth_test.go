@@ -48,7 +48,7 @@ func TestE2EProbe_LocalAuth(t *testing.T) {
 	api.headers.Set("X-API-Key", key)
 	user.ID = ""
 	api.require(t, ctx, http.MethodGet, "/users/me", nil, http.StatusOK, &user)
-	if user.ID == "" {
-		t.Fatal("API-key user lookup returned no user ID")
+	if user.ID != signupUserID {
+		t.Fatal("API-key user lookup returned a different user from signup")
 	}
 }
