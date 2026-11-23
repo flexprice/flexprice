@@ -65,10 +65,9 @@ func TestLiveMatrix(t *testing.T) {
 		t.Logf("family %s: %d passed, %d failed, %d skipped", f, passed, len(results)-passed-skipped, skipped)
 	}
 	if matched == 0 {
-		t.Fatalf("no billing scenarios matched BM_FILTER=%q", filter)
-	}
-	if executed == 0 {
-		t.Fatalf("all billing scenarios matching BM_FILTER=%q were skipped as known issues", filter)
+		t.Errorf("no billing scenarios matched BM_FILTER=%q", filter)
+	} else if executed == 0 {
+		t.Errorf("all billing scenarios matching BM_FILTER=%q were skipped as known issues", filter)
 	}
 	if os.Getenv("BM_SWEEP") == "true" {
 		removed, failed := engine.SweepOrphans(ctx, time.Now())
