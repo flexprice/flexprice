@@ -87,3 +87,56 @@ func TestCron(t *testing.T) {
 		})
 	}
 }
+
+func TestCronLegacyDefaults(t *testing.T) {
+	tests := map[types.ScheduledTaskInterval]string{
+		types.ScheduledTaskIntervalCustom:         "*/10 * * * *",
+		types.ScheduledTaskIntervalEvery15Minutes: "*/15 * * * *",
+		types.ScheduledTaskIntervalHourly:         "15 * * * *",
+		types.ScheduledTaskIntervalDaily:          "15 0 * * *",
+		types.ScheduledTaskIntervalEvery30Minutes: "*/30 * * * *",
+		types.ScheduledTaskIntervalWeekly:         "15 0 * * *",
+	}
+	for interval, want := range tests {
+		got, err := Cron(interval, nil)
+		if err != nil || got != want {
+			t.Fatalf("%s: got %q err=%v want %q", interval, got, err, want)
+		}
+	}
+}
+
+func TestBoundsLegacyCurrentPeriod(t *testing.T) {
+	tests := []struct {
+		interval  types.ScheduledTaskInterval
+		at        string
+		wantStart string
+		wantEnd   string
+	}{
+		{types.ScheduledTaskIntervalCustom, "2026-11-10T14:07:30Z", "2026-11-10T14:00:00Z", "2026-11-10T14:10:00Z"},
+		{types.ScheduledTaskIntervalHourly, "2026-11-10T10:30:00Z", "2026-11-10T10:00:00Z", "2026-11-10T11:00:00Z"},
+		{types.ScheduledTaskIntervalDaily, "2026-11-10T10:30:00Z", "2026-11-10T00:00:00Z", "2026-11-11T00:00:00Z"},
+		{types.ScheduledTaskIntervalEvery15Minutes, "2026-11-10T14:22:00Z", "2026-11-10T14:15:00Z", "2026-11-10T14:30:00Z"},
+		{types.ScheduledTaskIntervalWeekly, "2026-11-10T10:30:00Z", "2026-11-10T00:00:00Z", "2026-11-11T00:00:00Z"},
+	}
+	for _, tt := range tests {
+		start, end, err := Bounds(tt.interval, nil, mustTime(t, tt.at))
+		if err != nil || !start.Equal(mustTime(t, tt.wantStart)) || !end.Equal(mustTime(t, tt.wantEnd)) {
+			t.Fatalf("%s: got %s..%s err=%v", tt.interval, start, end, err)
+		}
+	}
+}
+
+func TestBoundsScheduledMatchesWindow(t *testing.T) {
+	at := mustTime(t, "2026-11-09T19:00:00Z")
+	sched := &types.ExportSchedule{Minute: 30, Timezone: "Asia/Kolkata"}
+	for _, c := range []struct {
+		interval types.ScheduledTaskInterval
+		schedule *types.ExportSchedule
+	}{{types.ScheduledTaskIntervalDaily, sched}, {types.ScheduledTaskIntervalManual, nil}} {
+		ws, we, _ := Window(c.interval, c.schedule, at)
+		bs, be, err := Bounds(c.interval, c.schedule, at)
+		if err != nil || !ws.Equal(bs) || !we.Equal(be) {
+			t.Fatalf("%s: bounds %s..%s window %s..%s", c.interval, bs, be, ws, we)
+		}
+	}
+}

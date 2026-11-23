@@ -8,6 +8,50 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// Bounds returns run bounds; nil schedule is legacy.
+func Bounds(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, at time.Time) (time.Time, time.Time, error) {
+	if schedule == nil && interval != types.ScheduledTaskIntervalManual {
+		start, end := legacyPeriod(interval, at)
+		return start, end, nil
+	}
+	return Window(interval, schedule, at)
+}
+
+// legacyPeriod returns the period containing at.
+func legacyPeriod(interval types.ScheduledTaskInterval, at time.Time) (time.Time, time.Time) {
+	y, m, d := at.Date()
+	atMinute := func(minute int) time.Time { return time.Date(y, m, d, at.Hour(), minute, 0, 0, at.Location()) }
+	switch interval {
+	case types.ScheduledTaskIntervalCustom:
+		start := atMinute(at.Minute() / 10 * 10)
+		return start, start.Add(10 * time.Minute)
+	case types.ScheduledTaskIntervalHourly:
+		return atMinute(0), atMinute(0).Add(time.Hour)
+	case types.ScheduledTaskIntervalEvery15Minutes:
+		start := atMinute(at.Minute() / 15 * 15)
+		return start, start.Add(15 * time.Minute)
+	default:
+		day := time.Date(y, m, d, 0, 0, 0, 0, at.Location())
+		return day, day.AddDate(0, 0, 1)
+	}
+}
+
+// legacyCron keeps cron for rows without schedule.
+func legacyCron(interval types.ScheduledTaskInterval) string {
+	switch interval {
+	case types.ScheduledTaskIntervalCustom:
+		return "*/10 * * * *"
+	case types.ScheduledTaskIntervalEvery15Minutes:
+		return "*/15 * * * *"
+	case types.ScheduledTaskIntervalHourly:
+		return "15 * * * *"
+	case types.ScheduledTaskIntervalEvery30Minutes:
+		return "*/30 * * * *"
+	default:
+		return "15 0 * * *"
+	}
+}
+
 // Window returns UTC run bounds.
 func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, scheduledStart time.Time) (time.Time, time.Time, error) {
 	loc := time.UTC
@@ -56,9 +100,7 @@ func Cron(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule) 
 			Mark(ierr.ErrValidation)
 	}
 	if schedule == nil {
-		return "", ierr.NewError("schedule is required").
-			WithHint("Schedule is required to build a cron expression").
-			Mark(ierr.ErrValidation)
+		return legacyCron(interval), nil
 	}
 	switch interval {
 	case types.ScheduledTaskIntervalHourly:
