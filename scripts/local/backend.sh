@@ -21,6 +21,7 @@ fi
 mkdir -p "$cache/bin" "$cache/runtime/internal"
 ln -sfn "$repo_root/internal/config" "$cache/runtime/internal/config"
 ln -sfn "$repo_root/.env.local" "$cache/runtime/.env"
+ln -sfn "$repo_root/assets" "$cache/runtime/assets"
 dbmate_version=v2.35.0
 dbmate_bin="$cache/$dbmate_version"
 if [[ ! -x "$dbmate_bin/dbmate" ]]; then
