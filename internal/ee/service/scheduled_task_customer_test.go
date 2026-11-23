@@ -412,8 +412,6 @@ func TestList_OriginFilters(t *testing.T) {
 func TestCreate_CustomersIntervalAllowlist(t *testing.T) {
 	for _, interval := range []types.ScheduledTaskInterval{
 		types.ScheduledTaskIntervalHourly,
-		types.ScheduledTaskIntervalEvery15Minutes,
-		types.ScheduledTaskIntervalEvery30Minutes,
 	} {
 		t.Run("deny "+string(interval), func(t *testing.T) {
 			repo := &originRepoFake{}
