@@ -8,7 +8,9 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalclient "github.com/flexprice/flexprice/internal/temporal/client"
@@ -16,6 +18,7 @@ import (
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/require"
 	"go.temporal.io/api/serviceerror"
@@ -55,7 +58,7 @@ func TestTriggerInvoiceWorkflowActivityAlreadyStarted(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			useStartErr(t, tt.err)
-			a := &BillingActivities{logger: logger.NewNoopLogger()}
+			a := &BillingActivities{logger: logger.NewNoopLogger(), serviceParams: service.ServiceParams{SettingsRepo: testutil.NewInMemorySettingsStore(), Logger: logger.NewNoopLogger()}}
 
 			out, err := a.TriggerInvoiceWorkflowActivity(context.Background(), invoiceModels.TriggerInvoiceWorkflowActivityInput{
 				InvoiceIDs:    []string{"inv_1"},
@@ -67,6 +70,28 @@ func TestTriggerInvoiceWorkflowActivityAlreadyStarted(t *testing.T) {
 			require.Equal(t, 0, out.TriggeredCount)
 		})
 	}
+}
+
+func TestTriggerInvoiceWorkflowActivitySkipsWhenAutoProcessingOff(t *testing.T) {
+	useStartErr(t, errors.New("must not start"))
+	store := testutil.NewInMemorySettingsStore()
+	require.NoError(t, store.Create(context.Background(), &settings.Setting{
+		ID:            "setting_1",
+		Key:           types.SettingKeyInvoiceConfig,
+		Value:         map[string]interface{}{"auto_finalize": false},
+		EnvironmentID: "env_1",
+		BaseModel:     types.BaseModel{TenantID: "tenant_1", Status: types.StatusPublished},
+	}))
+	a := &BillingActivities{logger: logger.NewNoopLogger(), serviceParams: service.ServiceParams{SettingsRepo: store, Logger: logger.NewNoopLogger()}}
+
+	out, err := a.TriggerInvoiceWorkflowActivity(context.Background(), invoiceModels.TriggerInvoiceWorkflowActivityInput{
+		InvoiceIDs:    []string{"inv_1"},
+		TenantID:      "tenant_1",
+		EnvironmentID: "env_1",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, out.FailedCount)
+	require.Equal(t, 0, out.TriggeredCount)
 }
 
 type stubSubscriptionService struct {
