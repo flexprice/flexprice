@@ -105,6 +105,12 @@ func TestScheduledTaskRepository_NewColumns(t *testing.T) {
 	require.True(t, updated.UpdatedAt.Equal(got.UpdatedAt))
 	require.True(t, updated.IsManagedCopy())
 
+	stale := *gotOld
+	require.NoError(t, repo.UpdateSettings(ctx, gotOld))
+	stale.Name = "stale"
+	err = repo.UpdateSettings(ctx, &stale)
+	require.True(t, ierr.IsVersionConflict(err))
+
 	otherEnvRow.Name = "hijack"
 	err = repo.UpdateSettings(ctx, otherEnvRow)
 	require.True(t, ierr.IsNotFound(err))

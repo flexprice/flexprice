@@ -298,11 +298,19 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 	if err := s.repo.UpdateSettings(ctx, task); err != nil {
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
 		if synced {
-			if spec, specErr := s.scheduleSpec(&previous); specErr == nil {
-				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, previous.Schedule != nil); revertErr != nil {
+			// Restore committed schedule; concurrent winner wins.
+			restore := &previous
+			if current, getErr := s.repo.Get(types.WithForceWriter(ctx), task.ID); getErr == nil {
+				restore = current
+			}
+			if spec, specErr := s.scheduleSpec(restore); specErr == nil {
+				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, restore.Schedule != nil); revertErr != nil {
 					s.logger.Error(ctx, "failed to revert temporal schedule spec", "id", task.ID, "error", revertErr)
 				}
 			}
+		}
+		if ierr.IsVersionConflict(err) {
+			return err
 		}
 		return ierr.WithError(err).
 			WithHint("Failed to update scheduled task").

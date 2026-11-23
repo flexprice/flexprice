@@ -224,8 +224,8 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		return nil, err
 	}
 
-	// Get existing task
-	task, err := s.repo.Get(ctx, id)
+	// Writer read keeps updated_at fresh.
+	task, err := s.repo.Get(types.WithForceWriter(ctx), id)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get scheduled task for update", "id", id, "error", err)
 		return nil, ierr.WithError(err).

@@ -34,6 +34,8 @@ type exportRepoFake struct {
 	created     *scheduledtask.ScheduledTask
 	settings    *scheduledtask.ScheduledTask
 	settingsErr error
+	// Committed by a concurrent writer on conflict.
+	winner *scheduledtask.ScheduledTask
 }
 
 func (r *exportRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTask) error {
@@ -44,12 +46,20 @@ func (r *exportRepoFake) Create(_ context.Context, t *scheduledtask.ScheduledTas
 func (r *exportRepoFake) Update(context.Context, *scheduledtask.ScheduledTask) error { return nil }
 
 func (r *exportRepoFake) Get(context.Context, string) (*scheduledtask.ScheduledTask, error) {
-	return r.task, nil
+	if r.task == nil {
+		return nil, nil
+	}
+	cp := *r.task
+	return &cp, nil
 }
 
 var settingsStamp = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 func (r *exportRepoFake) UpdateSettings(_ context.Context, t *scheduledtask.ScheduledTask) error {
+	if r.winner != nil {
+		r.task = r.winner
+		return r.settingsErr
+	}
 	t.UpdatedAt = settingsStamp
 	cp := *t
 	r.settings = &cp
@@ -418,6 +428,21 @@ func TestUpdate_RevertsTemporalOnDBError(t *testing.T) {
 	require.ErrorIs(t, err, dbErr)
 	require.Len(t, handle.updates, 2)
 	require.Equal(t, old, handle.spec)
+}
+
+func TestUpdate_ConcurrentWriteConflictKeepsWinnerSchedule(t *testing.T) {
+	winnerSchedule := &types.ExportSchedule{Hour: 2, Timezone: "Asia/Kolkata"}
+	handle := &exportHandleFake{spec: client.ScheduleSpec{CronExpressions: []string{"0 2 * * *"}, TimeZoneName: "Asia/Kolkata"}}
+	conflict := ierr.NewError("changed").Mark(ierr.ErrVersionConflict)
+	repo := &exportRepoFake{task: scheduledRow(nil), settingsErr: conflict, winner: scheduledRow(winnerSchedule)}
+	s := newExportService(repo, &exportTemporalFake{handle: handle})
+
+	_, err := s.UpdateScheduledTask(exportCtx(), "st_1", dto.UpdateScheduledTaskRequest{Schedule: kolkata()})
+	require.True(t, ierr.IsVersionConflict(err))
+	require.Len(t, handle.updates, 2)
+	require.Equal(t, []string{"0 2 * * *"}, handle.spec.CronExpressions)
+	require.Equal(t, "Asia/Kolkata", handle.spec.TimeZoneName)
+	require.Nil(t, repo.settings)
 }
 
 func TestRun_ScheduledRowNoBodyPassesNoWindow(t *testing.T) {

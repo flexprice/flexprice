@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	domainst "github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -151,14 +152,16 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 	return nil
 }
 
-// UpdateSettings writes name, schedule and updated_by only.
+// UpdateSettings writes settings if updated_at unchanged.
 func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
+	scope := []predicate.ScheduledTask{
+		scheduledtask.TenantID(types.GetTenantID(ctx)),
+		scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
+	}
 	update := r.client.Writer(ctx).ScheduledTask.
 		UpdateOneID(task.ID).
-		Where(
-			scheduledtask.TenantID(types.GetTenantID(ctx)),
-			scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
+		Where(scope...).
+		Where(scheduledtask.UpdatedAt(task.UpdatedAt)).
 		SetUpdatedBy(task.UpdatedBy)
 
 	if task.Name != "" {
@@ -174,14 +177,28 @@ func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *doma
 
 	saved, err := update.Save(ctx)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return ierr.NewError("scheduled task not found").
-				WithHint("No rows matched ID + tenant + environment").
-				Mark(ierr.ErrNotFound)
+		if !ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("Failed to update scheduled task settings").
+				Mark(ierr.ErrDatabase)
 		}
-		return ierr.WithError(err).
-			WithHint("Failed to update scheduled task settings").
-			Mark(ierr.ErrDatabase)
+		exists, existErr := r.client.Writer(ctx).ScheduledTask.Query().
+			Where(scope...).
+			Where(scheduledtask.ID(task.ID)).
+			Exist(ctx)
+		if existErr != nil {
+			return ierr.WithError(existErr).
+				WithHint("Failed to verify scheduled task").
+				Mark(ierr.ErrDatabase)
+		}
+		if exists {
+			return ierr.NewErrorf("scheduled task %s changed concurrently", task.ID).
+				WithHint("The export was modified by someone else; reload and retry").
+				Mark(ierr.ErrVersionConflict)
+		}
+		return ierr.NewError("scheduled task not found").
+			WithHint("No rows matched ID + tenant + environment").
+			Mark(ierr.ErrNotFound)
 	}
 	task.UpdatedAt = saved.UpdatedAt
 	return nil
