@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/security"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -1198,7 +1199,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 		s.ScheduledTaskRepo,
 		s.TaskRepo,
 		s.ConnectionRepo,
-		temporalService.GetGlobalTemporalClient(),
+		exportschedule.NewScheduler(temporalService.GetGlobalTemporalClient(), s.Logger),
 		s.Logger,
 		s.Config,
 		s.StorageResolver,

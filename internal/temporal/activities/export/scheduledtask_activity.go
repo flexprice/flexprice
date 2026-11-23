@@ -14,17 +14,11 @@ import (
 	"go.temporal.io/sdk/temporal"
 )
 
-// IntervalBoundaryCalculator defines the interface for calculating interval boundaries
-type IntervalBoundaryCalculator interface {
-	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
-}
-
 // ScheduledTaskActivity handles scheduled task operations
 type ScheduledTaskActivity struct {
-	scheduledTaskRepo  scheduledtask.Repository
-	taskRepo           task.Repository
-	logger             *logger.Logger
-	boundaryCalculator IntervalBoundaryCalculator
+	scheduledTaskRepo scheduledtask.Repository
+	taskRepo          task.Repository
+	logger            *logger.Logger
 }
 
 // NewScheduledTaskActivity creates a new scheduled task activity
@@ -32,13 +26,11 @@ func NewScheduledTaskActivity(
 	scheduledTaskRepo scheduledtask.Repository,
 	taskRepo task.Repository,
 	logger *logger.Logger,
-	boundaryCalculator IntervalBoundaryCalculator,
 ) *ScheduledTaskActivity {
 	return &ScheduledTaskActivity{
-		scheduledTaskRepo:  scheduledTaskRepo,
-		taskRepo:           taskRepo,
-		logger:             logger,
-		boundaryCalculator: boundaryCalculator,
+		scheduledTaskRepo: scheduledTaskRepo,
+		taskRepo:          taskRepo,
+		logger:            logger,
 	}
 }
 
@@ -118,7 +110,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 			"start_time", startTime,
 			"end_time", endTime)
 	} else if task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual {
-		startTime, endTime, err = scheduledtask.Window(task.Interval, task.Schedule, executionTime)
+		startTime, endTime, err = scheduledtask.Bounds(task.Interval, task.Schedule, executionTime)
 		if err != nil {
 			a.logger.Error(ctx, "failed to compute export window", "error", err, "scheduled_task_id", input.ScheduledTaskID)
 			return nil, temporal.NewNonRetryableApplicationError("invalid export schedule", "InvalidSchedule", err)
@@ -159,7 +151,7 @@ func (a *ScheduledTaskActivity) calculateTimeRange(ctx context.Context, task *sc
 
 	// Get current interval boundaries
 	// Example: currentTime = 12:15 → returns 12:00-13:00 (current interval)
-	currentIntervalStart, _ := a.boundaryCalculator.CalculateIntervalBoundaries(currentTime, interval)
+	currentIntervalStart, _, _ := scheduledtask.Bounds(interval, nil, currentTime)
 
 	// We want to export the PREVIOUS completed interval
 	// So use current interval start as the end time

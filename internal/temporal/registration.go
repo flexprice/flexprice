@@ -115,23 +115,10 @@ func RegisterWorkflowsAndActivities(
 	// Export activities
 	taskActivity := exportActivities.NewTaskActivity(params.TaskRepo, params.Logger)
 
-	// Create scheduled task service for interval boundary calculations
-	// Note: temporal client is nil because activity only uses CalculateIntervalBoundaries method
-	scheduledTaskService := service.NewScheduledTaskService(
-		params.ScheduledTaskRepo,
-		params.TaskRepo,
-		params.ConnectionRepo,
-		nil, // temporal client not needed for boundary calculations
-		params.Logger,
-		params.Config,
-		params.StorageResolver,
-	)
-
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(
 		params.ScheduledTaskRepo,
 		params.TaskRepo,
 		params.Logger,
-		scheduledTaskService,
 	)
 
 	// Meter usage service satisfies UsageAnalyticsGetter for the usage_analytics

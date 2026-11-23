@@ -22,18 +22,11 @@ func (r *stubTaskRepo) Get(context.Context, string) (*scheduledtask.ScheduledTas
 	return r.row, nil
 }
 
-type stubBoundary struct{}
-
-func (stubBoundary) CalculateIntervalBoundaries(t time.Time, _ types.ScheduledTaskInterval) (time.Time, time.Time) {
-	s := t.Truncate(24 * time.Hour)
-	return s, s.Add(24 * time.Hour)
-}
-
 func newDetailsActivity(t *testing.T, row *scheduledtask.ScheduledTask) *ScheduledTaskActivity {
 	t.Helper()
 	log, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevelInfo}})
 	require.NoError(t, err)
-	return NewScheduledTaskActivity(&stubTaskRepo{row: row}, nil, log, stubBoundary{})
+	return NewScheduledTaskActivity(&stubTaskRepo{row: row}, nil, log)
 }
 
 func mustTime(t *testing.T, s string) time.Time {

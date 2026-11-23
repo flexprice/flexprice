@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
 	"github.com/flexprice/flexprice/internal/types"
@@ -182,7 +183,7 @@ func newExportService(repo *exportRepoFake, tc *exportTemporalFake) *scheduledTa
 		repo:            repo,
 		taskRepo:        &exportTaskRepoFake{},
 		connectionRepo:  exportConnRepoFake{conn: managedS3Conn()},
-		temporalClient:  tc,
+		scheduler:       exportschedule.NewScheduler(tc, logger.NewNoopLogger()),
 		logger:          logger.NewNoopLogger(),
 		config:          exportCfg(),
 		storageResolver: exportResolverFake{provider: storage.ProviderS3},
@@ -359,7 +360,7 @@ func TestUpdate_ScheduleUpdatesTemporalThenDB(t *testing.T) {
 	require.True(t, handle.paused)
 	require.NotNil(t, handle.policy)
 	require.Equal(t, enums.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL, handle.policy.Overlap)
-	require.Equal(t, exportCatchupWindow, handle.policy.CatchupWindow)
+	require.Equal(t, exportschedule.CatchupWindow, handle.policy.CatchupWindow)
 	require.NotNil(t, repo.settings)
 	require.Equal(t, "nightly", repo.settings.Name)
 	require.Equal(t, kolkata(), repo.settings.Schedule)

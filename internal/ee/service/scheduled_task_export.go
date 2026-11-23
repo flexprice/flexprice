@@ -2,23 +2,15 @@ package service
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"time"
-
-	"go.temporal.io/api/enums/v1"
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/storage"
-	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
-
-const exportCatchupWindow = 24 * time.Hour
 
 // connectionJobConfig validates connection-backed job config.
 func (s *scheduledTaskService) connectionJobConfig(ctx context.Context, req dto.CreateScheduledTaskRequest) (*types.S3JobConfig, error) {
@@ -217,52 +209,6 @@ func (s *scheduledTaskService) flexpriceJobConfig(ctx context.Context, req dto.C
 	return jobConfig, nil
 }
 
-// scheduleSpec builds the Temporal spec.
-func (s *scheduledTaskService) scheduleSpec(task *scheduledtask.ScheduledTask) (client.ScheduleSpec, error) {
-	if task.Schedule == nil {
-		return client.ScheduleSpec{CronExpressions: []string{s.getCronExpression(task.Interval)}}, nil
-	}
-	cron, err := scheduledtask.Cron(task.Interval, task.Schedule)
-	if err != nil {
-		return client.ScheduleSpec{}, err
-	}
-	return client.ScheduleSpec{
-		CronExpressions: []string{cron},
-		TimeZoneName:    task.Schedule.Timezone,
-	}, nil
-}
-
-// replaceScheduleSpec keeps pause state.
-func (s *scheduledTaskService) replaceScheduleSpec(ctx context.Context, scheduleID string, spec client.ScheduleSpec, timezoneSet bool) (bool, error) {
-	handle := s.temporalClient.GetScheduleHandle(ctx, scheduleID)
-	err := handle.Update(ctx, client.ScheduleUpdateOptions{
-		DoUpdate: func(in client.ScheduleUpdateInput) (*client.ScheduleUpdate, error) {
-			in.Description.Schedule.Spec = &spec
-			if timezoneSet {
-				policy := client.SchedulePolicies{}
-				if in.Description.Schedule.Policy != nil {
-					policy = *in.Description.Schedule.Policy
-				}
-				policy.Overlap = enums.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
-				policy.CatchupWindow = exportCatchupWindow
-				in.Description.Schedule.Policy = &policy
-			}
-			return &client.ScheduleUpdate{Schedule: &in.Description.Schedule}, nil
-		},
-	})
-	var notFound *serviceerror.NotFound
-	if errors.As(err, &notFound) {
-		s.logger.Info(ctx, "temporal schedule not found; skipping spec sync", "schedule_id", scheduleID)
-		return false, nil
-	}
-	if err != nil {
-		return false, ierr.WithError(err).
-			WithHint("Failed to update Temporal schedule").
-			Mark(ierr.ErrInternal)
-	}
-	return true, nil
-}
-
 // updateExportSettings applies name, schedule.
 func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.UpdateScheduledTaskRequest) error {
 	if req.Schedule != nil {
@@ -285,12 +231,9 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 	task.UpdatedBy = types.GetUserID(ctx)
 
 	synced := false
-	if scheduleChanged && s.temporalClient != nil && task.TemporalScheduleID != "" {
-		spec, err := s.scheduleSpec(task)
-		if err != nil {
-			return err
-		}
-		if synced, err = s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, task.Schedule != nil); err != nil {
+	if scheduleChanged && s.scheduler != nil {
+		var err error
+		if synced, err = s.scheduler.UpdateSpec(ctx, task); err != nil {
 			return err
 		}
 	}
@@ -303,10 +246,8 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 			if current, getErr := s.repo.Get(types.WithForceWriter(ctx), task.ID); getErr == nil {
 				restore = current
 			}
-			if spec, specErr := s.scheduleSpec(restore); specErr == nil {
-				if _, revertErr := s.replaceScheduleSpec(ctx, task.TemporalScheduleID, spec, restore.Schedule != nil); revertErr != nil {
-					s.logger.Error(ctx, "failed to revert temporal schedule spec", "id", task.ID, "error", revertErr)
-				}
+			if _, revertErr := s.scheduler.UpdateSpec(ctx, restore); revertErr != nil {
+				s.logger.Error(ctx, "failed to revert temporal schedule spec", "id", task.ID, "error", revertErr)
 			}
 		}
 		if ierr.IsVersionConflict(err) {
@@ -344,13 +285,4 @@ func (s *scheduledTaskService) checkTimezoneChange(ctx context.Context, task *sc
 			Mark(ierr.ErrValidation)
 	}
 	return nil
-}
-
-// timezoneScheduleOptions sets overlap, catch-up.
-func timezoneScheduleOptions(task *scheduledtask.ScheduledTask, opts *models.CreateScheduleOptions) {
-	if task.Schedule == nil {
-		return
-	}
-	opts.Overlap = enums.SCHEDULE_OVERLAP_POLICY_BUFFER_ALL
-	opts.CatchupWindow = exportCatchupWindow
 }
