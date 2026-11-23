@@ -27,7 +27,7 @@ type AnalyticsService interface {
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
 	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams, windowDays int) error
-	ValidateViewSource(ctx context.Context, viewID string, windowDays int) error
+	ValidateViewSource(ctx context.Context, viewID string, windowDays int) (types.Grain, error)
 	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
 	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
@@ -622,36 +622,52 @@ func (s *analyticsService) ValidateReportSource(_ context.Context, key string, p
 	return checkReportRange(key, windowDays)
 }
 
-func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string, windowDays int) error {
+// ValidateViewSource checks the view and returns its timeseries grain.
+func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string, windowDays int) (types.Grain, error) {
 	v, err := s.views.Get(ctx, viewID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if v.Definition == nil {
-		return ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
+		return "", ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
 	}
 	def := exportDefinition(*v.Definition, "2026-01-01..2026-01-02")
+	grain := viewGrain(def)
 	if def.Family == types.FamilyReport {
 		if err := s.requireReports(); err != nil {
-			return err
+			return "", err
 		}
 		if _, err := analytics.ResolveVariables(def, nil); err != nil {
-			return err
+			return "", err
 		}
-		return checkReportRange(string(def.Metrics[0]), windowDays)
+		return grain, checkReportRange(string(def.Metrics[0]), windowDays)
 	}
 	rv, err := analytics.ResolveVariables(def, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if rv.Family == types.FamilyBilling && len(rv.Metrics) == 1 {
 		if bm, ok := analytics.LookupBillingMetric(rv.Metrics[0]); ok && bm.MaxRangeDays > 0 && windowDays > bm.MaxRangeDays {
-			return ierr.NewErrorf("view covers at most %d days", bm.MaxRangeDays).
+			return "", ierr.NewErrorf("view covers at most %d days", bm.MaxRangeDays).
 				WithHintf("This view covers at most %d days; choose a shorter interval", bm.MaxRangeDays).
 				Mark(ierr.ErrValidation)
 		}
 	}
-	return nil
+	return grain, nil
+}
+
+func viewGrain(def *analytics.ViewDefinition) types.Grain {
+	if def.Shape != types.ShapeTimeseries {
+		return ""
+	}
+	grain := def.Time.Grain
+	if grain != "" || def.Family != types.FamilyReport || len(def.Metrics) == 0 {
+		return grain
+	}
+	if entry, ok := analytics.LookupReport(string(def.Metrics[0])); ok && len(entry.Grains) > 0 {
+		return entry.Grains[0]
+	}
+	return ""
 }
 
 // exportDefinition pins the range and drops its variable.

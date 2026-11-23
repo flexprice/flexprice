@@ -39,6 +39,7 @@ type sourceValidatorFake struct {
 	calls              int
 	viewDays           int
 	reportDays         int
+	viewGrain          types.Grain
 }
 
 func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string, _ *types.ReportParams, days int) error {
@@ -48,11 +49,11 @@ func (f *sourceValidatorFake) ValidateReportSource(_ context.Context, key string
 	return f.reportErr
 }
 
-func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string, days int) error {
+func (f *sourceValidatorFake) ValidateViewSource(_ context.Context, id string, days int) (types.Grain, error) {
 	f.calls++
 	f.viewID = id
 	f.viewDays = days
-	return f.viewErr
+	return f.viewGrain, f.viewErr
 }
 
 func reportCreateReq() dto.CreateScheduledTaskRequest {
@@ -166,6 +167,37 @@ func TestCreateViewExport_ValidatesViewID(t *testing.T) {
 	_, err := s.CreateScheduledTask(withRoles(exportCtx(), roleWithAnalytics), viewCreateReq())
 	require.NoError(t, err)
 	require.Equal(t, "view_1", v.viewID)
+}
+
+func TestValidateViewSource_GrainCoarserThanIntervalRejected(t *testing.T) {
+	tests := []struct {
+		grain    types.Grain
+		interval types.ScheduledTaskInterval
+		wantErr  bool
+	}{
+		{types.GrainWeek, types.ScheduledTaskIntervalDaily, true},
+		{types.GrainMonth, types.ScheduledTaskIntervalWeekly, true},
+		{types.GrainWeek, types.ScheduledTaskIntervalWeekly, false},
+		{types.GrainMonth, types.ScheduledTaskIntervalMonthly, false},
+		{types.GrainMonth, types.ScheduledTaskIntervalManual, false},
+		{"", types.ScheduledTaskIntervalDaily, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.grain)+"/"+string(tt.interval), func(t *testing.T) {
+			s := newExportService(&exportRepoFake{}, &exportTemporalFake{})
+			s.analytics = &sourceValidatorFake{viewGrain: tt.grain}
+			req := viewCreateReq()
+			req.Interval = tt.interval
+
+			err := s.validateSource(exportCtx(), req)
+			if tt.wantErr {
+				require.True(t, ierr.IsValidation(err), "got %v", err)
+				require.Contains(t, err.Error(), "is coarser than the")
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
 
 func TestCreateEventsExport_NeverTouchesAnalytics(t *testing.T) {

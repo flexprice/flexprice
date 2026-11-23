@@ -84,8 +84,8 @@ func (s *stubAnalyticsService) ValidateReportSource(_ context.Context, _ string,
 	return s.err
 }
 
-func (s *stubAnalyticsService) ValidateViewSource(_ context.Context, _ string, _ int) error {
-	return s.err
+func (s *stubAnalyticsService) ValidateViewSource(_ context.Context, _ string, _ int) (types.Grain, error) {
+	return "", s.err
 }
 
 func (s *stubAnalyticsService) RunReportForExport(_ context.Context, _ string, _ *types.ReportParams, _ string) (*dto.AnalyticsQueryResult, error) {

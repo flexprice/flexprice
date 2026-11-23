@@ -88,7 +88,11 @@ func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.Creat
 		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
 	}
 	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
-		return s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
+		grain, err := s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
+		if err != nil {
+			return err
+		}
+		return checkGrain(grain, req.Interval)
 	}
 	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, intervalWindowDays(req.Interval)); err != nil {
 		return err
@@ -105,6 +109,10 @@ func checkReportGrain(key string, params *types.ReportParams, interval types.Sch
 	if entry, ok := analytics.LookupReport(key); grain == "" && ok && len(entry.Grains) > 0 {
 		grain = entry.Grains[0]
 	}
+	return checkGrain(grain, interval)
+}
+
+func checkGrain(grain types.Grain, interval types.ScheduledTaskInterval) error {
 	grainDays := map[types.Grain]int{types.GrainWeek: 7, types.GrainMonth: 31}[grain]
 	windowDays := intervalWindowDays(interval)
 	if windowDays == 0 || grainDays <= windowDays {
@@ -135,7 +143,8 @@ func (s *scheduledTaskService) checkWindowRange(ctx context.Context, task *sched
 	if s.analytics == nil {
 		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
 	}
-	return s.analytics.ValidateViewSource(ctx, task.SourceConfig.ViewID, days)
+	_, err := s.analytics.ValidateViewSource(ctx, task.SourceConfig.ViewID, days)
+	return err
 }
 
 func checkReportRange(key string, days int) error {

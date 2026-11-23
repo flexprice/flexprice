@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/analytics"
@@ -17,6 +18,11 @@ func exportSvc(repo *testutil.InMemoryReportsRepo) (AnalyticsService, *testutil.
 	}
 	views := testutil.NewInMemoryAnalyticsViewStore()
 	return NewAnalyticsService(ServiceParams{ReportsRepo: repo, AnalyticsViewRepo: views}), views
+}
+
+func validateView(svc AnalyticsService, ctx context.Context, id string, days int) error {
+	_, err := svc.ValidateViewSource(ctx, id, days)
+	return err
 }
 
 func TestValidateReportSource(t *testing.T) {
@@ -64,19 +70,19 @@ func TestValidateViewSource(t *testing.T) {
 	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
 	ctx := userCtx("env_1")
 
-	err := svc.ValidateViewSource(ctx, "missing", 1)
+	err := validateView(svc, ctx, "missing", 1)
 	assert.True(t, ierr.IsNotFound(err))
 
 	good := &analytics.View{Name: "ok", Definition: billingView(types.ShapeScalar)}
 	require.NoError(t, svc.CreateView(ctx, good))
-	assert.NoError(t, svc.ValidateViewSource(ctx, good.ID, 1))
+	assert.NoError(t, validateView(svc, ctx, good.ID, 1))
 
 	withVar := billingView(types.ShapeScalar)
 	withVar.Filters = []*analytics.Filter{{Field: "currency", Op: types.EQUAL, Value: []string{"{{cur}}"}}}
 	withVar.Variables = []*analytics.Variable{{Name: "cur", Type: types.VariableTypeString, Required: true}}
 	v := &analytics.View{Name: "var", Definition: withVar}
 	require.NoError(t, svc.CreateView(ctx, v))
-	err = svc.ValidateViewSource(ctx, v.ID, 1)
+	err = validateView(svc, ctx, v.ID, 1)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 }
@@ -113,7 +119,7 @@ func TestViewSource_RangeVariableIsReplacedByWindow(t *testing.T) {
 	v := &analytics.View{Name: "picker", Definition: def}
 	require.NoError(t, svc.CreateView(ctx, v))
 
-	require.NoError(t, svc.ValidateViewSource(ctx, v.ID, 1))
+	require.NoError(t, validateView(svc, ctx, v.ID, 1))
 	_, _, err := svc.RunViewForExport(ctx, v.ID, "2026-11-09..2026-11-10")
 	require.NoError(t, err)
 	assert.Equal(t, "2026-11-09", repo.Last.Time.From.Format("2006-01-02"))
@@ -134,7 +140,7 @@ func TestViewSource_SharedRangeVariableStillRequired(t *testing.T) {
 	v := &analytics.View{Name: "shared", Definition: def}
 	require.NoError(t, svc.CreateView(ctx, v))
 
-	assert.True(t, ierr.IsValidation(svc.ValidateViewSource(ctx, v.ID, 1)))
+	assert.True(t, ierr.IsValidation(validateView(svc, ctx, v.ID, 1)))
 }
 
 func TestRunViewForExport_DeletedViewNotFound(t *testing.T) {
@@ -235,8 +241,8 @@ func TestValidateViewSource_WindowCap(t *testing.T) {
 	v := &analytics.View{Name: "vol", Definition: billing}
 	require.NoError(t, svc.CreateView(ctx, v))
 
-	assert.NoError(t, svc.ValidateViewSource(ctx, v.ID, 7))
-	err := svc.ValidateViewSource(ctx, v.ID, 31)
+	assert.NoError(t, validateView(svc, ctx, v.ID, 7))
+	err := validateView(svc, ctx, v.ID, 31)
 	require.Error(t, err)
 	assert.True(t, ierr.IsValidation(err))
 }
@@ -253,16 +259,33 @@ func TestReportViewVariables(t *testing.T) {
 	def.Variables = []*analytics.Variable{{Name: "kind", Type: types.VariableTypeString, Required: true}}
 	noDefault := &analytics.View{Name: "nd", Definition: def}
 	require.NoError(t, svc.CreateView(ctx, noDefault))
-	assert.True(t, ierr.IsValidation(svc.ValidateViewSource(ctx, noDefault.ID, 7)))
+	assert.True(t, ierr.IsValidation(validateView(svc, ctx, noDefault.ID, 7)))
 
 	withDefault := *def
 	withDefault.Variables = []*analytics.Variable{{Name: "kind", Type: types.VariableTypeString, Required: true, Default: []string{"SUBSCRIPTION"}}}
 	ok := &analytics.View{Name: "wd", Definition: &withDefault}
 	require.NoError(t, svc.CreateView(ctx, ok))
-	require.NoError(t, svc.ValidateViewSource(ctx, ok.ID, 7))
+	require.NoError(t, validateView(svc, ctx, ok.ID, 7))
 
 	_, _, err := svc.RunViewForExport(ctx, ok.ID, "2026-11-09..2026-11-10")
 	require.NoError(t, err)
 	require.Len(t, repo.Last.Filters, 1)
 	assert.Equal(t, []string{"SUBSCRIPTION"}, repo.Last.Filters[0].Value)
+}
+
+func TestValidateViewSource_ReturnsTimeseriesGrain(t *testing.T) {
+	svc, _ := exportSvc(&testutil.InMemoryReportsRepo{On: true})
+	ctx := userCtx("env_1")
+
+	ts := &analytics.View{Name: "ts", Definition: billingView(types.ShapeTimeseries)}
+	require.NoError(t, svc.CreateView(ctx, ts))
+	grain, err := svc.ValidateViewSource(ctx, ts.ID, 1)
+	require.NoError(t, err)
+	assert.Equal(t, types.GrainMonth, grain)
+
+	scalar := &analytics.View{Name: "scalar", Definition: billingView(types.ShapeScalar)}
+	require.NoError(t, svc.CreateView(ctx, scalar))
+	grain, err = svc.ValidateViewSource(ctx, scalar.ID, 1)
+	require.NoError(t, err)
+	assert.Empty(t, grain)
 }
