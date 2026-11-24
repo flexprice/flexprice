@@ -6,7 +6,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -338,7 +337,7 @@ func (h *Handler) adoptOrphanedCardCheck(ctx context.Context, closed *dto.Paymen
 		"flexprice_payment_id", adoptedID,
 		"moyasar_payment_id", payment.ID,
 	)
-	return services.PaymentService.GetPayment(ctx, adoptedID)
+	return services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: adoptedID})
 }
 
 // releaseOrphanedCardCheck gives an orphaned card check back to the customer
