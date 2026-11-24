@@ -996,22 +996,6 @@ type SubscriptionResponse struct {
 
 	// Commitments are the commitments created with the subscription; set on create only.
 	Commitments []*CommitmentResponse `json:"commitments,omitempty"`
-
-	// PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.
-	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
-	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
-	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
-}
-
-// NewSubscriptionResponse builds the response for a subscription, with payment_terms_type and payment_terms_days
-// derived from its payment_terms.
-func NewSubscriptionResponse(sub *subscription.Subscription) *SubscriptionResponse {
-	if sub == nil {
-		return nil
-	}
-	resp := &SubscriptionResponse{Subscription: sub}
-	resp.PaymentTermsType, resp.PaymentTermsDays = lo.FromPtr(sub.PaymentTerms).Parts()
-	return resp
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -1051,22 +1035,6 @@ type SubscriptionResponseV2 struct {
 	// is behind the plan's current max prices.sequence — i.e. plan-price
 	// changes have not yet been reconciled into this subscription's line items.
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
-
-	// PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.
-	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
-	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
-	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
-}
-
-// NewSubscriptionResponseV2 builds the V2 response for a subscription, with payment_terms_type and
-// payment_terms_days derived from its payment_terms.
-func NewSubscriptionResponseV2(sub *subscription.Subscription) *SubscriptionResponseV2 {
-	if sub == nil {
-		return nil
-	}
-	resp := &SubscriptionResponseV2{Subscription: sub}
-	resp.PaymentTermsType, resp.PaymentTermsDays = lo.FromPtr(sub.PaymentTerms).Parts()
-	return resp
 }
 
 // ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
@@ -1586,6 +1554,7 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
 	// Validate has checked the payment terms.
 	paymentTerms, _ := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
+	paymentTermsType, paymentTermsDays := lo.FromPtr(paymentTerms).Parts()
 
 	// Handle legacy collection method and set defaults
 	paymentBehavior := types.PaymentBehaviorDefaultActive
@@ -1705,7 +1674,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		ParentSubscriptionID:   parentSubscriptionID,
-		PaymentTerms:           lo.Ternary(lo.FromPtr(paymentTerms) == "", nil, paymentTerms),
+		PaymentTermsType:       paymentTermsType,
+		PaymentTermsDays:       paymentTermsDays,
 		Settings:               NormalizeSettingsOverride(r.Settings),
 		SubscriptionType:       subscriptionType,
 	}

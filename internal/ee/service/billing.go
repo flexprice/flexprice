@@ -2491,9 +2491,10 @@ func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig ty
 	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
 		issueDate = issueDate.In(loc)
 	}
-	dueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
+	dueDate, ok := lo.FromPtr(sub.PaymentTermsType).DueDate(sub.PaymentTermsDays, issueDate)
 	if !ok {
-		dueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
+		tenantType, tenantDays := lo.FromPtr(invoiceConfig.PaymentTerms).Parts()
+		dueDate, ok = lo.FromPtr(tenantType).DueDate(tenantDays, issueDate)
 	}
 	if !ok {
 		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))
@@ -3078,7 +3079,7 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 			allEntitlements = append(allEntitlements, subEntitlements...)
 		}
 
-		allSubscriptions = append(allSubscriptions, dto.NewSubscriptionResponse(sub))
+		allSubscriptions = append(allSubscriptions, &dto.SubscriptionResponse{Subscription: sub})
 	}
 
 	// Use the generic aggregation function

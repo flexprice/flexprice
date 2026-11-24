@@ -636,8 +636,9 @@ func TestSetDates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			termsType, days := lo.FromPtr(tt.subTerms).Parts()
 			svc := &InvoiceService{
-				subRepo:      &fakeDueDateSubRepo{sub: &subscription.Subscription{Timezone: "Asia/Kolkata", PaymentTerms: tt.subTerms}},
+				subRepo:      &fakeDueDateSubRepo{sub: &subscription.Subscription{Timezone: "Asia/Kolkata", PaymentTermsType: termsType, PaymentTermsDays: days}},
 				settingsRepo: &fakeDueDateSettingsRepo{terms: tt.tenantTerms},
 			}
 			inv := &invoice.Invoice{DueDate: lo.ToPtr(tt.dueDate.UTC()), IssueDate: lo.ToPtr(tt.issueDate.UTC())}

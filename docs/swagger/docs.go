@@ -31021,7 +31021,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -31033,7 +31033,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "payment_terms_type": {
-                    "description": "PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.",
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTermsType"
@@ -31294,7 +31294,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms sets when invoices fall due; nil uses the tenant's.",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
@@ -31306,7 +31306,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "payment_terms_type": {
-                    "description": "PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.",
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTermsType"

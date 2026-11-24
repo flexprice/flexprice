@@ -269,7 +269,7 @@ func (s *subscriptionService) buildLineItemParamsForPrice(ctx context.Context, p
 // caller can create the price inside a transaction. For existing price, it fetches and validates only (no write).
 func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionLineItemRequest) (price *dto.PriceResponse, params *dto.LineItemParams, resolvedReq dto.CreateSubscriptionLineItemRequest, usedInlinePrice bool, inlineCreatePriceReq *dto.CreatePriceRequest, err error) {
 	priceService := NewPriceService(s.ServiceParams)
-	subResp := dto.NewSubscriptionResponse(sub)
+	subResp := &dto.SubscriptionResponse{Subscription: sub}
 
 	if req.Price != nil {
 		// Inline price: validate and prepare create request; caller persists price inside transaction

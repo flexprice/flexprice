@@ -59,6 +59,11 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		sub.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	paymentTerms, err := storedPaymentTerms(sub)
+	if err != nil {
+		return err
+	}
+
 	create := client.Subscription.Create().
 		SetID(sub.ID).
 		SetTenantID(sub.TenantID).
@@ -101,7 +106,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
-		SetNillablePaymentTerms(sub.PaymentTerms).
+		SetNillablePaymentTerms(paymentTerms).
 		SetSyncedPriceSequence(sub.SyncedPriceSequence)
 	// SetSettings(nil) would store JSON null, so leave the column NULL when there are no overrides.
 	if sub.Settings != nil {
@@ -291,8 +296,12 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Handle nullable payment_terms - explicitly clear if nil
-	if sub.PaymentTerms != nil {
-		query.SetPaymentTerms(*sub.PaymentTerms)
+	paymentTerms, err := storedPaymentTerms(sub)
+	if err != nil {
+		return err
+	}
+	if paymentTerms != nil {
+		query.SetPaymentTerms(*paymentTerms)
 	} else {
 		query.ClearPaymentTerms()
 	}
@@ -345,8 +354,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Execute update
-	_, err := query.SaveReturning(ctx)
-	if err != nil {
+	if _, err := query.SaveReturning(ctx); err != nil {
 		SetSpanError(span, err)
 		r.logger.Error(ctx, "failed to update subscription", "error", err, "subscription_id", sub.ID)
 		return ierr.WithError(err).
@@ -354,9 +362,22 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			Mark(ierr.ErrDatabase)
 	}
 
+	sub.PaymentTerms = paymentTerms
 	SetSpanSuccess(span)
 	r.invalidateCache(ctx, sub.ID)
 	return nil
+}
+
+// storedPaymentTerms joins the subscription's payment terms type and days into the stored payment_terms; nil when unset.
+func storedPaymentTerms(sub *domainSub.Subscription) (*types.PaymentTerms, error) {
+	if sub.PaymentTermsType == nil {
+		return nil, nil
+	}
+	terms, err := types.NewPaymentTerms(*sub.PaymentTermsType, sub.PaymentTermsDays)
+	if err != nil {
+		return nil, err
+	}
+	return &terms, nil
 }
 
 // UpdatePlan writes plan_id and nothing else, so a plan move can never ride along

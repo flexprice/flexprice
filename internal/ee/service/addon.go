@@ -936,7 +936,7 @@ func (s *addonService) buildAddonSyncLineItem(
 	}
 
 	lineItem := req.ToSubscriptionLineItem(ctx, dto.LineItemParams{
-		Subscription: dto.NewSubscriptionResponse(sub),
+		Subscription: &dto.SubscriptionResponse{Subscription: sub},
 		Price:        &dto.PriceResponse{Price: price},
 		Addon:        addonResp,
 		EntityType:   types.SubscriptionLineItemEntityTypeAddon,
