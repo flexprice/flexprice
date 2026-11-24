@@ -10934,11 +10934,6 @@ definitions:
         description: ParentSubscriptionID sets or clears the parent subscription.
           Omit to leave unchanged; send "" to clear.
         type: string
-      payment_terms:
-        allOf:
-        - $ref: '#/definitions/types.PaymentTerms'
-        description: 'Deprecated: use payment_terms_type and payment_terms_days, which
-          override it when sent.'
       payment_terms_days:
         description: PaymentTermsDays is the days after the issue date an invoice
           falls due; only with DAYS.

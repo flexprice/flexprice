@@ -32959,14 +32959,6 @@ const docTemplate = `{
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
                 },
-                "payment_terms": {
-                    "description": "Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.PaymentTerms"
-                        }
-                    ]
-                },
                 "payment_terms_days": {
                     "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
                     "type": "integer",

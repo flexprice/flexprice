@@ -2128,7 +2128,7 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 	}
 
 	// req.Validate has checked the payment terms.
-	if paymentTerms, _ := types.ResolvePaymentTerms(req.PaymentTerms, req.PaymentTermsType, req.PaymentTermsDays); paymentTerms != nil {
+	if paymentTerms, _ := types.ResolvePaymentTerms(nil, req.PaymentTermsType, req.PaymentTermsDays); paymentTerms != nil {
 		subscription.PaymentTermsType, subscription.PaymentTermsDays = paymentTerms.Parts()
 	}
 

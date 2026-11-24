@@ -33681,10 +33681,6 @@
             "type": "string",
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
           },
-          "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms",
-            "deprecated": true
-          },
           "payment_terms_days": {
             "maximum": 365,
             "minimum": 1,

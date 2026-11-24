@@ -785,8 +785,6 @@ type UpdateSubscriptionRequest struct {
 	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
-	// Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.
-	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
 	// PaymentTermsType sets when invoices fall due. Omit to leave unchanged; send "" to use the tenant's.
 	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
 	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
@@ -806,7 +804,7 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	if _, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
+	if _, err := types.ResolvePaymentTerms(nil, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
 		return err
 	}
 
