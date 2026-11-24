@@ -6359,7 +6359,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "Events could not be accepted, retry",
+                        "description": "May be partly accepted; retry only with event_id on every event",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }

@@ -98,7 +98,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Failure 503 {object} ierr.ErrorResponse "Events could not be accepted, retry"
+// @Failure 503 {object} ierr.ErrorResponse "May be partly accepted; retry only with event_id on every event"
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()

@@ -754,7 +754,7 @@ func publishFailureRequest(id string) *dto.IngestEventRequest {
 	}
 }
 
-// failOnIDPublisher fails Publish for listed event IDs and records the rest.
+// failOnIDPublisher fails listed IDs, records rest.
 type failOnIDPublisher struct {
 	failIDs   map[string]error
 	published []string

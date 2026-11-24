@@ -125,8 +125,7 @@ func TestPublish_OneClusterFailure_DoesNotBlockOther(t *testing.T) {
 	secondary := &fakePublisher{}
 	ep := newPub(logger.NewNoopLogger(), primary, secondary)
 
-	// Primary fails, but secondary must still receive the event (independent writes).
-	// The primary failure is the returned error.
+	// Secondary still written; primary error returned.
 	err := ep.Publish(context.Background(), sampleEvent())
 	if err == nil {
 		t.Fatal("expected the primary failure to be returned, got nil")
@@ -156,6 +155,12 @@ func TestIsMessageTooLarge_ThroughWatermillWrapping(t *testing.T) {
 	}
 	if IsMessageTooLarge(context.DeadlineExceeded) {
 		t.Fatal("unrelated error must not match")
+	}
+	if !IsMessageTooLarge(errors.Join(wrapped, wrapped)) {
+		t.Fatal("all-oversize join must match")
+	}
+	if IsMessageTooLarge(errors.Join(wrapped, context.DeadlineExceeded)) {
+		t.Fatal("mixed join must stay retryable")
 	}
 }
 

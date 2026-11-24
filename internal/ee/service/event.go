@@ -151,7 +151,7 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		Mark(ierr.ErrServiceUnavailable)
 }
 
-// publishFailure maps a publish error: oversize is a client error, the rest is retryable.
+// publishFailure: oversize is 400, else 503.
 func publishFailure(err error, retryHint string) error {
 	if kafka.IsMessageTooLarge(err) {
 		return ierr.WithError(err).

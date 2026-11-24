@@ -22,12 +22,7 @@ type messagePublisher interface {
 	Publish(topic string, messages ...*message.Message) error
 }
 
-// EventPublisher publishes source events to Kafka. It always writes to the deployment's
-// local cluster (cfg.Kafka); during the AWS→GCP migration, if a second cluster is
-// configured (cfg.KafkaSecondary), it also writes there (presence-based dual-write). Writes
-// are independent: one cluster failing does not block the other. Only the local cluster's
-// error is returned; a secondary failure is logged and never fails the caller.
-// See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+// EventPublisher writes primary; secondary failures only logged.
 type EventPublisher struct {
 	primary      messagePublisher
 	primaryCfg   *config.KafkaConfig
@@ -92,9 +87,17 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	return primaryErr
 }
 
-// IsMessageTooLarge reports whether a publish error is the broker client's
-// max-message-size rejection, which a retry cannot fix.
+// IsMessageTooLarge: every joined failure is oversize.
 func IsMessageTooLarge(err error) bool {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		errs := joined.Unwrap()
+		for _, e := range errs {
+			if !IsMessageTooLarge(e) {
+				return false
+			}
+		}
+		return len(errs) > 0
+	}
 	return errors.Is(err, sarama.ErrMessageSizeTooLarge)
 }
 
