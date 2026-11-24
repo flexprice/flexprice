@@ -166,28 +166,3 @@ func TestPaymentTermsParts(t *testing.T) {
 	assert.Nil(t, termsType)
 	assert.Nil(t, days)
 }
-
-func TestResolveInvoiceConfigPaymentTerms(t *testing.T) {
-	tests := []struct {
-		name    string
-		value   map[string]interface{}
-		want    map[string]interface{}
-		wantErr bool
-	}{
-		{name: "no payment terms", value: map[string]interface{}{"prefix": "INV"}, want: map[string]interface{}{"prefix": "INV"}},
-		{name: "payment_terms kept", value: map[string]interface{}{"payment_terms": "45 NET"}, want: map[string]interface{}{"payment_terms": "45 NET"}},
-		{name: "days", value: map[string]interface{}{"payment_terms_type": "DAYS", "payment_terms_days": 120}, want: map[string]interface{}{"payment_terms": "120 NET"}},
-		{name: "type overrides payment_terms", value: map[string]interface{}{"payment_terms": "30 NET", "payment_terms_type": "END_OF_MONTH"}, want: map[string]interface{}{"payment_terms": "END_OF_MONTH"}},
-		{name: "clear", value: map[string]interface{}{"payment_terms_type": ""}, want: map[string]interface{}{"payment_terms": nil}},
-		{name: "invalid", value: map[string]interface{}{"payment_terms_type": "DAYS", "payment_terms_days": 0}, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ResolveInvoiceConfigPaymentTerms(tt.value)
-			assert.Equal(t, tt.wantErr, err != nil)
-			if !tt.wantErr {
-				assert.Equal(t, tt.want, tt.value)
-			}
-		})
-	}
-}

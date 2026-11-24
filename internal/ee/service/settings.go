@@ -371,7 +371,7 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		if err != nil {
 			return nil, err
 		}
-		types.AddInvoiceConfigPaymentTermsParts(resp.Value)
+		dto.AddInvoiceConfigPaymentTermsParts(resp.Value)
 		return resp, nil
 	case types.SettingKeySubscriptionConfig:
 		return getSettingByKey[types.SubscriptionConfig](s, ctx, key)
@@ -449,7 +449,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 
 	switch key {
 	case types.SettingKeyInvoiceConfig:
-		if err := types.ResolveInvoiceConfigPaymentTerms(req.Value); err != nil {
+		if err := dto.ResolveInvoiceConfigPaymentTerms(req.Value); err != nil {
 			return nil, err
 		}
 		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.InvoiceConfig])
