@@ -19,22 +19,6 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 	return &ReminderHandler{service: service, log: log}
 }
 
-func bindReminderBody(c *gin.Context, req any) bool {
-	if err := c.ShouldBindJSON(req); err != nil {
-		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
-		return false
-	}
-	return true
-}
-
-func (h *ReminderHandler) respond(c *gin.Context, resp any, err error) {
-	if err != nil {
-		c.Error(err)
-		return
-	}
-	c.JSON(http.StatusOK, resp)
-}
-
 // ListReminders godoc
 // @Summary List reminder drafts
 // @ID listReminderDrafts
@@ -60,8 +44,14 @@ func (h *ReminderHandler) ListReminders(c *gin.Context) {
 		c.Error(ierr.WithError(err).WithHint("Invalid query parameters").Mark(ierr.ErrValidation))
 		return
 	}
+
 	resp, err := h.service.List(c.Request.Context(), &req)
-	h.respond(c, resp, err)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // GetReminder godoc
@@ -79,7 +69,12 @@ func (h *ReminderHandler) ListReminders(c *gin.Context) {
 // @Router /collections/reminders/{id} [get]
 func (h *ReminderHandler) GetReminder(c *gin.Context) {
 	resp, err := h.service.Get(c.Request.Context(), c.Param("id"))
-	h.respond(c, resp, err)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // UpdateReminder godoc
@@ -100,11 +95,18 @@ func (h *ReminderHandler) GetReminder(c *gin.Context) {
 // @Router /collections/reminders/update/{id} [put]
 func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 	var req dto.UpdateReminderRequest
-	if !bindReminderBody(c, &req) {
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 		return
 	}
+
 	resp, err := h.service.UpdateReminder(c.Request.Context(), c.Param("id"), &req)
-	h.respond(c, resp, err)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // BulkUpdateReminders godoc
@@ -123,9 +125,16 @@ func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 // @Router /collections/reminders/bulk-update [put]
 func (h *ReminderHandler) BulkUpdateReminders(c *gin.Context) {
 	var req dto.BulkUpdateRemindersRequest
-	if !bindReminderBody(c, &req) {
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).WithHint("Invalid request format").Mark(ierr.ErrValidation))
 		return
 	}
+
 	resp, err := h.service.BulkUpdateReminders(c.Request.Context(), &req)
-	h.respond(c, resp, err)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

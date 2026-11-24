@@ -27,8 +27,7 @@ func NewCollectionsHandler(service service.CollectionsService, log *logger.Logge
 // @Produce json
 // @Security ApiKeyAuth
 // @x-scope "read"
-// @Param limit query int false "Cards per column in this response (0-200, default 0 = counts and totals only); card_limit is the older name"
-// @Param card_limit query int false "Same as limit"
+// @Param limit query int false "Cards per column in this response (0-200, default 0 = counts and totals only)"
 // @Param q query string false "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)"
 // @Param currency query string false "Keep receivables in this currency (case-insensitive)"
 // @Success 200 {object} dto.CollectionsBoardResponse

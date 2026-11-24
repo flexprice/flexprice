@@ -224,7 +224,7 @@ func (f *reminderFixture) status(s invSpec) types.ReminderStatus {
 }
 
 // expected returns the ids of a column's rows in order for a query.
-func (f *reminderFixture) expected(q collections.Query, filter collections.RowFilter) []invSpec {
+func (f *reminderFixture) expected(q collections.Query, filter collections.InvoiceFilter) []invSpec {
 	var rows []invSpec
 	for _, s := range f.invoices {
 		if !f.matches(s, q) || (filter.CustomerID != "" && s.customer != filter.CustomerID) {
@@ -276,13 +276,13 @@ func (f *reminderFixture) expected(q collections.Query, filter collections.RowFi
 
 // untouched lists the overdue invoices nobody has a reminder for.
 func (f *reminderFixture) untouched() []string {
-	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.RowFilter{Column: types.CollectionsColumnOverdue})
+	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
 	return ids(lo.Filter(overdue, func(s invSpec, _ int) bool { return s.reminder == "" }))
 }
 
 func ids(rows []invSpec) []string { return lo.Map(rows, func(s invSpec, _ int) string { return s.id }) }
-func rowIDs(rows []collections.Row) []string {
-	return lo.Map(rows, func(r collections.Row, _ int) string { return r.InvoiceID })
+func rowIDs(rows []collections.InvoiceWithReminder) []string {
+	return lo.Map(rows, func(r collections.InvoiceWithReminder, _ int) string { return r.InvoiceID })
 }
 
 func totalsOf(rows []invSpec, paid bool) map[string]string {
@@ -305,8 +305,8 @@ var boardColumnKeys = []types.CollectionsColumnKey{
 	types.CollectionsColumnNotDue, types.CollectionsColumnOverdue, types.CollectionsColumnChasing, types.CollectionsColumnHeld, types.CollectionsColumnPaidThisWeek,
 }
 
-func filterOfColumn(c types.CollectionsColumnKey) collections.RowFilter {
-	return collections.RowFilter{Column: c, Statuses: types.ColumnStatuses(c)}
+func filterOfColumn(c types.CollectionsColumnKey) collections.InvoiceFilter {
+	return collections.InvoiceFilter{Column: c, Statuses: types.ColumnStatuses(c)}
 }
 
 func (f *reminderFixture) queries() []collections.Query {
@@ -360,7 +360,7 @@ func TestCollectionsRepository_AvailableCurrenciesIgnoreTheFilters(t *testing.T)
 func TestCollectionsRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	filters := []collections.RowFilter{
+	filters := []collections.InvoiceFilter{
 		filterOfColumn(types.CollectionsColumnNotDue), filterOfColumn(types.CollectionsColumnOverdue), filterOfColumn(types.CollectionsColumnChasing),
 		filterOfColumn(types.CollectionsColumnHeld), filterOfColumn(types.CollectionsColumnPaidThisWeek),
 		{Column: types.CollectionsColumnOverdue}, {Column: types.CollectionsColumnOverdue, CustomerID: "cust_b"},
@@ -373,7 +373,7 @@ func TestCollectionsRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 				got := []string{}
 				pages := 0
 				for page := 0; page < 500; page++ {
-					rows, hasMore, err := f.board.ListRows(f.ctx, q, filter, page*size, size)
+					rows, hasMore, err := f.board.ListInvoicesWithReminders(f.ctx, q, filter, page*size, size)
 					require.NoError(t, err)
 					got = append(got, rowIDs(rows)...)
 					pages++
@@ -387,7 +387,7 @@ func TestCollectionsRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 			}
 		}
 	}
-	past, hasMore, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnNotDue), 1000, 15)
+	past, hasMore, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnNotDue), 1000, 15)
 	require.NoError(t, err)
 	require.Empty(t, past)
 	require.False(t, hasMore)
@@ -396,7 +396,7 @@ func TestCollectionsRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 func TestCollectionsRepository_RowsCarryTheirReminder(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	rows, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnHeld), 0, 50)
+	rows, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnHeld), 0, 50)
 	require.NoError(t, err)
 	require.NotEmpty(t, rows)
 	for _, r := range rows {
@@ -408,11 +408,11 @@ func TestCollectionsRepository_RowsCarryTheirReminder(t *testing.T) {
 			require.Equal(t, "Promised to pay", r.Reminder.StatusReason)
 		}
 	}
-	pending, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnOverdue), 0, 100)
+	pending, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnOverdue), 0, 100)
 	require.NoError(t, err)
-	require.True(t, lo.SomeBy(pending, func(r collections.Row) bool { return r.Reminder == nil }), "an invoice nobody acted on has no reminder")
-	require.True(t, lo.SomeBy(pending, func(r collections.Row) bool { return r.Reminder != nil }), "a reopened reminder is pending with a row")
-	notDue, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnNotDue), 0, 50)
+	require.True(t, lo.SomeBy(pending, func(r collections.InvoiceWithReminder) bool { return r.Reminder == nil }), "an invoice nobody acted on has no reminder")
+	require.True(t, lo.SomeBy(pending, func(r collections.InvoiceWithReminder) bool { return r.Reminder != nil }), "a reopened reminder is pending with a row")
+	notDue, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnNotDue), 0, 50)
 	require.NoError(t, err)
 	for _, r := range notDue {
 		require.Nil(t, r.Reminder)
@@ -424,7 +424,7 @@ func TestCollectionsRepository_SummarizeRemindersMatchesTheGoExpectation(t *test
 	f.seed(t)
 	got, err := f.board.SummarizeReminders(f.ctx, f.asOf)
 	require.NoError(t, err)
-	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.RowFilter{Column: types.CollectionsColumnOverdue})
+	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
 	require.Equal(t, len(overdue), got.InvoiceCount)
 	require.Equal(t, totalsOf(overdue, false), totalsMap(got.Totals))
 	require.Equal(t, len(lo.Uniq(lo.Map(overdue, func(s invSpec, _ int) string { return s.customer }))), got.CustomerCount)
@@ -449,7 +449,7 @@ func TestCollectionsRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
 	f.seed(t)
 	for _, q := range f.queries() {
 		for _, key := range boardColumnKeys {
-			rows, _, err := f.board.ListRows(f.ctx, q, filterOfColumn(key), 0, 500)
+			rows, _, err := f.board.ListInvoicesWithReminders(f.ctx, q, filterOfColumn(key), 0, 500)
 			require.NoError(t, err)
 			for _, id := range rowIDs(rows) {
 				require.False(t, strings.HasPrefix(id, "iso_"), "no row of another tenant or environment: %s", id)
@@ -482,12 +482,12 @@ func TestCollectionsRepository_BoardRunsInsideATransactionWhenOneIsInContext(t *
 	}))
 }
 
-func TestInvoiceReminderRepository_GetRowsReturnsOnlyOpenOverdueInvoices(t *testing.T) {
+func TestInvoiceReminderRepository_GetInvoicesWithRemindersReturnsOnlyOpenOverdueInvoices(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.RowFilter{Column: types.CollectionsColumnOverdue})
+	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
 	ask := append(ids(overdue[:5]), f.run+"_nd00", f.run+"_pd00", f.run+"_x_draft", f.run+"_x_void", f.run+"_x_zero", f.run+"_x_deleted", "missing", fmt.Sprintf("iso_%s_0", f.run))
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, ask)
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, ask)
 	require.NoError(t, err)
 	require.ElementsMatch(t, ids(overdue[:5]), rowIDs(rows))
 	for _, r := range rows {
@@ -496,7 +496,7 @@ func TestInvoiceReminderRepository_GetRowsReturnsOnlyOpenOverdueInvoices(t *test
 		require.Equal(t, strings.ToLower(s.currency), r.Currency)
 		require.Equal(t, decimal.NewFromInt(s.remaining).String(), r.AmountRemaining.String())
 	}
-	none, err := f.reminders.GetRows(f.ctx, f.asOf, nil)
+	none, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, nil)
 	require.NoError(t, err)
 	require.Empty(t, none)
 }
@@ -515,7 +515,7 @@ func TestInvoiceReminderRepository_OneLiveReminderPerInvoiceAndSoftDeleteFreesIt
 	_, err := f.client.Writer(f.ctx).ExecContext(f.ctx, "UPDATE invoice_reminders SET status = 'deleted' WHERE id = $1", first.ID)
 	require.NoError(t, err)
 	require.NoError(t, f.reminders.Create(f.ctx, dup), "a soft-deleted reminder frees the invoice")
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{id})
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, []string{id})
 	require.NoError(t, err)
 	require.Equal(t, dup.ID, rows[0].Reminder.ID, "only the live reminder is read")
 }
@@ -540,7 +540,7 @@ func TestInvoiceReminderRepository_UpdateComparesStatusAndTimestamp(t *testing.T
 	previous.UpdatedAt = previous.UpdatedAt.Add(-time.Second)
 	require.True(t, errors.Is(f.reminders.Update(f.ctx, sameStatusStale, previous), ierr.ErrVersionConflict), "the timestamp is compared as well as the status")
 
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{id})
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, []string{id})
 	require.NoError(t, err)
 	require.Equal(t, types.ReminderStatusHeld, rows[0].Reminder.ReminderStatus)
 	require.Equal(t, "wait", rows[0].Reminder.StatusReason)
@@ -564,9 +564,9 @@ func TestInvoiceReminderRepository_CreateManySkipsInvoicesThatHaveOne(t *testing
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{pending[0], pending[2]}, created, "the invoice that already has a reminder is skipped")
 
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, pending[:3])
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, pending[:3])
 	require.NoError(t, err)
-	byID := lo.KeyBy(rows, func(r collections.Row) string { return r.InvoiceID })
+	byID := lo.KeyBy(rows, func(r collections.InvoiceWithReminder) string { return r.InvoiceID })
 	require.Equal(t, types.ReminderStatusHeld, byID[pending[1]].Reminder.ReminderStatus, "an existing reminder is untouched")
 	for _, id := range []string{pending[0], pending[2]} {
 		r := byID[id].Reminder
@@ -595,16 +595,16 @@ func TestInvoiceReminderRepository_StoresMetadataAndText(t *testing.T) {
 		Build()
 	require.NoError(t, f.reminders.Create(f.ctx, created))
 
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{id})
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, []string{id})
 	require.NoError(t, err)
 	got := rows[0].Reminder
 	require.Equal(t, collections.Metadata{OriginalTone: types.ReminderToneFirm, OriginalSubject: "orig subject", OriginalBody: "orig body"}, got.Original())
 	require.Equal(t, "new subject", got.Subject)
 	require.True(t, got.Edited())
 
-	listed, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnChasing), 0, 500)
+	listed, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnChasing), 0, 500)
 	require.NoError(t, err)
-	row, ok := lo.Find(listed, func(r collections.Row) bool { return r.InvoiceID == id })
+	row, ok := lo.Find(listed, func(r collections.InvoiceWithReminder) bool { return r.InvoiceID == id })
 	require.True(t, ok)
 	require.Equal(t, got.Original(), row.Reminder.Original(), "the joined board query decodes the same metadata")
 	require.Equal(t, "new body", row.Reminder.Body)
@@ -637,7 +637,7 @@ func TestInvoiceReminderRepository_ReminderAndEmailShareATransaction(t *testing.
 		return emails.Create(txCtx, email("email_b_"+f.run))
 	})
 	require.Error(t, err, "the second email repeats the idempotency key")
-	rows, err := f.reminders.GetRows(f.ctx, f.asOf, []string{ids[0]})
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, []string{ids[0]})
 	require.NoError(t, err)
 	require.Nil(t, rows[0].Reminder, "the reminder was rolled back with the email")
 
@@ -649,7 +649,7 @@ func TestInvoiceReminderRepository_ReminderAndEmailShareATransaction(t *testing.
 		return emails.Create(txCtx, e)
 	})
 	require.NoError(t, err)
-	rows, err = f.reminders.GetRows(f.ctx, f.asOf, []string{ids[1]})
+	rows, err = f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, []string{ids[1]})
 	require.NoError(t, err)
 	require.NotNil(t, rows[0].Reminder)
 	stored, err := emails.GetByIdempotencyKey(f.ctx, "other:"+f.run)
@@ -660,10 +660,10 @@ func TestInvoiceReminderRepository_ReminderAndEmailShareATransaction(t *testing.
 func TestCollectionsRepository_OverpaidInvoicesCountAsPaidThisWeek(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	rows, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, collections.RowFilter{Column: types.CollectionsColumnPaidThisWeek}, 0, 200)
+	rows, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, collections.InvoiceFilter{Column: types.CollectionsColumnPaidThisWeek}, 0, 200)
 	require.NoError(t, err)
 	require.Contains(t, rowIDs(rows), f.run+"_pd_over")
-	over, _ := lo.Find(rows, func(r collections.Row) bool { return r.InvoiceID == f.run+"_pd_over" })
+	over, _ := lo.Find(rows, func(r collections.InvoiceWithReminder) bool { return r.InvoiceID == f.run+"_pd_over" })
 	require.Equal(t, "25", over.AmountTotal.String(), "a paid card shows the invoice total")
 	require.NotNil(t, over.PaidAt)
 }

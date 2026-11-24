@@ -61,7 +61,7 @@ func (s *InMemoryInvoiceReminderStore) liveFor(ctx context.Context, invoiceID st
 	return nil
 }
 
-func (s *InMemoryInvoiceReminderStore) GetRows(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]collections.Row, error) {
+func (s *InMemoryInvoiceReminderStore) GetInvoicesWithReminders(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]collections.InvoiceWithReminder, error) {
 	if len(invoiceIDs) == 0 {
 		return nil, nil
 	}
@@ -75,12 +75,12 @@ func (s *InMemoryInvoiceReminderStore) GetRows(ctx context.Context, asOf time.Ti
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var rows []collections.Row
+	var rows []collections.InvoiceWithReminder
 	for _, inv := range invoices {
 		if inv.PaymentStatus == types.PaymentStatusSucceeded || !inv.AmountRemaining.IsPositive() || !types.IsOverdue(inv.DueDate, asOf) {
 			continue
 		}
-		row := collections.NewRowBuilder(&collections.Row{InvoiceID: inv.ID}).
+		row := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: inv.ID}).
 			WithInvoice(lo.FromPtr(inv.InvoiceNumber), inv.CustomerID, strings.ToLower(inv.Currency)).
 			WithAmounts(inv.AmountDue, inv.AmountRemaining).
 			WithDates(inv.DueDate, inv.PaidAt)

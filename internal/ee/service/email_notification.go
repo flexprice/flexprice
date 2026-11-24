@@ -330,11 +330,6 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 
 	cc := normalizeRecipients(out.cc)
 	metadata := lo.Assign(types.Metadata{}, out.metadata)
-	if redirect := normalizeRecipients([]string{s.Config.Email.TestRecipient}); len(redirect) > 0 && len(to) > 0 {
-		metadata[emailMetaOriginalTo] = strings.Join(to, ",")
-		s.Logger.Info(ctx, "email recipient replaced by the test recipient", "entity_id", out.entityID, "original_to", metadata[emailMetaOriginalTo])
-		to, cc = redirect, nil
-	}
 
 	e := &emaillog.EmailLog{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EMAIL_LOG),

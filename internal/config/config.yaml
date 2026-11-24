@@ -616,7 +616,6 @@ email:
   sender_domain: "mail.flexprice.io"
   sender_local_part: "invoices"
   region_tag: "" # us | ca | in | staging; delivery events tagged with another region are dropped
-  test_recipient: "" # DEV/TEST ONLY (FLEXPRICE_EMAIL_TEST_RECIPIENT): when set, every customer email goes to this address instead of the customer, and CC is dropped
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file

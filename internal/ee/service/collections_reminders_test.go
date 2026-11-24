@@ -113,7 +113,6 @@ type reminderFixture struct {
 	emailOn   bool
 	sent      *sentEmails
 	lists     int
-	redirect  string
 }
 
 func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
@@ -141,7 +140,7 @@ func (f *reminderFixture) params(repo collections.InvoiceReminderRepository) Ser
 		InvoiceLineItemRepo: testutil.NewInMemoryInvoiceLineItemStore(), PaymentRepo: testutil.NewInMemoryPaymentStore(), WalletRepo: testutil.NewInMemoryWalletStore(),
 		TaxAppliedRepo: testutil.NewInMemoryTaxAppliedStore(), TaxRateRepo: testutil.NewInMemoryTaxRateStore(),
 		ConnectionRepo: testutil.NewInMemoryConnectionStore(), StorageResolver: noStorage{},
-		Config: &config.Configuration{Email: config.EmailConfig{Enabled: f.emailOn, Provider: string(types.EmailProviderLocal), SenderLocalPart: "billing", SenderDomain: "mail.test", TestRecipient: f.redirect}},
+		Config: &config.Configuration{Email: config.EmailConfig{Enabled: f.emailOn, Provider: string(types.EmailProviderLocal), SenderLocalPart: "billing", SenderDomain: "mail.test"}},
 	}
 }
 
@@ -153,7 +152,7 @@ func (f *reminderFixture) customer(t *testing.T, ctx context.Context, id, name, 
 // overdue adds an open finalized invoice due at the start of the UTC day daysAgo days back, so it is daysAgo calendar days overdue at any time of day.
 func (f *reminderFixture) overdue(t *testing.T, ctx context.Context, id, customerID string, amount int64, daysAgo int) {
 	t.Helper()
-	due := utcDay(clock.Now()).Add(-time.Duration(daysAgo) * day)
+	due := types.UTCDay(clock.Now()).Add(-time.Duration(daysAgo) * day)
 	f.invoice(t, ctx, id, func(i *invoice.Invoice) {
 		i.CustomerID, i.DueDate = customerID, &due
 		i.AmountDue, i.AmountRemaining = decimal.NewFromInt(amount), decimal.NewFromInt(amount)
@@ -238,7 +237,7 @@ func TestReminder_GetRendersPendingWithoutWriting(t *testing.T) {
 	require.False(t, v.Edited)
 	require.Empty(t, v.OriginalSubject)
 	require.Nil(t, v.CreatedAt, "no timestamps until someone acts")
-	require.Equal(t, "Invoice is 40 days overdue, so a firm tone.", v.Why[0])
+	require.Equal(t, "Invoice is 40 days overdue, so a firm tone.", v.ToneReason)
 	require.Zero(t, f.reminders.Writes(), "reads store nothing")
 }
 
@@ -337,7 +336,7 @@ func TestReminder_ToneChangeOverwritesHandEditsThenAppliesTheRequestOnTop(t *tes
 	require.Contains(t, toned.Body, "This is a final notice")
 	require.True(t, toned.Edited)
 	require.Equal(t, original.Subject, toned.OriginalSubject, "the system's version is kept")
-	require.Equal(t, "Tone set to final notice by you (invoice is 5 days overdue).", toned.Why[0])
+	require.Equal(t, "Tone set to final notice by you (invoice is 5 days overdue).", toned.ToneReason)
 
 	both, err := f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Tone: lo.ToPtr("firm"), Subject: lo.ToPtr("Mine again")})
 	require.NoError(t, err)
@@ -384,7 +383,7 @@ func TestReminder_Transitions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.ReminderStatusHeld, held.Status)
 	require.Equal(t, "Promised Friday", held.StatusReason)
-	require.Contains(t, held.Why, "Held: Promised Friday")
+	require.NotContains(t, held.ToneReason, "Promised Friday", "tone_reason explains the tone only; the reason is status_reason")
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusHeld, "again"))
 	requireKind(t, err, ierr.ErrVersionConflict)
 
@@ -708,9 +707,9 @@ func TestReminder_ListUsesTheCollectionsRepositoryAndDoesNotWrite(t *testing.T) 
 	f := newReminderFixture(t, ctx)
 	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.example")
 	due := clock.Now().Add(-3 * day)
-	listed := collections.NewRowBuilder(&collections.Row{InvoiceID: "a1"}).WithInvoice("INV-1", "cust_1", "usd").
+	listed := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: "a1"}).WithInvoice("INV-1", "cust_1", "usd").
 		WithAmounts(decimal.NewFromInt(100), decimal.NewFromInt(100)).WithDates(&due, nil).Build()
-	f.board.rows = []collections.Row{*listed}
+	f.board.rows = []collections.InvoiceWithReminder{*listed}
 	f.board.hasMore = true
 	f.board.summary = *collections.NewReminderSummaryBuilder(nil).
 		WithTotals([]collections.CurrencyTotal{{Currency: "usd", Amount: decimal.NewFromInt(100)}}).
@@ -765,8 +764,8 @@ func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T)
 	f := newReminderFixture(t, ctx)
 	f.customer(t, ctx, "cust_1", "Acme", "")
 	due := clock.Now().Add(-3 * day)
-	row := func(id string, rem *collections.InvoiceReminder) collections.Row {
-		return *collections.NewRowBuilder(&collections.Row{InvoiceID: id}).WithInvoice(id, "cust_1", "usd").
+	row := func(id string, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
+		return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: id}).WithInvoice(id, "cust_1", "usd").
 			WithAmounts(decimal.Zero, decimal.NewFromInt(10)).WithDates(&due, nil).WithReminder(rem).Build()
 	}
 	stored := func(status types.ReminderStatus, mailBody string) *collections.InvoiceReminder {
@@ -776,7 +775,7 @@ func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T)
 			WithText(types.ReminderToneFriendly, "orig", mailBody).
 			Build()
 	}
-	f.board.rows = []collections.Row{
+	f.board.rows = []collections.InvoiceWithReminder{
 		row("untouched_held", stored(types.ReminderStatusHeld, "orig body")),
 		row("edited_held", stored(types.ReminderStatusHeld, "my words")),
 		row("approved", stored(types.ReminderStatusApproved, "orig body")),
@@ -840,11 +839,50 @@ func TestReminder_ApprovalChecksThePreviewedText(t *testing.T) {
 	require.Error(t, bulk.Validate(), "bulk approval cannot check the text of one reminder")
 }
 
-func TestReminderWhy_ApprovedReminderKeepsItsFrozenTone(t *testing.T) {
-	v := dto.InvoiceReminderResponse{Status: types.ReminderStatusApproved, Tone: types.ReminderToneFriendly}
-	why := reminderWhy(v, 75)
-	require.Len(t, why, 1)
-	require.Contains(t, why[0], reminderToneLabel(types.ReminderToneFriendly), "the approved tone, not the tone of today's age")
-	require.NotContains(t, why[0], reminderToneLabel(types.ReminderToneFinal))
-	require.Contains(t, why[0], "75 days overdue")
+func TestToneReason(t *testing.T) {
+	tests := []struct {
+		name string
+		view dto.InvoiceReminderResponse
+		days int
+		want string
+	}{
+		{"pending by age", dto.InvoiceReminderResponse{Status: types.ReminderStatusPending, Tone: types.ReminderToneFriendly}, 12, "Invoice is 12 days overdue, so a friendly tone."},
+		{"held by age", dto.InvoiceReminderResponse{Status: types.ReminderStatusHeld, Tone: types.ReminderToneFirm}, 40, "Invoice is 40 days overdue, so a firm tone."},
+		{"overdue today", dto.InvoiceReminderResponse{Status: types.ReminderStatusPending, Tone: types.ReminderToneFriendly}, 0, "Invoice became overdue today, so a friendly tone."},
+		{"one day", dto.InvoiceReminderResponse{Status: types.ReminderStatusPending, Tone: types.ReminderToneFriendly}, 1, "Invoice is 1 day overdue, so a friendly tone."},
+		{"edited text, same tone", dto.InvoiceReminderResponse{Status: types.ReminderStatusPending, Tone: types.ReminderToneFriendly, Edited: true, OriginalTone: types.ReminderToneFriendly}, 12, "Invoice is 12 days overdue, so a friendly tone."},
+		{"tone set by the person", dto.InvoiceReminderResponse{Status: types.ReminderStatusPending, Tone: types.ReminderToneFirm, Edited: true, OriginalTone: types.ReminderToneFriendly}, 12, "Tone set to firm by you (invoice is 12 days overdue)."},
+		{"approved keeps its tone", dto.InvoiceReminderResponse{Status: types.ReminderStatusApproved, Tone: types.ReminderToneFirm}, 12, "Approved with a firm tone, kept as approved (12 days overdue)."},
+		{"approved, now much older", dto.InvoiceReminderResponse{Status: types.ReminderStatusApproved, Tone: types.ReminderToneFriendly}, 75, "Approved with a friendly tone, kept as approved (75 days overdue)."},
+	}
+	for _, tt := range tests {
+		require.Equal(t, tt.want, toneReason(tt.view, tt.days), tt.name)
+	}
+}
+
+func TestReminderText_ValuesTypedByPeopleStayOnOneLine(t *testing.T) {
+	inv := reminderInvoice{number: "INV-1\r\nBcc: attacker@example.com", currency: "usd", remaining: decimal.NewFromInt(100), due: time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)}
+	subject, body, err := renderReminder(types.ReminderToneFirm, "Acme\nCorp\x00", "Flex\tBilling\r\n", inv, time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+
+	require.NotContains(t, subject, "\n")
+	require.NotContains(t, subject, "\r")
+	require.Equal(t, "Reminder: Invoice INV-1 Bcc: attacker@example.com is past due: $100", subject)
+	require.Contains(t, body, "Hi Acme Corp,\n")
+	require.Contains(t, body, "Flex Billing Billing\n")
+	require.NotContains(t, body, "\x00")
+	for _, line := range strings.Split(body, "\n") {
+		require.False(t, strings.HasPrefix(strings.TrimSpace(line), "Bcc:"), "no value can start a line of its own")
+	}
+}
+
+func TestReminder_EditedSubjectStaysOnOneLine(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
+
+	got, err := f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Subject: lo.ToPtr("Pay now\r\nBcc: x@example.com")})
+	require.NoError(t, err)
+	require.Equal(t, "Pay now Bcc: x@example.com", got.Subject)
 }

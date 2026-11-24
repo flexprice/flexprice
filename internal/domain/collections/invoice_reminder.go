@@ -85,7 +85,8 @@ func (b *invoiceReminderBuilder) Build() *InvoiceReminder {
 	return b.r
 }
 
-type Row struct {
+// InvoiceWithReminder is an invoice joined to its reminder, if anyone acted on one: the unit the board and the reminder list read.
+type InvoiceWithReminder struct {
 	InvoiceID       string
 	InvoiceNumber   string
 	CustomerID      string
@@ -97,45 +98,45 @@ type Row struct {
 	Reminder        *InvoiceReminder
 }
 
-type rowBuilder struct {
-	r *Row
+type invoiceWithReminderBuilder struct {
+	r *InvoiceWithReminder
 }
 
-// NewRowBuilder starts from a copy of r (or an empty row when r is nil).
-func NewRowBuilder(r *Row) *rowBuilder {
+// NewInvoiceWithReminderBuilder starts from a copy of r (or an empty row when r is nil).
+func NewInvoiceWithReminderBuilder(r *InvoiceWithReminder) *invoiceWithReminderBuilder {
 	if r == nil {
-		return &rowBuilder{r: &Row{}}
+		return &invoiceWithReminderBuilder{r: &InvoiceWithReminder{}}
 	}
 	cp := *r
-	return &rowBuilder{r: &cp}
+	return &invoiceWithReminderBuilder{r: &cp}
 }
 
-func (b *rowBuilder) WithInvoice(number, customerID, currency string) *rowBuilder {
+func (b *invoiceWithReminderBuilder) WithInvoice(number, customerID, currency string) *invoiceWithReminderBuilder {
 	b.r.InvoiceNumber, b.r.CustomerID, b.r.Currency = number, customerID, currency
 	return b
 }
 
-func (b *rowBuilder) WithAmounts(total, remaining decimal.Decimal) *rowBuilder {
+func (b *invoiceWithReminderBuilder) WithAmounts(total, remaining decimal.Decimal) *invoiceWithReminderBuilder {
 	b.r.AmountTotal, b.r.AmountRemaining = total, remaining
 	return b
 }
 
-func (b *rowBuilder) WithDates(due, paid *time.Time) *rowBuilder {
+func (b *invoiceWithReminderBuilder) WithDates(due, paid *time.Time) *invoiceWithReminderBuilder {
 	b.r.DueDate, b.r.PaidAt = due, paid
 	return b
 }
 
-func (b *rowBuilder) WithReminder(reminder *InvoiceReminder) *rowBuilder {
+func (b *invoiceWithReminderBuilder) WithReminder(reminder *InvoiceReminder) *invoiceWithReminderBuilder {
 	b.r.Reminder = reminder
 	return b
 }
 
-func (b *rowBuilder) Build() *Row {
+func (b *invoiceWithReminderBuilder) Build() *InvoiceWithReminder {
 	return b.r
 }
 
 type InvoiceReminderRepository interface {
-	GetRows(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]Row, error)
+	GetInvoicesWithReminders(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]InvoiceWithReminder, error)
 	Create(ctx context.Context, reminder *InvoiceReminder) error
 	CreateMany(ctx context.Context, reminders []*InvoiceReminder) ([]string, error)
 	Update(ctx context.Context, reminder *InvoiceReminder, previous *InvoiceReminder) error

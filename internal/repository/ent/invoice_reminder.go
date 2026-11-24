@@ -120,9 +120,9 @@ func paidWindow(asOfP, sinceP string) string {
 	return fmt.Sprintf("i.invoice_status = 'FINALIZED' AND i.payment_status IN ('SUCCEEDED', 'OVERPAID') AND i.paid_at >= %s AND i.paid_at <= %s", sinceP, asOfP)
 }
 
-// rowColumns selects the invoice columns a card of the column shows and, when joined, its reminder. The columns the
+// invoiceColumns selects the invoice columns a card of the column shows and, when joined, its reminder. The columns the
 // card does not show are selected as NULL or zero, so not due and paid pages are served by their covering indexes alone.
-func rowColumns(column types.CollectionsColumnKey, joined bool) string {
+func invoiceColumns(column types.CollectionsColumnKey, joined bool) string {
 	invoice := `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), 0::numeric, i.amount_remaining, i.due_date, NULL::timestamptz`
 	if column == types.CollectionsColumnPaidThisWeek {
 		invoice = `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), i.amount_due, 0::numeric, NULL::timestamptz, i.paid_at`
@@ -140,7 +140,7 @@ func nullTime(t sql.NullTime) *time.Time {
 	return &t.Time
 }
 
-func scanRow(ctx context.Context, rows *sql.Rows) (collections.Row, error) {
+func scanInvoice(ctx context.Context, rows *sql.Rows) (collections.InvoiceWithReminder, error) {
 	var (
 		invoiceID, number, customerID, currency string
 		total, remaining                        decimal.Decimal
@@ -151,9 +151,9 @@ func scanRow(ctx context.Context, rows *sql.Rows) (collections.Row, error) {
 	)
 	if err := rows.Scan(&invoiceID, &number, &customerID, &currency, &total, &remaining, &due, &paid,
 		&rid, &status, &reason, &approved, &metadata, &tone, &subject, &body, &created, &updated); err != nil {
-		return collections.Row{}, err
+		return collections.InvoiceWithReminder{}, err
 	}
-	row := collections.NewRowBuilder(&collections.Row{InvoiceID: invoiceID}).
+	row := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: invoiceID}).
 		WithInvoice(number, customerID, currency).
 		WithAmounts(total, remaining).
 		WithDates(nullTime(due), nullTime(paid))
@@ -181,10 +181,10 @@ func decodeMetadata(raw []byte) map[string]interface{} {
 	return metadata
 }
 
-func scanRowList(ctx context.Context, rows *sql.Rows) ([]collections.Row, error) {
-	list := []collections.Row{}
+func scanInvoiceList(ctx context.Context, rows *sql.Rows) ([]collections.InvoiceWithReminder, error) {
+	list := []collections.InvoiceWithReminder{}
 	err := scanRows(rows, func() error {
-		row, err := scanRow(ctx, rows)
+		row, err := scanInvoice(ctx, rows)
 		if err != nil {
 			return err
 		}
@@ -196,7 +196,7 @@ func scanRowList(ctx context.Context, rows *sql.Rows) ([]collections.Row, error)
 
 // Raw SQL: ent has no LEFT JOIN of invoices to invoice_reminders with a coalesce() filter and ordering (no edge between them).
 // overdueFrom is the open overdue invoices with their reminders, narrowed by the query and the filter.
-func overdueFrom(sc scope, a *sqlArgs, q collections.Query, f collections.RowFilter) string {
+func overdueFrom(sc scope, a *sqlArgs, q collections.Query, f collections.InvoiceFilter) string {
 	conditions := []string{sc.invoices(), openInvoice, "i.due_date < " + a.bind(q.AsOf)}
 	if q.Currency != "" {
 		conditions = append(conditions, "lower(i.currency) = "+a.bind(q.Currency))
@@ -299,7 +299,7 @@ func (r *collectionsRepository) board(ctx context.Context, db queryer, q collect
 
 	if limit > 0 {
 		for column, col := range built.Columns {
-			rows, hasMore, err := listRows(ctx, db, q, filterOf(column), 0, limit)
+			rows, hasMore, err := listInvoices(ctx, db, q, filterOf(column), 0, limit)
 			if err != nil {
 				return nil, err
 			}
@@ -316,8 +316,8 @@ func (r *collectionsRepository) board(ctx context.Context, db queryer, q collect
 	return collections.NewBoardBuilder(built).WithAvailableCurrencies(currencies).Build(), nil
 }
 
-func filterOf(column types.CollectionsColumnKey) collections.RowFilter {
-	return collections.RowFilter{Column: column, Statuses: types.ColumnStatuses(column)}
+func filterOf(column types.CollectionsColumnKey) collections.InvoiceFilter {
+	return collections.InvoiceFilter{Column: column, Statuses: types.ColumnStatuses(column)}
 }
 
 // currenciesOf lists the currencies of an unfiltered board from its column totals.
@@ -418,7 +418,7 @@ func summarizeOverdue(ctx context.Context, db queryer, q collections.Query) (map
 	var a sqlArgs
 	sc := newScope(ctx, &a)
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`SELECT %s, lower(i.currency), count(*), sum(i.amount_remaining) %s GROUP BY 1, 2`,
-		effectiveStatus, overdueFrom(sc, &a, q, collections.RowFilter{})), a.values...)
+		effectiveStatus, overdueFrom(sc, &a, q, collections.InvoiceFilter{})), a.values...)
 	if err != nil {
 		return nil, dbError(err, "Failed to total overdue invoices")
 	}
@@ -450,10 +450,10 @@ func summarizeOverdue(ctx context.Context, db queryer, q collections.Query) (map
 	return summaries, nil
 }
 
-func (r *collectionsRepository) ListRows(ctx context.Context, q collections.Query, f collections.RowFilter, offset, limit int) ([]collections.Row, bool, error) {
+func (r *collectionsRepository) ListInvoicesWithReminders(ctx context.Context, q collections.Query, f collections.InvoiceFilter, offset, limit int) ([]collections.InvoiceWithReminder, bool, error) {
 	span := StartRepositorySpan(ctx, "board", "list_rows", map[string]interface{}{"column": f.Column})
 	defer FinishSpan(span)
-	rows, hasMore, err := listRows(ctx, r.client.Reader(ctx), q, f, offset, limit)
+	rows, hasMore, err := listInvoices(ctx, r.client.Reader(ctx), q, f, offset, limit)
 	if err != nil {
 		SetSpanError(span, err)
 	}
@@ -461,7 +461,7 @@ func (r *collectionsRepository) ListRows(ctx context.Context, q collections.Quer
 }
 
 // Raw SQL: pages invoices through the same joined filter as the totals so counts and rows agree, with NULLS LAST ordering.
-func listRows(ctx context.Context, db queryer, q collections.Query, f collections.RowFilter, offset, limit int) ([]collections.Row, bool, error) {
+func listInvoices(ctx context.Context, db queryer, q collections.Query, f collections.InvoiceFilter, offset, limit int) ([]collections.InvoiceWithReminder, bool, error) {
 	var a sqlArgs
 	sc := newScope(ctx, &a)
 	var from, order string
@@ -475,11 +475,11 @@ func listRows(ctx context.Context, db queryer, q collections.Query, f collection
 		from, order, joined = overdueFrom(sc, &a, q, f), overdueOrder, true
 	}
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`SELECT %s %s ORDER BY %s LIMIT %s OFFSET %s`,
-		rowColumns(f.Column, joined), from, order, a.bind(limit+1), a.bind(offset)), a.values...)
+		invoiceColumns(f.Column, joined), from, order, a.bind(limit+1), a.bind(offset)), a.values...)
 	if err != nil {
 		return nil, false, dbError(err, "Failed to list board rows")
 	}
-	list, err := scanRowList(ctx, rows)
+	list, err := scanInvoiceList(ctx, rows)
 	if err != nil {
 		return nil, false, dbError(err, "Failed to list board rows")
 	}
@@ -499,7 +499,7 @@ func (r *collectionsRepository) SummarizeReminders(ctx context.Context, asOf tim
 	rows, err := r.client.Reader(ctx).QueryContext(ctx, fmt.Sprintf(
 		`SELECT grouping(%[1]s, lower(i.currency)), %[1]s, lower(i.currency), count(*), sum(i.amount_remaining), count(DISTINCT i.customer_id)
 		 %[2]s GROUP BY GROUPING SETS ((%[1]s, lower(i.currency)), ())`,
-		effectiveStatus, overdueFrom(sc, &a, collections.Query{AsOf: asOf}, collections.RowFilter{})), a.values...)
+		effectiveStatus, overdueFrom(sc, &a, collections.Query{AsOf: asOf}, collections.InvoiceFilter{})), a.values...)
 	if err != nil {
 		SetSpanError(span, err)
 		return collections.ReminderSummary{}, dbError(err, "Failed to total overdue invoices")
@@ -534,7 +534,7 @@ func (r *collectionsRepository) SummarizeReminders(ctx context.Context, asOf tim
 	return *collections.NewReminderSummaryBuilder(nil).WithTotals(totalsOf(totals)).WithCounts(invoices, customers).WithStatuses(statuses).Build(), nil
 }
 
-// overdueInvoice is the part of an invoice a reminder row needs; selecting only these columns keeps GetRows light.
+// overdueInvoice is the part of an invoice a reminder row needs; selecting only these columns keeps GetInvoicesWithReminders light.
 type overdueInvoice struct {
 	ID              string          `json:"id"`
 	InvoiceNumber   *string         `json:"invoice_number"`
@@ -546,7 +546,7 @@ type overdueInvoice struct {
 	PaidAt          *time.Time      `json:"paid_at"`
 }
 
-func (r *invoiceReminderRepository) GetRows(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]collections.Row, error) {
+func (r *invoiceReminderRepository) GetInvoicesWithReminders(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]collections.InvoiceWithReminder, error) {
 	if len(invoiceIDs) == 0 {
 		return nil, nil
 	}
@@ -590,8 +590,8 @@ func (r *invoiceReminderRepository) GetRows(ctx context.Context, asOf time.Time,
 	byInvoice := lo.SliceToMap(stored, func(e *ent.InvoiceReminder) (string, *collections.InvoiceReminder) {
 		return e.InvoiceID, reminderFromEnt(e)
 	})
-	rows := lo.Map(invoices, func(i overdueInvoice, _ int) collections.Row {
-		return *collections.NewRowBuilder(&collections.Row{InvoiceID: i.ID}).
+	rows := lo.Map(invoices, func(i overdueInvoice, _ int) collections.InvoiceWithReminder {
+		return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: i.ID}).
 			WithInvoice(lo.FromPtr(i.InvoiceNumber), i.CustomerID, strings.ToLower(i.Currency)).
 			WithAmounts(i.AmountDue, i.AmountRemaining).
 			WithDates(i.DueDate, i.PaidAt).

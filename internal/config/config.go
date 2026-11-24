@@ -1195,8 +1195,6 @@ type EmailConfig struct {
 	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
 	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`
 	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
-	// TestRecipient replaces the To address of every customer email when set; for development and test deployments only.
-	TestRecipient string `mapstructure:"test_recipient" validate:"omitempty,email"`
 }
 
 // EmailEventsConfig is the consumer group that auto-sends customer emails from webhook.topic events.

@@ -15,7 +15,7 @@ type Query struct {
 	Currency string
 }
 
-type RowFilter struct {
+type InvoiceFilter struct {
 	Column     types.CollectionsColumnKey
 	Statuses   []types.ReminderStatus
 	CustomerID string
@@ -33,7 +33,7 @@ type ColumnSummary struct {
 
 type BoardColumn struct {
 	Summary ColumnSummary
-	Rows    []Row
+	Rows    []InvoiceWithReminder
 	HasMore bool
 }
 
@@ -94,7 +94,7 @@ func (b *boardColumnBuilder) WithSummary(summary ColumnSummary) *boardColumnBuil
 	return b
 }
 
-func (b *boardColumnBuilder) WithRows(rows []Row, hasMore bool) *boardColumnBuilder {
+func (b *boardColumnBuilder) WithRows(rows []InvoiceWithReminder, hasMore bool) *boardColumnBuilder {
 	b.c.Rows, b.c.HasMore = rows, hasMore
 	return b
 }
@@ -168,6 +168,6 @@ func (b *reminderSummaryBuilder) Build() *ReminderSummary {
 // CollectionsRepository reads the invoices of the Collections feature with their reminders: the board, its columns and the reminder list.
 type CollectionsRepository interface {
 	Board(ctx context.Context, q Query, limit int) (*Board, error)
-	ListRows(ctx context.Context, q Query, f RowFilter, offset, limit int) (rows []Row, hasMore bool, err error)
+	ListInvoicesWithReminders(ctx context.Context, q Query, f InvoiceFilter, offset, limit int) (rows []InvoiceWithReminder, hasMore bool, err error)
 	SummarizeReminders(ctx context.Context, asOf time.Time) (ReminderSummary, error)
 }

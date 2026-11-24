@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/template" // nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 	"time"
+	"unicode"
 
 	"github.com/shopspring/decimal"
 
@@ -115,15 +116,37 @@ type reminderInvoice struct {
 // renderReminder writes the subject and body of the reminder of one overdue invoice in a tone.
 func renderReminder(tone types.ReminderTone, greeting, tenant string, inv reminderInvoice, now time.Time) (subject, body string, err error) {
 	amount := reminderMoney(inv.remaining, inv.currency)
+	number := singleLine(inv.number)
+
 	input := reminderTextInput{
-		Greeting: greeting, Tenant: tenant, Number: inv.number, Amount: amount,
-		Due: inv.due.UTC().Format("Jan 2"), DaysOverdue: calendarDaysBetween(inv.due, now),
+		Greeting:    singleLine(greeting),
+		Tenant:      singleLine(tenant),
+		Number:      number,
+		Amount:      amount,
+		Due:         inv.due.UTC().Format("Jan 2"),
+		DaysOverdue: types.CalendarDaysBetween(inv.due, now),
 	}
+
 	var buf bytes.Buffer
 	if err := reminderTemplates[tone].Execute(&buf, input); err != nil {
 		return "", "", err
 	}
-	return reminderSubject(tone, inv.number, amount), buf.String(), nil
+
+	return reminderSubject(tone, number, amount), buf.String(), nil
+}
+
+// singleLine turns control characters (line breaks, tabs, NUL) in a value typed by a person into spaces and squeezes
+// the whitespace, so a customer name, tenant name, invoice number or subject cannot add lines or header text.
+func singleLine(value string) string {
+	cleaned := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+
+		return r
+	}, value)
+
+	return strings.Join(strings.Fields(cleaned), " ")
 }
 
 func reminderSubject(tone types.ReminderTone, number, amount string) string {

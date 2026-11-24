@@ -19,10 +19,9 @@ const (
 
 // CollectionsBoardRequest holds the query parameters of the collections board and of one of its columns.
 type CollectionsBoardRequest struct {
-	// Limit is the number of cards per column; card_limit is its older name. On the board it defaults to 0, which
-	// returns counts and totals only; on a column it is the page size (default 15). Counts and totals always cover the whole column.
-	Limit     int `form:"limit" json:"limit,omitempty"`
-	CardLimit int `form:"card_limit" json:"card_limit,omitempty"`
+	// Limit is the number of cards per column. On the board it defaults to 0, which returns counts and totals only;
+	// on a column it is the page size (default 15). Counts and totals always cover the whole column.
+	Limit int `form:"limit" json:"limit,omitempty"`
 	// Page is the 1-based page of a column; only the column endpoint takes it.
 	Page int `form:"page" json:"page,omitempty"`
 	// AsOf pins a column page to the as_of of the board call (RFC3339), on any page.
@@ -42,7 +41,7 @@ func (r *CollectionsBoardRequest) Validate() error {
 		r.Q = string(runes[:CollectionsBoardMaxQueryLength])
 	}
 	r.Currency = strings.TrimSpace(r.Currency)
-	if r.Limit < 0 || r.CardLimit < 0 || r.Limit > CollectionsBoardMaxCardLimit || r.CardLimit > CollectionsBoardMaxCardLimit {
+	if r.Limit < 0 || r.Limit > CollectionsBoardMaxCardLimit {
 		return ierr.NewError("limit out of range").
 			WithHint("limit must be between 0 and 200.").
 			Mark(ierr.ErrValidation)
@@ -76,24 +75,17 @@ func (r *CollectionsBoardRequest) PageOffset() int {
 	return (r.PageNumber() - 1) * r.PageLimit()
 }
 
-// pageLimit is limit, else card_limit, else zero.
-func (r *CollectionsBoardRequest) pageLimit() int {
+// BoardCardLimit is the number of cards per column on the board; zero means counts and totals only.
+func (r *CollectionsBoardRequest) BoardCardLimit() int {
+	return r.Limit
+}
+
+// PageLimit is the page size of a column page: limit, else the default.
+func (r *CollectionsBoardRequest) PageLimit() int {
 	if r.Limit > 0 {
 		return r.Limit
 	}
-	return r.CardLimit
-}
 
-// BoardCardLimit is the number of cards per column on the board; zero means counts and totals only.
-func (r *CollectionsBoardRequest) BoardCardLimit() int {
-	return r.pageLimit()
-}
-
-// PageLimit is the page size of a column page: limit, else card_limit, else the default.
-func (r *CollectionsBoardRequest) PageLimit() int {
-	if limit := r.pageLimit(); limit > 0 {
-		return limit
-	}
 	return CollectionsColumnDefaultPageSize
 }
 
@@ -103,8 +95,8 @@ type CollectionsCurrencyTotal struct {
 	Amount   decimal.Decimal `json:"amount" swaggertype:"string"`
 }
 
-// CollectionsBoardCard is one invoice. Overdue-type cards carry the reminder fields; ReminderStatus is pending until someone acts.
-type CollectionsBoardCard struct {
+// CollectionsItem is one invoice. Overdue-type cards carry the reminder fields; ReminderStatus is pending until someone acts.
+type CollectionsItem struct {
 	InvoiceID     string `json:"invoice_id"`
 	InvoiceNumber string `json:"invoice_number"`
 	CustomerID    string `json:"customer_id"`
@@ -129,7 +121,7 @@ type CollectionsBoardColumn struct {
 	// Count is the number of invoices in the whole column.
 	Count  int                        `json:"count"`
 	Totals []CollectionsCurrencyTotal `json:"totals"`
-	Cards  []CollectionsBoardCard     `json:"cards"`
+	Cards  []CollectionsItem          `json:"cards"`
 	// HasMore is true when the column has cards beyond the ones in this response.
 	HasMore bool `json:"has_more"`
 }
@@ -147,7 +139,7 @@ type CollectionsColumnPageResponse struct {
 	Key     types.CollectionsColumnKey `json:"key"`
 	AsOf    time.Time                  `json:"as_of"`
 	Page    int                        `json:"page"`
-	Cards   []CollectionsBoardCard     `json:"cards"`
+	Cards   []CollectionsItem          `json:"cards"`
 	HasMore bool                       `json:"has_more"`
 }
 
@@ -174,7 +166,8 @@ type InvoiceReminderResponse struct {
 	OriginalTone    types.ReminderTone `json:"original_tone,omitempty"`
 	OriginalSubject string             `json:"original_subject,omitempty"`
 	OriginalBody    string             `json:"original_body,omitempty"`
-	Why             []string           `json:"why"`
+	// ToneReason explains the tone shown: the invoice's age, "Tone set to firm by you", or "Approved with a firm tone, kept as approved". It says nothing about edits or status; use edited and status_reason.
+	ToneReason string `json:"tone_reason"`
 	// Email is where the email of an approved reminder stands; absent until one was queued.
 	Email *ReminderEmailStatus `json:"email,omitempty"`
 	// CreatedAt and UpdatedAt are omitted until a person acts on the reminder.

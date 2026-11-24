@@ -18,7 +18,6 @@ import (
 const (
 	emailMetaReminderBody = "reminder_body"
 	emailMetaReminderID   = "reminder_id"
-	emailMetaOriginalTo   = "original_to"
 )
 
 // ReminderEmail is an approved payment reminder, frozen for sending.
@@ -158,7 +157,7 @@ func invoiceStillOwed(status types.InvoiceStatus, payment types.PaymentStatus, h
 }
 
 // reminderEmails is the latest email of each approved reminder in rows, in one query; fresh reads from the primary.
-func (s *reminderService) reminderEmails(ctx context.Context, rows []collections.Row, fresh bool) (map[string]*dto.ReminderEmailStatus, error) {
+func (s *reminderService) reminderEmails(ctx context.Context, rows []collections.InvoiceWithReminder, fresh bool) (map[string]*dto.ReminderEmailStatus, error) {
 	keys := map[string]string{}
 	for _, r := range rows {
 		if rem := r.Reminder; rem != nil && rem.ReminderStatus == types.ReminderStatusApproved && rem.ApprovedAt != nil {

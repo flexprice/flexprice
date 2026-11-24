@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"testing"
 	"time"
 
@@ -209,33 +208,4 @@ func (s *AutoInvoiceEmailSuite) TestRecordsSkipReasons() {
 			s.Equal(tt.reason, lo.FromPtr(logs[0].StatusReason))
 		})
 	}
-}
-
-func (s *AutoInvoiceEmailSuite) TestTestRecipientReplacesEveryAddress() {
-	s.enableAutoSend()
-	cfg := s.GetConfig()
-	cfg.Email.TestRecipient = " Tester@Flexprice.test "
-	stores := s.GetStores()
-	svc := NewEmailNotificationService(ServiceParams{
-		Logger: s.GetLogger(), Config: cfg, DB: s.GetDB(), TenantRepo: stores.TenantRepo, CustomerRepo: stores.CustomerRepo,
-		InvoiceRepo: stores.InvoiceRepo, SettingsRepo: stores.SettingsRepo, EmailLogRepo: stores.EmailLogRepo, EmailProvider: local.New(s.GetLogger()),
-	})
-
-	inv := s.finalizedInvoice("ap@customer.test", 100)
-	s.Require().NoError(svc.SendAutoInvoiceEmail(s.GetContext(), inv.ID))
-	manual := s.finalizedInvoice("ap2@customer.test", 100)
-	_, err := svc.SendInvoiceEmail(s.GetContext(), manual.ID, &dto.SendInvoiceEmailRequest{To: []string{"x@customer.test"}, CC: []string{"cc@customer.test"}})
-	s.Require().NoError(err)
-	nobody := s.finalizedInvoice("", 100)
-	s.Require().NoError(svc.SendAutoInvoiceEmail(s.GetContext(), nobody.ID))
-
-	for invoiceID, original := range map[string]string{inv.ID: "ap@customer.test", manual.ID: "x@customer.test"} {
-		logs := s.emailsFor(invoiceID)
-		s.Require().Len(logs, 1)
-		s.Equal([]string{"tester@flexprice.test"}, logs[0].ToAddresses)
-		s.Empty(logs[0].CCAddresses)
-		s.Equal(original, logs[0].Metadata[emailMetaOriginalTo])
-	}
-	s.Equal(types.EmailDeliveryStatusSkipped, s.emailsFor(nobody.ID)[0].DeliveryStatus, "a customer without an address is still skipped")
-	s.NotContains(s.emailsFor(nobody.ID)[0].Metadata, emailMetaOriginalTo)
 }

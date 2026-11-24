@@ -22,12 +22,12 @@ import (
 // fakeBoard is a canned CollectionsRepository that records how it was called; the real queries are tested against Postgres.
 type fakeBoard struct {
 	board   *collections.Board
-	rows    []collections.Row
+	rows    []collections.InvoiceWithReminder
 	hasMore bool
 	summary collections.ReminderSummary
 
 	query         collections.Query
-	filter        collections.RowFilter
+	filter        collections.InvoiceFilter
 	offset, limit int
 }
 
@@ -36,7 +36,7 @@ func (f *fakeBoard) Board(_ context.Context, q collections.Query, limit int) (*c
 	return f.board, nil
 }
 
-func (f *fakeBoard) ListRows(_ context.Context, q collections.Query, filter collections.RowFilter, offset, limit int) ([]collections.Row, bool, error) {
+func (f *fakeBoard) ListInvoicesWithReminders(_ context.Context, q collections.Query, filter collections.InvoiceFilter, offset, limit int) ([]collections.InvoiceWithReminder, bool, error) {
 	f.query, f.filter, f.offset, f.limit = q, filter, offset, limit
 	return f.rows, f.hasMore, nil
 }
@@ -54,8 +54,8 @@ func boardFixture(t *testing.T) (CollectionsService, *fakeBoard, context.Context
 	return NewCollectionsService(ServiceParams{CustomerRepo: customers, CollectionsRepo: fake}), fake, ctx
 }
 
-func rowDue(id string, remaining int64, due *time.Time, rem *collections.InvoiceReminder) collections.Row {
-	return *collections.NewRowBuilder(&collections.Row{InvoiceID: id}).
+func rowDue(id string, remaining int64, due *time.Time, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
+	return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: id}).
 		WithInvoice("INV-"+id, "cust_1", "usd").
 		WithAmounts(decimal.NewFromInt(remaining+10), decimal.NewFromInt(remaining)).
 		WithDates(due, nil).
@@ -79,7 +79,7 @@ func TestBoard_LimitZeroReturnsCountsAndTotalsOnly(t *testing.T) {
 	svc, fake, ctx := boardFixture(t)
 	fake.board = fullBoard(map[types.CollectionsColumnKey]int{types.CollectionsColumnNotDue: 3, types.CollectionsColumnOverdue: 7})
 
-	for _, req := range []dto.CollectionsBoardRequest{{}, {Limit: 0}, {CardLimit: 0}} {
+	for _, req := range []dto.CollectionsBoardRequest{{}, {Limit: 0}} {
 		resp, err := svc.GetBoard(ctx, &req)
 		require.NoError(t, err)
 		require.Zero(t, fake.limit, "the repository is asked for no rows")
@@ -111,7 +111,7 @@ func TestBoard_PositiveLimitReturnsTheFirstPage(t *testing.T) {
 		WithOriginal(types.ReminderToneFriendly, "", "").
 		WithText(types.ReminderToneFinal, "", "").
 		Build()
-	rows := []collections.Row{rowDue("a1", 100, &due, nil), rowDue("a2", 50, &due, held)}
+	rows := []collections.InvoiceWithReminder{rowDue("a1", 100, &due, nil), rowDue("a2", 50, &due, held)}
 	board.Columns[types.CollectionsColumnOverdue] = *collections.NewBoardColumnBuilder(&col).WithRows(rows, true).Build()
 	fake.board = board
 
@@ -139,15 +139,15 @@ func TestBoard_PositiveLimitReturnsTheFirstPage(t *testing.T) {
 
 func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
 	svc, fake, ctx := boardFixture(t)
-	soon, paidAt := utcDay(clock.Now()).Add(2*day+12*time.Hour), clock.Now().Add(-time.Hour)
+	soon, paidAt := types.UTCDay(clock.Now()).Add(2*day+12*time.Hour), clock.Now().Add(-time.Hour)
 	board := fullBoard(nil)
 	nd := board.Columns[types.CollectionsColumnNotDue]
-	nd.Rows = []collections.Row{rowDue("n1", 10, &soon, nil), rowDue("n2", 10, nil, nil)}
+	nd.Rows = []collections.InvoiceWithReminder{rowDue("n1", 10, &soon, nil), rowDue("n2", 10, nil, nil)}
 	board.Columns[types.CollectionsColumnNotDue] = nd
 	pd := board.Columns[types.CollectionsColumnPaidThisWeek]
-	paidRow := collections.NewRowBuilder(&collections.Row{InvoiceID: "p1"}).WithInvoice("INV-p1", "cust_1", "usd").
+	paidRow := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: "p1"}).WithInvoice("INV-p1", "cust_1", "usd").
 		WithAmounts(decimal.NewFromInt(10), decimal.Zero).WithDates(nil, &paidAt).Build()
-	pd.Rows = []collections.Row{*paidRow}
+	pd.Rows = []collections.InvoiceWithReminder{*paidRow}
 	board.Columns[types.CollectionsColumnPaidThisWeek] = pd
 	fake.board = board
 
@@ -171,7 +171,7 @@ func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
 func TestBoard_ColumnPages(t *testing.T) {
 	svc, fake, ctx := boardFixture(t)
 	due := clock.Now().Add(-5 * day)
-	fake.rows = []collections.Row{rowDue("a1", 100, &due, nil)}
+	fake.rows = []collections.InvoiceWithReminder{rowDue("a1", 100, &due, nil)}
 	fake.hasMore = true
 
 	resp, err := svc.GetColumn(ctx, "held", &dto.CollectionsBoardRequest{Page: 3, Limit: 4, Q: "x", Currency: "EUR"})
@@ -240,13 +240,12 @@ func TestCollectionsBoardRequest_Validate(t *testing.T) {
 	require.Equal(t, 15, req.PageLimit(), "a column page defaults to 15 cards")
 	require.Equal(t, dto.CollectionsColumnDefaultPageSize, req.PageLimit())
 
-	alias := dto.CollectionsBoardRequest{CardLimit: 7}
-	require.NoError(t, alias.Validate())
-	require.Equal(t, 7, alias.BoardCardLimit(), "card_limit is an alias of limit")
-	both := dto.CollectionsBoardRequest{CardLimit: 7, Limit: 9}
-	require.Equal(t, 9, both.BoardCardLimit(), "limit wins")
+	sized := dto.CollectionsBoardRequest{Limit: 9}
+	require.NoError(t, sized.Validate())
+	require.Equal(t, 9, sized.BoardCardLimit())
+	require.Equal(t, 9, sized.PageLimit())
 
-	for _, bad := range []dto.CollectionsBoardRequest{{Limit: -1}, {CardLimit: -1}, {Limit: 201}, {CardLimit: 201}, {Page: -1}} {
+	for _, bad := range []dto.CollectionsBoardRequest{{Limit: -1}, {Limit: 201}, {Page: -1}} {
 		require.Error(t, bad.Validate())
 	}
 	trimmed := dto.CollectionsBoardRequest{Q: "  acme  ", Currency: " USD "}

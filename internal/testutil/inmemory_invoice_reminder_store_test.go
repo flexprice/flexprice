@@ -33,10 +33,10 @@ func TestInMemoryInvoiceReminderStore_KeepsItsOwnCopies(t *testing.T) {
 	require.True(t, store.All(ctx)[0].ApprovedAt.Equal(approved), "a read copy does not write through either")
 }
 
-func TestInMemoryInvoiceReminderStore_GetRowsWithoutIDsReturnsNothing(t *testing.T) {
+func TestInMemoryInvoiceReminderStore_GetInvoicesWithRemindersWithoutIDsReturnsNothing(t *testing.T) {
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "tenant_a"), "env_a")
 	store := NewInMemoryInvoiceReminderStore(NewInMemoryInvoiceStore())
-	rows, err := store.GetRows(ctx, time.Now(), nil)
+	rows, err := store.GetInvoicesWithReminders(ctx, time.Now(), nil)
 	require.NoError(t, err)
 	require.Empty(t, rows, "like production, no ids means no rows, not every invoice")
 }

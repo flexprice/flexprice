@@ -125,39 +125,6 @@ func TestReminderEmail_ProviderOutageKeepsTheEmailQueuedForTheNextRun(t *testing
 	require.Equal(t, 1, f.dispatch(t, ctx).Sent)
 }
 
-func TestReminderEmail_TestRecipientReplacesTheCustomer(t *testing.T) {
-	ctx := reminderCtxFor("tenant_a", "env_a")
-	f := newReminderFixture(t, ctx)
-	f.redirect = "Tester@Flexprice.test"
-	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
-	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
-	f.withEmail(t, ctx, emailsOn)
-
-	approved, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
-	require.NoError(t, err)
-	e := f.emails(t, ctx, "a1")[0]
-	require.Equal(t, []string{"tester@flexprice.test"}, e.ToAddresses)
-	require.Empty(t, e.CCAddresses)
-	require.Equal(t, "ap@acme.test", e.Metadata[emailMetaOriginalTo])
-	require.Equal(t, "tester@flexprice.test", approved.Email.To, "the response shows who it will really go to")
-	f.dispatch(t, ctx)
-	require.Equal(t, []string{"tester@flexprice.test"}, f.sent.all()[0].To, "the provider only ever sees the test recipient")
-}
-
-func TestReminderEmail_TestRecipientDoesNotInventARecipient(t *testing.T) {
-	ctx := reminderCtxFor("tenant_a", "env_a")
-	f := newReminderFixture(t, ctx)
-	f.redirect = "tester@flexprice.test"
-	f.customer(t, ctx, "cust_noemail", "No Mail", "")
-	f.overdue(t, ctx, "a2", "cust_noemail", 100, 5)
-	f.withEmail(t, ctx, emailsOn)
-	_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
-	require.NoError(t, err)
-	require.Equal(t, types.EmailDeliveryStatusSkipped, f.emails(t, ctx, "a2")[0].DeliveryStatus)
-	f.dispatch(t, ctx)
-	require.Empty(t, f.sent.all())
-}
-
 func TestReminderEmail_ReopenCancelsAQueuedEmailAndApprovingAgainMakesANewOne(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
@@ -293,7 +260,7 @@ func TestReminderEmail_ListCarriesTheEmailOfApprovedRemindersInOneQuery(t *testi
 	_, err = f.svc.UpdateReminder(ctx, "a3", setStatus(types.ReminderStatusHeld, "wait"))
 	require.NoError(t, err)
 
-	rows, err := f.reminders.GetRows(ctx, clock.Now(), []string{"a1", "a2", "a3", "a4"})
+	rows, err := f.reminders.GetInvoicesWithReminders(ctx, clock.Now(), []string{"a1", "a2", "a3", "a4"})
 	require.NoError(t, err)
 	f.board.rows = rows
 	f.lists = 0
