@@ -461,3 +461,48 @@ func TestDBDurationViewTrimsBucketsAndMinMax(t *testing.T) {
 		t.Error("max should not be recorded")
 	}
 }
+
+func TestTemporalMetricViews(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(append([]sdkmetric.Option{sdkmetric.WithReader(reader)}, temporalMetricViews()...)...)
+	m := mp.Meter(temporalMeterName)
+	ctx := context.Background()
+
+	dropped, _ := m.Int64Counter("temporal_worker_start")
+	kept, _ := m.Int64Counter("temporal_request")
+	hist, _ := m.Float64Histogram("temporal_request_latency")
+	dropped.Add(ctx, 1)
+	kept.Add(ctx, 1)
+	hist.Record(ctx, 0.5)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &rm); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]metricdata.Metrics{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, mt := range sm.Metrics {
+			got[mt.Name] = mt
+		}
+	}
+	if _, ok := got["temporal_worker_start"]; ok {
+		t.Error("dropped metric exported")
+	}
+	if _, ok := got["temporal_request"]; !ok {
+		t.Error("kept counter missing")
+	}
+	h, ok := got["temporal_request_latency"].Data.(metricdata.Histogram[float64])
+	if !ok || len(h.DataPoints) != 1 {
+		t.Fatal("kept histogram missing")
+	}
+	dp := h.DataPoints[0]
+	if _, ok := dp.Min.Value(); ok {
+		t.Error("min should not be recorded")
+	}
+	if _, ok := dp.Max.Value(); ok {
+		t.Error("max should not be recorded")
+	}
+	if !slices.Equal(dp.Bounds, defaultHistogramBoundaries) {
+		t.Errorf("bounds changed: %v", dp.Bounds)
+	}
+}

@@ -334,6 +334,7 @@ func (s *Service) initMeter(ctx context.Context) error {
 	opts = append(opts, s.httpMetricViews()...)
 	opts = append(opts, s.appMetricViews()...)
 	opts = append(opts, dbDurationView())
+	opts = append(opts, temporalMetricViews()...)
 
 	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
@@ -406,6 +407,60 @@ func dbDurationView() sdkmetric.Option {
 	))
 }
 
+const temporalMeterName = "temporal-sdk-go"
+
+var temporalDroppedMetrics = []string{
+	"temporal_activity_poll_no_task",
+	"temporal_local_activity_execution_latency",
+	"temporal_local_activity_succeed_endtoend_latency",
+	"temporal_local_activity_total",
+	"temporal_long_request_attempt",
+	"temporal_long_request_failure",
+	"temporal_long_request_failure_attempt",
+	"temporal_long_request_latency_attempt",
+	"temporal_poller_start",
+	"temporal_request_attempt",
+	"temporal_request_failure_attempt",
+	"temporal_request_latency_attempt",
+	"temporal_sticky_cache_total_forced_eviction",
+	"temporal_worker_start",
+	"temporal_worker_task_slots_used",
+	"temporal_workflow_task_queue_poll_empty",
+}
+
+var temporalNoMinMaxHistograms = []string{
+	"temporal_request_latency",
+	"temporal_long_request_latency",
+	"temporal_activity_execution_latency",
+	"temporal_activity_succeed_endtoend_latency",
+	"temporal_activity_schedule_to_start_latency",
+	"temporal_workflow_endtoend_latency",
+	"temporal_workflow_task_execution_latency",
+	"temporal_workflow_task_replay_latency",
+	"temporal_workflow_task_schedule_to_start_latency",
+}
+
+// SDK default boundaries; views replace them, so repeat verbatim.
+var defaultHistogramBoundaries = []float64{0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}
+
+func temporalMetricViews() []sdkmetric.Option {
+	scope := instrumentation.Scope{Name: temporalMeterName}
+	views := make([]sdkmetric.Option, 0, len(temporalDroppedMetrics)+len(temporalNoMinMaxHistograms))
+	for _, name := range temporalDroppedMetrics {
+		views = append(views, dropView(sdkmetric.Instrument{Name: name, Scope: scope}))
+	}
+	for _, name := range temporalNoMinMaxHistograms {
+		views = append(views, sdkmetric.WithView(sdkmetric.NewView(
+			sdkmetric.Instrument{Name: name, Scope: scope},
+			sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: defaultHistogramBoundaries,
+				NoMinMax:   true,
+			}},
+		)))
+	}
+	return views
+}
+
 // newMetricExporter builds the OTLP metric exporter (gRPC or HTTP), mirroring
 // newTraceExporter's endpoint/protocol/header handling.
 func (s *Service) newMetricExporter(ctx context.Context) (sdkmetric.Exporter, error) {
@@ -476,7 +531,7 @@ func (s *Service) TemporalMetricsHandler() client.MetricsHandler {
 	}
 
 	return temporalotel.NewMetricsHandler(temporalotel.MetricsHandlerOptions{
-		Meter: s.meterProvider.Meter("temporal-sdk-go"),
+		Meter: s.meterProvider.Meter(temporalMeterName),
 		OnError: func(err error) {
 			if s.logger == nil {
 				return
