@@ -864,7 +864,8 @@ func (s *subscriptionModificationService) createInheritedSubscription(ctx contex
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,
-		PaymentTerms:           parent.PaymentTerms,
+		PaymentTermsType:       parent.PaymentTermsType,
+		PaymentTermsDays:       parent.PaymentTermsDays,
 		EnableTrueUp:           parent.EnableTrueUp,
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 	}
