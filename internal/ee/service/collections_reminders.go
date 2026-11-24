@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -50,6 +51,7 @@ type reminderMail struct {
 type reminderCtx struct {
 	now    time.Time
 	tenant string
+	emails map[string]*dto.ReminderEmailStatus
 }
 
 func reminderStatusOf(r collections.Row) types.ReminderStatus {
@@ -88,6 +90,9 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 		now:    asOf,
 		tenant: s.tenantName(ctx),
 	}
+	if rc.emails, err = s.reminderEmails(ctx, rows, false); err != nil {
+		return nil, err
+	}
 	summaryReminder := dto.ReminderSummary{
 		OverdueTotals: dtoTotals(summary.Totals),
 		InvoiceCount:  summary.InvoiceCount,
@@ -119,6 +124,9 @@ func (s *reminderService) Get(ctx context.Context, invoiceID string) (*dto.Invoi
 	if err != nil {
 		return nil, err
 	}
+	if rc.emails, err = s.reminderEmails(ctx, rows, false); err != nil {
+		return nil, err
+	}
 	v, err := s.view(rows[0], customers[rows[0].CustomerID], rc)
 	return &v, err
 }
@@ -137,10 +145,15 @@ func (s *reminderService) UpdateReminder(ctx context.Context, invoiceID string, 
 		return nil, err
 	}
 	if next != nil {
-		if err := s.save(ctx, row, next); err != nil {
+		queued, err := s.save(ctx, row, c, next)
+		if err != nil {
 			return nil, err
 		}
 		row.Reminder = next
+		s.sendNow(ctx, []*emaillog.EmailLog{queued})
+	}
+	if rc.emails, err = s.reminderEmails(ctx, []collections.Row{row}, true); err != nil {
+		return nil, err
 	}
 	v, err := s.view(row, c, rc)
 	return &v, err
@@ -156,6 +169,7 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 	}
 
 	applied := map[string]collections.Row{}
+	var queued []*emaillog.EmailLog
 	var inserts []*collections.InvoiceReminder
 	for _, row := range rows {
 		next, err := s.plan(ctx, row, customers[row.CustomerID], rc, &req.UpdateReminderRequest)
@@ -168,14 +182,17 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 		switch {
 		case next == nil:
 			applied[row.InvoiceID] = row
-		case row.Reminder == nil:
+		case row.Reminder == nil && next.ReminderStatus != types.ReminderStatusApproved:
 			inserts = append(inserts, next)
 		default:
-			if err := s.save(ctx, row, next); errors.Is(err, ierr.ErrVersionConflict) {
+			email, err := s.save(ctx, row, customers[row.CustomerID], next)
+			if errors.Is(err, ierr.ErrVersionConflict) {
 				continue
-			} else if err != nil {
+			}
+			if err != nil {
 				return nil, err
 			}
+			queued = append(queued, email)
 			row.Reminder = next
 			applied[row.InvoiceID] = row
 		}
@@ -191,6 +208,11 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 			row.Reminder = next
 			applied[row.InvoiceID] = row
 		}
+	}
+
+	s.sendNow(ctx, queued)
+	if rc.emails, err = s.reminderEmails(ctx, lo.Values(applied), true); err != nil {
+		return nil, err
 	}
 
 	resp := &dto.BulkUpdateRemindersResponse{Drafts: []dto.InvoiceReminderResponse{}}
@@ -303,7 +325,26 @@ func (s *reminderService) plan(ctx context.Context, row collections.Row, c *cust
 	return next.WithStatus(target, reason, approvedAt).Build(), nil
 }
 
-func (s *reminderService) save(ctx context.Context, row collections.Row, next *collections.InvoiceReminder) error {
+func (s *reminderService) save(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) (*emaillog.EmailLog, error) {
+	if !changesApproval(row.Reminder, next) {
+		return nil, s.store(ctx, row, next)
+	}
+	var queued *emaillog.EmailLog
+	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.cancelEmail(txCtx, row, next); err != nil {
+			return err
+		}
+		if err := s.store(txCtx, row, next); err != nil {
+			return err
+		}
+		var err error
+		queued, err = s.queueEmail(txCtx, row, c, next)
+		return err
+	})
+	return queued, err
+}
+
+func (s *reminderService) store(ctx context.Context, row collections.Row, next *collections.InvoiceReminder) error {
 	var err error
 	if row.Reminder == nil {
 		err = s.InvoiceReminderRepo.Create(ctx, next)
@@ -314,6 +355,36 @@ func (s *reminderService) save(ctx context.Context, row collections.Row, next *c
 		return ierr.NewError("reminder changed").WithHint("This reminder was changed by someone else. Reload and try again.").Mark(ierr.ErrVersionConflict)
 	}
 	return err
+}
+
+// changesApproval reports a change that approves a reminder or takes its approval back.
+func changesApproval(prev, next *collections.InvoiceReminder) bool {
+	return next.ReminderStatus == types.ReminderStatusApproved || (prev != nil && prev.ReminderStatus == types.ReminderStatusApproved)
+}
+
+// queueEmail queues the email of a reminder that was just approved, with the text frozen as approved.
+func (s *reminderService) queueEmail(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) (*emaillog.EmailLog, error) {
+	if next.ReminderStatus != types.ReminderStatusApproved || next.ApprovedAt == nil {
+		return nil, nil
+	}
+	return NewEmailNotificationService(s.ServiceParams).QueueReminderEmail(ctx, ReminderEmail{
+		InvoiceID:  row.InvoiceID,
+		CustomerID: row.CustomerID,
+		ReminderID: next.ID,
+		Recipient:  lo.FromPtr(c).Email,
+		Subject:    next.Subject,
+		Body:       next.Body,
+		ApprovedAt: *next.ApprovedAt,
+	})
+}
+
+// cancelEmail withdraws the email of an approval that is being taken back.
+func (s *reminderService) cancelEmail(ctx context.Context, row collections.Row, next *collections.InvoiceReminder) error {
+	prev := row.Reminder
+	if prev == nil || prev.ReminderStatus != types.ReminderStatusApproved || prev.ApprovedAt == nil || next.ReminderStatus == types.ReminderStatusApproved {
+		return nil
+	}
+	return NewEmailNotificationService(s.ServiceParams).CancelReminderEmail(ctx, reminderEmailKey(row.InvoiceID, prev.ID, *prev.ApprovedAt))
 }
 
 func (s *reminderService) render(r collections.Row, c *customer.Customer, rc reminderCtx, tone types.ReminderTone) (reminderMail, error) {
@@ -367,6 +438,7 @@ func (s *reminderService) view(r collections.Row, c *customer.Customer, rc remin
 			v.OriginalTone, v.OriginalSubject, v.OriginalBody = original.OriginalTone, original.OriginalSubject, original.OriginalBody
 		}
 	}
+	v.Email = rc.emails[r.InvoiceID]
 	v.Why = reminderWhy(v, days)
 	return v, nil
 }

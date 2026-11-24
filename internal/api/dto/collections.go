@@ -175,9 +175,19 @@ type InvoiceReminderResponse struct {
 	OriginalSubject string             `json:"original_subject,omitempty"`
 	OriginalBody    string             `json:"original_body,omitempty"`
 	Why             []string           `json:"why"`
+	// Email is where the email of an approved reminder stands; absent until one was queued.
+	Email *ReminderEmailStatus `json:"email,omitempty"`
 	// CreatedAt and UpdatedAt are omitted until a person acts on the reminder.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+// ReminderEmailStatus is the latest email of an approved reminder; To is who it actually went to.
+type ReminderEmailStatus struct {
+	Status       types.EmailDeliveryStatus `json:"status"`
+	To           string                    `json:"to"`
+	SentAt       *time.Time                `json:"sent_at,omitempty"`
+	StatusReason string                    `json:"status_reason,omitempty"`
 }
 
 // ReminderSummary totals all overdue invoices and counts reminders by status, ignoring list filters.

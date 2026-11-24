@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,11 +16,17 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/storage"
+	"github.com/flexprice/flexprice/internal/storage/storagetypes"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -44,6 +52,54 @@ func requireKind(t *testing.T, err error, kind error) {
 	require.True(t, errors.Is(err, kind), "got %v", err)
 }
 
+// countingEmailLogs counts List calls, to show a page of reminders reads its emails in one query.
+type countingEmailLogs struct {
+	emaillog.Repository
+	calls *int
+}
+
+func (c *countingEmailLogs) List(ctx context.Context, filter *types.EmailLogFilter) ([]*emaillog.EmailLog, error) {
+	*c.calls++
+	return c.Repository.List(ctx, filter)
+}
+
+// noStorage is an object storage resolver with nothing behind it, as a local run has: invoice PDFs cannot be produced.
+type noStorage struct{ storage.Resolver }
+
+func (noStorage) ForPlatform(context.Context, storage.Purpose) (storagetypes.Storage, error) {
+	return nil, ierr.NewError("no object storage").Mark(ierr.ErrServiceUnavailable)
+}
+
+// sentEmails is an email provider that keeps what it was asked to send.
+type sentEmails struct {
+	mu   sync.Mutex
+	list []emailtypes.OutboundEmail
+	// down makes every send fail as a provider outage would, so emails stay queued.
+	down bool
+}
+
+func (p *sentEmails) Name() types.EmailProvider { return types.EmailProviderLocal }
+
+func (p *sentEmails) Send(_ context.Context, msg emailtypes.OutboundEmail) (emailtypes.SendResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.down {
+		return emailtypes.SendResult{}, ierr.NewError("provider unavailable").Mark(ierr.ErrServiceUnavailable)
+	}
+	p.list = append(p.list, msg)
+	return emailtypes.SendResult{ProviderMessageID: "msg_" + msg.IdempotencyKey}, nil
+}
+
+func (p *sentEmails) ParseEvents(context.Context, []byte, http.Header) ([]emailtypes.DeliveryEvent, error) {
+	return nil, nil
+}
+
+func (p *sentEmails) all() []emailtypes.OutboundEmail {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]emailtypes.OutboundEmail(nil), p.list...)
+}
+
 type reminderFixture struct {
 	invoices  *testutil.InMemoryInvoiceStore
 	customers *testutil.InMemoryCustomerStore
@@ -51,6 +107,12 @@ type reminderFixture struct {
 	reminders *testutil.InMemoryInvoiceReminderStore
 	board     *fakeBoard
 	svc       ReminderService
+	logs      *testutil.InMemoryEmailLogStore
+	settings  *testutil.InMemorySettingsStore
+	emailOn   bool
+	sent      *sentEmails
+	lists     int
+	redirect  string
 }
 
 func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
@@ -59,6 +121,7 @@ func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
 	f := &reminderFixture{
 		invoices: invoices, customers: testutil.NewInMemoryCustomerStore(), tenants: testutil.NewInMemoryTenantStore(),
 		reminders: testutil.NewInMemoryInvoiceReminderStore(invoices), board: &fakeBoard{},
+		logs: testutil.NewInMemoryEmailLogStore(), settings: testutil.NewInMemorySettingsStore(), sent: &sentEmails{},
 	}
 	require.NoError(t, f.tenants.Create(ctx, &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Flex"}))
 	f.svc = f.serviceWith(f.reminders)
@@ -66,7 +129,19 @@ func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
 }
 
 func (f *reminderFixture) serviceWith(repo collections.InvoiceReminderRepository) ReminderService {
-	return NewReminderService(ServiceParams{CustomerRepo: f.customers, TenantRepo: f.tenants, InvoiceReminderRepo: repo, BoardRepo: f.board})
+	return NewReminderService(f.params(repo))
+}
+
+func (f *reminderFixture) params(repo collections.InvoiceReminderRepository) ServiceParams {
+	log := logger.NewNoopLogger()
+	return ServiceParams{
+		Logger: log, DB: testutil.NewMockPostgresClient(log), CustomerRepo: f.customers, TenantRepo: f.tenants, InvoiceRepo: f.invoices,
+		InvoiceReminderRepo: repo, BoardRepo: f.board, SettingsRepo: f.settings, EmailLogRepo: &countingEmailLogs{Repository: f.logs, calls: &f.lists}, EmailProvider: f.sent,
+		InvoiceLineItemRepo: testutil.NewInMemoryInvoiceLineItemStore(), PaymentRepo: testutil.NewInMemoryPaymentStore(), WalletRepo: testutil.NewInMemoryWalletStore(),
+		TaxAppliedRepo: testutil.NewInMemoryTaxAppliedStore(), TaxRateRepo: testutil.NewInMemoryTaxRateStore(),
+		ConnectionRepo: testutil.NewInMemoryConnectionStore(), StorageResolver: noStorage{},
+		Config: &config.Configuration{Email: config.EmailConfig{Enabled: f.emailOn, Provider: string(types.EmailProviderLocal), SenderLocalPart: "billing", SenderDomain: "mail.test", TestRecipient: f.redirect}},
+	}
 }
 
 func (f *reminderFixture) customer(t *testing.T, ctx context.Context, id, name, email string) {

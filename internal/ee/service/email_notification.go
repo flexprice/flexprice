@@ -51,6 +51,14 @@ type EmailNotificationService interface {
 	// Events for another region, events without tenant tags and events for unknown emails are dropped.
 	HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error
 
+	// QueueReminderEmail queues the email of an approved payment reminder with its text frozen at approval.
+	// It returns nil when this deployment or environment does not send emails, or the tenant has no reply-to email.
+	QueueReminderEmail(ctx context.Context, reminder ReminderEmail) (*emaillog.EmailLog, error)
+
+	// CancelReminderEmail withdraws the email of a reminder approval being undone. An email that already went
+	// out cannot be withdrawn and returns a version conflict.
+	CancelReminderEmail(ctx context.Context, key string) error
+
 	// RegisterHandler registers the email-events consumer that auto-sends emails for finalized invoices.
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 }
@@ -79,6 +87,11 @@ type outgoingEmail struct {
 	idempotencyKey *string
 	// skipReason records the email as skipped instead of sending it.
 	skipReason string
+	// metadata is stored on the email log, for example the text a composer renders.
+	metadata types.Metadata
+	// bestEffort queues the email quietly like an automatic one: no email is recorded when emails are off
+	// or the tenant has no reply-to, and a customer without an address is recorded as skipped.
+	bestEffort bool
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -270,6 +283,9 @@ func (s *emailNotificationService) ListEmails(ctx context.Context, filter *types
 // Reply-To is not recorded at all and returns a nil email.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
 	if !s.Config.Email.IsProviderConfigured() {
+		if out.bestEffort {
+			return nil, nil
+		}
 		return nil, ierr.NewError("customer emails are disabled").
 			WithHint("Emails to customers are not enabled in this deployment").
 			Mark(ierr.ErrInvalidOperation)
@@ -279,6 +295,9 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		return nil, err
 	}
 	if !cfg.Enabled {
+		if out.bestEffort {
+			return nil, nil
+		}
 		return nil, ierr.NewError("emails are disabled for this environment").
 			WithHint("Enable emails in this environment's settings to send them").
 			Mark(ierr.ErrInvalidOperation)
@@ -290,7 +309,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 	}
 	to := normalizeRecipients(out.to)
 	replyTo := lo.CoalesceOrEmpty(out.replyTo, t.BillingDetails.ReplyToEmail())
-	auto := out.trigger == types.EmailTriggerAuto
+	auto := out.trigger == types.EmailTriggerAuto || out.bestEffort
 
 	switch {
 	case replyTo == "" && auto:
@@ -309,6 +328,14 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
+	cc := normalizeRecipients(out.cc)
+	metadata := lo.Assign(types.Metadata{}, out.metadata)
+	if redirect := normalizeRecipients([]string{s.Config.Email.TestRecipient}); len(redirect) > 0 && len(to) > 0 {
+		metadata[emailMetaOriginalTo] = strings.Join(to, ",")
+		s.Logger.Info(ctx, "email recipient replaced by the test recipient", "entity_id", out.entityID, "original_to", metadata[emailMetaOriginalTo])
+		to, cc = redirect, nil
+	}
+
 	e := &emaillog.EmailLog{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EMAIL_LOG),
 		EnvironmentID:  types.GetEnvironmentID(ctx),
@@ -320,12 +347,12 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		FromAddress:    senderAddress(s.Config.Email.SenderLocalPart, s.Config.Email.SenderDomain, t.ID, lo.CoalesceOrEmpty(out.senderName, t.Name)),
 		ReplyTo:        replyTo,
 		ToAddresses:    to,
-		CCAddresses:    normalizeRecipients(out.cc),
+		CCAddresses:    cc,
 		Subject:        out.subject,
 		Provider:       s.EmailProvider.Name(),
 		DeliveryStatus: types.EmailDeliveryStatusQueued,
 		IdempotencyKey: out.idempotencyKey,
-		Metadata:       types.Metadata{},
+		Metadata:       metadata,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	if out.skipReason != "" {
@@ -526,6 +553,8 @@ func (s *emailNotificationService) compose(ctx context.Context, e *emaillog.Emai
 	switch e.TemplateKey {
 	case types.EmailTemplateInvoiceFinalized:
 		return s.composeInvoiceEmail(ctx, e, allowMissingAttachments)
+	case types.EmailTemplateInvoicePaymentReminder:
+		return s.composeReminderEmail(ctx, e)
 	default:
 		return nil, ierr.NewErrorf("no composer for email template %s", e.TemplateKey).
 			WithHint("This email type cannot be sent").
