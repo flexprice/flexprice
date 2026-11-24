@@ -1006,8 +1006,11 @@ type SubscriptionResponse struct {
 // NewSubscriptionResponse builds the response for a subscription, with payment_terms_type and payment_terms_days
 // derived from its payment_terms.
 func NewSubscriptionResponse(sub *subscription.Subscription) *SubscriptionResponse {
+	if sub == nil {
+		return nil
+	}
 	resp := &SubscriptionResponse{Subscription: sub}
-	resp.PaymentTermsType, resp.PaymentTermsDays = paymentTermsParts(sub)
+	resp.PaymentTermsType, resp.PaymentTermsDays = lo.FromPtr(sub.PaymentTerms).Parts()
 	return resp
 }
 
@@ -1058,16 +1061,12 @@ type SubscriptionResponseV2 struct {
 // NewSubscriptionResponseV2 builds the V2 response for a subscription, with payment_terms_type and
 // payment_terms_days derived from its payment_terms.
 func NewSubscriptionResponseV2(sub *subscription.Subscription) *SubscriptionResponseV2 {
-	resp := &SubscriptionResponseV2{Subscription: sub}
-	resp.PaymentTermsType, resp.PaymentTermsDays = paymentTermsParts(sub)
-	return resp
-}
-
-func paymentTermsParts(sub *subscription.Subscription) (*types.PaymentTermsType, *int) {
-	if sub == nil || sub.PaymentTerms == nil {
-		return nil, nil
+	if sub == nil {
+		return nil
 	}
-	return sub.PaymentTerms.Parts()
+	resp := &SubscriptionResponseV2{Subscription: sub}
+	resp.PaymentTermsType, resp.PaymentTermsDays = lo.FromPtr(sub.PaymentTerms).Parts()
+	return resp
 }
 
 // ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
