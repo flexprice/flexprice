@@ -2053,42 +2053,11 @@ definitions:
           name
         type: string
     type: object
-  CollectionsBoardCard:
-    properties:
-      amount:
-        description: Amount is the remaining balance (not_due, overdue, chasing, held)
-          or the invoice total (paid_this_week).
-        type: string
-      currency:
-        type: string
-      customer_id:
-        type: string
-      customer_name:
-        type: string
-      days_overdue:
-        type: integer
-      due_date:
-        type: string
-      due_in_days:
-        type: integer
-      invoice_id:
-        type: string
-      invoice_number:
-        type: string
-      paid_at:
-        type: string
-      reminder_status:
-        $ref: '#/definitions/types.ReminderStatus'
-      reminder_status_reason:
-        type: string
-      reminder_tone:
-        $ref: '#/definitions/types.ReminderTone'
-    type: object
   CollectionsBoardColumn:
     properties:
       cards:
         items:
-          $ref: '#/definitions/CollectionsBoardCard'
+          $ref: '#/definitions/CollectionsItem'
         type: array
       count:
         description: Count is the number of invoices in the whole column.
@@ -2129,7 +2098,7 @@ definitions:
         type: string
       cards:
         items:
-          $ref: '#/definitions/CollectionsBoardCard'
+          $ref: '#/definitions/CollectionsItem'
         type: array
       has_more:
         type: boolean
@@ -2144,6 +2113,37 @@ definitions:
         type: string
       currency:
         type: string
+    type: object
+  CollectionsItem:
+    properties:
+      amount:
+        description: Amount is the remaining balance (not_due, overdue, chasing, held)
+          or the invoice total (paid_this_week).
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      days_overdue:
+        type: integer
+      due_date:
+        type: string
+      due_in_days:
+        type: integer
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+      paid_at:
+        type: string
+      reminder_status:
+        $ref: '#/definitions/types.ReminderStatus'
+      reminder_status_reason:
+        type: string
+      reminder_tone:
+        $ref: '#/definitions/types.ReminderTone'
     type: object
   CommitmentBucketRequest:
     properties:
@@ -6396,12 +6396,13 @@ definitions:
         type: string
       tone:
         $ref: '#/definitions/types.ReminderTone'
+      tone_reason:
+        description: 'ToneReason explains the tone shown: the invoice''s age, "Tone
+          set to firm by you", or "Approved with a firm tone, kept as approved". It
+          says nothing about edits or status; use edited and status_reason.'
+        type: string
       updated_at:
         type: string
-      why:
-        items:
-          type: string
-        type: array
     type: object
   InvoiceResponse:
     properties:
@@ -13389,8 +13390,8 @@ definitions:
     - DebugTrackerStatusAttributed
   types.Duration:
     enum:
-    - 3600000000000
     - 604800000000000
+    - 3600000000000
     properties:
       unit:
         $ref: '#/definitions/types.DurationUnit'
@@ -13398,8 +13399,8 @@ definitions:
         type: integer
     type: object
     x-enum-varnames:
-    - EntitlementGrantMinDuration
     - CollectionsPaidWindow
+    - EntitlementGrantMinDuration
   types.DurationUnit:
     enum:
     - second
@@ -19867,13 +19868,9 @@ paths:
       operationId: getCollectionsBoard
       parameters:
       - description: Cards per column in this response (0-200, default 0 = counts
-          and totals only); card_limit is the older name
+          and totals only)
         in: query
         name: limit
-        type: integer
-      - description: Same as limit
-        in: query
-        name: card_limit
         type: integer
       - description: Keep receivables whose customer name, customer email or invoice
           number contains this text (case-insensitive, max 100 characters)

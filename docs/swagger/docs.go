@@ -2114,14 +2114,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Cards per column in this response (0-200, default 0 = counts and totals only); card_limit is the older name",
+                        "description": "Cards per column in this response (0-200, default 0 = counts and totals only)",
                         "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Same as limit",
-                        "name": "card_limit",
                         "in": "query"
                     },
                     {
@@ -21128,58 +21122,13 @@ const docTemplate = `{
                 }
             }
         },
-        "CollectionsBoardCard": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "description": "Amount is the remaining balance (not_due, overdue, chasing, held) or the invoice total (paid_this_week).",
-                    "type": "string"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "customer_id": {
-                    "type": "string"
-                },
-                "customer_name": {
-                    "type": "string"
-                },
-                "days_overdue": {
-                    "type": "integer"
-                },
-                "due_date": {
-                    "type": "string"
-                },
-                "due_in_days": {
-                    "type": "integer"
-                },
-                "invoice_id": {
-                    "type": "string"
-                },
-                "invoice_number": {
-                    "type": "string"
-                },
-                "paid_at": {
-                    "type": "string"
-                },
-                "reminder_status": {
-                    "$ref": "#/definitions/types.ReminderStatus"
-                },
-                "reminder_status_reason": {
-                    "type": "string"
-                },
-                "reminder_tone": {
-                    "$ref": "#/definitions/types.ReminderTone"
-                }
-            }
-        },
         "CollectionsBoardColumn": {
             "type": "object",
             "properties": {
                 "cards": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/CollectionsBoardCard"
+                        "$ref": "#/definitions/CollectionsItem"
                     }
                 },
                 "count": {
@@ -21237,7 +21186,7 @@ const docTemplate = `{
                 "cards": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/CollectionsBoardCard"
+                        "$ref": "#/definitions/CollectionsItem"
                     }
                 },
                 "has_more": {
@@ -21259,6 +21208,51 @@ const docTemplate = `{
                 },
                 "currency": {
                     "type": "string"
+                }
+            }
+        },
+        "CollectionsItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "description": "Amount is the remaining balance (not_due, overdue, chasing, held) or the invoice total (paid_this_week).",
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "days_overdue": {
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "due_in_days": {
+                    "type": "integer"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_number": {
+                    "type": "string"
+                },
+                "paid_at": {
+                    "type": "string"
+                },
+                "reminder_status": {
+                    "$ref": "#/definitions/types.ReminderStatus"
+                },
+                "reminder_status_reason": {
+                    "type": "string"
+                },
+                "reminder_tone": {
+                    "$ref": "#/definitions/types.ReminderTone"
                 }
             }
         },
@@ -27052,14 +27046,12 @@ const docTemplate = `{
                 "tone": {
                     "$ref": "#/definitions/types.ReminderTone"
                 },
-                "updated_at": {
+                "tone_reason": {
+                    "description": "ToneReason explains the tone shown: the invoice's age, \"Tone set to firm by you\", or \"Approved with a firm tone, kept as approved\". It says nothing about edits or status; use edited and status_reason.",
                     "type": "string"
                 },
-                "why": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -36793,8 +36785,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                3600000000000,
-                604800000000000
+                604800000000000,
+                3600000000000
             ],
             "properties": {
                 "unit": {
@@ -36805,8 +36797,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "EntitlementGrantMinDuration",
-                "CollectionsPaidWindow"
+                "CollectionsPaidWindow",
+                "EntitlementGrantMinDuration"
             ]
         },
         "types.DurationUnit": {
