@@ -1889,7 +1889,18 @@ var (
 					DescColumns: map[string]bool{
 						InvoicesColumns[30].Name: true,
 					},
-					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text = 'SUCCEEDED'::text))",
+					IncludeColumns: []string{
+						InvoicesColumns[0].Name,
+
+						InvoicesColumns[8].Name,
+
+						InvoicesColumns[14].Name,
+
+						InvoicesColumns[15].Name,
+
+						InvoicesColumns[42].Name,
+					},
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text = ANY ((ARRAY['SUCCEEDED'::character varying, 'OVERPAID'::character varying])::text[])))",
 				},
 			},
 			{

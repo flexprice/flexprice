@@ -72,11 +72,11 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 	if req.Status != "" {
 		filter.Statuses = []types.ReminderStatus{types.ReminderStatus(req.Status)}
 	}
-	rows, hasMore, err := s.BoardRepo.ListRows(ctx, collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency)}, filter, req.PageOffset(), req.PageLimit())
+	rows, hasMore, err := s.CollectionsRepo.ListRows(ctx, collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency)}, filter, req.PageOffset(), req.PageLimit())
 	if err != nil {
 		return nil, err
 	}
-	summary, err := s.BoardRepo.SummarizeReminders(ctx, asOf)
+	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +302,10 @@ func (s *reminderService) plan(ctx context.Context, row collections.Row, c *cust
 			shown = written
 		}
 	}
+	if target == types.ReminderStatusApproved && current != target &&
+		((req.ExpectedSubject != nil && *req.ExpectedSubject != mail.subject) || (req.ExpectedBody != nil && *req.ExpectedBody != mail.body)) {
+		return nil, reminderConflict("The reminder text changed since you opened it. Review it again before approving.")
+	}
 	reason, approvedAt := cur.StatusReason, cur.ApprovedAt
 	if reasonChanged {
 		reason = req.StatusReason
@@ -440,6 +444,9 @@ func reminderWhy(v dto.InvoiceReminderResponse, days int) []string {
 		age = "invoice became overdue today"
 	}
 	why := []string{fmt.Sprintf("%s, so a %s tone.", strings.ToUpper(age[:1])+age[1:], reminderToneLabel(reminderToneForDays(days)))}
+	if v.Status == types.ReminderStatusApproved {
+		why = []string{fmt.Sprintf("Approved with a %s tone, kept as approved (%s).", reminderToneLabel(v.Tone), age)}
+	}
 	if v.Edited && v.Tone != v.OriginalTone {
 		why = []string{fmt.Sprintf("Tone set to %s by you (%s).", reminderToneLabel(v.Tone), age)}
 	}

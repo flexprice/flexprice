@@ -213,8 +213,8 @@ func NewInvoiceReminderRepository(p RepositoryParams) collections.InvoiceReminde
 	return entRepo.NewInvoiceReminderRepository(p.EntClient, p.Logger)
 }
 
-func NewBoardRepository(p RepositoryParams) collections.BoardRepository {
-	return entRepo.NewBoardRepository(p.EntClient, p.Logger)
+func NewCollectionsRepository(p RepositoryParams) collections.CollectionsRepository {
+	return entRepo.NewCollectionsRepository(p.EntClient, p.Logger)
 }
 
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {

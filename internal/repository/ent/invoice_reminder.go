@@ -45,13 +45,13 @@ func NewInvoiceReminderRepository(client postgres.IClient, log *logger.Logger) c
 	return &invoiceReminderRepository{client: client, log: log}
 }
 
-type boardRepository struct {
+type collectionsRepository struct {
 	client postgres.IClient
 	log    *logger.Logger
 }
 
-func NewBoardRepository(client postgres.IClient, log *logger.Logger) collections.BoardRepository {
-	return &boardRepository{client: client, log: log}
+func NewCollectionsRepository(client postgres.IClient, log *logger.Logger) collections.CollectionsRepository {
+	return &collectionsRepository{client: client, log: log}
 }
 
 type queryer interface {
@@ -115,13 +115,18 @@ func scanRows(rows *sql.Rows, scan func() error) error {
 	return rows.Err()
 }
 
+// paidWindow is the invoices fully paid inside the window; an overpaid invoice is paid too.
 func paidWindow(asOfP, sinceP string) string {
-	return fmt.Sprintf("i.invoice_status = 'FINALIZED' AND i.payment_status = 'SUCCEEDED' AND i.paid_at >= %s AND i.paid_at <= %s", sinceP, asOfP)
+	return fmt.Sprintf("i.invoice_status = 'FINALIZED' AND i.payment_status IN ('SUCCEEDED', 'OVERPAID') AND i.paid_at >= %s AND i.paid_at <= %s", sinceP, asOfP)
 }
 
-// rowColumns selects an invoice and, when joined, its reminder.
-func rowColumns(joined bool) string {
-	invoice := `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), i.amount_due, i.amount_remaining, i.due_date, i.paid_at`
+// rowColumns selects the invoice columns a card of the column shows and, when joined, its reminder. The columns the
+// card does not show are selected as NULL or zero, so not due and paid pages are served by their covering indexes alone.
+func rowColumns(column types.CollectionsColumnKey, joined bool) string {
+	invoice := `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), 0::numeric, i.amount_remaining, i.due_date, NULL::timestamptz`
+	if column == types.CollectionsColumnPaidThisWeek {
+		invoice = `i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency), i.amount_due, 0::numeric, NULL::timestamptz, i.paid_at`
+	}
 	if !joined {
 		return invoice + `, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::jsonb, NULL::text, NULL::text, NULL::text, NULL::timestamptz, NULL::timestamptz`
 	}
@@ -227,12 +232,17 @@ func invoiceFrom(sc scope, a *sqlArgs, q collections.Query, column types.Collect
 }
 
 // Raw SQL: ent cannot open a REPEATABLE READ read-only transaction, which keeps every column of the board consistent.
-func (r *boardRepository) Board(ctx context.Context, q collections.Query, limit int) (*collections.Board, error) {
+func (r *collectionsRepository) Board(ctx context.Context, q collections.Query, limit int) (*collections.Board, error) {
 	span := StartRepositorySpan(ctx, "board", "board", nil)
 	defer FinishSpan(span)
 
 	var db queryer = r.client.Reader(ctx)
-	if r.client.TxFromContext(ctx) == nil {
+	if r.client.TxFromContext(ctx) != nil {
+		if err := requireSnapshotIsolation(ctx, db); err != nil {
+			SetSpanError(span, err)
+			return nil, err
+		}
+	} else {
 		tx, err := r.client.Reader(ctx).BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 		if err != nil {
 			SetSpanError(span, err)
@@ -250,7 +260,26 @@ func (r *boardRepository) Board(ctx context.Context, q collections.Query, limit 
 	return board, nil
 }
 
-func (r *boardRepository) board(ctx context.Context, db queryer, q collections.Query, limit int) (*collections.Board, error) {
+// requireSnapshotIsolation refuses a caller's transaction that cannot give every column of the board one snapshot.
+func requireSnapshotIsolation(ctx context.Context, db queryer) error {
+	rows, err := db.QueryContext(ctx, `SELECT current_setting('transaction_isolation')`)
+	if err != nil {
+		return dbError(err, "Failed to check the board snapshot")
+	}
+	var level string
+	if err := scanRows(rows, func() error { return rows.Scan(&level) }); err != nil {
+		return dbError(err, "Failed to check the board snapshot")
+	}
+	if level != "repeatable read" && level != "serializable" {
+		return ierr.NewError("board needs a snapshot transaction").
+			WithHint("Run the board outside a transaction, or in a REPEATABLE READ one.").
+			WithReportableDetails(map[string]any{"isolation": level}).
+			Mark(ierr.ErrInternal)
+	}
+	return nil
+}
+
+func (r *collectionsRepository) board(ctx context.Context, db queryer, q collections.Query, limit int) (*collections.Board, error) {
 	board := collections.NewBoardBuilder(nil)
 	for _, column := range []types.CollectionsColumnKey{types.CollectionsColumnNotDue, types.CollectionsColumnPaidThisWeek} {
 		summary, err := summarizeInvoices(ctx, db, q, column)
@@ -421,7 +450,7 @@ func summarizeOverdue(ctx context.Context, db queryer, q collections.Query) (map
 	return summaries, nil
 }
 
-func (r *boardRepository) ListRows(ctx context.Context, q collections.Query, f collections.RowFilter, offset, limit int) ([]collections.Row, bool, error) {
+func (r *collectionsRepository) ListRows(ctx context.Context, q collections.Query, f collections.RowFilter, offset, limit int) ([]collections.Row, bool, error) {
 	span := StartRepositorySpan(ctx, "board", "list_rows", map[string]interface{}{"column": f.Column})
 	defer FinishSpan(span)
 	rows, hasMore, err := listRows(ctx, r.client.Reader(ctx), q, f, offset, limit)
@@ -446,7 +475,7 @@ func listRows(ctx context.Context, db queryer, q collections.Query, f collection
 		from, order, joined = overdueFrom(sc, &a, q, f), overdueOrder, true
 	}
 	rows, err := db.QueryContext(ctx, fmt.Sprintf(`SELECT %s %s ORDER BY %s LIMIT %s OFFSET %s`,
-		rowColumns(joined), from, order, a.bind(limit+1), a.bind(offset)), a.values...)
+		rowColumns(f.Column, joined), from, order, a.bind(limit+1), a.bind(offset)), a.values...)
 	if err != nil {
 		return nil, false, dbError(err, "Failed to list board rows")
 	}
@@ -461,7 +490,7 @@ func listRows(ctx context.Context, db queryer, q collections.Query, f collection
 }
 
 // Raw SQL: GROUPING SETS over a LEFT JOIN; ent has no grouping sets.
-func (r *boardRepository) SummarizeReminders(ctx context.Context, asOf time.Time) (collections.ReminderSummary, error) {
+func (r *collectionsRepository) SummarizeReminders(ctx context.Context, asOf time.Time) (collections.ReminderSummary, error) {
 	span := StartRepositorySpan(ctx, "board", "summarize_reminders", nil)
 	defer FinishSpan(span)
 
@@ -580,11 +609,11 @@ func (r *invoiceReminderRepository) createBuilder(ctx context.Context, d *collec
 	return r.client.Writer(ctx).InvoiceReminder.Create().
 		SetID(d.ID).
 		SetInvoiceID(d.InvoiceID).
-		SetReminderStatus(string(d.ReminderStatus)).
+		SetReminderStatus(d.ReminderStatus).
 		SetStatusReason(d.StatusReason).
 		SetNillableApprovedAt(d.ApprovedAt).
 		SetMetadata(d.Metadata).
-		SetTone(string(d.Tone)).
+		SetTone(d.Tone).
 		SetSubject(d.Subject).
 		SetBody(d.Body).
 		SetTenantID(d.TenantID).
@@ -613,12 +642,17 @@ func (r *invoiceReminderRepository) Create(ctx context.Context, d *collections.I
 	return nil
 }
 
-// CreateMany inserts the reminders in one statement and returns the invoice ids it inserted. If a concurrent first action
+// CreateMany inserts the reminders in one statement and returns the invoice ids it inserted. It must not run in a transaction. If a concurrent first action
 // makes the batch violate the one-reminder-per-invoice index, the whole statement is rolled back by Postgres and each
 // reminder is inserted on its own, so the invoices that already have a reminder are skipped.
 func (r *invoiceReminderRepository) CreateMany(ctx context.Context, reminders []*collections.InvoiceReminder) ([]string, error) {
 	if len(reminders) == 0 {
 		return nil, nil
+	}
+	if r.client.TxFromContext(ctx) != nil {
+		return nil, ierr.NewError("create_many cannot run in a transaction").
+			WithHint("A duplicate would abort the transaction, so the per-reminder fallback could not run. Create the reminders outside it.").
+			Mark(ierr.ErrInternal)
 	}
 	span := StartRepositorySpan(ctx, "invoice_reminder", "create_many", map[string]interface{}{"reminders": len(reminders)})
 	defer FinishSpan(span)
@@ -658,14 +692,14 @@ func (r *invoiceReminderRepository) Update(ctx context.Context, d *collections.I
 			invoicereminder.TenantID(types.GetTenantID(ctx)),
 			invoicereminder.EnvironmentID(types.GetEnvironmentID(ctx)),
 			invoicereminder.Status(string(types.StatusPublished)),
-			invoicereminder.ReminderStatus(string(previous.ReminderStatus)),
+			invoicereminder.ReminderStatus(previous.ReminderStatus),
 			invoicereminder.UpdatedAt(previous.UpdatedAt),
 		).
-		SetReminderStatus(string(d.ReminderStatus)).
+		SetReminderStatus(d.ReminderStatus).
 		SetStatusReason(d.StatusReason).
 		SetNillableApprovedAt(d.ApprovedAt).
 		SetMetadata(d.Metadata).
-		SetTone(string(d.Tone)).
+		SetTone(d.Tone).
 		SetSubject(d.Subject).
 		SetBody(d.Body).
 		SetUpdatedAt(clock.Now()).
@@ -700,8 +734,8 @@ func reminderFromEnt(e *ent.InvoiceReminder) *collections.InvoiceReminder {
 			UpdatedBy: e.UpdatedBy,
 		},
 	}).
-		WithStatus(types.ReminderStatus(e.ReminderStatus), e.StatusReason, e.ApprovedAt).
+		WithStatus(e.ReminderStatus, e.StatusReason, e.ApprovedAt).
 		WithMetadata(e.Metadata).
-		WithText(types.ReminderTone(e.Tone), e.Subject, e.Body).
+		WithText(e.Tone, e.Subject, e.Body).
 		Build()
 }

@@ -26,7 +26,7 @@ type CollectionsBoardRequest struct {
 	// Page is the 1-based page of a column; only the column endpoint takes it.
 	Page int `form:"page" json:"page,omitempty"`
 	// AsOf pins a column page to the as_of of the board call (RFC3339), on any page.
-	AsOf string `form:"as_of" json:"as_of,omitempty"`
+	AsOf *time.Time `form:"as_of" json:"as_of,omitempty"`
 	// Q keeps receivables whose customer name, customer email or invoice number contains it, ignoring case.
 	Q string `form:"q" json:"q,omitempty"`
 	// Currency keeps receivables in this currency, ignoring case.
@@ -55,7 +55,7 @@ func (r *CollectionsBoardRequest) Validate() error {
 
 // validatePageDepth refuses pages deeper than CollectionsMaxPageDepth rows.
 func validatePageDepth(page, limit int) error {
-	if page*limit > CollectionsMaxPageDepth {
+	if limit > 0 && page > CollectionsMaxPageDepth/limit {
 		return ierr.NewErrorf("page too deep").
 			WithHintf("page times limit cannot exceed %d. Narrow the list with q or currency.", CollectionsMaxPageDepth).
 			Mark(ierr.ErrValidation)
@@ -208,9 +208,9 @@ type ListRemindersRequest struct {
 	CustomerID string `form:"customer_id" json:"customer_id,omitempty"`
 	Currency   string `form:"currency" json:"currency,omitempty"`
 	// Limit is the page size (default 15, max 100); Page is 1-based. AsOf pins the list to the clock of an earlier response.
-	Limit int    `form:"limit" json:"limit,omitempty"`
-	Page  int    `form:"page" json:"page,omitempty"`
-	AsOf  string `form:"as_of" json:"as_of,omitempty"`
+	Limit int        `form:"limit" json:"limit,omitempty"`
+	Page  int        `form:"page" json:"page,omitempty"`
+	AsOf  *time.Time `form:"as_of" json:"as_of,omitempty"`
 }
 
 const (
@@ -279,6 +279,10 @@ type UpdateReminderRequest struct {
 	Tone         *string              `json:"tone,omitempty"`
 	Subject      *string              `json:"subject,omitempty"`
 	Body         *string              `json:"body,omitempty"`
+	// ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict
+	// when the text that would be approved now differs (the invoice changed since the preview). Optional, approval only.
+	ExpectedSubject *string `json:"expected_subject,omitempty"`
+	ExpectedBody    *string `json:"expected_body,omitempty"`
 }
 
 func (r *UpdateReminderRequest) Validate() error {
@@ -294,6 +298,9 @@ func (r *UpdateReminderRequest) Validate() error {
 		return ierr.NewError("reason required").WithHint("Say why this reminder is held with status_reason.").Mark(ierr.ErrValidation)
 	case r.StatusReason != "" && r.Status != types.ReminderStatusHeld && r.Status != types.ReminderStatusSkipped:
 		return ierr.NewError("unexpected reason").WithHint("status_reason only goes with status held or skipped.").Mark(ierr.ErrValidation)
+	}
+	if (r.ExpectedSubject != nil || r.ExpectedBody != nil) && r.Status != types.ReminderStatusApproved {
+		return ierr.NewError("unexpected preview text").WithHint("expected_subject and expected_body only go with status approved.").Mark(ierr.ErrValidation)
 	}
 	if r.Tone != nil && !types.ReminderTone(*r.Tone).Valid() {
 		return ierr.NewError("invalid tone").WithHint("tone must be friendly, firm or final.").Mark(ierr.ErrValidation)
@@ -320,6 +327,9 @@ func (r *BulkUpdateRemindersRequest) Validate() error {
 	}
 	if len(r.InvoiceIDs) > RemindersMaxBulk {
 		return ierr.NewError("too many invoices").WithHint("Update at most 200 invoices at a time.").Mark(ierr.ErrValidation)
+	}
+	if r.ExpectedSubject != nil || r.ExpectedBody != nil {
+		return ierr.NewError("expected text not allowed").WithHint("Approve one reminder at a time to check the text you saw.").Mark(ierr.ErrValidation)
 	}
 	if r.Subject != nil || r.Body != nil {
 		return ierr.NewError("subject and body not allowed").WithHint("Edit the subject or body of one reminder at a time.").Mark(ierr.ErrValidation)

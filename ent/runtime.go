@@ -1964,7 +1964,7 @@ func init() {
 	// invoicereminderDescReminderStatus is the schema descriptor for reminder_status field.
 	invoicereminderDescReminderStatus := invoicereminderFields[2].Descriptor()
 	// invoicereminder.DefaultReminderStatus holds the default value on creation for the reminder_status field.
-	invoicereminder.DefaultReminderStatus = invoicereminderDescReminderStatus.Default.(string)
+	invoicereminder.DefaultReminderStatus = types.ReminderStatus(invoicereminderDescReminderStatus.Default.(string))
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
 	_ = invoicesequenceFields
 	// invoicesequenceDescTenantID is the schema descriptor for tenant_id field.

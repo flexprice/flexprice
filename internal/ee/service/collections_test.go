@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// fakeBoard is a canned BoardRepository that records how it was called; the real queries are tested against Postgres.
+// fakeBoard is a canned CollectionsRepository that records how it was called; the real queries are tested against Postgres.
 type fakeBoard struct {
 	board   *collections.Board
 	rows    []collections.Row
@@ -50,7 +51,7 @@ func boardFixture(t *testing.T) (CollectionsService, *fakeBoard, context.Context
 	customers := testutil.NewInMemoryCustomerStore()
 	require.NoError(t, customers.Create(ctx, &customer.Customer{ID: "cust_1", Name: "Acme", BaseModel: types.GetDefaultBaseModel(ctx)}))
 	fake := &fakeBoard{}
-	return NewCollectionsService(ServiceParams{CustomerRepo: customers, BoardRepo: fake}), fake, ctx
+	return NewCollectionsService(ServiceParams{CustomerRepo: customers, CollectionsRepo: fake}), fake, ctx
 }
 
 func rowDue(id string, remaining int64, due *time.Time, rem *collections.InvoiceReminder) collections.Row {
@@ -138,7 +139,7 @@ func TestBoard_PositiveLimitReturnsTheFirstPage(t *testing.T) {
 
 func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
 	svc, fake, ctx := boardFixture(t)
-	soon, paidAt := clock.Now().Add(2*day+time.Hour), clock.Now().Add(-time.Hour)
+	soon, paidAt := utcDay(clock.Now()).Add(2*day+12*time.Hour), clock.Now().Add(-time.Hour)
 	board := fullBoard(nil)
 	nd := board.Columns[types.CollectionsColumnNotDue]
 	nd.Rows = []collections.Row{rowDue("n1", 10, &soon, nil), rowDue("n2", 10, nil, nil)}
@@ -202,10 +203,10 @@ func TestBoard_ColumnPageRules(t *testing.T) {
 	for name, req := range map[string]dto.CollectionsBoardRequest{
 		"negative page": {Page: -1}, "limit above the maximum": {Limit: 201}, "negative limit": {Limit: -1},
 		"too deep with default": {Page: 334}, "too deep with limit 10": {Page: 501, Limit: 10}, "too deep with limit 200": {Page: 26, Limit: 200},
-		"malformed as_of": {AsOf: "yesterday"}, "date only": {AsOf: "2026-11-20"},
-		"too old":               {AsOf: time.Now().Add(-25 * time.Hour).Format(time.RFC3339Nano)},
-		"in the future":         {AsOf: time.Now().Add(time.Hour).Format(time.RFC3339Nano)},
-		"as_of on a later page": {Page: 2, AsOf: "nope"},
+		"too old":                  {AsOf: lo.ToPtr(time.Now().Add(-25 * time.Hour))},
+		"in the future":            {AsOf: lo.ToPtr(time.Now().Add(time.Hour))},
+		"too old on a later page":  {Page: 2, AsOf: lo.ToPtr(time.Now().Add(-48 * time.Hour))},
+		"page that would overflow": {Page: math.MaxInt, Limit: 200},
 	} {
 		_, err := svc.GetColumn(ctx, "not_due", &req)
 		requireKind(t, err, ierr.ErrValidation)
@@ -213,7 +214,7 @@ func TestBoard_ColumnPageRules(t *testing.T) {
 	}
 	for name, req := range map[string]dto.CollectionsBoardRequest{
 		"deepest allowed page": {Page: 333}, "limit 200 page 25": {Page: 25, Limit: 200}, "page zero is page one": {Page: 0},
-		"a little clock skew": {AsOf: time.Now().Add(20 * time.Second).Format(time.RFC3339Nano)},
+		"a little clock skew": {AsOf: lo.ToPtr(time.Now().Add(20 * time.Second))},
 	} {
 		_, err := svc.GetColumn(ctx, "not_due", &req)
 		require.NoError(t, err, name)
@@ -223,7 +224,7 @@ func TestBoard_ColumnPageRules(t *testing.T) {
 
 	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
 	for _, page := range []int{1, 2, 7} {
-		resp, err := svc.GetColumn(ctx, "not_due", &dto.CollectionsBoardRequest{Page: page, AsOf: asOf.Format(time.RFC3339Nano)})
+		resp, err := svc.GetColumn(ctx, "not_due", &dto.CollectionsBoardRequest{Page: page, AsOf: &asOf})
 		require.NoError(t, err)
 		require.True(t, resp.AsOf.Equal(asOf), "page %d is read at the board clock", page)
 		require.True(t, fake.query.AsOf.Equal(asOf))
@@ -258,11 +259,11 @@ func TestCollectionsBoardRequest_Validate(t *testing.T) {
 
 func TestParsePageAsOf(t *testing.T) {
 	now := time.Now()
-	asOf, err := parsePageAsOf("", now)
+	asOf, err := parsePageAsOf(nil, now)
 	require.NoError(t, err)
 	require.True(t, asOf.Equal(now))
 	good := now.Add(-time.Hour).UTC().Truncate(time.Microsecond)
-	got, err := parsePageAsOf(good.Format(time.RFC3339Nano), now)
+	got, err := parsePageAsOf(&good, now)
 	require.NoError(t, err)
 	require.True(t, got.Equal(good))
 }

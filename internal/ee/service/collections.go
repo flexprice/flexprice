@@ -56,7 +56,7 @@ func (s *collectionsService) GetBoard(ctx context.Context, req *dto.CollectionsB
 	q := boardQuery(clock.Now(), req)
 	limit := req.BoardCardLimit()
 
-	board, err := s.BoardRepo.Board(ctx, q, limit)
+	board, err := s.CollectionsRepo.Board(ctx, q, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (s *collectionsService) GetColumn(ctx context.Context, key string, req *dto
 	if err != nil {
 		return nil, err
 	}
-	rows, hasMore, err := s.BoardRepo.ListRows(
+	rows, hasMore, err := s.CollectionsRepo.ListRows(
 		ctx,
 		boardQuery(asOf, req),
 		collections.RowFilter{

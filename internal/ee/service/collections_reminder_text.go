@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
-	"text/template"
+	"text/template" // nosemgrep: go.lang.security.audit.xss.import-text-template.import-text-template
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// The reminder is plain text, escaped into the HTML layout when it is emailed; html/template would store '&amp;' and '&#39;' in it.
 const (
 	reminderFriendlyMaxDays = 30
 	reminderFirmMaxDays     = 60

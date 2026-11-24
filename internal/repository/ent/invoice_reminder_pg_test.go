@@ -45,7 +45,7 @@ type customerSpec struct{ id, name, email string }
 type reminderFixture struct {
 	ctx, other, otherEnv context.Context
 	client               postgres.IClient
-	board                collections.BoardRepository
+	board                collections.CollectionsRepository
 	reminders            collections.InvoiceReminderRepository
 	asOf                 time.Time
 	run                  string
@@ -62,6 +62,7 @@ func newReminderFixture(t *testing.T) *reminderFixture {
 	clients, err := postgres.NewEntClients(cfg, log)
 	require.NoError(t, err)
 	client := postgres.NewClient(clients, log, nil)
+	t.Cleanup(func() { _ = client.Close() })
 
 	run := strings.ReplaceAll(types.GenerateUUID(), "-", "")[:12]
 	scoped := func(tenant, env string) context.Context {
@@ -69,7 +70,7 @@ func newReminderFixture(t *testing.T) *reminderFixture {
 	}
 	f := &reminderFixture{
 		ctx: scoped("tenant_pg_"+run, "env_pg_"+run), other: scoped("tenant_pg_"+run+"_b", "env_pg_"+run), otherEnv: scoped("tenant_pg_"+run, "env_pg_"+run+"_b"),
-		client: client, board: entrepo.NewBoardRepository(client, log), reminders: entrepo.NewInvoiceReminderRepository(client, log),
+		client: client, board: entrepo.NewCollectionsRepository(client, log), reminders: entrepo.NewInvoiceReminderRepository(client, log),
 		asOf: time.Now().UTC().Truncate(time.Microsecond), run: run,
 	}
 	t.Cleanup(func() {
@@ -162,6 +163,7 @@ func (f *reminderFixture) seed(t *testing.T) {
 	f.invoices = append(f.invoices,
 		invSpec{id: f.run + "_pd_edge_in", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED", number: "INV-EDGEIN", total: 9, paidAt: f.at(-types.CollectionsPaidWindow)},
 		invSpec{id: f.run + "_pd_edge_out", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED", number: "INV-EDGEOUT", total: 9, paidAt: f.at(-types.CollectionsPaidWindow - time.Microsecond)},
+		invSpec{id: f.run + "_pd_over", customer: "cust_b", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "OVERPAID", number: "INV-OVER", total: 25, paidAt: f.at(-time.Hour)},
 		invSpec{id: f.run + "_x_draft", customer: "cust_a", currency: "usd", invoiceStatus: "DRAFT", paymentStatus: "PENDING", number: "INV-X1", remaining: 10, total: 10, due: f.at(-48 * time.Hour)},
 		invSpec{id: f.run + "_x_void", customer: "cust_a", currency: "usd", invoiceStatus: "VOIDED", paymentStatus: "PENDING", number: "INV-X2", remaining: 10, total: 10, due: f.at(-48 * time.Hour)},
 		invSpec{id: f.run + "_x_zero", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "PENDING", number: "INV-X3", total: 10, due: f.at(-48 * time.Hour)},
@@ -234,7 +236,7 @@ func (f *reminderFixture) expected(q collections.Query, filter collections.RowFi
 				rows = append(rows, s)
 			}
 		case types.CollectionsColumnPaidThisWeek:
-			if !s.deleted && s.invoiceStatus == "FINALIZED" && s.paymentStatus == "SUCCEEDED" && s.paidAt != nil &&
+			if !s.deleted && s.invoiceStatus == "FINALIZED" && (s.paymentStatus == "SUCCEEDED" || s.paymentStatus == "OVERPAID") && s.paidAt != nil &&
 				!s.paidAt.Before(q.AsOf.Add(-types.CollectionsPaidWindow)) && !s.paidAt.After(q.AsOf) {
 				rows = append(rows, s)
 			}
@@ -317,7 +319,7 @@ func (f *reminderFixture) queries() []collections.Query {
 	}
 }
 
-func TestBoardRepository_BoardMatchesThePlainGoExpectation(t *testing.T) {
+func TestCollectionsRepository_BoardMatchesThePlainGoExpectation(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	for _, q := range f.queries() {
@@ -345,7 +347,7 @@ func TestBoardRepository_BoardMatchesThePlainGoExpectation(t *testing.T) {
 	}
 }
 
-func TestBoardRepository_AvailableCurrenciesIgnoreTheFilters(t *testing.T) {
+func TestCollectionsRepository_AvailableCurrenciesIgnoreTheFilters(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	for _, q := range f.queries() {
@@ -355,7 +357,7 @@ func TestBoardRepository_AvailableCurrenciesIgnoreTheFilters(t *testing.T) {
 	}
 }
 
-func TestBoardRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
+func TestCollectionsRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	filters := []collections.RowFilter{
@@ -391,7 +393,7 @@ func TestBoardRepository_PagesWalkToTheEndInTheSameOrder(t *testing.T) {
 	require.False(t, hasMore)
 }
 
-func TestBoardRepository_RowsCarryTheirReminder(t *testing.T) {
+func TestCollectionsRepository_RowsCarryTheirReminder(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	rows, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, filterOfColumn(types.CollectionsColumnHeld), 0, 50)
@@ -417,7 +419,7 @@ func TestBoardRepository_RowsCarryTheirReminder(t *testing.T) {
 	}
 }
 
-func TestBoardRepository_SummarizeRemindersMatchesTheGoExpectation(t *testing.T) {
+func TestCollectionsRepository_SummarizeRemindersMatchesTheGoExpectation(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	got, err := f.board.SummarizeReminders(f.ctx, f.asOf)
@@ -433,7 +435,7 @@ func TestBoardRepository_SummarizeRemindersMatchesTheGoExpectation(t *testing.T)
 	require.Equal(t, want, got.Statuses)
 }
 
-func TestBoardRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
+func TestCollectionsRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
 	f := newReminderFixture(t)
 	empty, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf}, 5)
 	require.NoError(t, err)
@@ -467,10 +469,12 @@ func TestBoardRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
 	require.Equal(t, 1, summary.InvoiceCount)
 }
 
-func TestBoardRepository_BoardRunsInsideATransactionWhenOneIsInContext(t *testing.T) {
+func TestCollectionsRepository_BoardRunsInsideATransactionWhenOneIsInContext(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	require.NoError(t, f.client.WithTx(f.ctx, func(txCtx context.Context) error {
+		_, err := f.client.Writer(txCtx).ExecContext(txCtx, "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+		require.NoError(t, err)
 		board, err := f.board.Board(txCtx, collections.Query{AsOf: f.asOf}, 5)
 		require.NoError(t, err)
 		require.NotEmpty(t, board.AvailableCurrencies)
@@ -651,4 +655,38 @@ func TestInvoiceReminderRepository_ReminderAndEmailShareATransaction(t *testing.
 	stored, err := emails.GetByIdempotencyKey(f.ctx, "other:"+f.run)
 	require.NoError(t, err)
 	require.Equal(t, "frozen", stored.Metadata["reminder_body"])
+}
+
+func TestCollectionsRepository_OverpaidInvoicesCountAsPaidThisWeek(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	rows, _, err := f.board.ListRows(f.ctx, collections.Query{AsOf: f.asOf}, collections.RowFilter{Column: types.CollectionsColumnPaidThisWeek}, 0, 200)
+	require.NoError(t, err)
+	require.Contains(t, rowIDs(rows), f.run+"_pd_over")
+	over, _ := lo.Find(rows, func(r collections.Row) bool { return r.InvoiceID == f.run+"_pd_over" })
+	require.Equal(t, "25", over.AmountTotal.String(), "a paid card shows the invoice total")
+	require.NotNil(t, over.PaidAt)
+}
+
+func TestCollectionsRepository_BoardRefusesATransactionWithoutASnapshot(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	err := f.client.WithTx(f.ctx, func(txCtx context.Context) error {
+		_, err := f.board.Board(txCtx, collections.Query{AsOf: f.asOf}, 0)
+		return err
+	})
+	require.Error(t, err, "a READ COMMITTED transaction cannot give the board one snapshot")
+}
+
+func TestInvoiceReminderRepository_CreateManyRefusesATransaction(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: "irem_" + f.run + "_tx", InvoiceID: f.run + "_nd00", BaseModel: types.GetDefaultBaseModel(f.ctx),
+	}).WithText(types.ReminderToneFriendly, "s", "b").Build()
+	err := f.client.WithTx(f.ctx, func(txCtx context.Context) error {
+		_, err := f.reminders.CreateMany(txCtx, []*collections.InvoiceReminder{r})
+		return err
+	})
+	require.Error(t, err)
 }

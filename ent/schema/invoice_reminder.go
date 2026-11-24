@@ -38,6 +38,7 @@ func (InvoiceReminder) Fields() []ent.Field {
 			NotEmpty().
 			Immutable(),
 		field.String("reminder_status").
+			GoType(types.ReminderStatus("")).
 			SchemaType(varchar("20")).
 			Default(string(types.ReminderStatusPending)),
 		field.String("status_reason").
@@ -50,6 +51,7 @@ func (InvoiceReminder) Fields() []ent.Field {
 			Optional().
 			SchemaType(map[string]string{"postgres": "jsonb"}),
 		field.String("tone").
+			GoType(types.ReminderTone("")).
 			SchemaType(varchar("20")),
 		field.String("subject").
 			SchemaType(text),

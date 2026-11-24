@@ -56509,11 +56509,11 @@ type InvoiceReminderMutation struct {
 	updated_by      *string
 	environment_id  *string
 	invoice_id      *string
-	reminder_status *string
+	reminder_status *types.ReminderStatus
 	status_reason   *string
 	approved_at     *time.Time
 	metadata        *map[string]interface{}
-	tone            *string
+	tone            *types.ReminderTone
 	subject         *string
 	body            *string
 	clearedFields   map[string]struct{}
@@ -56954,12 +56954,12 @@ func (m *InvoiceReminderMutation) ResetInvoiceID() {
 }
 
 // SetReminderStatus sets the "reminder_status" field.
-func (m *InvoiceReminderMutation) SetReminderStatus(s string) {
-	m.reminder_status = &s
+func (m *InvoiceReminderMutation) SetReminderStatus(ts types.ReminderStatus) {
+	m.reminder_status = &ts
 }
 
 // ReminderStatus returns the value of the "reminder_status" field in the mutation.
-func (m *InvoiceReminderMutation) ReminderStatus() (r string, exists bool) {
+func (m *InvoiceReminderMutation) ReminderStatus() (r types.ReminderStatus, exists bool) {
 	v := m.reminder_status
 	if v == nil {
 		return
@@ -56970,7 +56970,7 @@ func (m *InvoiceReminderMutation) ReminderStatus() (r string, exists bool) {
 // OldReminderStatus returns the old "reminder_status" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldReminderStatus(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldReminderStatus(ctx context.Context) (v types.ReminderStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldReminderStatus is only allowed on UpdateOne operations")
 	}
@@ -57137,12 +57137,12 @@ func (m *InvoiceReminderMutation) ResetMetadata() {
 }
 
 // SetTone sets the "tone" field.
-func (m *InvoiceReminderMutation) SetTone(s string) {
-	m.tone = &s
+func (m *InvoiceReminderMutation) SetTone(tt types.ReminderTone) {
+	m.tone = &tt
 }
 
 // Tone returns the value of the "tone" field in the mutation.
-func (m *InvoiceReminderMutation) Tone() (r string, exists bool) {
+func (m *InvoiceReminderMutation) Tone() (r types.ReminderTone, exists bool) {
 	v := m.tone
 	if v == nil {
 		return
@@ -57153,7 +57153,7 @@ func (m *InvoiceReminderMutation) Tone() (r string, exists bool) {
 // OldTone returns the old "tone" field's value of the InvoiceReminder entity.
 // If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceReminderMutation) OldTone(ctx context.Context) (v string, err error) {
+func (m *InvoiceReminderMutation) OldTone(ctx context.Context) (v types.ReminderTone, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTone is only allowed on UpdateOne operations")
 	}
@@ -57467,7 +57467,7 @@ func (m *InvoiceReminderMutation) SetField(name string, value ent.Value) error {
 		m.SetInvoiceID(v)
 		return nil
 	case invoicereminder.FieldReminderStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.ReminderStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -57495,7 +57495,7 @@ func (m *InvoiceReminderMutation) SetField(name string, value ent.Value) error {
 		m.SetMetadata(v)
 		return nil
 	case invoicereminder.FieldTone:
-		v, ok := value.(string)
+		v, ok := value.(types.ReminderTone)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

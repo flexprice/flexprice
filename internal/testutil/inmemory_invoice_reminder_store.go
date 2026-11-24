@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -41,8 +42,7 @@ func (s *InMemoryInvoiceReminderStore) All(ctx context.Context) []*collections.I
 	var out []*collections.InvoiceReminder
 	for _, r := range s.reminders {
 		if s.inScope(ctx, r) {
-			cp := *r
-			out = append(out, &cp)
+			out = append(out, cloneReminder(r))
 		}
 	}
 	return out
@@ -62,6 +62,9 @@ func (s *InMemoryInvoiceReminderStore) liveFor(ctx context.Context, invoiceID st
 }
 
 func (s *InMemoryInvoiceReminderStore) GetRows(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]collections.Row, error) {
+	if len(invoiceIDs) == 0 {
+		return nil, nil
+	}
 	queryFilter := types.NewNoLimitQueryFilter()
 	queryFilter.Status = lo.ToPtr(types.StatusPublished)
 	invoices, err := s.invoices.List(ctx, &types.InvoiceFilter{
@@ -82,7 +85,7 @@ func (s *InMemoryInvoiceReminderStore) GetRows(ctx context.Context, asOf time.Ti
 			WithAmounts(inv.AmountDue, inv.AmountRemaining).
 			WithDates(inv.DueDate, inv.PaidAt)
 		if r := s.liveFor(ctx, inv.ID); r != nil {
-			row = row.WithReminder(collections.NewInvoiceReminderBuilder(r).Build())
+			row = row.WithReminder(cloneReminder(r))
 		}
 		rows = append(rows, *row.Build())
 	}
@@ -97,8 +100,7 @@ func (s *InMemoryInvoiceReminderStore) Create(ctx context.Context, r *collection
 		return ierr.NewError("reminder already exists").Mark(ierr.ErrAlreadyExists)
 	}
 	r.TenantID, r.EnvironmentID, r.BaseModel.Status = types.GetTenantID(ctx), types.GetEnvironmentID(ctx), types.StatusPublished
-	cp := *r
-	s.reminders[r.ID] = &cp
+	s.reminders[r.ID] = cloneReminder(r)
 	return nil
 }
 
@@ -112,8 +114,7 @@ func (s *InMemoryInvoiceReminderStore) CreateMany(ctx context.Context, reminders
 			continue
 		}
 		r.TenantID, r.EnvironmentID, r.BaseModel.Status = types.GetTenantID(ctx), types.GetEnvironmentID(ctx), types.StatusPublished
-		cp := *r
-		s.reminders[r.ID] = &cp
+		s.reminders[r.ID] = cloneReminder(r)
 		created = append(created, r.InvoiceID)
 	}
 	return created, nil
@@ -127,9 +128,21 @@ func (s *InMemoryInvoiceReminderStore) Update(ctx context.Context, r *collection
 	if !ok || !s.inScope(ctx, cur) || cur.ReminderStatus != previous.ReminderStatus || !cur.UpdatedAt.Equal(previous.UpdatedAt) {
 		return ierr.NewError("reminder changed").Mark(ierr.ErrVersionConflict)
 	}
-	cp := *r
+	cp := cloneReminder(r)
 	cp.TenantID, cp.EnvironmentID, cp.BaseModel.Status, cp.UpdatedAt = cur.TenantID, cur.EnvironmentID, cur.BaseModel.Status, clock.Now()
-	s.reminders[r.ID] = &cp
-	*r = cp
+	s.reminders[r.ID] = cp
+	*r = *cloneReminder(cp)
 	return nil
+}
+
+// cloneReminder copies a reminder with its own ApprovedAt and Metadata, so a stored row never shares memory with a caller.
+func cloneReminder(r *collections.InvoiceReminder) *collections.InvoiceReminder {
+	cp := *r
+	if r.ApprovedAt != nil {
+		cp.ApprovedAt = lo.ToPtr(*r.ApprovedAt)
+	}
+	if r.Metadata != nil {
+		cp.Metadata = maps.Clone(r.Metadata)
+	}
+	return &cp
 }

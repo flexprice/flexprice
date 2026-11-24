@@ -165,7 +165,8 @@ func (b *reminderSummaryBuilder) Build() *ReminderSummary {
 	return b.s
 }
 
-type BoardRepository interface {
+// CollectionsRepository reads the invoices of the Collections feature with their reminders: the board, its columns and the reminder list.
+type CollectionsRepository interface {
 	Board(ctx context.Context, q Query, limit int) (*Board, error)
 	ListRows(ctx context.Context, q Query, f RowFilter, offset, limit int) (rows []Row, hasMore bool, err error)
 	SummarizeReminders(ctx context.Context, asOf time.Time) (ReminderSummary, error)

@@ -362,3 +362,40 @@ func (f *reminderFixture) queued(t *testing.T, ctx context.Context) []*emaillog.
 	require.NoError(t, err)
 	return logs
 }
+
+// cancelsOnRead cancels the reminder email right after DeliverEmail first reads it as queued: a reopen that lands
+// before the send but after the dispatcher looked.
+type cancelsOnRead struct {
+	emaillog.Repository
+	cancel func()
+	once   bool
+}
+
+func (c *cancelsOnRead) Get(ctx context.Context, id string) (*emaillog.EmailLog, error) {
+	e, err := c.Repository.Get(ctx, id)
+	if err == nil && !c.once {
+		c.once = true
+		c.cancel()
+	}
+	return e, err
+}
+
+func TestReminderEmail_ReopenBetweenTheReadAndTheSendIsNotEmailed(t *testing.T) {
+	f, ctx := emailFixture(t, emailsOn)
+	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+	queued := f.queued(t, ctx)
+	require.Len(t, queued, 1)
+
+	params := f.params(f.reminders)
+	svc := NewEmailNotificationService(params)
+	params.EmailLogRepo = &cancelsOnRead{Repository: params.EmailLogRepo, cancel: func() {
+		require.NoError(t, svc.CancelReminderEmail(ctx, lo.FromPtr(queued[0].IdempotencyKey)))
+	}}
+	require.NoError(t, NewEmailNotificationService(params).DeliverEmail(ctx, queued[0].ID, false))
+
+	require.Empty(t, f.sent.all(), "the reopened reminder is not emailed")
+	logs := f.emails(t, ctx, "a1")
+	require.Len(t, logs, 1)
+	require.Equal(t, types.EmailDeliveryStatusSkipped, logs[0].DeliveryStatus, "and the log says why it was not sent")
+}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -93,7 +94,7 @@ var (
 	// InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
 	InvoiceIDValidator func(string) error
 	// DefaultReminderStatus holds the default value on creation for the "reminder_status" field.
-	DefaultReminderStatus string
+	DefaultReminderStatus types.ReminderStatus
 )
 
 // OrderOption defines the ordering options for the InvoiceReminder queries.

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -105,8 +106,9 @@ func InvoiceID(v string) predicate.InvoiceReminder {
 }
 
 // ReminderStatus applies equality check predicate on the "reminder_status" field. It's identical to ReminderStatusEQ.
-func ReminderStatus(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldReminderStatus, v))
+func ReminderStatus(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldReminderStatus, vc))
 }
 
 // StatusReason applies equality check predicate on the "status_reason" field. It's identical to StatusReasonEQ.
@@ -120,8 +122,9 @@ func ApprovedAt(v time.Time) predicate.InvoiceReminder {
 }
 
 // Tone applies equality check predicate on the "tone" field. It's identical to ToneEQ.
-func Tone(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, v))
+func Tone(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, vc))
 }
 
 // Subject applies equality check predicate on the "subject" field. It's identical to SubjectEQ.
@@ -635,68 +638,87 @@ func InvoiceIDContainsFold(v string) predicate.InvoiceReminder {
 }
 
 // ReminderStatusEQ applies the EQ predicate on the "reminder_status" field.
-func ReminderStatusEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldReminderStatus, v))
+func ReminderStatusEQ(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldReminderStatus, vc))
 }
 
 // ReminderStatusNEQ applies the NEQ predicate on the "reminder_status" field.
-func ReminderStatusNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldReminderStatus, v))
+func ReminderStatusNEQ(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldReminderStatus, vc))
 }
 
 // ReminderStatusIn applies the In predicate on the "reminder_status" field.
-func ReminderStatusIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldReminderStatus, vs...))
+func ReminderStatusIn(vs ...types.ReminderStatus) predicate.InvoiceReminder {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.InvoiceReminder(sql.FieldIn(FieldReminderStatus, v...))
 }
 
 // ReminderStatusNotIn applies the NotIn predicate on the "reminder_status" field.
-func ReminderStatusNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldReminderStatus, vs...))
+func ReminderStatusNotIn(vs ...types.ReminderStatus) predicate.InvoiceReminder {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldReminderStatus, v...))
 }
 
 // ReminderStatusGT applies the GT predicate on the "reminder_status" field.
-func ReminderStatusGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldReminderStatus, v))
+func ReminderStatusGT(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldGT(FieldReminderStatus, vc))
 }
 
 // ReminderStatusGTE applies the GTE predicate on the "reminder_status" field.
-func ReminderStatusGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldReminderStatus, v))
+func ReminderStatusGTE(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldReminderStatus, vc))
 }
 
 // ReminderStatusLT applies the LT predicate on the "reminder_status" field.
-func ReminderStatusLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldReminderStatus, v))
+func ReminderStatusLT(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldLT(FieldReminderStatus, vc))
 }
 
 // ReminderStatusLTE applies the LTE predicate on the "reminder_status" field.
-func ReminderStatusLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldReminderStatus, v))
+func ReminderStatusLTE(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldReminderStatus, vc))
 }
 
 // ReminderStatusContains applies the Contains predicate on the "reminder_status" field.
-func ReminderStatusContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldReminderStatus, v))
+func ReminderStatusContains(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldContains(FieldReminderStatus, vc))
 }
 
 // ReminderStatusHasPrefix applies the HasPrefix predicate on the "reminder_status" field.
-func ReminderStatusHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldReminderStatus, v))
+func ReminderStatusHasPrefix(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldReminderStatus, vc))
 }
 
 // ReminderStatusHasSuffix applies the HasSuffix predicate on the "reminder_status" field.
-func ReminderStatusHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldReminderStatus, v))
+func ReminderStatusHasSuffix(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldReminderStatus, vc))
 }
 
 // ReminderStatusEqualFold applies the EqualFold predicate on the "reminder_status" field.
-func ReminderStatusEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldReminderStatus, v))
+func ReminderStatusEqualFold(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldReminderStatus, vc))
 }
 
 // ReminderStatusContainsFold applies the ContainsFold predicate on the "reminder_status" field.
-func ReminderStatusContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldReminderStatus, v))
+func ReminderStatusContainsFold(v types.ReminderStatus) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldReminderStatus, vc))
 }
 
 // StatusReasonEQ applies the EQ predicate on the "status_reason" field.
@@ -835,68 +857,87 @@ func MetadataNotNil() predicate.InvoiceReminder {
 }
 
 // ToneEQ applies the EQ predicate on the "tone" field.
-func ToneEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, v))
+func ToneEQ(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldTone, vc))
 }
 
 // ToneNEQ applies the NEQ predicate on the "tone" field.
-func ToneNEQ(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNEQ(FieldTone, v))
+func ToneNEQ(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldTone, vc))
 }
 
 // ToneIn applies the In predicate on the "tone" field.
-func ToneIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldIn(FieldTone, vs...))
+func ToneIn(vs ...types.ReminderTone) predicate.InvoiceReminder {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.InvoiceReminder(sql.FieldIn(FieldTone, v...))
 }
 
 // ToneNotIn applies the NotIn predicate on the "tone" field.
-func ToneNotIn(vs ...string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldNotIn(FieldTone, vs...))
+func ToneNotIn(vs ...types.ReminderTone) predicate.InvoiceReminder {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldTone, v...))
 }
 
 // ToneGT applies the GT predicate on the "tone" field.
-func ToneGT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGT(FieldTone, v))
+func ToneGT(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldGT(FieldTone, vc))
 }
 
 // ToneGTE applies the GTE predicate on the "tone" field.
-func ToneGTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldGTE(FieldTone, v))
+func ToneGTE(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldTone, vc))
 }
 
 // ToneLT applies the LT predicate on the "tone" field.
-func ToneLT(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLT(FieldTone, v))
+func ToneLT(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldLT(FieldTone, vc))
 }
 
 // ToneLTE applies the LTE predicate on the "tone" field.
-func ToneLTE(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldLTE(FieldTone, v))
+func ToneLTE(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldTone, vc))
 }
 
 // ToneContains applies the Contains predicate on the "tone" field.
-func ToneContains(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContains(FieldTone, v))
+func ToneContains(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldContains(FieldTone, vc))
 }
 
 // ToneHasPrefix applies the HasPrefix predicate on the "tone" field.
-func ToneHasPrefix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldTone, v))
+func ToneHasPrefix(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldTone, vc))
 }
 
 // ToneHasSuffix applies the HasSuffix predicate on the "tone" field.
-func ToneHasSuffix(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldTone, v))
+func ToneHasSuffix(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldTone, vc))
 }
 
 // ToneEqualFold applies the EqualFold predicate on the "tone" field.
-func ToneEqualFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldTone, v))
+func ToneEqualFold(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldTone, vc))
 }
 
 // ToneContainsFold applies the ContainsFold predicate on the "tone" field.
-func ToneContainsFold(v string) predicate.InvoiceReminder {
-	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldTone, v))
+func ToneContainsFold(v types.ReminderTone) predicate.InvoiceReminder {
+	vc := string(v)
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldTone, vc))
 }
 
 // SubjectEQ applies the EQ predicate on the "subject" field.

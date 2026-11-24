@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/invoicereminder"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // InvoiceReminder is the model entity for the InvoiceReminder schema.
@@ -35,7 +36,7 @@ type InvoiceReminder struct {
 	// InvoiceID holds the value of the "invoice_id" field.
 	InvoiceID string `json:"invoice_id,omitempty"`
 	// ReminderStatus holds the value of the "reminder_status" field.
-	ReminderStatus string `json:"reminder_status,omitempty"`
+	ReminderStatus types.ReminderStatus `json:"reminder_status,omitempty"`
 	// StatusReason holds the value of the "status_reason" field.
 	StatusReason string `json:"status_reason,omitempty"`
 	// ApprovedAt holds the value of the "approved_at" field.
@@ -43,7 +44,7 @@ type InvoiceReminder struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// Tone holds the value of the "tone" field.
-	Tone string `json:"tone,omitempty"`
+	Tone types.ReminderTone `json:"tone,omitempty"`
 	// Subject holds the value of the "subject" field.
 	Subject string `json:"subject,omitempty"`
 	// Body holds the value of the "body" field.
@@ -135,7 +136,7 @@ func (_m *InvoiceReminder) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reminder_status", values[i])
 			} else if value.Valid {
-				_m.ReminderStatus = value.String
+				_m.ReminderStatus = types.ReminderStatus(value.String)
 			}
 		case invoicereminder.FieldStatusReason:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -162,7 +163,7 @@ func (_m *InvoiceReminder) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tone", values[i])
 			} else if value.Valid {
-				_m.Tone = value.String
+				_m.Tone = types.ReminderTone(value.String)
 			}
 		case invoicereminder.FieldSubject:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -237,7 +238,7 @@ func (_m *InvoiceReminder) String() string {
 	builder.WriteString(_m.InvoiceID)
 	builder.WriteString(", ")
 	builder.WriteString("reminder_status=")
-	builder.WriteString(_m.ReminderStatus)
+	builder.WriteString(fmt.Sprintf("%v", _m.ReminderStatus))
 	builder.WriteString(", ")
 	builder.WriteString("status_reason=")
 	builder.WriteString(_m.StatusReason)
@@ -251,7 +252,7 @@ func (_m *InvoiceReminder) String() string {
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("tone=")
-	builder.WriteString(_m.Tone)
+	builder.WriteString(fmt.Sprintf("%v", _m.Tone))
 	builder.WriteString(", ")
 	builder.WriteString("subject=")
 	builder.WriteString(_m.Subject)

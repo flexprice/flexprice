@@ -386,47 +386,63 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 		return s.failIfPermanent(ctx, e, err)
 	}
 
-	res, err := s.EmailProvider.Send(ctx, email.OutboundEmail{
-		IdempotencyKey: e.ID,
-		From:           e.FromAddress,
-		ReplyTo:        e.ReplyTo,
-		To:             e.ToAddresses,
-		CC:             e.CCAddresses,
-		Subject:        e.Subject,
-		HTML:           composed.content.HTML,
-		Text:           composed.content.Text,
-		Attachments:    composed.attachments,
-		Headers:        map[string]string{"Message-ID": fmt.Sprintf("<%s@%s>", e.ID, s.Config.Email.SenderDomain)},
-		Tags: map[string]string{
-			emailtypes.TagTenantID:      e.TenantID,
-			emailtypes.TagEnvironmentID: e.EnvironmentID,
-			emailtypes.TagEmailLogID:    e.ID,
-			emailtypes.TagRegion:        s.Config.Email.RegionTag,
-		},
-	})
-	if err != nil {
-		return s.failIfPermanent(ctx, e, err)
-	}
-
-	sentAt := clock.Now()
-	err = s.transition(ctx, e.ID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+	// The row stays locked from the final status check until the status is recorded, so a cancel or skip cannot land
+	// between the provider accepting the email and the log saying so. If this process dies in between, nothing is
+	// committed: the email stays queued and the provider's idempotency key (the log id) stops a second send.
+	var sendErr error
+	sent := false
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		cur, err := s.EmailLogRepo.GetForUpdate(txCtx, e.ID)
+		if err != nil {
+			return err
+		}
+		if cur.DeliveryStatus != types.EmailDeliveryStatusQueued {
+			return nil
+		}
+		res, err := s.EmailProvider.Send(txCtx, email.OutboundEmail{
+			IdempotencyKey: e.ID,
+			From:           e.FromAddress,
+			ReplyTo:        e.ReplyTo,
+			To:             e.ToAddresses,
+			CC:             e.CCAddresses,
+			Subject:        e.Subject,
+			HTML:           composed.content.HTML,
+			Text:           composed.content.Text,
+			Attachments:    composed.attachments,
+			Headers:        map[string]string{"Message-ID": fmt.Sprintf("<%s@%s>", e.ID, s.Config.Email.SenderDomain)},
+			Tags: map[string]string{
+				emailtypes.TagTenantID:      e.TenantID,
+				emailtypes.TagEnvironmentID: e.EnvironmentID,
+				emailtypes.TagEmailLogID:    e.ID,
+				emailtypes.TagRegion:        s.Config.Email.RegionTag,
+			},
+		})
+		if err != nil {
+			sendErr = err
+			return nil
+		}
+		sent = true
 		b := emaillog.NewEmailLogBuilder(cur)
 		if cur.ProviderMessageID == nil && res.ProviderMessageID != "" {
 			b = b.WithProviderMessageID(res.ProviderMessageID)
 		}
 		if cur.SentAt == nil {
-			b = b.WithSentAt(sentAt)
+			b = b.WithSentAt(clock.Now())
 		}
-		if cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSent) {
-			b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
-		}
+		b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
 		for k, v := range composed.metadata {
 			b = b.WithMetadata(k, v)
 		}
-		return b.Build()
+		return s.EmailLogRepo.Update(txCtx, b.Build())
 	})
 	if err != nil {
 		return err
+	}
+	if sendErr != nil {
+		return s.failIfPermanent(ctx, e, sendErr)
+	}
+	if !sent {
+		return nil
 	}
 
 	s.Logger.Info(ctx, "email sent", "email_log_id", e.ID, "provider", e.Provider)

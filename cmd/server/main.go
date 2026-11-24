@@ -182,7 +182,7 @@ func main() {
 			repository.NewBillingInstalmentRepository,
 			repository.NewBillingEntityRepository,
 			repository.NewInvoiceReminderRepository,
-			repository.NewBoardRepository,
+			repository.NewCollectionsRepository,
 			repository.NewPaymentRepository,
 			repository.NewPaymentMethodRepository,
 			repository.NewRefundRepository,

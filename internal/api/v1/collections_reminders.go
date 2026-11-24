@@ -97,7 +97,7 @@ func (h *ReminderHandler) GetReminder(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Invoice is not open and overdue"
 // @Failure 409 {object} ierr.ErrorResponse "Not allowed in the reminder's status, or changed by someone else"
-// @Router /collections/reminders/{id} [put]
+// @Router /collections/reminders/update/{id} [put]
 func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 	var req dto.UpdateReminderRequest
 	if !bindReminderBody(c, &req) {
@@ -110,7 +110,7 @@ func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 // BulkUpdateReminders godoc
 // @Summary Update reminders in bulk
 // @ID bulkUpdateReminderDrafts
-// @Description Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. Unknown or not overdue invoices fail the request with 404 before anything is written; invoices the change is not legal for, or that someone changed meanwhile, are left as they are and left out of the response. Nothing is sent.
+// @Description Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. Unknown or not overdue invoices fail the request with 404 before anything is written; each invoice is applied on its own, so a failure partway keeps the invoices already applied; invoices the change is not legal for, or that someone changed meanwhile, are left as they are and left out of the response. Approving queues each email for the dispatcher; nothing is sent in the request.
 // @Tags Collections
 // @Accept json
 // @Produce json
@@ -120,7 +120,7 @@ func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 // @Success 200 {object} dto.BulkUpdateRemindersResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "An invoice was not found"
-// @Router /collections/reminders [put]
+// @Router /collections/reminders/bulk-update [put]
 func (h *ReminderHandler) BulkUpdateReminders(c *gin.Context) {
 	var req dto.BulkUpdateRemindersRequest
 	if !bindReminderBody(c, &req) {

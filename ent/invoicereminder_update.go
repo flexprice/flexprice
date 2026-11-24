@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // InvoiceReminderUpdate is the builder for updating InvoiceReminder entities.
@@ -69,13 +70,13 @@ func (_u *InvoiceReminderUpdate) ClearUpdatedBy() *InvoiceReminderUpdate {
 }
 
 // SetReminderStatus sets the "reminder_status" field.
-func (_u *InvoiceReminderUpdate) SetReminderStatus(v string) *InvoiceReminderUpdate {
+func (_u *InvoiceReminderUpdate) SetReminderStatus(v types.ReminderStatus) *InvoiceReminderUpdate {
 	_u.mutation.SetReminderStatus(v)
 	return _u
 }
 
 // SetNillableReminderStatus sets the "reminder_status" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableReminderStatus(v *string) *InvoiceReminderUpdate {
+func (_u *InvoiceReminderUpdate) SetNillableReminderStatus(v *types.ReminderStatus) *InvoiceReminderUpdate {
 	if v != nil {
 		_u.SetReminderStatus(*v)
 	}
@@ -135,13 +136,13 @@ func (_u *InvoiceReminderUpdate) ClearMetadata() *InvoiceReminderUpdate {
 }
 
 // SetTone sets the "tone" field.
-func (_u *InvoiceReminderUpdate) SetTone(v string) *InvoiceReminderUpdate {
+func (_u *InvoiceReminderUpdate) SetTone(v types.ReminderTone) *InvoiceReminderUpdate {
 	_u.mutation.SetTone(v)
 	return _u
 }
 
 // SetNillableTone sets the "tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdate) SetNillableTone(v *string) *InvoiceReminderUpdate {
+func (_u *InvoiceReminderUpdate) SetNillableTone(v *types.ReminderTone) *InvoiceReminderUpdate {
 	if v != nil {
 		_u.SetTone(*v)
 	}
@@ -335,13 +336,13 @@ func (_u *InvoiceReminderUpdateOne) ClearUpdatedBy() *InvoiceReminderUpdateOne {
 }
 
 // SetReminderStatus sets the "reminder_status" field.
-func (_u *InvoiceReminderUpdateOne) SetReminderStatus(v string) *InvoiceReminderUpdateOne {
+func (_u *InvoiceReminderUpdateOne) SetReminderStatus(v types.ReminderStatus) *InvoiceReminderUpdateOne {
 	_u.mutation.SetReminderStatus(v)
 	return _u
 }
 
 // SetNillableReminderStatus sets the "reminder_status" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableReminderStatus(v *string) *InvoiceReminderUpdateOne {
+func (_u *InvoiceReminderUpdateOne) SetNillableReminderStatus(v *types.ReminderStatus) *InvoiceReminderUpdateOne {
 	if v != nil {
 		_u.SetReminderStatus(*v)
 	}
@@ -401,13 +402,13 @@ func (_u *InvoiceReminderUpdateOne) ClearMetadata() *InvoiceReminderUpdateOne {
 }
 
 // SetTone sets the "tone" field.
-func (_u *InvoiceReminderUpdateOne) SetTone(v string) *InvoiceReminderUpdateOne {
+func (_u *InvoiceReminderUpdateOne) SetTone(v types.ReminderTone) *InvoiceReminderUpdateOne {
 	_u.mutation.SetTone(v)
 	return _u
 }
 
 // SetNillableTone sets the "tone" field if the given value is not nil.
-func (_u *InvoiceReminderUpdateOne) SetNillableTone(v *string) *InvoiceReminderUpdateOne {
+func (_u *InvoiceReminderUpdateOne) SetNillableTone(v *types.ReminderTone) *InvoiceReminderUpdateOne {
 	if v != nil {
 		_u.SetTone(*v)
 	}

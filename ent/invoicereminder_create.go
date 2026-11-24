@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/invoicereminder"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // InvoiceReminderCreate is the builder for creating a InvoiceReminder entity.
@@ -117,13 +118,13 @@ func (_c *InvoiceReminderCreate) SetInvoiceID(v string) *InvoiceReminderCreate {
 }
 
 // SetReminderStatus sets the "reminder_status" field.
-func (_c *InvoiceReminderCreate) SetReminderStatus(v string) *InvoiceReminderCreate {
+func (_c *InvoiceReminderCreate) SetReminderStatus(v types.ReminderStatus) *InvoiceReminderCreate {
 	_c.mutation.SetReminderStatus(v)
 	return _c
 }
 
 // SetNillableReminderStatus sets the "reminder_status" field if the given value is not nil.
-func (_c *InvoiceReminderCreate) SetNillableReminderStatus(v *string) *InvoiceReminderCreate {
+func (_c *InvoiceReminderCreate) SetNillableReminderStatus(v *types.ReminderStatus) *InvoiceReminderCreate {
 	if v != nil {
 		_c.SetReminderStatus(*v)
 	}
@@ -165,7 +166,7 @@ func (_c *InvoiceReminderCreate) SetMetadata(v map[string]interface{}) *InvoiceR
 }
 
 // SetTone sets the "tone" field.
-func (_c *InvoiceReminderCreate) SetTone(v string) *InvoiceReminderCreate {
+func (_c *InvoiceReminderCreate) SetTone(v types.ReminderTone) *InvoiceReminderCreate {
 	_c.mutation.SetTone(v)
 	return _c
 }

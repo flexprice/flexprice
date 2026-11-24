@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -136,7 +137,7 @@ func (f *reminderFixture) params(repo collections.InvoiceReminderRepository) Ser
 	log := logger.NewNoopLogger()
 	return ServiceParams{
 		Logger: log, DB: testutil.NewMockPostgresClient(log), CustomerRepo: f.customers, TenantRepo: f.tenants, InvoiceRepo: f.invoices,
-		InvoiceReminderRepo: repo, BoardRepo: f.board, SettingsRepo: f.settings, EmailLogRepo: &countingEmailLogs{Repository: f.logs, calls: &f.lists}, EmailProvider: f.sent,
+		InvoiceReminderRepo: repo, CollectionsRepo: f.board, SettingsRepo: f.settings, EmailLogRepo: &countingEmailLogs{Repository: f.logs, calls: &f.lists}, EmailProvider: f.sent,
 		InvoiceLineItemRepo: testutil.NewInMemoryInvoiceLineItemStore(), PaymentRepo: testutil.NewInMemoryPaymentStore(), WalletRepo: testutil.NewInMemoryWalletStore(),
 		TaxAppliedRepo: testutil.NewInMemoryTaxAppliedStore(), TaxRateRepo: testutil.NewInMemoryTaxRateStore(),
 		ConnectionRepo: testutil.NewInMemoryConnectionStore(), StorageResolver: noStorage{},
@@ -149,10 +150,10 @@ func (f *reminderFixture) customer(t *testing.T, ctx context.Context, id, name, 
 	require.NoError(t, f.customers.Create(ctx, &customer.Customer{ID: id, Name: name, Email: email, BaseModel: types.GetDefaultBaseModel(ctx)}))
 }
 
-// overdue adds an open finalized invoice that is daysAgo days (and an hour) past due.
+// overdue adds an open finalized invoice due at the start of the UTC day daysAgo days back, so it is daysAgo calendar days overdue at any time of day.
 func (f *reminderFixture) overdue(t *testing.T, ctx context.Context, id, customerID string, amount int64, daysAgo int) {
 	t.Helper()
-	due := clock.Now().Add(-time.Duration(daysAgo)*day - time.Hour)
+	due := utcDay(clock.Now()).Add(-time.Duration(daysAgo) * day)
 	f.invoice(t, ctx, id, func(i *invoice.Invoice) {
 		i.CustomerID, i.DueDate = customerID, &due
 		i.AmountDue, i.AmountRemaining = decimal.NewFromInt(amount), decimal.NewFromInt(amount)
@@ -702,7 +703,7 @@ func TestReminder_PaidInvoiceHidesItsReminderAndTenantsAreIsolated(t *testing.T)
 	requireKind(t, err, ierr.ErrNotFound)
 }
 
-func TestReminder_ListUsesTheBoardRepositoryAndDoesNotWrite(t *testing.T) {
+func TestReminder_ListUsesTheCollectionsRepositoryAndDoesNotWrite(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
 	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.example")
@@ -738,9 +739,9 @@ func TestReminder_ListUsesTheBoardRepositoryAndDoesNotWrite(t *testing.T) {
 
 	for name, req := range map[string]dto.ListRemindersRequest{
 		"limit above the maximum": {Limit: 101}, "negative page": {Page: -1}, "too deep": {Page: 51, Limit: 100},
-		"bad status": {Status: "nope"}, "bad as_of": {AsOf: "nope"},
-		"as_of too old":       {AsOf: time.Now().Add(-25 * time.Hour).Format(time.RFC3339Nano)},
-		"as_of in the future": {AsOf: time.Now().Add(time.Hour).Format(time.RFC3339Nano)},
+		"bad status": {Status: "nope"}, "page that would overflow": {Page: math.MaxInt, Limit: 100},
+		"as_of too old":       {AsOf: lo.ToPtr(time.Now().Add(-25 * time.Hour))},
+		"as_of in the future": {AsOf: lo.ToPtr(time.Now().Add(time.Hour))},
 	} {
 		_, err := f.svc.List(ctx, &req)
 		requireKind(t, err, ierr.ErrValidation)
@@ -753,7 +754,7 @@ func TestReminder_ListUsesTheBoardRepositoryAndDoesNotWrite(t *testing.T) {
 	require.Equal(t, 15, f.board.limit, "the list defaults to 15")
 	require.Equal(t, 1, defaults.Page)
 	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
-	pinned, err := f.svc.List(ctx, &dto.ListRemindersRequest{AsOf: asOf.Format(time.RFC3339Nano)})
+	pinned, err := f.svc.List(ctx, &dto.ListRemindersRequest{AsOf: &asOf})
 	require.NoError(t, err)
 	require.True(t, pinned.AsOf.Equal(asOf))
 	require.True(t, f.board.query.AsOf.Equal(asOf))
@@ -804,4 +805,46 @@ func TestReminder_RowsOfManyInvoicesStayDistinct(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, types.ReminderStatusPending, got.Status, "one reminder per invoice: a sibling invoice is untouched")
 	require.Len(t, f.reminders.All(ctx), 1)
+}
+
+func TestReminder_ApprovalChecksThePreviewedText(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
+	f.overdue(t, ctx, "a2", "cust_1", 100, 5)
+
+	preview, err := f.svc.Get(ctx, "a1")
+	require.NoError(t, err)
+	approved := setStatus(types.ReminderStatusApproved, "")
+	approved.ExpectedSubject, approved.ExpectedBody = &preview.Subject, &preview.Body
+	got, err := f.svc.UpdateReminder(ctx, "a1", approved)
+	require.NoError(t, err, "the text the reviewer saw is the text approved")
+	require.Equal(t, preview.Body, got.Body)
+
+	stale := setStatus(types.ReminderStatusApproved, "")
+	stale.ExpectedBody = lo.ToPtr("What the reviewer saw when the invoice was 3 days overdue")
+	_, err = f.svc.UpdateReminder(ctx, "a2", stale)
+	requireKind(t, err, ierr.ErrVersionConflict)
+	row, err := f.svc.Get(ctx, "a2")
+	require.NoError(t, err)
+	require.Equal(t, types.ReminderStatusPending, row.Status, "a stale preview approves nothing")
+
+	for name, bad := range map[string]*dto.UpdateReminderRequest{
+		"expected text without an approval": {Status: types.ReminderStatusHeld, StatusReason: "x", ExpectedBody: lo.ToPtr("b")},
+		"expected text on a mail edit":      {Body: lo.ToPtr("b"), ExpectedSubject: lo.ToPtr("s")},
+	} {
+		require.Error(t, bad.Validate(), name)
+	}
+	bulk := &dto.BulkUpdateRemindersRequest{InvoiceIDs: []string{"a1"}, UpdateReminderRequest: *approved}
+	require.Error(t, bulk.Validate(), "bulk approval cannot check the text of one reminder")
+}
+
+func TestReminderWhy_ApprovedReminderKeepsItsFrozenTone(t *testing.T) {
+	v := dto.InvoiceReminderResponse{Status: types.ReminderStatusApproved, Tone: types.ReminderToneFriendly}
+	why := reminderWhy(v, 75)
+	require.Len(t, why, 1)
+	require.Contains(t, why[0], reminderToneLabel(types.ReminderToneFriendly), "the approved tone, not the tone of today's age")
+	require.NotContains(t, why[0], reminderToneLabel(types.ReminderToneFinal))
+	require.Contains(t, why[0], "75 days overdue")
 }
