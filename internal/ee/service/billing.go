@@ -2491,10 +2491,10 @@ func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig ty
 	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
 		issueDate = issueDate.In(loc)
 	}
-	dueDate, ok := lo.FromPtr(sub.PaymentTermsType).DueDate(sub.PaymentTermsDays, issueDate)
+	dueDate, ok := lo.FromPtr(sub.PaymentTermsType).DueDate(lo.FromPtr(sub.PaymentTermsDays), issueDate)
 	if !ok {
 		tenantType, tenantDays := lo.FromPtr(invoiceConfig.PaymentTerms).Parts()
-		dueDate, ok = lo.FromPtr(tenantType).DueDate(tenantDays, issueDate)
+		dueDate, ok = lo.FromPtr(tenantType).DueDate(lo.FromPtr(tenantDays), issueDate)
 	}
 	if !ok {
 		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))

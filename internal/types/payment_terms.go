@@ -147,13 +147,13 @@ func ResolvePaymentTerms(legacy *PaymentTerms, termsType *PaymentTermsType, days
 // DueDate returns the invoice due date for terms of this type, counted from the issue date; days applies to DAYS only.
 // End of month terms take the last day of the issue date's month (or the next) in issueDate's location.
 // Returns false if the type is empty or invalid, or DAYS has no valid day count.
-func (t PaymentTermsType) DueDate(days *int, issueDate time.Time) (time.Time, bool) {
+func (t PaymentTermsType) DueDate(days int, issueDate time.Time) (time.Time, bool) {
 	switch t {
 	case PaymentTermsTypeDays:
-		if days == nil || *days < paymentTermsMinNetDays || *days > paymentTermsMaxNetDays {
+		if days < paymentTermsMinNetDays || days > paymentTermsMaxNetDays {
 			return time.Time{}, false
 		}
-		return issueDate.AddDate(0, 0, *days), true
+		return issueDate.AddDate(0, 0, days), true
 	case PaymentTermsTypeDueOnReceipt:
 		return issueDate, true
 	case PaymentTermsTypeEndOfMonth:

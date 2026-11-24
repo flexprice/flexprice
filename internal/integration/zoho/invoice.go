@@ -479,20 +479,21 @@ func (s *InvoiceService) setDates(ctx context.Context, req *InvoiceCreateRequest
 		return nil
 	}
 
-	termsType, days := sub.PaymentTermsType, sub.PaymentTermsDays
-	if termsType == nil {
+	termsType, days := lo.FromPtr(sub.PaymentTermsType), lo.FromPtr(sub.PaymentTermsDays)
+	if termsType == "" {
 		tenantTerms, err := s.tenantPaymentTerms(ctx)
 		if err != nil {
 			return err
 		}
-		termsType, days = tenantTerms.Parts()
+		tenantType, tenantDays := tenantTerms.Parts()
+		termsType, days = lo.FromPtr(tenantType), lo.FromPtr(tenantDays)
 	}
-	termsDue, ok := lo.FromPtr(termsType).DueDate(days, issueDate)
+	termsDue, ok := termsType.DueDate(days, issueDate)
 	if !ok || !termsDue.Equal(*inv.DueDate) {
 		return nil
 	}
 
-	switch *termsType {
+	switch termsType {
 	case types.PaymentTermsTypeEndOfMonth:
 		req.PaymentTerms = lo.ToPtr(zohoPaymentTermsEndOfMonth)
 	case types.PaymentTermsTypeEndOfNextMonth:
@@ -501,8 +502,8 @@ func (s *InvoiceService) setDates(ctx context.Context, req *InvoiceCreateRequest
 		req.PaymentTerms = lo.ToPtr(0)
 		req.PaymentTermsLabel = "Due on Receipt"
 	case types.PaymentTermsTypeDays:
-		req.PaymentTerms = days
-		req.PaymentTermsLabel = fmt.Sprintf("Net %d", *days)
+		req.PaymentTerms = lo.ToPtr(days)
+		req.PaymentTermsLabel = fmt.Sprintf("Net %d", days)
 	}
 	return nil
 }
