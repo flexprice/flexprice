@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -654,8 +655,12 @@ type CreateSubscriptionRequest struct {
 	// SubscriptionStatus: set to "draft" to skip invoice creation and payment on create.
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
-	// PaymentTerms sets when invoices fall due. Omit to use the tenant's.
+	// Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
+	// PaymentTermsType sets when invoices fall due. Omit to use the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty" minimum:"1" maximum:"365"`
 
 	// Settings overrides the customer and environment settings for this subscription.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
@@ -781,8 +786,12 @@ type UpdateSubscriptionRequest struct {
 	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
-	// PaymentTerms sets when invoices fall due. Omit to leave unchanged; send "" to use the tenant's.
+	// Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.
 	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
+	// PaymentTermsType sets when invoices fall due. Omit to leave unchanged; send "" to use the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty" minimum:"1" maximum:"365"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -798,11 +807,11 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	if r.PaymentTerms != nil {
-		if err := r.PaymentTerms.Validate(); err != nil {
-			return err
-		}
+	paymentTerms, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
+	if err != nil {
+		return err
 	}
+	r.PaymentTerms = paymentTerms
 
 	return nil
 }
@@ -990,6 +999,19 @@ type SubscriptionResponse struct {
 
 	// Commitments are the commitments created with the subscription; set on create only.
 	Commitments []*CommitmentResponse `json:"commitments,omitempty"`
+
+	// PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
+}
+
+// MarshalJSON adds payment_terms_type and payment_terms_days, derived from payment_terms.
+func (r SubscriptionResponse) MarshalJSON() ([]byte, error) {
+	type plain SubscriptionResponse
+	out := plain(r)
+	out.PaymentTermsType, out.PaymentTermsDays = paymentTermsParts(r.Subscription)
+	return json.Marshal(out)
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -1029,6 +1051,26 @@ type SubscriptionResponseV2 struct {
 	// is behind the plan's current max prices.sequence — i.e. plan-price
 	// changes have not yet been reconciled into this subscription's line items.
 	PlanPricesOutOfSync bool `json:"plan_prices_out_of_sync"`
+
+	// PaymentTermsType is the subscription's payment terms type; absent when it uses the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
+}
+
+// MarshalJSON adds payment_terms_type and payment_terms_days, derived from payment_terms.
+func (r SubscriptionResponseV2) MarshalJSON() ([]byte, error) {
+	type plain SubscriptionResponseV2
+	out := plain(r)
+	out.PaymentTermsType, out.PaymentTermsDays = paymentTermsParts(r.Subscription)
+	return json.Marshal(out)
+}
+
+func paymentTermsParts(sub *subscription.Subscription) (*types.PaymentTermsType, *int) {
+	if sub == nil || sub.PaymentTerms == nil {
+		return nil, nil
+	}
+	return sub.PaymentTerms.Parts()
 }
 
 // ApplyDefaults fills the creation config's defaults, starts the subscription now unless given a start, and puts its
@@ -1255,11 +1297,11 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	if r.PaymentTerms != nil {
-		if err := (*r.PaymentTerms).Validate(); err != nil {
-			return err
-		}
+	paymentTerms, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
+	if err != nil {
+		return err
 	}
+	r.PaymentTerms = lo.Ternary(lo.FromPtr(paymentTerms) == "", nil, paymentTerms)
 
 	// Set default value to Billing Period Count if not provided
 	if r.BillingPeriodCount == 0 {

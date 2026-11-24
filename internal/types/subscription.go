@@ -274,7 +274,7 @@ func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
 }
 
 // PaymentTerms sets when an invoice falls due, counted from its issue date.
-// @Description "<days> NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.
+// @Description Deprecated: use payment_terms_type and payment_terms_days. "<days> NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.
 type PaymentTerms string
 
 const (
@@ -332,6 +332,79 @@ func PaymentTermsToDueDateDays(p PaymentTerms) (int, bool) {
 		return 0, false
 	}
 	return days, true
+}
+
+// PaymentTermsType is the kind of payment terms; DAYS takes a day count.
+// @Description DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.
+type PaymentTermsType string
+
+const (
+	PaymentTermsTypeDays           PaymentTermsType = "DAYS"
+	PaymentTermsTypeDueOnReceipt   PaymentTermsType = "DUE_ON_RECEIPT"
+	PaymentTermsTypeEndOfMonth     PaymentTermsType = "END_OF_MONTH"
+	PaymentTermsTypeEndOfNextMonth PaymentTermsType = "END_OF_NEXT_MONTH"
+)
+
+// NewPaymentTerms builds payment terms from a type and, for DAYS only, a day count.
+func NewPaymentTerms(termsType PaymentTermsType, days *int) (PaymentTerms, error) {
+	switch termsType {
+	case PaymentTermsTypeDays:
+		terms := PaymentTerms(fmt.Sprintf("%d%s", lo.FromPtr(days), paymentTermsNetSuffix))
+		if _, ok := PaymentTermsToDueDateDays(terms); days == nil || !ok {
+			return "", ierr.NewError("invalid payment_terms_days").
+				WithHint(fmt.Sprintf("payment_terms_days must be from %d to %d when payment_terms_type is DAYS", paymentTermsMinNetDays, paymentTermsMaxNetDays)).
+				WithReportableDetails(map[string]any{"payment_terms_days": days}).
+				Mark(ierr.ErrValidation)
+		}
+		return terms, nil
+	case PaymentTermsTypeDueOnReceipt, PaymentTermsTypeEndOfMonth, PaymentTermsTypeEndOfNextMonth:
+		if days != nil {
+			return "", ierr.NewError("payment_terms_days is only allowed with payment_terms_type DAYS").
+				WithHint("Remove payment_terms_days or set payment_terms_type to DAYS").
+				WithReportableDetails(map[string]any{"payment_terms_type": termsType}).
+				Mark(ierr.ErrValidation)
+		}
+		return PaymentTerms(termsType), nil
+	default:
+		return "", ierr.NewError("invalid payment_terms_type").
+			WithHint("payment_terms_type must be DAYS, DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH").
+			WithReportableDetails(map[string]any{"payment_terms_type": termsType}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+// Parts splits payment terms into their type and, for DAYS, day count; both nil when empty or invalid.
+func (p PaymentTerms) Parts() (*PaymentTermsType, *int) {
+	switch p {
+	case PaymentTermsDueOnReceipt, PaymentTermsEndOfMonth, PaymentTermsEndOfNextMonth:
+		return lo.ToPtr(PaymentTermsType(p)), nil
+	}
+	if days, ok := PaymentTermsToDueDateDays(p); ok {
+		return lo.ToPtr(PaymentTermsTypeDays), &days
+	}
+	return nil, nil
+}
+
+// ResolvePaymentTerms returns the terms a request sets: payment_terms_type and payment_terms_days when sent, else
+// payment_terms. Nil when none is sent; "" clears.
+func ResolvePaymentTerms(legacy *PaymentTerms, termsType *PaymentTermsType, days *int) (*PaymentTerms, error) {
+	if termsType == nil && days == nil {
+		if legacy == nil {
+			return nil, nil
+		}
+		if err := legacy.Validate(); err != nil {
+			return nil, err
+		}
+		return legacy, nil
+	}
+	if lo.FromPtr(termsType) == "" && days == nil {
+		return lo.ToPtr(PaymentTerms("")), nil
+	}
+	terms, err := NewPaymentTerms(lo.FromPtr(termsType), days)
+	if err != nil {
+		return nil, err
+	}
+	return &terms, nil
 }
 
 // PaymentTermsDueDate returns the invoice due date for the payment terms, counted from the issue date.

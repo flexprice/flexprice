@@ -24550,7 +24550,17 @@
             "$ref": "#/components/schemas/types.PaymentBehavior"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "$ref": "#/components/schemas/types.PaymentTerms",
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "maximum": 365,
+            "minimum": 1,
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -31873,7 +31883,15 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "$ref": "#/components/schemas/types.PaymentTerms",
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -32109,7 +32127,15 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "$ref": "#/components/schemas/types.PaymentTerms",
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -33656,7 +33682,17 @@
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "$ref": "#/components/schemas/types.PaymentTerms",
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "maximum": 365,
+            "minimum": 1,
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
@@ -38654,7 +38690,7 @@
       },
       "types.PaymentTerms": {
         "type": "string",
-        "description": "\"<days> NET\" (days 1\u2013365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH. The enum lists common values.",
+        "description": "Deprecated: use payment_terms_type and payment_terms_days. \"<days> NET\" (days 1\u2013365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
         "enum": [
           "15 NET",
           "30 NET",
@@ -42147,6 +42183,23 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.PaymentTermsType": {
+        "type": "string",
+        "description": "DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
+        "enum": [
+          "DAYS",
+          "DUE_ON_RECEIPT",
+          "END_OF_MONTH",
+          "END_OF_NEXT_MONTH"
+        ],
+        "x-enum-varnames": [
+          "PaymentTermsTypeDays",
+          "PaymentTermsTypeDueOnReceipt",
+          "PaymentTermsTypeEndOfMonth",
+          "PaymentTermsTypeEndOfNextMonth"
+        ],
+        "x-speakeasy-name-override": "PaymentTermsType"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",

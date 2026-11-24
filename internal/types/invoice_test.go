@@ -117,3 +117,77 @@ func TestInvoiceConfig_PaymentTermsValidation(t *testing.T) {
 	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("366 NET"))
 	require.Error(t, cfg.Validate())
 }
+
+func TestResolvePaymentTerms(t *testing.T) {
+	terms := func(p PaymentTerms) *PaymentTerms { return &p }
+	tests := []struct {
+		name      string
+		legacy    *PaymentTerms
+		termsType *PaymentTermsType
+		days      *int
+		want      *PaymentTerms
+		wantErr   bool
+	}{
+		{name: "nothing sent"},
+		{name: "payment_terms only", legacy: terms("30 NET"), want: terms("30 NET")},
+		{name: "payment_terms clear", legacy: terms(""), want: terms("")},
+		{name: "invalid payment_terms", legacy: terms("0 NET"), wantErr: true},
+		{name: "days", termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(120), want: terms("120 NET")},
+		{name: "end of next month", termsType: lo.ToPtr(PaymentTermsTypeEndOfNextMonth), want: terms(PaymentTermsEndOfNextMonth)},
+		{name: "due on receipt", termsType: lo.ToPtr(PaymentTermsTypeDueOnReceipt), want: terms(PaymentTermsDueOnReceipt)},
+		{name: "type clear", termsType: lo.ToPtr(PaymentTermsType("")), want: terms("")},
+		{name: "type overrides payment_terms", legacy: terms("30 NET"), termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(45), want: terms("45 NET")},
+		{name: "type overrides invalid payment_terms", legacy: terms("bad"), termsType: lo.ToPtr(PaymentTermsTypeEndOfMonth), want: terms(PaymentTermsEndOfMonth)},
+		{name: "days without count", termsType: lo.ToPtr(PaymentTermsTypeDays), wantErr: true},
+		{name: "days over 365", termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(366), wantErr: true},
+		{name: "count with end of month", termsType: lo.ToPtr(PaymentTermsTypeEndOfMonth), days: lo.ToPtr(5), wantErr: true},
+		{name: "count without type", days: lo.ToPtr(45), wantErr: true},
+		{name: "unknown type", termsType: lo.ToPtr(PaymentTermsType("END_OF_WEEK")), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolvePaymentTerms(tt.legacy, tt.termsType, tt.days)
+			assert.Equal(t, tt.wantErr, err != nil)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPaymentTermsParts(t *testing.T) {
+	termsType, days := PaymentTerms("45 NET").Parts()
+	assert.Equal(t, lo.ToPtr(PaymentTermsTypeDays), termsType)
+	assert.Equal(t, lo.ToPtr(45), days)
+
+	termsType, days = PaymentTermsEndOfMonth.Parts()
+	assert.Equal(t, lo.ToPtr(PaymentTermsTypeEndOfMonth), termsType)
+	assert.Nil(t, days)
+
+	termsType, days = PaymentTerms("").Parts()
+	assert.Nil(t, termsType)
+	assert.Nil(t, days)
+}
+
+func TestResolveInvoiceConfigPaymentTerms(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   map[string]interface{}
+		want    map[string]interface{}
+		wantErr bool
+	}{
+		{name: "no payment terms", value: map[string]interface{}{"prefix": "INV"}, want: map[string]interface{}{"prefix": "INV"}},
+		{name: "payment_terms kept", value: map[string]interface{}{"payment_terms": "45 NET"}, want: map[string]interface{}{"payment_terms": "45 NET"}},
+		{name: "days", value: map[string]interface{}{"payment_terms_type": "DAYS", "payment_terms_days": 120}, want: map[string]interface{}{"payment_terms": "120 NET"}},
+		{name: "type overrides payment_terms", value: map[string]interface{}{"payment_terms": "30 NET", "payment_terms_type": "END_OF_MONTH"}, want: map[string]interface{}{"payment_terms": "END_OF_MONTH"}},
+		{name: "clear", value: map[string]interface{}{"payment_terms_type": ""}, want: map[string]interface{}{"payment_terms": nil}},
+		{name: "invalid", value: map[string]interface{}{"payment_terms_type": "DAYS", "payment_terms_days": 0}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ResolveInvoiceConfigPaymentTerms(tt.value)
+			assert.Equal(t, tt.wantErr, err != nil)
+			if !tt.wantErr {
+				assert.Equal(t, tt.want, tt.value)
+			}
+		})
+	}
+}

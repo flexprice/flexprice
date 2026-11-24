@@ -367,7 +367,12 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
 	switch key {
 	case types.SettingKeyInvoiceConfig:
-		return getSettingByKey[types.InvoiceConfig](s, ctx, key)
+		resp, err := getSettingByKey[types.InvoiceConfig](s, ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		types.AddInvoiceConfigPaymentTermsParts(resp.Value)
+		return resp, nil
 	case types.SettingKeySubscriptionConfig:
 		return getSettingByKey[types.SubscriptionConfig](s, ctx, key)
 	case types.SettingKeyInvoicePDFConfig:
@@ -438,6 +443,11 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return nil, err
 	}
 
+	if key == types.SettingKeyInvoiceConfig {
+		if err := types.ResolveInvoiceConfigPaymentTerms(req.Value); err != nil {
+			return nil, err
+		}
+	}
 	if err := req.Validate(key); err != nil {
 		return nil, err
 	}
