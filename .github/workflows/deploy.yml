@@ -495,6 +495,84 @@ jobs:
             --tag "${GHCR_IMAGE}:main" \
             "${GHCR_IMAGE}:${GITHUB_SHA}"
 
+  # Inert unless vars.AWS_EKS_PREPROD_TAG is set.
+  retag-eks-preprod:
+    name: Retag GHCR image (EKS preprod)
+    needs: [build, resolve-config, migrate]
+    if: >-
+      ${{ always() &&
+          vars.AWS_EKS_PREPROD_TAG != '' &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.environment == 'production' &&
+          needs.resolve-config.outputs.dry_run != 'true' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write # GHCR imagetools push
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          cache-binary: false
+
+      - name: Retag :<sha> -> preprod tag (manifest copy)
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          GITHUB_SHA: ${{ github.sha }}
+          TARGET_TAG: ${{ vars.AWS_EKS_PREPROD_TAG }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:${TARGET_TAG}" \
+            "${GHCR_IMAGE}:${GITHUB_SHA}"
+
+  # Inert unless vars.AWS_EKS_PROD_TAG is set.
+  retag-eks-prod:
+    name: Retag GHCR image (EKS prod)
+    needs: [build, resolve-config, migrate, approval-gate]
+    if: >-
+      ${{ always() &&
+          vars.AWS_EKS_PROD_TAG != '' &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+          needs.approval-gate.result == 'success' }}
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write # GHCR imagetools push
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          cache-binary: false
+
+      - name: Retag :<sha> -> prod tag (manifest copy)
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          GITHUB_SHA: ${{ github.sha }}
+          TARGET_TAG: ${{ vars.AWS_EKS_PROD_TAG }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:${TARGET_TAG}" \
+            "${GHCR_IMAGE}:${GITHUB_SHA}"
+
   # api, consumer, worker in one CodePipeline run.
   deploy-backend-codepipeline:
     name: Deploy API, Consumer, Worker (CodePipeline)
