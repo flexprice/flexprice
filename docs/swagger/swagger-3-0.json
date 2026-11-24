@@ -24550,7 +24550,11 @@
             "$ref": "#/components/schemas/types.PaymentBehavior"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
             "deprecated": true
           },
           "payment_terms_days": {
@@ -31883,7 +31887,11 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
             "deprecated": true
           },
           "payment_terms_days": {
@@ -32127,7 +32135,11 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
             "deprecated": true
           },
           "payment_terms_days": {

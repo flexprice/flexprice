@@ -175,16 +175,17 @@ function main() {
   }
 
   // 4c. Mark properties deprecated where their replacement exists; swag cannot deprecate a field.
+  //     OpenAPI 3.0 ignores keywords beside $ref, so a $ref property is wrapped in allOf first.
   const DEPRECATED_PROPERTIES = [{ property: 'payment_terms', replacedBy: 'payment_terms_type' }];
   let deprecatedCount = 0;
   for (const schema of Object.values(schemas)) {
     const props = schema?.properties;
     if (!props) continue;
     for (const { property, replacedBy } of DEPRECATED_PROPERTIES) {
-      if (props[property] && props[replacedBy]) {
-        props[property].deprecated = true;
-        deprecatedCount++;
-      }
+      if (!props[property] || !props[replacedBy]) continue;
+      const { $ref, ...rest } = props[property];
+      props[property] = $ref ? { ...rest, allOf: [{ $ref }], deprecated: true } : { ...rest, deprecated: true };
+      deprecatedCount++;
     }
   }
 
