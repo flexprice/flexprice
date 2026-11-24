@@ -28373,7 +28373,7 @@ const docTemplate = `{
             }
         },
         "PauseSubscriptionRequest": {
-            "description": "Pauses an active subscription now. Usage and arrear fixed charges up to the pause are billed on a closing invoice.",
+            "description": "Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation over the time the subscription was active.",
             "type": "object",
             "properties": {
                 "metadata": {
@@ -28383,8 +28383,13 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "pause_grace_period_days": {
+                    "description": "PauseGracePeriodDays cancels the subscription if it is not resumed within these days.\n@Description Must not go past the current period end. When omitted, the pause_grace_period_days of the subscription_config setting is used, capped at the period end, and without it the subscription is cancelled at the current period end if it is still paused.\n@Example 15",
+                    "type": "integer",
+                    "minimum": 1
+                },
                 "proration_behavior": {
-                    "description": "ProrationBehavior controls proration on the closing invoice. Defaults to none.\n@Description none bills arrear fixed charges for the full period and gives no credit. create_prorations bills arrear fixed charges for the used part of the period and credits the unused part of advance fixed charges to the wallet.",
+                    "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.\n@Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet when the period's invoice is finalized.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
@@ -29747,7 +29752,7 @@ const docTemplate = `{
             }
         },
         "ResumeSubscriptionRequest": {
-            "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date.",
+            "description": "Resumes a paused subscription now. No invoice is raised: the period's invoice carries on and is billed at the period end.",
             "type": "object",
             "properties": {
                 "metadata": {
@@ -29756,14 +29761,6 @@ const docTemplate = `{
                     "additionalProperties": {
                         "type": "string"
                     }
-                },
-                "proration_behavior": {
-                    "description": "ProrationBehavior, when sent, is saved on the subscription and prices the period that starts at the resume.\n@Description none bills fixed charges of the first period at the full price. create_prorations bills them for the remaining part of the period. When omitted, the subscription's current proration_behavior is used.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ProrationBehavior"
-                        }
-                    ]
                 }
             }
         },
@@ -31539,6 +31536,14 @@ const docTemplate = `{
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 },
                 "reason": {
                     "description": "Reason is the reason for pausing",
@@ -42185,6 +42190,14 @@ const docTemplate = `{
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
+                },
+                "proration_behavior": {
+                    "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
                 },
                 "reason": {
                     "description": "Reason is the reason for pausing",

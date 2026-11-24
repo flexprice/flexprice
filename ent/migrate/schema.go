@@ -1268,7 +1268,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[9], EmailLogsColumns[11]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "\"trigger\" = 'auto'",
+					Where: "((trigger)::text = 'auto'::text)",
 				},
 			},
 			{
@@ -1289,7 +1289,7 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[3]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "delivery_status = 'queued'",
+					Where: "((delivery_status)::text = 'queued'::text)",
 				},
 			},
 		},
@@ -3147,6 +3147,7 @@ var (
 		{Name: "pause_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "pause_mode", Type: field.TypeString, Default: "scheduled", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "resume_mode", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "proration_behavior", Type: field.TypeString, Default: "none", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "pause_start", Type: field.TypeTime},
 		{Name: "pause_end", Type: field.TypeTime, Nullable: true},
 		{Name: "resumed_at", Type: field.TypeTime, Nullable: true},
@@ -3164,7 +3165,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscription_pauses_subscriptions_pauses",
-				Columns:    []*schema.Column{SubscriptionPausesColumns[18]},
+				Columns:    []*schema.Column{SubscriptionPausesColumns[19]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -3173,17 +3174,17 @@ var (
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[18], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[19], SubscriptionPausesColumns[2]},
 			},
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_pause_start_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[11], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[12], SubscriptionPausesColumns[2]},
 			},
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_pause_end_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[12], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[13], SubscriptionPausesColumns[2]},
 			},
 		},
 	}

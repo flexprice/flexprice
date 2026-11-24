@@ -301,6 +301,9 @@ func (s *billingService) CalculateFixedCharges(
 				if skip {
 					continue
 				}
+				if item.InvoiceCadence == types.InvoiceCadenceArrear {
+					wAmount = wAmount.Mul(billedFractionOutsidePauses(serviceablePeriod, params.RefundablePausedPeriods))
+				}
 
 				// Shared: price unit + rounding. Emit one invoice line item per window.
 				line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, wAmount, effectiveStart, effectiveEnd)
@@ -2403,11 +2406,20 @@ func (s *billingService) calculateMeterUsageCharges(
 	filteredSub := *sub
 	filteredSub.LineItems = lineItems
 
+	// Paused time bills no usage, and refundable paused time is taken off arrear fixed charges.
+	pauses, err := s.SubRepo.ListPauses(ctx, sub.ID)
+	if err != nil {
+		return nil, err
+	}
+	stretches := pausedStretches(pauses, periodStart, periodEnd)
+	pausedPeriods := lo.Map(stretches, func(st pausedStretch, _ int) types.Period { return st.period })
+
 	// Fixed charges (all of them, one call — CalculateFixedCharges fans out per item).
 	fixedResult, err := s.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-		Subscription: &filteredSub,
-		PeriodStart:  periodStart,
-		PeriodEnd:    periodEnd,
+		Subscription:            &filteredSub,
+		PeriodStart:             periodStart,
+		PeriodEnd:               periodEnd,
+		RefundablePausedPeriods: refundablePeriods(stretches),
 	})
 	if err != nil {
 		return nil, err
@@ -2460,6 +2472,7 @@ func (s *billingService) calculateMeterUsageCharges(
 					EndTime:        w.End,
 					Source:         string(source),
 					LineItems:      windowLineItems,
+					PausedPeriods:  pausedPeriods,
 				})
 				if err != nil {
 					return nil, err

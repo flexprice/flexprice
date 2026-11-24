@@ -19,6 +19,9 @@ type SubscriptionPause struct {
 	PauseMode   types.PauseMode   `db:"pause_mode" json:"pause_mode"`
 	ResumeMode  types.ResumeMode  `db:"resume_mode" json:"resume_mode,omitempty"`
 
+	// ProrationBehavior decides whether this pause's days are taken off the fixed charges.
+	ProrationBehavior types.ProrationBehavior `db:"proration_behavior" json:"proration_behavior"`
+
 	// PauseStart is when the pause actually started
 	PauseStart time.Time `db:"pause_start" json:"pause_start"`
 
@@ -57,6 +60,7 @@ func SubscriptionPauseFromEnt(p *ent.SubscriptionPause) *SubscriptionPause {
 		PauseStatus:         types.PauseStatus(p.PauseStatus),
 		PauseMode:           types.PauseMode(p.PauseMode),
 		ResumeMode:          types.ResumeMode(p.ResumeMode),
+		ProrationBehavior:   types.ProrationBehavior(p.ProrationBehavior),
 		PauseStart:          p.PauseStart,
 		PauseEnd:            p.PauseEnd,
 		ResumedAt:           p.ResumedAt,

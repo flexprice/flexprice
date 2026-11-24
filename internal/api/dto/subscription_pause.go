@@ -7,11 +7,16 @@ import (
 )
 
 // PauseSubscriptionRequest pauses an active subscription immediately.
-// @Description Pauses an active subscription now. Usage and arrear fixed charges up to the pause are billed on a closing invoice.
+// @Description Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation over the time the subscription was active.
 type PauseSubscriptionRequest struct {
-	// ProrationBehavior controls proration on the closing invoice. Defaults to none.
-	// @Description none bills arrear fixed charges for the full period and gives no credit. create_prorations bills arrear fixed charges for the used part of the period and credits the unused part of advance fixed charges to the wallet.
+	// ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.
+	// @Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet when the period's invoice is finalized.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
+
+	// PauseGracePeriodDays cancels the subscription if it is not resumed within these days.
+	// @Description Must not go past the current period end. When omitted, the pause_grace_period_days of the subscription_config setting is used, capped at the period end, and without it the subscription is cancelled at the current period end if it is still paused.
+	// @Example 15
+	PauseGracePeriodDays *int `json:"pause_grace_period_days,omitempty" validate:"omitempty,min=1"`
 
 	// Reason for pausing the subscription
 	// @Description Optional reason for the pause. Maximum 255 characters
@@ -35,12 +40,8 @@ func (r *PauseSubscriptionRequest) Validate() error {
 }
 
 // ResumeSubscriptionRequest resumes a paused subscription immediately.
-// @Description Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date.
+// @Description Resumes a paused subscription now. No invoice is raised: the period's invoice carries on and is billed at the period end.
 type ResumeSubscriptionRequest struct {
-	// ProrationBehavior, when sent, is saved on the subscription and prices the period that starts at the resume.
-	// @Description none bills fixed charges of the first period at the full price. create_prorations bills them for the remaining part of the period. When omitted, the subscription's current proration_behavior is used.
-	ProrationBehavior *types.ProrationBehavior `json:"proration_behavior,omitempty"`
-
 	// Metadata merged into the pause
 	// @Example {"resumed_by": "admin"}
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -48,13 +49,7 @@ type ResumeSubscriptionRequest struct {
 
 // Validate validates the resume subscription request
 func (r *ResumeSubscriptionRequest) Validate() error {
-	if err := validator.ValidateRequest(r); err != nil {
-		return err
-	}
-	if r.ProrationBehavior != nil {
-		return r.ProrationBehavior.Validate()
-	}
-	return nil
+	return validator.ValidateRequest(r)
 }
 
 // SubscriptionPauseResponse represents a subscription pause in API responses

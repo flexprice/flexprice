@@ -2202,6 +2202,8 @@ type GetUsageBySubscriptionRequest struct {
 	Source string `json:"-"`
 	// LineItems are the active line items at StartTime; empty loads them.
 	LineItems []*subscription.SubscriptionLineItem `json:"-"`
+	// PausedPeriods, sorted by start, are left out of the billing usage.
+	PausedPeriods []types.Period `json:"-"`
 }
 
 type GetUsageBySubscriptionResponse struct {

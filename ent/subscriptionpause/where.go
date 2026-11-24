@@ -120,6 +120,11 @@ func ResumeMode(v string) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldEQ(FieldResumeMode, v))
 }
 
+// ProrationBehavior applies equality check predicate on the "proration_behavior" field. It's identical to ProrationBehaviorEQ.
+func ProrationBehavior(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldEQ(FieldProrationBehavior, v))
+}
+
 // PauseStart applies equality check predicate on the "pause_start" field. It's identical to PauseStartEQ.
 func PauseStart(v time.Time) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldEQ(FieldPauseStart, v))
@@ -853,6 +858,71 @@ func ResumeModeEqualFold(v string) predicate.SubscriptionPause {
 // ResumeModeContainsFold applies the ContainsFold predicate on the "resume_mode" field.
 func ResumeModeContainsFold(v string) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldContainsFold(FieldResumeMode, v))
+}
+
+// ProrationBehaviorEQ applies the EQ predicate on the "proration_behavior" field.
+func ProrationBehaviorEQ(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldEQ(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorNEQ applies the NEQ predicate on the "proration_behavior" field.
+func ProrationBehaviorNEQ(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldNEQ(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorIn applies the In predicate on the "proration_behavior" field.
+func ProrationBehaviorIn(vs ...string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldIn(FieldProrationBehavior, vs...))
+}
+
+// ProrationBehaviorNotIn applies the NotIn predicate on the "proration_behavior" field.
+func ProrationBehaviorNotIn(vs ...string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldNotIn(FieldProrationBehavior, vs...))
+}
+
+// ProrationBehaviorGT applies the GT predicate on the "proration_behavior" field.
+func ProrationBehaviorGT(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldGT(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorGTE applies the GTE predicate on the "proration_behavior" field.
+func ProrationBehaviorGTE(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldGTE(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorLT applies the LT predicate on the "proration_behavior" field.
+func ProrationBehaviorLT(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldLT(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorLTE applies the LTE predicate on the "proration_behavior" field.
+func ProrationBehaviorLTE(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldLTE(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorContains applies the Contains predicate on the "proration_behavior" field.
+func ProrationBehaviorContains(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldContains(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorHasPrefix applies the HasPrefix predicate on the "proration_behavior" field.
+func ProrationBehaviorHasPrefix(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldHasPrefix(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorHasSuffix applies the HasSuffix predicate on the "proration_behavior" field.
+func ProrationBehaviorHasSuffix(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldHasSuffix(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorEqualFold applies the EqualFold predicate on the "proration_behavior" field.
+func ProrationBehaviorEqualFold(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldEqualFold(FieldProrationBehavior, v))
+}
+
+// ProrationBehaviorContainsFold applies the ContainsFold predicate on the "proration_behavior" field.
+func ProrationBehaviorContainsFold(v string) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldContainsFold(FieldProrationBehavior, v))
 }
 
 // PauseStartEQ applies the EQ predicate on the "pause_start" field.

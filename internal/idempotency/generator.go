@@ -42,6 +42,9 @@ const (
 	// ScopePlanChange scopes the single settlement invoice a swap-in-place plan
 	// change raises.
 	ScopePlanChange Scope = "plan_change"
+
+	// ScopePauseProratedCredit scopes the one wallet credit a subscription gets per billing period for its prorated paused time.
+	ScopePauseProratedCredit Scope = "pause_prorated_credit"
 )
 
 // Generator generates idempotency keys

@@ -291,6 +291,9 @@ type GetSubscriptionMeterUsageRequest struct {
 	// restricts the query to the subscription owner's external_id only.
 	IncludeChildren bool
 
+	// PausedPeriods, sorted by start, are left out of the billing usage queries.
+	PausedPeriods []types.Period
+
 	// ForceApplyCommitment, when true, keeps commitment / true-up cost active
 	// even on fanned-out analytics AND routes commitment line items through
 	// the source-fanning query path so the CSV export can produce per-source
@@ -733,6 +736,9 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 				AggregationType:     group.AggType,
 				UseFinal:            req.UseFinal,
 			}
+			if len(req.PausedPeriods) > 0 {
+				queryParams.TimeRanges = activeTimeRanges(group.Start, group.End, req.PausedPeriods)
+			}
 
 			results, err := s.repo.GetUsageMultiMeter(ctx, queryParams)
 			if err != nil {
@@ -853,7 +859,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 			bucketedResult, err := s.queryBucketedMeterUsage(
 				ctx, m, p, externalCustomerIDs,
 				itemStart, itemEnd, req.BillingAnchor, req.UseFinal,
-				req.PropertyFilters, req.Sources, req.CollectSources,
+				req.PropertyFilters, req.Sources, req.CollectSources, req.PausedPeriods,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to query bucketed meter usage for meter %s: %w", meterID, err)
@@ -1071,6 +1077,7 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 	propertyFilters map[string][]string,
 	sources []string,
 	collectSources bool,
+	pausedPeriods []types.Period,
 ) (*events.AggregationResult, error) {
 	aggType := m.Aggregation.Type
 	meterGroupBy := price.BucketedGroupBy(p, m)
@@ -1099,6 +1106,9 @@ func (s *meterUsageService) queryBucketedMeterUsage(
 		UseFinal:            useFinal,
 		PropertyFilters:     propertyFilters,
 		Sources:             sources,
+	}
+	if len(pausedPeriods) > 0 {
+		queryParams.TimeRanges = activeTimeRanges(periodStart, periodEnd, pausedPeriods)
 	}
 
 	result, err := s.repo.GetUsageForBucketedMeters(ctx, queryParams)

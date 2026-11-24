@@ -151,6 +151,20 @@ func (_c *SubscriptionPauseCreate) SetNillableResumeMode(v *string) *Subscriptio
 	return _c
 }
 
+// SetProrationBehavior sets the "proration_behavior" field.
+func (_c *SubscriptionPauseCreate) SetProrationBehavior(v string) *SubscriptionPauseCreate {
+	_c.mutation.SetProrationBehavior(v)
+	return _c
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (_c *SubscriptionPauseCreate) SetNillableProrationBehavior(v *string) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetProrationBehavior(*v)
+	}
+	return _c
+}
+
 // SetPauseStart sets the "pause_start" field.
 func (_c *SubscriptionPauseCreate) SetPauseStart(v time.Time) *SubscriptionPauseCreate {
 	_c.mutation.SetPauseStart(v)
@@ -307,6 +321,10 @@ func (_c *SubscriptionPauseCreate) defaults() {
 		v := subscriptionpause.DefaultPauseMode
 		_c.mutation.SetPauseMode(v)
 	}
+	if _, ok := _c.mutation.ProrationBehavior(); !ok {
+		v := subscriptionpause.DefaultProrationBehavior
+		_c.mutation.SetProrationBehavior(v)
+	}
 	if _, ok := _c.mutation.PauseStart(); !ok {
 		v := subscriptionpause.DefaultPauseStart()
 		_c.mutation.SetPauseStart(v)
@@ -362,6 +380,14 @@ func (_c *SubscriptionPauseCreate) check() error {
 	if v, ok := _c.mutation.PauseMode(); ok {
 		if err := subscriptionpause.PauseModeValidator(v); err != nil {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ProrationBehavior(); !ok {
+		return &ValidationError{Name: "proration_behavior", err: errors.New(`ent: missing required field "SubscriptionPause.proration_behavior"`)}
+	}
+	if v, ok := _c.mutation.ProrationBehavior(); ok {
+		if err := subscriptionpause.ProrationBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.proration_behavior": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.PauseStart(); !ok {
@@ -450,6 +476,10 @@ func (_c *SubscriptionPauseCreate) createSpec() (*SubscriptionPause, *sqlgraph.C
 	if value, ok := _c.mutation.ResumeMode(); ok {
 		_spec.SetField(subscriptionpause.FieldResumeMode, field.TypeString, value)
 		_node.ResumeMode = value
+	}
+	if value, ok := _c.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
+		_node.ProrationBehavior = value
 	}
 	if value, ok := _c.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)

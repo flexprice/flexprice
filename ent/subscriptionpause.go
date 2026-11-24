@@ -41,6 +41,8 @@ type SubscriptionPause struct {
 	PauseMode string `json:"pause_mode,omitempty"`
 	// ResumeMode holds the value of the "resume_mode" field.
 	ResumeMode string `json:"resume_mode,omitempty"`
+	// ProrationBehavior holds the value of the "proration_behavior" field.
+	ProrationBehavior string `json:"proration_behavior,omitempty"`
 	// PauseStart holds the value of the "pause_start" field.
 	PauseStart time.Time `json:"pause_start,omitempty"`
 	// PauseEnd holds the value of the "pause_end" field.
@@ -88,7 +90,7 @@ func (*SubscriptionPause) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case subscriptionpause.FieldMetadata:
 			values[i] = new([]byte)
-		case subscriptionpause.FieldID, subscriptionpause.FieldTenantID, subscriptionpause.FieldStatus, subscriptionpause.FieldCreatedBy, subscriptionpause.FieldUpdatedBy, subscriptionpause.FieldEnvironmentID, subscriptionpause.FieldSubscriptionID, subscriptionpause.FieldPauseStatus, subscriptionpause.FieldPauseMode, subscriptionpause.FieldResumeMode, subscriptionpause.FieldReason:
+		case subscriptionpause.FieldID, subscriptionpause.FieldTenantID, subscriptionpause.FieldStatus, subscriptionpause.FieldCreatedBy, subscriptionpause.FieldUpdatedBy, subscriptionpause.FieldEnvironmentID, subscriptionpause.FieldSubscriptionID, subscriptionpause.FieldPauseStatus, subscriptionpause.FieldPauseMode, subscriptionpause.FieldResumeMode, subscriptionpause.FieldProrationBehavior, subscriptionpause.FieldReason:
 			values[i] = new(sql.NullString)
 		case subscriptionpause.FieldCreatedAt, subscriptionpause.FieldUpdatedAt, subscriptionpause.FieldPauseStart, subscriptionpause.FieldPauseEnd, subscriptionpause.FieldResumedAt, subscriptionpause.FieldOriginalPeriodStart, subscriptionpause.FieldOriginalPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -178,6 +180,12 @@ func (_m *SubscriptionPause) assignValues(columns []string, values []any) error 
 				return fmt.Errorf("unexpected type %T for field resume_mode", values[i])
 			} else if value.Valid {
 				_m.ResumeMode = value.String
+			}
+		case subscriptionpause.FieldProrationBehavior:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field proration_behavior", values[i])
+			} else if value.Valid {
+				_m.ProrationBehavior = value.String
 			}
 		case subscriptionpause.FieldPauseStart:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -298,6 +306,9 @@ func (_m *SubscriptionPause) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("resume_mode=")
 	builder.WriteString(_m.ResumeMode)
+	builder.WriteString(", ")
+	builder.WriteString("proration_behavior=")
+	builder.WriteString(_m.ProrationBehavior)
 	builder.WriteString(", ")
 	builder.WriteString("pause_start=")
 	builder.WriteString(_m.PauseStart.Format(time.ANSIC))

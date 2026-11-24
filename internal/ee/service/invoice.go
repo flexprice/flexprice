@@ -497,15 +497,6 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	// A paused period is recorded by CreatePausedPeriodInvoice and never billed.
-	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
-		return nil, ierr.NewError("cannot create a billing draft for a paused subscription").
-			WithHint("Resume the subscription before billing its current period").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": sub.ID,
-			}).
-			Mark(ierr.ErrValidation)
-	}
 	billingPeriodStr := string(sub.BillingPeriod)
 	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	billingReason := types.InvoiceBillingReasonSubscriptionCycle
@@ -861,6 +852,10 @@ func (s *invoiceService) ComputeInvoice(ctx context.Context, invoiceID string, r
 			now := clock.Now()
 			inv.LastComputedAt = &now
 			inv.InvoiceStatus = types.InvoiceStatusSkipped
+			// A closed period with nothing to bill is never finalized, so its paused advance credit is given here.
+			if err := s.creditPausedAdvanceCharges(txCtx, inv); err != nil {
+				return err
+			}
 			if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 				return err
 			}
@@ -1683,6 +1678,9 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		}
 		if len(unclaimed) > 0 {
 			return staleDraftError(lockedInv.ID, unclaimed, "Recompute the invoice and finalize again")
+		}
+		if err := s.creditPausedAdvanceCharges(txCtx, lockedInv); err != nil {
+			return err
 		}
 
 		if err := s.InvoiceRepo.Update(txCtx, lockedInv); err != nil {

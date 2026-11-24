@@ -38,6 +38,8 @@ type CalculateFixedChargesParams struct {
 	// OpeningInvoiceAdjustmentAmount is an optional credit (e.g. plan-change netting) applied only to
 	// fixed line amounts after rounding, before coupons.
 	OpeningInvoiceAdjustmentAmount *decimal.Decimal `json:"-"`
+	// RefundablePausedPeriods are paused stretches taken off arrear fixed charges.
+	RefundablePausedPeriods []types.Period `json:"-"`
 }
 
 // Validate enforces struct tags and a non-negative optional adjustment.
