@@ -1,7 +1,4 @@
 -- migrate:up
-SET LOCAL lock_timeout = '3s';
-SET LOCAL statement_timeout = '30s';
-
 CREATE TABLE IF NOT EXISTS "invoice_reminders" (
   "id" varchar(50) NOT NULL,
   "tenant_id" varchar(50) NOT NULL,
@@ -15,14 +12,13 @@ CREATE TABLE IF NOT EXISTS "invoice_reminders" (
   "reminder_status" varchar(20) NOT NULL DEFAULT 'pending',
   "status_reason" text NULL,
   "approved_at" timestamptz NULL,
-  "original_tone" varchar(20) NOT NULL,
-  "original_subject" text NOT NULL,
-  "original_body" text NOT NULL,
-  "mail_tone" varchar(20) NOT NULL,
-  "mail_subject" text NOT NULL,
-  "mail_body" text NOT NULL,
+  "metadata" jsonb NULL,
+  "tone" varchar(20) NOT NULL,
+  "subject" text NOT NULL,
+  "body" text NOT NULL,
   PRIMARY KEY ("id")
 );
+-- One live reminder per invoice. The table is new, so a plain build inside this transaction blocks nothing.
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_invoice_reminder_tenant_env_invoice" ON "invoice_reminders" ("tenant_id", "environment_id", "invoice_id") WHERE ((status)::text = 'published'::text);
 
 -- migrate:down
