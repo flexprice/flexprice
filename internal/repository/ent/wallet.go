@@ -200,24 +200,6 @@ func (r *walletRepository) GetWalletForUpdate(ctx context.Context, id string) (*
 	return walletdomain.FromEnt(w), nil
 }
 
-// invalidateCacheAfterCommit drops cache post-commit.
-func (r *walletRepository) invalidateCacheAfterCommit(ctx context.Context, walletID string) {
-	tx, ok := ctx.Value(types.CtxDBTransaction).(*ent.Tx)
-	if !ok {
-		r.DeleteCache(ctx, walletID)
-		return
-	}
-	tx.OnCommit(func(next ent.Committer) ent.Committer {
-		return ent.CommitFunc(func(c context.Context, t *ent.Tx) error {
-			err := next.Commit(c, t)
-			if err == nil {
-				r.DeleteCache(ctx, walletID)
-			}
-			return err
-		})
-	})
-}
-
 func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*walletdomain.Wallet, error) {
 	client := r.client.Reader(ctx)
 
@@ -547,7 +529,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	r.invalidateCacheAfterCommit(ctx, walletID)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, walletID) })
 	return nil
 }
 
