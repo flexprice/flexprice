@@ -542,6 +542,16 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return r.validateIssueDate()
+}
+
+func (r *CreateInvoiceRequest) validateIssueDate() error {
+	if r.IssueDate != nil && r.IssueDate.After(clock.Now()) {
+		return ierr.NewError("issue_date cannot be in the future").
+			WithHint("Issue date cannot be in the future").
+			WithReportableDetails(map[string]any{"issue_date": r.IssueDate}).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
@@ -554,11 +564,8 @@ func (r *CreateInvoiceRequest) Validate() error {
 		return err
 	}
 
-	if r.IssueDate != nil && r.IssueDate.After(clock.Now()) {
-		return ierr.NewError("issue_date cannot be in the future").
-			WithHint("Issue date cannot be in the future").
-			WithReportableDetails(map[string]any{"issue_date": r.IssueDate}).
-			Mark(ierr.ErrValidation)
+	if err := r.validateIssueDate(); err != nil {
+		return err
 	}
 
 	// Allow negative amount_due for credit invoices, but not for other types

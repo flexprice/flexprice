@@ -1541,8 +1541,8 @@ func (r *invoiceRepository) GetRevenueTrend(ctx context.Context, windowCount int
 		FROM windows w
 		CROSS JOIN currencies c
 		LEFT JOIN invoices i
-			ON i.created_at >= w.window_start
-		 AND i.created_at <  w.window_end
+			ON i.issue_date >= w.window_start
+		 AND i.issue_date <  w.window_end
 		 AND i.tenant_id = $2
 		 AND i.environment_id = $3
 		 AND i.invoice_status = 'FINALIZED'

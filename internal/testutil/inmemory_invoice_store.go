@@ -753,10 +753,10 @@ func (s *InMemoryInvoiceStore) GetRevenueTrend(ctx context.Context, windowCount 
 		for currency := range currencies {
 			totalRevenue := decimal.Zero
 			for _, inv := range invoices {
-				if inv.Currency == currency && inv.FinalizedAt != nil {
-					finalizedTime := *inv.FinalizedAt
-					if (finalizedTime.Equal(windowStart) || finalizedTime.After(windowStart)) &&
-						(finalizedTime.Equal(windowEnd) || finalizedTime.Before(windowEnd)) {
+				if inv.Currency == currency && inv.FinalizedAt != nil && inv.IssueDate != nil {
+					issueTime := *inv.IssueDate
+					if (issueTime.Equal(windowStart) || issueTime.After(windowStart)) &&
+						(issueTime.Equal(windowEnd) || issueTime.Before(windowEnd)) {
 						totalRevenue = totalRevenue.Add(inv.Total)
 					}
 				}

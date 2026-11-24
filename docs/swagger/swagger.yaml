@@ -14839,8 +14839,6 @@ definitions:
     - credit_consumption
     - credit_topups
     - net_billing
-    - invoice_total_issued
-    - net_billing_issued
     - active_customers
     type: string
     x-enum-varnames:
@@ -14856,8 +14854,6 @@ definitions:
     - MetricCreditConsumption
     - MetricCreditTopups
     - MetricNetBilling
-    - MetricInvoiceTotalIssued
-    - MetricNetBillingIssued
     - MetricActiveCustomers
   types.ModifySubscriptionLineItem:
     properties:
