@@ -13,7 +13,6 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -145,12 +144,10 @@ func (s *reminderService) UpdateReminder(ctx context.Context, invoiceID string, 
 		return nil, err
 	}
 	if next != nil {
-		queued, err := s.save(ctx, row, c, next)
-		if err != nil {
+		if err := s.save(ctx, row, c, next); err != nil {
 			return nil, err
 		}
 		row.Reminder = next
-		s.sendNow(ctx, []*emaillog.EmailLog{queued})
 	}
 	if rc.emails, err = s.reminderEmails(ctx, []collections.Row{row}, true); err != nil {
 		return nil, err
@@ -169,7 +166,6 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 	}
 
 	applied := map[string]collections.Row{}
-	var queued []*emaillog.EmailLog
 	var inserts []*collections.InvoiceReminder
 	for _, row := range rows {
 		next, err := s.plan(ctx, row, customers[row.CustomerID], rc, &req.UpdateReminderRequest)
@@ -185,14 +181,13 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 		case row.Reminder == nil && next.ReminderStatus != types.ReminderStatusApproved:
 			inserts = append(inserts, next)
 		default:
-			email, err := s.save(ctx, row, customers[row.CustomerID], next)
+			err := s.save(ctx, row, customers[row.CustomerID], next)
 			if errors.Is(err, ierr.ErrVersionConflict) {
 				continue
 			}
 			if err != nil {
 				return nil, err
 			}
-			queued = append(queued, email)
 			row.Reminder = next
 			applied[row.InvoiceID] = row
 		}
@@ -210,7 +205,6 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 		}
 	}
 
-	s.sendNow(ctx, queued)
 	if rc.emails, err = s.reminderEmails(ctx, lo.Values(applied), true); err != nil {
 		return nil, err
 	}
@@ -325,23 +319,19 @@ func (s *reminderService) plan(ctx context.Context, row collections.Row, c *cust
 	return next.WithStatus(target, reason, approvedAt).Build(), nil
 }
 
-func (s *reminderService) save(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) (*emaillog.EmailLog, error) {
+func (s *reminderService) save(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) error {
 	if !changesApproval(row.Reminder, next) {
-		return nil, s.store(ctx, row, next)
+		return s.store(ctx, row, next)
 	}
-	var queued *emaillog.EmailLog
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.cancelEmail(txCtx, row, next); err != nil {
 			return err
 		}
 		if err := s.store(txCtx, row, next); err != nil {
 			return err
 		}
-		var err error
-		queued, err = s.queueEmail(txCtx, row, c, next)
-		return err
+		return s.queueEmail(txCtx, row, c, next)
 	})
-	return queued, err
 }
 
 func (s *reminderService) store(ctx context.Context, row collections.Row, next *collections.InvoiceReminder) error {
@@ -362,12 +352,12 @@ func changesApproval(prev, next *collections.InvoiceReminder) bool {
 	return next.ReminderStatus == types.ReminderStatusApproved || (prev != nil && prev.ReminderStatus == types.ReminderStatusApproved)
 }
 
-// queueEmail queues the email of a reminder that was just approved, with the text frozen as approved.
-func (s *reminderService) queueEmail(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) (*emaillog.EmailLog, error) {
+// queueEmail queues the email of a reminder that was just approved, with the text frozen as approved; the dispatcher sends it.
+func (s *reminderService) queueEmail(ctx context.Context, row collections.Row, c *customer.Customer, next *collections.InvoiceReminder) error {
 	if next.ReminderStatus != types.ReminderStatusApproved || next.ApprovedAt == nil {
-		return nil, nil
+		return nil
 	}
-	return NewEmailNotificationService(s.ServiceParams).QueueReminderEmail(ctx, ReminderEmail{
+	_, err := NewEmailNotificationService(s.ServiceParams).QueueReminderEmail(ctx, ReminderEmail{
 		InvoiceID:  row.InvoiceID,
 		CustomerID: row.CustomerID,
 		ReminderID: next.ID,
@@ -376,6 +366,7 @@ func (s *reminderService) queueEmail(ctx context.Context, row collections.Row, c
 		Body:       next.Body,
 		ApprovedAt: *next.ApprovedAt,
 	})
+	return err
 }
 
 // cancelEmail withdraws the email of an approval that is being taken back.

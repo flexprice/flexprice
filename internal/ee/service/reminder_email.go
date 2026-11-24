@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -156,53 +155,6 @@ func (s *emailNotificationService) composeReminderEmail(ctx context.Context, e *
 // invoiceStillOwed reports an invoice a reminder can still be about: finalized and not paid.
 func invoiceStillOwed(status types.InvoiceStatus, payment types.PaymentStatus, hasBalance bool) bool {
 	return status == types.InvoiceStatusFinalized && payment != types.PaymentStatusSucceeded && hasBalance
-}
-
-const (
-	// reminderSendWait bounds how long an approval waits to send its emails; unsent ones stay queued for the dispatcher.
-	reminderSendWait = 5 * time.Second
-	// reminderSendWaitWithAttachment is the bound when the emails carry a PDF: the request body is a few hundred KB
-	// and the provider checks the attachment before it answers.
-	reminderSendWaitWithAttachment = 20 * time.Second
-	// reminderSendWorkers bounds how many emails of one bulk approval are handed to the provider at once.
-	reminderSendWorkers = 8
-)
-
-// sendNow hands just-queued reminder emails to the provider, a few at a time, within reminderSendWait. It never fails
-// the approval: an email it cannot send stays queued for the dispatcher.
-func (s *reminderService) sendNow(ctx context.Context, queued []*emaillog.EmailLog) {
-	pending := lo.Filter(queued, func(e *emaillog.EmailLog, _ int) bool {
-		return e != nil && e.DeliveryStatus == types.EmailDeliveryStatusQueued
-	})
-	if len(pending) == 0 {
-		return
-	}
-	sendCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.sendWait(ctx))
-	defer cancel()
-
-	emails := NewEmailNotificationService(s.ServiceParams)
-	slots := make(chan struct{}, reminderSendWorkers)
-	var wg sync.WaitGroup
-	for _, e := range pending {
-		slots <- struct{}{}
-		wg.Add(1)
-		go func(e *emaillog.EmailLog) {
-			defer func() { <-slots; wg.Done() }()
-			if err := emails.DeliverEmail(sendCtx, e.ID, false); err != nil {
-				s.Logger.Info(sendCtx, "reminder email left queued for the dispatcher", "error", err.Error(), "email_log_id", e.ID, "invoice_id", e.EntityID)
-			}
-		}(e)
-	}
-	wg.Wait()
-}
-
-// sendWait is how long an approval waits for its emails to go out: longer when they carry an attachment.
-func (s *reminderService) sendWait(ctx context.Context) time.Duration {
-	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
-	if err == nil && cfg.AttachInvoicePDF {
-		return reminderSendWaitWithAttachment
-	}
-	return reminderSendWait
 }
 
 // reminderEmails is the latest email of each approved reminder in rows, in one query; fresh reads from the primary.

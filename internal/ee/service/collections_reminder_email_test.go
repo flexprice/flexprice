@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
@@ -14,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -57,7 +57,15 @@ func emailFixture(t *testing.T, o emailSetup) (*reminderFixture, context.Context
 	return f, ctx
 }
 
-func TestReminderEmail_ApproveSendsTheFrozenTextAtOnce(t *testing.T) {
+// dispatch runs the email dispatcher once, as the Temporal cron does.
+func (f *reminderFixture) dispatch(t *testing.T, ctx context.Context) *EmailDispatchResult {
+	t.Helper()
+	res, err := NewEmailNotificationService(f.params(f.reminders)).DispatchEmails(ctx)
+	require.NoError(t, err)
+	return res
+}
+
+func TestReminderEmail_ApproveOnlyQueuesTheFrozenText(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
 	_, err := f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Subject: lo.ToPtr("Custom subject"), Body: lo.ToPtr("Custom body")})
 	require.NoError(t, err)
@@ -65,6 +73,7 @@ func TestReminderEmail_ApproveSendsTheFrozenTextAtOnce(t *testing.T) {
 
 	approved, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
+	require.Empty(t, f.sent.all(), "approving never calls the provider")
 	logs := f.emails(t, ctx, "a1")
 	require.Len(t, logs, 1)
 	e := logs[0]
@@ -74,45 +83,46 @@ func TestReminderEmail_ApproveSendsTheFrozenTextAtOnce(t *testing.T) {
 	require.Equal(t, "cust_1", e.CustomerID)
 	require.Equal(t, []string{"ap@acme.test"}, e.ToAddresses)
 	require.Equal(t, "billing@flex.test", e.ReplyTo)
-	require.Equal(t, types.EmailDeliveryStatusSent, e.DeliveryStatus, "the email goes out as part of the approval")
+	require.Equal(t, types.EmailDeliveryStatusQueued, e.DeliveryStatus)
 	require.Equal(t, "Custom subject", e.Subject)
 	require.Equal(t, "Custom body", e.Metadata[emailMetaReminderBody])
 	require.Equal(t, reminderEmailKey("a1", f.reminders.All(ctx)[0].ID, *approved.ApprovedAt), lo.FromPtr(e.IdempotencyKey))
-
-	sent := f.sent.all()
-	require.Len(t, sent, 1)
-	require.Equal(t, []string{"ap@acme.test"}, sent[0].To)
-	require.Equal(t, "Custom subject", sent[0].Subject)
-	require.Contains(t, sent[0].Text, "Custom body")
-
-	require.NotNil(t, approved.Email)
-	require.Equal(t, dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusSent, To: "ap@acme.test", SentAt: e.SentAt}, *approved.Email)
+	require.Equal(t, &dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusQueued, To: "ap@acme.test"}, approved.Email)
 
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrVersionConflict)
 	_, err = f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Body: lo.ToPtr("Changed after approval")})
 	requireKind(t, err, ierr.ErrVersionConflict)
 	require.Len(t, f.emails(t, ctx, "a1"), 1, "a repeated approval makes no second email")
-	require.Len(t, f.sent.all(), 1, "and sends nothing again")
+	require.Empty(t, f.sent.all())
 
+	res := f.dispatch(t, ctx)
+	require.Equal(t, 1, res.Sent, "the dispatcher sends it")
+	sent := f.sent.all()
+	require.Len(t, sent, 1)
+	require.Equal(t, []string{"ap@acme.test"}, sent[0].To)
+	require.Equal(t, "Custom subject", sent[0].Subject)
+	require.Contains(t, sent[0].Text, "Custom body")
 	got, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
-	require.Equal(t, approved.Email, got.Email)
+	require.Equal(t, types.EmailDeliveryStatusSent, got.Email.Status, "the reminder shows what the dispatcher did")
+	require.NotNil(t, got.Email.SentAt)
+	require.Equal(t, 0, f.dispatch(t, ctx).Sent, "and sends it once")
 }
 
-func TestReminderEmail_ProviderOutageLeavesTheEmailQueuedForTheDispatcher(t *testing.T) {
+func TestReminderEmail_ProviderOutageKeepsTheEmailQueuedForTheNextRun(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
+	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+
 	f.sent.down = true
-	approved, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
-	require.NoError(t, err, "approving still works")
-	require.Equal(t, types.ReminderStatusApproved, approved.Status)
-	require.NotNil(t, approved.Email)
-	require.Equal(t, types.EmailDeliveryStatusQueued, approved.Email.Status)
-	require.Equal(t, "ap@acme.test", approved.Email.To)
+	require.Equal(t, 1, f.dispatch(t, ctx).Deferred)
+	got, err := f.svc.Get(ctx, "a1")
+	require.NoError(t, err)
+	require.Equal(t, types.EmailDeliveryStatusQueued, got.Email.Status)
 
 	f.sent.down = false
-	require.NoError(t, NewEmailNotificationService(f.params(f.reminders)).DeliverEmail(ctx, f.emails(t, ctx, "a1")[0].ID, false), "the dispatcher sends it later")
-	require.Len(t, f.sent.all(), 1)
+	require.Equal(t, 1, f.dispatch(t, ctx).Sent)
 }
 
 func TestReminderEmail_TestRecipientReplacesTheCustomer(t *testing.T) {
@@ -129,8 +139,9 @@ func TestReminderEmail_TestRecipientReplacesTheCustomer(t *testing.T) {
 	require.Equal(t, []string{"tester@flexprice.test"}, e.ToAddresses)
 	require.Empty(t, e.CCAddresses)
 	require.Equal(t, "ap@acme.test", e.Metadata[emailMetaOriginalTo])
+	require.Equal(t, "tester@flexprice.test", approved.Email.To, "the response shows who it will really go to")
+	f.dispatch(t, ctx)
 	require.Equal(t, []string{"tester@flexprice.test"}, f.sent.all()[0].To, "the provider only ever sees the test recipient")
-	require.Equal(t, "tester@flexprice.test", approved.Email.To, "the response shows who it really went to")
 }
 
 func TestReminderEmail_TestRecipientDoesNotInventARecipient(t *testing.T) {
@@ -143,12 +154,12 @@ func TestReminderEmail_TestRecipientDoesNotInventARecipient(t *testing.T) {
 	_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
 	require.Equal(t, types.EmailDeliveryStatusSkipped, f.emails(t, ctx, "a2")[0].DeliveryStatus)
+	f.dispatch(t, ctx)
 	require.Empty(t, f.sent.all())
 }
 
 func TestReminderEmail_ReopenCancelsAQueuedEmailAndApprovingAgainMakesANewOne(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
-	f.sent.down = true
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
 
@@ -160,27 +171,44 @@ func TestReminderEmail_ReopenCancelsAQueuedEmailAndApprovingAgainMakesANewOne(t 
 	require.Len(t, logs, 1)
 	require.Equal(t, types.EmailDeliveryStatusSkipped, logs[0].DeliveryStatus)
 	require.Contains(t, lo.FromPtr(logs[0].StatusReason), "reopened")
+	require.Equal(t, 0, f.dispatch(t, ctx).Sent, "a cancelled email is never sent")
 
-	f.sent.down = false
 	_, err = f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Body: lo.ToPtr("Second round")})
 	require.NoError(t, err)
 	second, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
 	statuses := lo.Map(f.emails(t, ctx, "a1"), func(e *emaillog.EmailLog, _ int) types.EmailDeliveryStatus { return e.DeliveryStatus })
-	require.ElementsMatch(t, []types.EmailDeliveryStatus{types.EmailDeliveryStatusSkipped, types.EmailDeliveryStatusSent}, statuses)
-	require.Equal(t, types.EmailDeliveryStatusSent, second.Email.Status, "the response shows the new email, not the cancelled one")
+	require.ElementsMatch(t, []types.EmailDeliveryStatus{types.EmailDeliveryStatusSkipped, types.EmailDeliveryStatusQueued}, statuses)
+	require.Equal(t, types.EmailDeliveryStatusQueued, second.Email.Status, "the response shows the new email, not the cancelled one")
 }
 
 func TestReminderEmail_ReopenAfterTheEmailWentOutIsRefused(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
+	require.Equal(t, 1, f.dispatch(t, ctx).Sent)
 
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusPending, ""))
 	requireKind(t, err, ierr.ErrVersionConflict)
 	got, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
 	require.Equal(t, types.ReminderStatusApproved, got.Status, "the reminder stays approved")
+}
+
+func TestReminderEmail_DeliveryEventsReachTheReminder(t *testing.T) {
+	f, ctx := emailFixture(t, emailsOn)
+	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+	f.dispatch(t, ctx)
+
+	e := f.emails(t, ctx, "a1")[0]
+	require.NoError(t, f.logs.Update(ctx, applyDeliveryEvent(e, emailtypes.DeliveryEvent{
+		ProviderMessageID: lo.FromPtr(e.ProviderMessageID), Status: types.EmailDeliveryStatusBounced, Reason: "mailbox full", OccurredAt: clock.Now(),
+	})))
+	got, err := f.svc.Get(ctx, "a1")
+	require.NoError(t, err)
+	require.Equal(t, types.EmailDeliveryStatusBounced, got.Email.Status, "a webhook event moves the status the reminder shows")
+	require.Equal(t, "mailbox full", got.Email.StatusReason)
 }
 
 func TestReminderEmail_CustomerWithoutAddressIsRecordedAsSkipped(t *testing.T) {
@@ -212,7 +240,7 @@ func TestReminderEmail_ApprovingStillWorksWhenEmailsAreOff(t *testing.T) {
 	}
 }
 
-func TestReminderEmail_BulkApproveSendsOneEmailPerInvoice(t *testing.T) {
+func TestReminderEmail_BulkApproveQueuesOneEmailPerInvoice(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
 	f.overdue(t, ctx, "a2", "cust_1", 100, 5)
 	f.overdue(t, ctx, "a3", "cust_1", 100, 5)
@@ -224,34 +252,32 @@ func TestReminderEmail_BulkApproveSendsOneEmailPerInvoice(t *testing.T) {
 	require.Len(t, out.Drafts, 3)
 	for _, d := range out.Drafts {
 		require.NotNil(t, d.Email, d.ID)
-		require.Equal(t, types.EmailDeliveryStatusSent, d.Email.Status, d.ID)
+		require.Equal(t, types.EmailDeliveryStatusQueued, d.Email.Status, d.ID)
 	}
-	require.Len(t, f.sent.all(), 3)
+	require.Empty(t, f.sent.all(), "bulk approving never calls the provider")
 	again, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2", "a3"}))
 	require.NoError(t, err)
 	require.Empty(t, again.Drafts, "approved reminders are left alone")
-	require.Len(t, f.sent.all(), 3, "no duplicate sends")
 
+	require.Equal(t, 3, f.dispatch(t, ctx).Sent, "one run sends them all, once each")
+	require.Len(t, f.sent.all(), 3)
 	back, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusPending, []string{"a1", "a2", "a3"}))
 	require.NoError(t, err)
 	require.Empty(t, back.Drafts, "sent emails cannot be taken back")
 }
 
-func TestReminderEmail_BulkApproveKeepsUnsentEmailsQueuedAndReopenCancelsThem(t *testing.T) {
+func TestReminderEmail_BulkReopenCancelsQueuedEmails(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
-	f.sent.down = true
 	f.overdue(t, ctx, "a2", "cust_1", 100, 5)
-	out, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2"}))
+	_, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2"}))
 	require.NoError(t, err)
-	for _, d := range out.Drafts {
-		require.Equal(t, types.EmailDeliveryStatusQueued, d.Email.Status, d.ID)
-	}
 	back, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusPending, []string{"a1", "a2"}))
 	require.NoError(t, err)
 	require.Len(t, back.Drafts, 2)
 	for _, id := range []string{"a1", "a2"} {
 		require.Equal(t, types.EmailDeliveryStatusSkipped, f.emails(t, ctx, id)[0].DeliveryStatus, id)
 	}
+	require.Equal(t, 0, f.dispatch(t, ctx).Sent)
 }
 
 func TestReminderEmail_ListCarriesTheEmailOfApprovedRemindersInOneQuery(t *testing.T) {
@@ -261,10 +287,9 @@ func TestReminderEmail_ListCarriesTheEmailOfApprovedRemindersInOneQuery(t *testi
 	}
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
-	f.sent.down = true
+	f.dispatch(t, ctx)
 	_, err = f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
-	f.sent.down = false
 	_, err = f.svc.UpdateReminder(ctx, "a3", setStatus(types.ReminderStatusHeld, "wait"))
 	require.NoError(t, err)
 
@@ -282,26 +307,6 @@ func TestReminderEmail_ListCarriesTheEmailOfApprovedRemindersInOneQuery(t *testi
 	require.Nil(t, byID["a4"].Email, "neither has a reminder nobody acted on")
 }
 
-func TestReminderEmail_SendWaitIsLongerForEmailsWithAnAttachment(t *testing.T) {
-	ctx := reminderCtxFor("tenant_a", "env_a")
-	wait := func(f *reminderFixture) time.Duration { return f.svc.(*reminderService).sendWait(ctx) }
-	setting := func(f *reminderFixture, attachPDF bool) {
-		require.NoError(t, f.settings.Create(ctx, &settings.Setting{
-			ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyEmailNotificationConfig,
-			Value:         map[string]interface{}{"enabled": true, "attach_invoice_pdf": attachPDF},
-			EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
-		}))
-	}
-
-	plain := newReminderFixture(t, ctx)
-	setting(plain, false)
-	require.Equal(t, reminderSendWait, wait(plain), "no attachment: the short bound")
-
-	withPDF := newReminderFixture(t, ctx)
-	setting(withPDF, true)
-	require.Equal(t, reminderSendWaitWithAttachment, wait(withPDF), "the invoice PDF is attached")
-}
-
 func TestReminderEmail_PDFThatCannotBeProducedNeverHoldsTheEmail(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
@@ -309,16 +314,16 @@ func TestReminderEmail_PDFThatCannotBeProducedNeverHoldsTheEmail(t *testing.T) {
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 	f.withEmail(t, ctx, emailSetup{provider: true, enabled: true, attachPDF: true, replyTo: "billing@flex.test"})
 
-	approved, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
-	require.Equal(t, types.EmailDeliveryStatusSent, approved.Email.Status, "no PDF, and the email still goes out at once")
+	res := f.dispatch(t, ctx)
+	require.Equal(t, 1, res.Sent, "no PDF, and the dispatcher still sends on its first run")
+	require.Zero(t, res.Deferred)
 	require.Len(t, f.sent.all(), 1)
 	require.Empty(t, f.sent.all()[0].Attachments)
 	e := f.emails(t, ctx, "a1")[0]
 	require.Equal(t, emailPDFUnavailable, e.Metadata[emailMetaPDF])
-	for _, queued := range f.queued(t, ctx) {
-		require.NotEqual(t, e.ID, queued.ID, "nothing is left queued for the dispatcher")
-	}
+	require.Empty(t, f.queued(t, ctx), "nothing is left queued")
 }
 
 func TestReminderEmail_PDFLinkStillAccompaniesTheEmail(t *testing.T) {
@@ -333,6 +338,7 @@ func TestReminderEmail_PDFLinkStillAccompaniesTheEmail(t *testing.T) {
 
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
+	f.dispatch(t, ctx)
 	e := f.emails(t, ctx, "a1")[0]
 	require.Equal(t, types.EmailDeliveryStatusSent, e.DeliveryStatus)
 	require.Equal(t, emailPDFInvoiceLink, e.Metadata[emailMetaPDF], "a PDF that can be linked is still linked")
@@ -343,6 +349,7 @@ func TestReminderEmail_WithoutThePDFSettingNothingIsRecordedAboutIt(t *testing.T
 	f, ctx := emailFixture(t, emailsOn)
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
+	f.dispatch(t, ctx)
 	require.Equal(t, emailPDFDisabled, f.emails(t, ctx, "a1")[0].Metadata[emailMetaPDF])
 }
 
