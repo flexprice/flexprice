@@ -547,29 +547,35 @@ func TestInvoiceReminderRepository_UpdateComparesStatusAndTimestamp(t *testing.T
 	require.Nil(t, rows[0].Reminder.ApprovedAt)
 }
 
-func TestInvoiceReminderRepository_CreateManySkipsInvoicesThatHaveOne(t *testing.T) {
+func TestInvoiceReminderRepository_CreateManyIsAllOrNothing(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
 	pending := f.untouched()
-	require.GreaterOrEqual(t, len(pending), 3)
+	require.GreaterOrEqual(t, len(pending), 4)
 	f.remind(t, f.ctx, pending[1], types.ReminderStatusHeld, "wait")
 
 	now := f.asOf
-	batch := lo.Map(pending[:3], func(id string, _ int) *collections.InvoiceReminder {
+	build := func(id string) *collections.InvoiceReminder {
 		return collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{ID: "irem_bulk_" + f.run + "_" + id, InvoiceID: id, BaseModel: types.GetDefaultBaseModel(f.ctx)}).
 			WithOriginal(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").WithText(types.ReminderToneFirm, "s\nwith newline", "b, with \"quotes\"").
 			WithStatus(types.ReminderStatusApproved, "", &now).Build()
-	})
-	created, err := f.reminders.CreateMany(f.ctx, batch)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{pending[0], pending[2]}, created, "the invoice that already has a reminder is skipped")
+	}
 
+	err := f.reminders.CreateMany(f.ctx, lo.Map(pending[:3], func(id string, _ int) *collections.InvoiceReminder { return build(id) }))
+	require.True(t, ierr.IsAlreadyExists(err), "got %v", err)
 	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, pending[:3])
 	require.NoError(t, err)
 	byID := lo.KeyBy(rows, func(r collections.InvoiceWithReminder) string { return r.InvoiceID })
+	require.Nil(t, byID[pending[0]].Reminder, "one duplicate inserts nothing")
+	require.Nil(t, byID[pending[2]].Reminder)
 	require.Equal(t, types.ReminderStatusHeld, byID[pending[1]].Reminder.ReminderStatus, "an existing reminder is untouched")
-	for _, id := range []string{pending[0], pending[2]} {
-		r := byID[id].Reminder
+
+	fresh := []string{pending[0], pending[2]}
+	require.NoError(t, f.reminders.CreateMany(f.ctx, lo.Map(fresh, func(id string, _ int) *collections.InvoiceReminder { return build(id) })))
+	rows, err = f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, fresh)
+	require.NoError(t, err)
+	for _, row := range rows {
+		r := row.Reminder
 		require.Equal(t, types.ReminderStatusApproved, r.ReminderStatus)
 		require.NotNil(t, r.ApprovedAt)
 		require.True(t, r.ApprovedAt.Equal(now))
@@ -577,9 +583,7 @@ func TestInvoiceReminderRepository_CreateManySkipsInvoicesThatHaveOne(t *testing
 		require.Equal(t, "b, with \"quotes\"", r.Original().OriginalBody)
 		require.False(t, r.Edited())
 	}
-	none, err := f.reminders.CreateMany(f.ctx, nil)
-	require.NoError(t, err)
-	require.Empty(t, none)
+	require.NoError(t, f.reminders.CreateMany(f.ctx, nil))
 }
 
 func TestInvoiceReminderRepository_StoresMetadataAndText(t *testing.T) {
@@ -678,15 +682,28 @@ func TestCollectionsRepository_BoardRefusesATransactionWithoutASnapshot(t *testi
 	require.Error(t, err, "a READ COMMITTED transaction cannot give the board one snapshot")
 }
 
-func TestInvoiceReminderRepository_CreateManyRefusesATransaction(t *testing.T) {
+func TestInvoiceReminderRepository_CreateManyRollsBackWithItsTransaction(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
-		ID: "irem_" + f.run + "_tx", InvoiceID: f.run + "_nd00", BaseModel: types.GetDefaultBaseModel(f.ctx),
-	}).WithText(types.ReminderToneFriendly, "s", "b").Build()
+	pending := f.untouched()
+	require.GreaterOrEqual(t, len(pending), 2)
+	f.remind(t, f.ctx, pending[1], types.ReminderStatusHeld, "wait")
+
+	build := func(id string) *collections.InvoiceReminder {
+		return collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+			ID: "irem_" + f.run + "_tx_" + id, InvoiceID: id, BaseModel: types.GetDefaultBaseModel(f.ctx),
+		}).WithText(types.ReminderToneFriendly, "s", "b").Build()
+	}
+
 	err := f.client.WithTx(f.ctx, func(txCtx context.Context) error {
-		_, err := f.reminders.CreateMany(txCtx, []*collections.InvoiceReminder{r})
-		return err
+		if err := f.reminders.Create(txCtx, build(pending[0])); err != nil {
+			return err
+		}
+		return f.reminders.CreateMany(txCtx, []*collections.InvoiceReminder{build(pending[1])})
 	})
-	require.Error(t, err)
+	require.True(t, ierr.IsAlreadyExists(err), "got %v", err)
+
+	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, pending[:1])
+	require.NoError(t, err)
+	require.Nil(t, rows[0].Reminder, "the write before the duplicate is rolled back with it")
 }

@@ -56,7 +56,27 @@ func boardQuery(asOf time.Time, req *dto.CollectionsBoardRequest) collections.Qu
 	}
 }
 
+// requireCollectionsEnabled refuses Collections requests in an environment where it is not turned on.
+func requireCollectionsEnabled(ctx context.Context, params ServiceParams) error {
+	cfg, err := GetSetting[types.CollectionsConfig](NewSettingsService(params).(*settingsService), ctx, types.SettingKeyCollectionsConfig)
+	if err != nil {
+		return err
+	}
+
+	if !cfg.Enabled {
+		return ierr.NewError("collections is not enabled").
+			WithHint("Collections is not enabled for this environment. Ask an administrator to turn it on in Settings.").
+			Mark(ierr.ErrPermissionDenied)
+	}
+
+	return nil
+}
+
 func (s *collectionsService) GetBoard(ctx context.Context, req *dto.CollectionsBoardRequest) (*dto.CollectionsBoardResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -113,6 +133,10 @@ func isBoardColumn(key types.CollectionsColumnKey) bool {
 }
 
 func (s *collectionsService) GetColumn(ctx context.Context, key string, req *dto.CollectionsBoardRequest) (*dto.CollectionsColumnPageResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	column := types.CollectionsColumnKey(key)
 	if !isBoardColumn(column) {
 		return nil, ierr.NewErrorf("unknown column %s", key).

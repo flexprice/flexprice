@@ -14,7 +14,9 @@ import (
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -51,7 +53,12 @@ func boardFixture(t *testing.T) (CollectionsService, *fakeBoard, context.Context
 	customers := testutil.NewInMemoryCustomerStore()
 	require.NoError(t, customers.Create(ctx, &customer.Customer{ID: "cust_1", Name: "Acme", BaseModel: types.GetDefaultBaseModel(ctx)}))
 	fake := &fakeBoard{}
-	return NewCollectionsService(ServiceParams{CustomerRepo: customers, CollectionsRepo: fake}), fake, ctx
+	store := testutil.NewInMemorySettingsStore()
+	require.NoError(t, store.Create(ctx, &settings.Setting{
+		ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyCollectionsConfig, Value: map[string]interface{}{"enabled": true},
+		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
+	return NewCollectionsService(ServiceParams{CustomerRepo: customers, CollectionsRepo: fake, SettingsRepo: store, Logger: logger.NewNoopLogger()}), fake, ctx
 }
 
 func rowDue(id string, remaining int64, due *time.Time, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
@@ -154,8 +161,8 @@ func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
 	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 5})
 	require.NoError(t, err)
 	notDue := resp.Columns[0].Cards
-	require.Equal(t, 2, *notDue[0].DueInDays)
 	require.NotNil(t, notDue[0].DueDate)
+	require.Equal(t, types.CalendarDaysBetween(resp.AsOf, *notDue[0].DueDate), *notDue[0].DueInDays, "days are counted from the board clock")
 	require.Nil(t, notDue[1].DueInDays)
 	for _, c := range notDue {
 		require.Empty(t, c.ReminderStatus)

@@ -138,6 +138,6 @@ func (b *invoiceWithReminderBuilder) Build() *InvoiceWithReminder {
 type InvoiceReminderRepository interface {
 	GetInvoicesWithReminders(ctx context.Context, asOf time.Time, invoiceIDs []string) ([]InvoiceWithReminder, error)
 	Create(ctx context.Context, reminder *InvoiceReminder) error
-	CreateMany(ctx context.Context, reminders []*InvoiceReminder) ([]string, error)
+	CreateMany(ctx context.Context, reminders []*InvoiceReminder) error
 	Update(ctx context.Context, reminder *InvoiceReminder, previous *InvoiceReminder) error
 }

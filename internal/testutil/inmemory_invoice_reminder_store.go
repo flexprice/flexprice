@@ -104,20 +104,20 @@ func (s *InMemoryInvoiceReminderStore) Create(ctx context.Context, r *collection
 	return nil
 }
 
-func (s *InMemoryInvoiceReminderStore) CreateMany(ctx context.Context, reminders []*collections.InvoiceReminder) ([]string, error) {
+func (s *InMemoryInvoiceReminderStore) CreateMany(ctx context.Context, reminders []*collections.InvoiceReminder) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.writes++
-	var created []string
 	for _, r := range reminders {
 		if s.liveFor(ctx, r.InvoiceID) != nil {
-			continue
+			return ierr.NewError("reminder already exists").Mark(ierr.ErrAlreadyExists)
 		}
+	}
+	for _, r := range reminders {
 		r.TenantID, r.EnvironmentID, r.BaseModel.Status = types.GetTenantID(ctx), types.GetEnvironmentID(ctx), types.StatusPublished
 		s.reminders[r.ID] = cloneReminder(r)
-		created = append(created, r.InvoiceID)
 	}
-	return created, nil
+	return nil
 }
 
 func (s *InMemoryInvoiceReminderStore) Update(ctx context.Context, r *collections.InvoiceReminder, previous *collections.InvoiceReminder) error {

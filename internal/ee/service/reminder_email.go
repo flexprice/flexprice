@@ -66,7 +66,6 @@ func (s *emailNotificationService) QueueReminderEmail(ctx context.Context, r Rem
 		replyTo:        merchant.BillingDetails.ReplyToEmail(),
 		idempotencyKey: &key,
 		metadata:       types.Metadata{emailMetaReminderBody: r.Body, emailMetaReminderID: r.ReminderID},
-		bestEffort:     true,
 	})
 }
 
@@ -103,10 +102,6 @@ func (s *emailNotificationService) CancelReminderEmail(ctx context.Context, key 
 	return nil
 }
 
-// reminderSendsWithoutPDF is the policy for reminders: an invoice PDF that cannot be produced never holds the email back,
-// it goes out at once without it (the invoice email still waits for its PDF).
-const reminderSendsWithoutPDF = true
-
 // composeReminderEmail lays the text frozen at approval into the shared layout; it never rewrites the text.
 func (s *emailNotificationService) composeReminderEmail(ctx context.Context, e *emaillog.EmailLog) (*composedEmail, error) {
 	body := e.Metadata[emailMetaReminderBody]
@@ -136,7 +131,7 @@ func (s *emailNotificationService) composeReminderEmail(ctx context.Context, e *
 
 	view := render.Invoice{Number: invoiceNumber(&inv.Invoice), ViewURL: inv.HostedInvoiceURL}
 	composed := &composedEmail{metadata: map[string]string{}}
-	if err := s.attachInvoiceFile(ctx, e, invoiceSvc, inv, &view, composed, reminderSendsWithoutPDF); err != nil {
+	if err := s.attachInvoiceFile(ctx, e, invoiceSvc, inv, &view, composed, true); err != nil {
 		return nil, err
 	}
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cockroachdb/errors"
+
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 
@@ -31,6 +33,7 @@ func (f *reminderFixture) withEmail(t *testing.T, ctx context.Context, o emailSe
 	t.Helper()
 	f.emailOn = o.provider
 	require.NoError(t, f.tenants.Update(ctx, &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Flex", BillingDetails: tenant.TenantBillingDetails{Email: o.replyTo}}))
+	_ = f.settings.DeleteByKey(ctx, types.SettingKeyEmailNotificationConfig)
 	require.NoError(t, f.settings.Create(ctx, &settings.Setting{
 		ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyEmailNotificationConfig, Value: map[string]interface{}{"enabled": o.enabled, "attach_invoice_pdf": o.attachPDF},
 		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
@@ -178,33 +181,69 @@ func TestReminderEmail_DeliveryEventsReachTheReminder(t *testing.T) {
 	require.Equal(t, "mailbox full", got.Email.StatusReason)
 }
 
-func TestReminderEmail_CustomerWithoutAddressIsRecordedAsSkipped(t *testing.T) {
+func TestReminderEmail_CustomerWithoutAddressCannotBeApproved(t *testing.T) {
 	f, ctx := emailFixture(t, emailsOn)
 	f.overdue(t, ctx, "a2", "cust_noemail", 100, 5)
+
 	_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
+	requireKind(t, err, ierr.ErrValidation)
+	require.Equal(t, "This customer has no email address. Add one before approving.", errors.FlattenHints(err))
+
+	got, err := f.svc.Get(ctx, "a2")
 	require.NoError(t, err)
-	logs := f.emails(t, ctx, "a2")
-	require.Len(t, logs, 1)
-	require.Equal(t, types.EmailDeliveryStatusSkipped, logs[0].DeliveryStatus)
-	require.Equal(t, "Customer has no email address", lo.FromPtr(logs[0].StatusReason))
+	require.Equal(t, types.ReminderStatusPending, got.Status, "the approval is not recorded")
+	require.Empty(t, got.CustomerEmail, "the response shows the missing address so a UI can ask for it")
+	require.Empty(t, f.emails(t, ctx, "a2"), "no email row, not even a skipped one")
+	require.Empty(t, f.reminders.All(ctx), "and no reminder row")
 }
 
-func TestReminderEmail_ApprovingStillWorksWhenEmailsAreOff(t *testing.T) {
-	for name, setup := range map[string]emailSetup{
-		"provider not configured":      {provider: false, enabled: true, replyTo: "billing@flex.test"},
-		"disabled for the environment": {provider: true, enabled: false, replyTo: "billing@flex.test"},
-		"tenant has no reply-to email": {provider: true, enabled: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			f, ctx := emailFixture(t, setup)
-			got, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+func TestReminderEmail_ApprovingFailsLoudlyWhereEmailsCannotBeSent(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup emailSetup
+		kind  error
+		hint  string
+	}{
+		{"deployment has no email provider", emailSetup{provider: false, enabled: true, replyTo: "billing@flex.test"}, ierr.ErrServiceUnavailable, "Emails are not available in this deployment"},
+		{"environment emails switched off behind Collections", emailSetup{provider: true, enabled: false, replyTo: "billing@flex.test"}, ierr.ErrInvalidOperation, "Enable emails in this environment's settings to send them"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, ctx := emailFixture(t, tt.setup)
+
+			_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+			requireKind(t, err, tt.kind)
+			require.Equal(t, tt.hint, errors.FlattenHints(err))
+
+			got, err := f.svc.Get(ctx, "a1")
 			require.NoError(t, err)
-			require.Equal(t, types.ReminderStatusApproved, got.Status)
-			require.Empty(t, f.emails(t, ctx, "a1"), "no email is recorded")
-			_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusPending, ""))
-			require.NoError(t, err, "and reopening has nothing to cancel")
+			require.Equal(t, types.ReminderStatusPending, got.Status, "nothing is stored")
+			require.Empty(t, f.emails(t, ctx, "a1"))
+			require.Empty(t, f.reminders.All(ctx))
 		})
 	}
+}
+
+func TestReminderEmail_EnabledButTenantHasNoReplyToFailsLoudly(t *testing.T) {
+	f, ctx := emailFixture(t, emailSetup{provider: true, enabled: true})
+
+	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
+	requireKind(t, err, ierr.ErrInvalidOperation)
+
+	got, err := f.svc.Get(ctx, "a1")
+	require.NoError(t, err)
+	require.Equal(t, types.ReminderStatusPending, got.Status, "the approval rolls back with the email")
+	require.Empty(t, f.emails(t, ctx, "a1"))
+}
+
+func TestReminderEmail_BulkApproveFailsForACustomerWithoutAddress(t *testing.T) {
+	f, ctx := emailFixture(t, emailsOn)
+	f.overdue(t, ctx, "a2", "cust_noemail", 100, 5)
+	f.overdue(t, ctx, "a3", "cust_1", 100, 5)
+
+	_, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a2", "a1", "a3"}))
+	requireKind(t, err, ierr.ErrValidation)
+	require.Empty(t, f.queued(t, ctx), "no email is queued when the request fails")
 }
 
 func TestReminderEmail_BulkApproveQueuesOneEmailPerInvoice(t *testing.T) {
@@ -222,15 +261,13 @@ func TestReminderEmail_BulkApproveQueuesOneEmailPerInvoice(t *testing.T) {
 		require.Equal(t, types.EmailDeliveryStatusQueued, d.Email.Status, d.ID)
 	}
 	require.Empty(t, f.sent.all(), "bulk approving never calls the provider")
-	again, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2", "a3"}))
-	require.NoError(t, err)
-	require.Empty(t, again.Drafts, "approved reminders are left alone")
+	_, err = f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2", "a3"}))
+	requireKind(t, err, ierr.ErrVersionConflict)
 
 	require.Equal(t, 3, f.dispatch(t, ctx).Sent, "one run sends them all, once each")
 	require.Len(t, f.sent.all(), 3)
-	back, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusPending, []string{"a1", "a2", "a3"}))
-	require.NoError(t, err)
-	require.Empty(t, back.Drafts, "sent emails cannot be taken back")
+	_, err = f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusPending, []string{"a1", "a2", "a3"}))
+	requireKind(t, err, ierr.ErrVersionConflict)
 }
 
 func TestReminderEmail_BulkReopenCancelsQueuedEmails(t *testing.T) {

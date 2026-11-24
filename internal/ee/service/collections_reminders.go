@@ -61,6 +61,10 @@ func reminderStatusOf(r collections.InvoiceWithReminder) types.ReminderStatus {
 }
 
 func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersRequest) (*dto.ListRemindersResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -119,6 +123,10 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 }
 
 func (s *reminderService) Get(ctx context.Context, invoiceID string) (*dto.InvoiceReminderResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	invoices, customers, rc, err := s.load(ctx, []string{invoiceID})
 	if err != nil {
 		return nil, err
@@ -131,6 +139,10 @@ func (s *reminderService) Get(ctx context.Context, invoiceID string) (*dto.Invoi
 }
 
 func (s *reminderService) UpdateReminder(ctx context.Context, invoiceID string, req *dto.UpdateReminderRequest) (*dto.InvoiceReminderResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -156,7 +168,12 @@ func (s *reminderService) UpdateReminder(ctx context.Context, invoiceID string, 
 	return &v, err
 }
 
+// BulkUpdateReminders applies one change to every invoice in one transaction: if any invoice fails, none changes.
 func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.BulkUpdateRemindersRequest) (*dto.BulkUpdateRemindersResponse, error) {
+	if err := requireCollectionsEnabled(ctx, s.ServiceParams); err != nil {
+		return nil, err
+	}
+
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -166,77 +183,45 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 		return nil, err
 	}
 
-	applied := map[string]collections.InvoiceWithReminder{}
-	var inserts []*collections.InvoiceReminder
+	var updated []collections.InvoiceWithReminder
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		updated = make([]collections.InvoiceWithReminder, 0, len(invoices))
+		var inserts []*collections.InvoiceReminder
 
-	for _, row := range invoices {
-		next, err := s.plan(ctx, row, customers[row.CustomerID], rc, &req.UpdateReminderRequest)
-		if errors.Is(err, ierr.ErrVersionConflict) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
+		for _, row := range invoices {
+			c := customers[row.CustomerID]
 
-		switch {
-		case next == nil:
-			applied[row.InvoiceID] = row
-
-		case row.Reminder == nil && next.ReminderStatus != types.ReminderStatusApproved:
-			inserts = append(inserts, next)
-
-		default:
-			err := s.save(ctx, row, customers[row.CustomerID], next)
-			if errors.Is(err, ierr.ErrVersionConflict) {
-				continue
-			}
+			next, err := s.plan(txCtx, row, c, rc, &req.UpdateReminderRequest)
 			if err != nil {
-				return nil, err
+				return bulkReminderError(row, err)
 			}
 
-			row.Reminder = next
-			applied[row.InvoiceID] = row
-		}
-	}
+			if next != nil {
+				// Reminders that queue no email are inserted together below.
+				if row.Reminder == nil && next.ReminderStatus != types.ReminderStatusApproved {
+					inserts = append(inserts, next)
+				} else if err := s.save(txCtx, row, c, next); err != nil {
+					return bulkReminderError(row, err)
+				}
+				row.Reminder = next
+			}
 
-	created, err := s.InvoiceReminderRepo.CreateMany(ctx, inserts)
+			updated = append(updated, row)
+		}
+
+		return storeConflict(s.InvoiceReminderRepo.CreateMany(txCtx, inserts))
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	rowsByInvoice := map[string]collections.InvoiceWithReminder{}
-	for _, row := range invoices {
-		rowsByInvoice[row.InvoiceID] = row
-	}
-
-	for _, next := range inserts {
-		if !lo.Contains(created, next.InvoiceID) {
-			continue
-		}
-
-		row := rowsByInvoice[next.InvoiceID]
-		row.Reminder = next
-		applied[row.InvoiceID] = row
-	}
-
-	appliedRows := make([]collections.InvoiceWithReminder, 0, len(applied))
-	for _, row := range applied {
-		appliedRows = append(appliedRows, row)
-	}
-
-	if rc.emails, err = s.reminderEmails(ctx, appliedRows, true); err != nil {
+	if rc.emails, err = s.reminderEmails(ctx, updated, true); err != nil {
 		return nil, err
 	}
 
-	resp := &dto.BulkUpdateRemindersResponse{Drafts: []dto.InvoiceReminderResponse{}}
-
-	for _, row := range invoices {
-		updated, ok := applied[row.InvoiceID]
-		if !ok {
-			continue
-		}
-
-		view, err := s.view(updated, customers[updated.CustomerID], rc)
+	resp := &dto.BulkUpdateRemindersResponse{Drafts: make([]dto.InvoiceReminderResponse, 0, len(updated))}
+	for _, row := range updated {
+		view, err := s.view(row, customers[row.CustomerID], rc)
 		if err != nil {
 			return nil, err
 		}
@@ -245,6 +230,13 @@ func (s *reminderService) BulkUpdateReminders(ctx context.Context, req *dto.Bulk
 	}
 
 	return resp, nil
+}
+
+// bulkReminderError tags err with the invoice that failed the bulk update, keeping its kind and hint.
+func bulkReminderError(row collections.InvoiceWithReminder, err error) error {
+	return ierr.WithError(err).
+		WithReportableDetails(map[string]any{"invoice_id": row.InvoiceID, "invoice_number": row.InvoiceNumber}).
+		Error()
 }
 
 func (s *reminderService) load(ctx context.Context, ids []string) ([]collections.InvoiceWithReminder, map[string]*customer.Customer, reminderCtx, error) {
@@ -315,7 +307,7 @@ func (s *reminderService) plan(ctx context.Context, row collections.InvoiceWithR
 		return nil, nil
 	}
 
-	if cur == nil || (target == types.ReminderStatusApproved && !editsMail && !cur.Edited()) {
+	if cur == nil || (target == types.ReminderStatusApproved && !cur.Edited()) {
 		written, err := s.render(row, c, rc, "")
 		if err != nil {
 			return nil, err
@@ -363,15 +355,45 @@ func (s *reminderService) save(ctx context.Context, row collections.InvoiceWithR
 	if !changesApproval(row.Reminder, next) {
 		return s.store(ctx, row, next)
 	}
+
+	approving := next.ReminderStatus == types.ReminderStatusApproved
+	if approving {
+		if err := s.requireApprovable(c); err != nil {
+			return err
+		}
+	}
+
 	return s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.cancelEmail(txCtx, row, next); err != nil {
 			return err
 		}
-		if err := s.store(txCtx, row, next); err != nil {
-			return err
+
+		if approving {
+			if err := s.queueEmail(txCtx, row, c, next); err != nil {
+				return err
+			}
 		}
-		return s.queueEmail(txCtx, row, c, next)
+
+		return s.store(txCtx, row, next)
 	})
+}
+
+// requireApprovable refuses an approval that cannot send its email: this deployment has no email provider, or the
+// customer has no address. Emails being on for the environment is guaranteed by Collections being enabled.
+func (s *reminderService) requireApprovable(c *customer.Customer) error {
+	if !s.Config.Email.IsProviderConfigured() {
+		return ierr.NewError("emails are not available").
+			WithHint("Emails are not available in this deployment").
+			Mark(ierr.ErrServiceUnavailable)
+	}
+
+	if strings.TrimSpace(lo.FromPtr(c).Email) == "" {
+		return ierr.NewError("customer has no email address").
+			WithHint("This customer has no email address. Add one before approving.").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 func (s *reminderService) store(ctx context.Context, row collections.InvoiceWithReminder, next *collections.InvoiceReminder) error {
@@ -381,6 +403,11 @@ func (s *reminderService) store(ctx context.Context, row collections.InvoiceWith
 	} else {
 		err = s.InvoiceReminderRepo.Update(ctx, next, row.Reminder)
 	}
+	return storeConflict(err)
+}
+
+// storeConflict turns a reminder created meanwhile by someone else into a version conflict.
+func storeConflict(err error) error {
 	if errors.Is(err, ierr.ErrAlreadyExists) {
 		return ierr.NewError("reminder changed").WithHint("This reminder was changed by someone else. Reload and try again.").Mark(ierr.ErrVersionConflict)
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/email/emailtypes"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -124,8 +125,19 @@ func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
 		logs: testutil.NewInMemoryEmailLogStore(), settings: testutil.NewInMemorySettingsStore(), sent: &sentEmails{},
 	}
 	require.NoError(t, f.tenants.Create(ctx, &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Flex"}))
-	f.svc = f.serviceWith(f.reminders)
+	f.setCollections(t, ctx, true)
+	f.withEmail(t, ctx, emailsOn)
 	return f
+}
+
+// setCollections turns Collections on or off in the fixture's environment.
+func (f *reminderFixture) setCollections(t *testing.T, ctx context.Context, enabled bool) {
+	t.Helper()
+	_ = f.settings.DeleteByKey(ctx, types.SettingKeyCollectionsConfig)
+	require.NoError(t, f.settings.Create(ctx, &settings.Setting{
+		ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyCollectionsConfig, Value: map[string]interface{}{"enabled": enabled},
+		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
+	}))
 }
 
 func (f *reminderFixture) serviceWith(repo collections.InvoiceReminderRepository) ReminderService {
@@ -244,7 +256,7 @@ func TestReminder_GetRendersPendingWithoutWriting(t *testing.T) {
 func TestReminder_NotFoundWhenNotOpenAndOverdue(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "paid", "cust_1", 100, 5)
 	f.pay(t, ctx, "paid")
 	soon := clock.Now().Add(day)
@@ -275,7 +287,7 @@ func TestReminder_NotFoundWhenNotOpenAndOverdue(t *testing.T) {
 func TestReminder_EditStoresOriginalAndMail(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 	before, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
@@ -322,7 +334,7 @@ func TestReminder_EditStoresOriginalAndMail(t *testing.T) {
 func TestReminder_ToneChangeOverwritesHandEditsThenAppliesTheRequestOnTop(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 	original, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
@@ -348,7 +360,7 @@ func TestReminder_ToneChangeOverwritesHandEditsThenAppliesTheRequestOnTop(t *tes
 func TestReminder_Transitions(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 
 	_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusPending, ""))
@@ -407,7 +419,7 @@ func TestReminder_Transitions(t *testing.T) {
 func TestReminder_ApproveKeepsEditsAndRewritesAnUneditedHeldReminder(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "edited", "cust_1", 100, 5)
 	f.overdue(t, ctx, "plain", "cust_1", 100, 5)
 
@@ -439,10 +451,34 @@ func TestReminder_ApproveKeepsEditsAndRewritesAnUneditedHeldReminder(t *testing.
 	require.False(t, rewritten.Edited)
 }
 
+func TestReminder_ApproveRefreshesAnUneditedHeldReminderEvenWhenTheRequestRepeatsItsTone(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.overdue(t, ctx, "plain", "cust_1", 100, 5)
+
+	_, err := f.svc.UpdateReminder(ctx, "plain", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+	stored := f.reminders.All(ctx)[0]
+	stale := *stored
+	stale.Body = "snapshot taken long ago"
+	stale.Metadata = collections.NewInvoiceReminderBuilder(&stale).WithOriginal(stale.Tone, stale.Subject, "snapshot taken long ago").Build().Metadata
+	require.NoError(t, f.reminders.Update(ctx, &stale, stored))
+
+	approve := setStatus(types.ReminderStatusApproved, "")
+	approve.Tone = lo.ToPtr(string(types.ReminderToneFriendly))
+	got, err := f.svc.UpdateReminder(ctx, "plain", approve)
+	require.NoError(t, err)
+	require.Contains(t, got.Body, "Hi Acme", "the tone the reviewer saw is not a reason to approve an old snapshot")
+	require.NotContains(t, got.Body, "snapshot taken long ago")
+	require.False(t, got.Edited)
+	require.NotEqual(t, "snapshot taken long ago", f.reminders.All(ctx)[0].Original().OriginalBody, "the baseline is refreshed too")
+}
+
 func TestReminder_FirstActionConflictAndStaleUpdateAre409(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 
 	racing := &racingReminderRepo{InvoiceReminderRepository: f.reminders}
@@ -486,7 +522,7 @@ func (r *racingReminderRepo) Create(ctx context.Context, d *collections.InvoiceR
 	return r.InvoiceReminderRepository.Create(ctx, d)
 }
 
-func (r *racingReminderRepo) CreateMany(ctx context.Context, d []*collections.InvoiceReminder) ([]string, error) {
+func (r *racingReminderRepo) CreateMany(ctx context.Context, d []*collections.InvoiceReminder) error {
 	r.before()
 	return r.InvoiceReminderRepository.CreateMany(ctx, d)
 }
@@ -509,7 +545,7 @@ func TestReminder_StatusMatrix(t *testing.T) {
 			t.Run(string(from)+"_to_"+string(to), func(t *testing.T) {
 				ctx := reminderCtxFor("tenant_a", "env_a")
 				f := newReminderFixture(t, ctx)
-				f.customer(t, ctx, "cust_1", "Acme", "")
+				f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 				f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 				if from != pending {
 					_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(held, "wait"))
@@ -576,7 +612,7 @@ func TestUpdateReminderRequest_Validate(t *testing.T) {
 func TestReminder_ApproveWithEditsInOneRequest(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 	before, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
@@ -595,7 +631,7 @@ func TestReminder_ApproveWithEditsInOneRequest(t *testing.T) {
 func TestReminder_BulkUpdate(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	for _, id := range []string{"i1", "i2", "i3", "i4", "i5"} {
 		f.overdue(t, ctx, id, "cust_1", 100, 5)
 	}
@@ -626,10 +662,14 @@ func TestReminder_BulkUpdate(t *testing.T) {
 	requireKind(t, err, ierr.ErrNotFound)
 	require.Equal(t, writes, f.reminders.Writes(), "a failed bulk request writes nothing")
 
-	out, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"i4", "i1", "i2", "i3", "i1"}))
+	_, err = f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"i3", "i4", "i1"}))
+	requireKind(t, err, ierr.ErrVersionConflict)
+	require.Equal(t, writes, f.reminders.Writes(), "a skipped reminder cannot be approved, so the whole request fails")
+
+	out, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"i4", "i1", "i2", "i1"}))
 	require.NoError(t, err)
 	require.Equal(t, []string{"i4", "i1", "i2"}, lo.Map(out.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }),
-		"a held reminder can be approved but a skipped one cannot, so i3 is left out; duplicates count once; the response keeps the request order")
+		"a held reminder can be approved; duplicates count once; the response keeps the request order")
 	for _, d := range out.Drafts {
 		require.Equal(t, types.ReminderStatusApproved, d.Status)
 		require.NotNil(t, d.ApprovedAt)
@@ -638,9 +678,8 @@ func TestReminder_BulkUpdate(t *testing.T) {
 	require.Equal(t, "Custom", i4.Body, "an edited reminder keeps its edit when approved in bulk")
 	require.Len(t, f.reminders.All(ctx), 4)
 
-	held, err := f.svc.BulkUpdateReminders(ctx, &dto.BulkUpdateRemindersRequest{InvoiceIDs: []string{"i1", "i4"}, UpdateReminderRequest: *setStatus(types.ReminderStatusHeld, "wait")})
-	require.NoError(t, err)
-	require.Empty(t, held.Drafts, "approved reminders cannot be held; they are left out")
+	_, err = f.svc.BulkUpdateReminders(ctx, &dto.BulkUpdateRemindersRequest{InvoiceIDs: []string{"i1", "i4"}, UpdateReminderRequest: *setStatus(types.ReminderStatusHeld, "wait")})
+	requireKind(t, err, ierr.ErrVersionConflict)
 
 	reopened, err := f.svc.BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusPending, []string{"i1", "i4", "i2"}))
 	require.NoError(t, err)
@@ -650,10 +689,10 @@ func TestReminder_BulkUpdate(t *testing.T) {
 	require.Equal(t, types.ReminderToneFinal, toned.Drafts[0].Tone)
 }
 
-func TestReminder_BulkUpdateSkipsInvoicesChangedMeanwhile(t *testing.T) {
+func TestReminder_BulkUpdateFailsWhenAnInvoiceChangedMeanwhile(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
 	f.overdue(t, ctx, "a2", "cust_1", 100, 5)
 	f.overdue(t, ctx, "a3", "cust_1", 100, 5)
@@ -665,28 +704,52 @@ func TestReminder_BulkUpdateSkipsInvoicesChangedMeanwhile(t *testing.T) {
 		_, err := f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusHeld, "someone else"))
 		require.NoError(t, err)
 	}
-	out, err := f.serviceWith(racing).BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2"}))
-	require.NoError(t, err)
-	require.Equal(t, []string{"a2"}, lo.Map(out.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }))
+	_, err = f.serviceWith(racing).BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a1", "a2"}))
+	requireKind(t, err, ierr.ErrVersionConflict)
 	held, err := f.svc.Get(ctx, "a1")
 	require.NoError(t, err)
-	require.Equal(t, types.ReminderStatusHeld, held.Status)
+	require.Equal(t, types.ReminderStatusHeld, held.Status, "the other writer won")
+	untouched, err := f.svc.Get(ctx, "a2")
+	require.NoError(t, err)
+	require.Equal(t, types.ReminderStatusPending, untouched.Status, "one conflict stops the whole request")
+	require.Nil(t, untouched.CreatedAt)
 
 	racing.race = func() {
 		_, err := f.svc.UpdateReminder(ctx, "a3", &dto.UpdateReminderRequest{Body: ptr("Theirs")})
 		require.NoError(t, err)
 	}
-	out, err = f.serviceWith(racing).BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a3"}))
-	require.NoError(t, err)
-	require.Empty(t, out.Drafts, "an existing row changed meanwhile is skipped")
+	_, err = f.serviceWith(racing).BulkUpdateReminders(ctx, bulkStatus(types.ReminderStatusApproved, []string{"a3"}))
+	requireKind(t, err, ierr.ErrVersionConflict)
+}
+
+func TestReminder_BulkUpdateFailsWhenAnotherRequestCreatedAReminder(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
+	f.overdue(t, ctx, "a2", "cust_1", 100, 5)
+
+	racing := &racingReminderRepo{InvoiceReminderRepository: f.reminders}
+	racing.race = func() {
+		_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusSkipped, ""))
+		require.NoError(t, err)
+	}
+	_, err := f.serviceWith(racing).BulkUpdateReminders(ctx, &dto.BulkUpdateRemindersRequest{InvoiceIDs: []string{"a1", "a2"}, UpdateReminderRequest: *setStatus(types.ReminderStatusHeld, "wait")})
+	requireKind(t, err, ierr.ErrVersionConflict)
+
+	all := f.reminders.All(ctx)
+	require.Len(t, all, 1, "the reminder for a1 is not inserted either")
+	require.Equal(t, types.ReminderStatusSkipped, all[0].ReminderStatus)
 }
 
 func TestReminder_PaidInvoiceHidesItsReminderAndTenantsAreIsolated(t *testing.T) {
 	ctxA := reminderCtxFor("tenant_a", "env_a")
 	ctxB := reminderCtxFor("tenant_b", "env_a")
 	f := newReminderFixture(t, ctxA)
-	f.customer(t, ctxA, "cust_1", "Acme", "")
+	f.customer(t, ctxA, "cust_1", "Acme", "ap@acme.test")
 	f.overdue(t, ctxA, "a1", "cust_1", 100, 5)
+	f.setCollections(t, ctxB, true)
+	f.setCollections(t, reminderCtxFor("tenant_a", "env_b"), true)
 	_, err := f.svc.UpdateReminder(ctxA, "a1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
 
@@ -762,7 +825,7 @@ func TestReminder_ListUsesTheCollectionsRepositoryAndDoesNotWrite(t *testing.T) 
 func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	due := clock.Now().Add(-3 * day)
 	row := func(id string, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
 		return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: id}).WithInvoice(id, "cust_1", "usd").
@@ -794,7 +857,7 @@ func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T)
 func TestReminder_RowsOfManyInvoicesStayDistinct(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
-	f.customer(t, ctx, "cust_1", "Acme", "")
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
 	for i := 0; i < 5; i++ {
 		f.overdue(t, ctx, fmt.Sprintf("a%d", i), "cust_1", 100, 5)
 	}

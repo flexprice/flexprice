@@ -52,7 +52,7 @@ type EmailNotificationService interface {
 	HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error
 
 	// QueueReminderEmail queues the email of an approved payment reminder with its text frozen at approval.
-	// It returns nil when this deployment or environment does not send emails, or the tenant has no reply-to email.
+	// It fails when emails are off for the deployment or environment, or the tenant has no reply-to email.
 	QueueReminderEmail(ctx context.Context, reminder ReminderEmail) (*emaillog.EmailLog, error)
 
 	// CancelReminderEmail withdraws the email of a reminder approval being undone. An email that already went
@@ -89,9 +89,6 @@ type outgoingEmail struct {
 	skipReason string
 	// metadata is stored on the email log, for example the text a composer renders.
 	metadata types.Metadata
-	// bestEffort queues the email quietly like an automatic one: no email is recorded when emails are off
-	// or the tenant has no reply-to, and a customer without an address is recorded as skipped.
-	bestEffort bool
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -283,9 +280,6 @@ func (s *emailNotificationService) ListEmails(ctx context.Context, filter *types
 // Reply-To is not recorded at all and returns a nil email.
 func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail) (*emaillog.EmailLog, error) {
 	if !s.Config.Email.IsProviderConfigured() {
-		if out.bestEffort {
-			return nil, nil
-		}
 		return nil, ierr.NewError("customer emails are disabled").
 			WithHint("Emails to customers are not enabled in this deployment").
 			Mark(ierr.ErrInvalidOperation)
@@ -295,9 +289,6 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		return nil, err
 	}
 	if !cfg.Enabled {
-		if out.bestEffort {
-			return nil, nil
-		}
 		return nil, ierr.NewError("emails are disabled for this environment").
 			WithHint("Enable emails in this environment's settings to send them").
 			Mark(ierr.ErrInvalidOperation)
@@ -309,7 +300,7 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 	}
 	to := normalizeRecipients(out.to)
 	replyTo := lo.CoalesceOrEmpty(out.replyTo, t.BillingDetails.ReplyToEmail())
-	auto := out.trigger == types.EmailTriggerAuto || out.bestEffort
+	auto := out.trigger == types.EmailTriggerAuto
 
 	switch {
 	case replyTo == "" && auto:

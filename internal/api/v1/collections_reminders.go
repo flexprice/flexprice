@@ -37,6 +37,7 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 // @Success 200 {object} dto.ListRemindersResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/reminders [get]
 func (h *ReminderHandler) ListReminders(c *gin.Context) {
 	var req dto.ListRemindersRequest
@@ -66,6 +67,7 @@ func (h *ReminderHandler) ListReminders(c *gin.Context) {
 // @Success 200 {object} dto.InvoiceReminderResponse
 // @Failure 404 {object} ierr.ErrorResponse "Not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/reminders/{id} [get]
 func (h *ReminderHandler) GetReminder(c *gin.Context) {
 	resp, err := h.service.Get(c.Request.Context(), c.Param("id"))
@@ -80,7 +82,7 @@ func (h *ReminderHandler) GetReminder(c *gin.Context) {
 // UpdateReminder godoc
 // @Summary Update reminder
 // @ID updateReminderDraft
-// @Description Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Nothing is sent.
+// @Description Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty) or the tenant has no reply-to email; where emails are off, approving only records the decision.
 // @Tags Collections
 // @Accept json
 // @Produce json
@@ -92,6 +94,7 @@ func (h *ReminderHandler) GetReminder(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Invoice is not open and overdue"
 // @Failure 409 {object} ierr.ErrorResponse "Not allowed in the reminder's status, or changed by someone else"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/reminders/update/{id} [put]
 func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 	var req dto.UpdateReminderRequest
@@ -112,7 +115,7 @@ func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 // BulkUpdateReminders godoc
 // @Summary Update reminders in bulk
 // @ID bulkUpdateReminderDrafts
-// @Description Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. Unknown or not overdue invoices fail the request with 404 before anything is written; each invoice is applied on its own, so a failure partway keeps the invoices already applied; invoices the change is not legal for, or that someone changed meanwhile, are left as they are and left out of the response. Approving queues each email for the dispatcher; nothing is sent in the request.
+// @Description Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. All or nothing: if any invoice cannot take the change (unknown or not overdue, a change not legal for its status, someone changed it meanwhile, or, where emails are on, an approval for a customer without an email address), the request fails and no invoice changes. The error details name the invoice. Approving queues each email for the dispatcher.
 // @Tags Collections
 // @Accept json
 // @Produce json
@@ -122,6 +125,8 @@ func (h *ReminderHandler) UpdateReminder(c *gin.Context) {
 // @Success 200 {object} dto.BulkUpdateRemindersResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "An invoice was not found"
+// @Failure 409 {object} ierr.ErrorResponse "An invoice cannot take the change or was changed meanwhile"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/reminders/bulk-update [put]
 func (h *ReminderHandler) BulkUpdateReminders(c *gin.Context) {
 	var req dto.BulkUpdateRemindersRequest

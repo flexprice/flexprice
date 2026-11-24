@@ -33,6 +33,7 @@ func NewCollectionsHandler(service service.CollectionsService, log *logger.Logge
 // @Success 200 {object} dto.CollectionsBoardResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/board [get]
 func (h *CollectionsHandler) GetBoard(c *gin.Context) {
 	var req dto.CollectionsBoardRequest
@@ -66,6 +67,7 @@ func (h *CollectionsHandler) GetBoard(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request, as_of or page too deep"
 // @Failure 404 {object} ierr.ErrorResponse "Unknown column"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 403 {object} ierr.ErrorResponse "Collections is not enabled for this environment"
 // @Router /collections/board/columns/{key} [get]
 func (h *CollectionsHandler) GetBoardColumn(c *gin.Context) {
 	var req dto.CollectionsBoardRequest
