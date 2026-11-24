@@ -719,7 +719,7 @@ func (s *usageAnalyticsService) expandObjects(ctx context.Context, expand []type
 		subIDs := distinctIDs(lo.FlatMap(resp.Items, func(it dto.UsageAnalyticsItem, _ int) []string { return it.SubscriptionIDs }))
 		for _, id := range subIDs {
 			if sub := in.subByID[id]; sub != nil {
-				resp.Subscriptions[id] = &dto.SubscriptionResponse{Subscription: sub}
+				resp.Subscriptions[id] = dto.NewSubscriptionResponse(sub)
 			}
 		}
 	}

@@ -889,7 +889,7 @@ func createPlanLineItem(
 	}
 
 	lineItemParams := dto.LineItemParams{
-		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Subscription: dto.NewSubscriptionResponse(sub),
 		Price:        &dto.PriceResponse{Price: price},
 		Plan:         &dto.PlanResponse{Plan: plan},
 		EntityType:   types.SubscriptionLineItemEntityTypePlan,

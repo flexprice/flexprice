@@ -258,7 +258,7 @@ func (s *subscriptionService) createSubscription(ctx context.Context, req dto.Cr
 	}
 
 	// Create line items using DTO method
-	subscriptionResponse := &dto.SubscriptionResponse{Subscription: sub}
+	subscriptionResponse := dto.NewSubscriptionResponse(sub)
 	planResponse := &dto.PlanResponse{Plan: plan}
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	// Bucket configs keyed by line item ID — captured here (while PriceID is the
@@ -708,7 +708,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
-	response := &dto.SubscriptionResponse{Subscription: result.Sub, Commitments: result.Commitments}
+	response := dto.NewSubscriptionResponse(result.Sub)
+	response.Commitments = result.Commitments
 	if result.Invoice != nil {
 		response.LatestInvoice = result.Invoice
 	}
@@ -981,7 +982,7 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 	NotifySubscriptionChanged(ctx, s.ServiceParams, sub.ID)
 
 	// Create response
-	response := &dto.SubscriptionResponse{Subscription: sub}
+	response := dto.NewSubscriptionResponse(sub)
 
 	// Include latest invoice if created
 	if invoice != nil {
@@ -1291,7 +1292,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 		phaseLineItems := lo.Map(validPrices, func(priceResp *dto.PriceResponse, _ int) *subscription.SubscriptionLineItem {
 			// Build line item params
 			params := dto.LineItemParams{
-				Subscription: &dto.SubscriptionResponse{Subscription: sub},
+				Subscription: dto.NewSubscriptionResponse(sub),
 				Price:        priceResp,
 				Plan:         planResponse,
 				EntityType:   types.SubscriptionLineItemEntityTypePlan,
@@ -1774,9 +1775,7 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 		return nil, err
 	}
 
-	response := &dto.SubscriptionResponse{
-		Subscription: sub,
-	}
+	response := dto.NewSubscriptionResponse(sub)
 
 	// if subscription pause status is not none, get all pauses
 	if sub.PauseStatus != types.PauseStatusNone {
@@ -1891,9 +1890,7 @@ func (s *subscriptionService) GetSubscriptionV2(ctx context.Context, id string, 
 		return nil, err
 	}
 
-	response := &dto.SubscriptionResponseV2{
-		Subscription: sub,
-	}
+	response := dto.NewSubscriptionResponseV2(sub)
 
 	// Compare sub.SyncedPriceSequence against the plan's current max
 	// prices.sequence — when the sub is behind, plan-price changes have not
@@ -2727,11 +2724,9 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 			}
 		}
 
-		response.Items[i] = &dto.SubscriptionResponse{
-			Subscription: sub,
-			Plan:         planResp,
-			Customer:     customerResp,
-		}
+		response.Items[i] = dto.NewSubscriptionResponse(sub)
+		response.Items[i].Plan = planResp
+		response.Items[i].Customer = customerResp
 	}
 
 	s.Logger.Debug(ctx, "built subscription responses", "response_count", len(response.Items))
@@ -2896,10 +2891,8 @@ func (s *subscriptionService) GetSubscriptionsForCustomer(ctx context.Context, e
 			continue
 		}
 
-		response.Items[i] = &dto.SubscriptionResponse{
-			Subscription: sub,
-			Entitlements: features,
-		}
+		response.Items[i] = dto.NewSubscriptionResponse(sub)
+		response.Items[i].Entitlements = features
 	}
 
 	return response, nil
@@ -4633,7 +4626,7 @@ func (s *subscriptionService) PauseSubscription(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPaused, subscriptionID)
 
 	return &dto.PauseSubscriptionResponse{
-		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Subscription: dto.NewSubscriptionResponse(sub),
 		Pause:        &dto.SubscriptionPauseResponse{SubscriptionPause: pause},
 	}, nil
 }
@@ -4849,7 +4842,7 @@ func (s *subscriptionService) ResumeSubscription(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
 
 	return &dto.ResumeSubscriptionResponse{
-		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Subscription: dto.NewSubscriptionResponse(sub),
 		Pause:        &dto.SubscriptionPauseResponse{SubscriptionPause: pause},
 	}, nil
 }
@@ -7658,9 +7651,7 @@ func (s *subscriptionService) GetSubscriptionsForBillingPeriodUpdate(ctx context
 		Items: make([]*dto.SubscriptionResponse, len(subs)),
 	}
 	for i, sub := range subs {
-		response.Items[i] = &dto.SubscriptionResponse{
-			Subscription: sub,
-		}
+		response.Items[i] = dto.NewSubscriptionResponse(sub)
 	}
 	return response, nil
 }

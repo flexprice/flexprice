@@ -443,17 +443,15 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return nil, err
 	}
 
-	if key == types.SettingKeyInvoiceConfig {
-		if err := types.ResolveInvoiceConfigPaymentTerms(req.Value); err != nil {
-			return nil, err
-		}
-	}
 	if err := req.Validate(key); err != nil {
 		return nil, err
 	}
 
 	switch key {
 	case types.SettingKeyInvoiceConfig:
+		if err := types.ResolveInvoiceConfigPaymentTerms(req.Value); err != nil {
+			return nil, err
+		}
 		return s.updateBillingEntityGuardedSetting(ctx, key, req, updateSettingByKey[types.InvoiceConfig])
 	case types.SettingKeySubscriptionConfig:
 		return updateSettingByKey[types.SubscriptionConfig](s, ctx, key, req)

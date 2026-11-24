@@ -3078,7 +3078,7 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 			allEntitlements = append(allEntitlements, subEntitlements...)
 		}
 
-		allSubscriptions = append(allSubscriptions, &dto.SubscriptionResponse{Subscription: sub})
+		allSubscriptions = append(allSubscriptions, dto.NewSubscriptionResponse(sub))
 	}
 
 	// Use the generic aggregation function

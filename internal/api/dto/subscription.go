@@ -2,7 +2,6 @@ package dto
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -1006,12 +1005,12 @@ type SubscriptionResponse struct {
 	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
 }
 
-// MarshalJSON adds payment_terms_type and payment_terms_days, derived from payment_terms.
-func (r SubscriptionResponse) MarshalJSON() ([]byte, error) {
-	type plain SubscriptionResponse
-	out := plain(r)
-	out.PaymentTermsType, out.PaymentTermsDays = paymentTermsParts(r.Subscription)
-	return json.Marshal(out)
+// NewSubscriptionResponse builds the response for a subscription, with payment_terms_type and payment_terms_days
+// derived from its payment_terms.
+func NewSubscriptionResponse(sub *subscription.Subscription) *SubscriptionResponse {
+	resp := &SubscriptionResponse{Subscription: sub}
+	resp.PaymentTermsType, resp.PaymentTermsDays = paymentTermsParts(sub)
+	return resp
 }
 
 // ListSubscriptionsResponse represents the response for listing subscriptions
@@ -1058,12 +1057,12 @@ type SubscriptionResponseV2 struct {
 	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
 }
 
-// MarshalJSON adds payment_terms_type and payment_terms_days, derived from payment_terms.
-func (r SubscriptionResponseV2) MarshalJSON() ([]byte, error) {
-	type plain SubscriptionResponseV2
-	out := plain(r)
-	out.PaymentTermsType, out.PaymentTermsDays = paymentTermsParts(r.Subscription)
-	return json.Marshal(out)
+// NewSubscriptionResponseV2 builds the V2 response for a subscription, with payment_terms_type and
+// payment_terms_days derived from its payment_terms.
+func NewSubscriptionResponseV2(sub *subscription.Subscription) *SubscriptionResponseV2 {
+	resp := &SubscriptionResponseV2{Subscription: sub}
+	resp.PaymentTermsType, resp.PaymentTermsDays = paymentTermsParts(sub)
+	return resp
 }
 
 func paymentTermsParts(sub *subscription.Subscription) (*types.PaymentTermsType, *int) {

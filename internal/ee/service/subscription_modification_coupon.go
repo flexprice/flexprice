@@ -163,7 +163,7 @@ func (s *subscriptionModificationService) executeAddCoupon(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     dto.NewSubscriptionResponse(sub),
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -229,7 +229,7 @@ func (s *subscriptionModificationService) executeRemoveCoupon(
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     dto.NewSubscriptionResponse(sub),
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -326,7 +326,7 @@ func (s *subscriptionModificationService) previewAddCoupon(
 	}
 
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     dto.NewSubscriptionResponse(sub),
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }
@@ -376,7 +376,7 @@ func (s *subscriptionModificationService) previewRemoveCoupon(
 		return nil, err
 	}
 	return &dto.SubscriptionModifyResponse{
-		Subscription:     &dto.SubscriptionResponse{Subscription: sub},
+		Subscription:     dto.NewSubscriptionResponse(sub),
 		ChangedResources: dto.ChangedResources{},
 	}, nil
 }

@@ -549,7 +549,7 @@ func (s *subscriptionService) resolveLineItems(
 		}
 	}
 
-	subResp := &dto.SubscriptionResponse{Subscription: sub}
+	subResp := dto.NewSubscriptionResponse(sub)
 	for j, target := range targetPrices {
 		if matchedTarget[j] {
 			continue
@@ -1313,7 +1313,7 @@ func buildPlanChangeResponse(
 	req dto.SubscriptionChangeV2Request,
 ) *dto.SubscriptionChangeV2Response {
 	return &dto.SubscriptionChangeV2Response{
-		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Subscription: dto.NewSubscriptionResponse(sub),
 		ChangeType:   r.changeType,
 		EffectiveAt:  r.effectiveAt,
 		FromPlan:     planChangeSummary(r.fromPlan),
