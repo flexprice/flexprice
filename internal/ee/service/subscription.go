@@ -2124,12 +2124,9 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
-	if req.PaymentTerms != nil {
-		if *req.PaymentTerms == "" {
-			subscription.PaymentTerms = nil
-		} else {
-			subscription.PaymentTerms = req.PaymentTerms
-		}
+	// req.Validate has checked the payment terms.
+	if paymentTerms, _ := types.ResolvePaymentTerms(req.PaymentTerms, req.PaymentTermsType, req.PaymentTermsDays); paymentTerms != nil {
+		subscription.PaymentTerms = lo.Ternary(*paymentTerms == "", nil, paymentTerms)
 	}
 
 	if req.CancelAtPeriodEnd != nil {

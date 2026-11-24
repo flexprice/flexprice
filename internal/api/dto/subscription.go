@@ -806,11 +806,9 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	paymentTerms, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
-	if err != nil {
+	if _, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
 		return err
 	}
-	r.PaymentTerms = paymentTerms
 
 	return nil
 }
@@ -1296,11 +1294,9 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	paymentTerms, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
-	if err != nil {
+	if _, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
 		return err
 	}
-	r.PaymentTerms = lo.Ternary(lo.FromPtr(paymentTerms) == "", nil, paymentTerms)
 
 	// Set default value to Billing Period Count if not provided
 	if r.BillingPeriodCount == 0 {
@@ -1589,6 +1585,9 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 }
 
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
+	// Validate has checked the payment terms.
+	paymentTerms, _ := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
+
 	// Handle legacy collection method and set defaults
 	paymentBehavior := types.PaymentBehaviorDefaultActive
 	collectionMethod := types.CollectionMethodChargeAutomatically
@@ -1707,7 +1706,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		ParentSubscriptionID:   parentSubscriptionID,
-		PaymentTerms:           r.PaymentTerms,
+		PaymentTerms:           lo.Ternary(lo.FromPtr(paymentTerms) == "", nil, paymentTerms),
 		Settings:               NormalizeSettingsOverride(r.Settings),
 		SubscriptionType:       subscriptionType,
 	}
