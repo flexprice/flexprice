@@ -416,6 +416,7 @@ jobs:
     needs: [build, resolve-config, migrate]
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
           vars.K8S_PREPROD_TAG != '' &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
@@ -461,13 +462,14 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   approval-gate:
     name: Approve production rollout
-    needs: [resolve-config, deploy-preprod]
+    needs: [resolve-config, deploy-preprod, retag-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
-          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: prod-approval
 
@@ -493,14 +495,15 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   promote-main-ghcr:
     name: Approve & promote :main to GHCR (GCP prod)
-    needs: [build, resolve-config, deploy-preprod]
+    needs: [build, resolve-config, deploy-preprod, retag-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
-          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: gcp-prod-approval
     permissions:

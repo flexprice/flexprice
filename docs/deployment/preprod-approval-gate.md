@@ -54,6 +54,15 @@ reuses that service's current task definition and only swaps the image, so any
 preprod-specific config (e.g. a future distinct `OTEL_SERVICE_NAME`) lives in
 the service's task definition, not in CI.
 
+### 2b. Optional: Kubernetes preprod tag
+
+Set the repo variable `K8S_PREPROD_TAG` to a tag name. On main and `v*` runs,
+`retag-k8s-preprod` copies `:<sha>` to that tag after migrations, before either
+approval gate. Point the preprod cluster's Argo CD Image Updater at it (digest
+strategy). Both gates wait for this job, and treat it as skipped when the
+variable is unset. CI only publishes the tag: before approving, confirm the
+rollout itself in Argo CD or its notifications.
+
 ### 3. Verify with a dry run
 
 Actions → "Build, Push & Deploy to AWS ECS" → **Run workflow** →
