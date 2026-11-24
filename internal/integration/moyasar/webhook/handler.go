@@ -327,7 +327,7 @@ func (h *Handler) adoptOrphanedCardCheck(ctx context.Context, closed *dto.Paymen
 		Gateway:           string(types.PaymentGatewayTypeMoyasar),
 		Amount:            closed.Amount,
 		Currency:          closed.Currency,
-		IdempotencyKey:    "moyasar_card_check_" + payment.ID,
+		IdempotencyKey:    payment.ID,
 	})
 	if err != nil {
 		return nil, err

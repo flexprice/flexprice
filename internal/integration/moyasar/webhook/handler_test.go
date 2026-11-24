@@ -128,10 +128,13 @@ func (s *OrphanedCardCheckSuite) declinedAttempt() string {
 	return id
 }
 
+// retryID has the shape of a real Moyasar payment ID.
+const retryID = "6f1c2a9e-4b7d-4e3a-9c58-1d2e3f4a5b6c"
+
 // approvedRetry is a paid card check whose metadata still points at an earlier attempt.
 func approvedRetry(flexpricePaymentID string) *moyasar.MoyasarPayment {
 	return &moyasar.MoyasarPayment{
-		ID:       "moy_retry",
+		ID:       retryID,
 		Status:   string(moyasar.MoyasarPaymentStatusPaid),
 		Source:   &moyasar.PaymentSource{Token: "token_retry", Company: "visa", Number: "4111-11XX-XXXX-1111"},
 		Metadata: map[string]string{"flexprice_payment_id": flexpricePaymentID},
@@ -141,7 +144,7 @@ func approvedRetry(flexpricePaymentID string) *moyasar.MoyasarPayment {
 var paidEvent = &webhook.MoyasarWebhookEvent{
 	ID:   "evt_retry",
 	Type: webhook.EventPaymentPaid,
-	Data: webhook.PaymentEventData{ID: "moy_retry"},
+	Data: webhook.PaymentEventData{ID: retryID},
 }
 
 func (s *OrphanedCardCheckSuite) TestApprovedRetryIsRecordedSavedAndReleased() {
@@ -172,13 +175,14 @@ func (s *OrphanedCardCheckSuite) TestApprovedRetryIsRecordedSavedAndReleased() {
 				s.Require().NoError(h.HandleWebhookEvent(ctx, paidEvent, types.GetEnvironmentID(ctx), services))
 			}
 
-			created, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(ctx, "moyasar_card_check_moy_retry")
+			created, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(ctx, retryID)
 			s.Require().NoError(err)
+			s.LessOrEqual(len(created.IdempotencyKey), 50, "payments.idempotency_key is varchar(50)")
 			adopted, err := s.GetStores().PaymentRepo.Get(ctx, created.ID)
 			s.Require().NoError(err)
 			s.Equal(types.PaymentDestinationTypeCustomer, adopted.DestinationType)
 			s.Equal(s.customerID, adopted.DestinationID)
-			s.Equal("moy_retry", lo.FromPtr(adopted.GatewayPaymentID))
+			s.Equal(retryID, lo.FromPtr(adopted.GatewayPaymentID))
 			s.Equal(tt.wantStatus, adopted.PaymentStatus)
 
 			declined, err := s.GetStores().PaymentRepo.Get(ctx, declinedID)
@@ -188,7 +192,7 @@ func (s *OrphanedCardCheckSuite) TestApprovedRetryIsRecordedSavedAndReleased() {
 			s.Require().Len(methods.created, 1)
 			s.Equal("token_retry", methods.created[0].GatewayMethodID)
 			s.Equal(s.customerID, methods.created[0].CustomerID)
-			s.Contains(client.voided, "moy_retry")
+			s.Contains(client.voided, retryID)
 		})
 	}
 }
@@ -246,9 +250,9 @@ func TestOrphanedCardCheck_ReleasedWhenItCannotBeRecorded(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-			assert.Equal(t, []string{"moy_retry"}, client.voided)
+			assert.Equal(t, []string{retryID}, client.voided)
 			if tt.wantRefunded {
-				assert.Equal(t, []string{"moy_retry"}, client.refunded)
+				assert.Equal(t, []string{retryID}, client.refunded)
 			} else {
 				assert.Empty(t, client.refunded)
 			}
