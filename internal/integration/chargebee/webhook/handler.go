@@ -319,7 +319,7 @@ func (h *Handler) settleLinkedPayment(
 
 	// A tenant's own notes land in the same array, so anything that is not one of our
 	// payment ids simply is not ours to settle.
-	if _, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID); err != nil {
+	if _, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID}); err != nil {
 		return false, nil
 	}
 

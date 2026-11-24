@@ -35,7 +35,7 @@ const (
 var gatewayCapabilities = map[string][]paymentCapability{
 	"stripe":    {capPaymentLink, capAutoCharge, capListMethods, capAddMethod, capDeleteMethod, capSetDefault},
 	"chargebee": {capPaymentLink, capAutoCharge, capListMethods, capAddMethod, capDeleteMethod, capSetDefault},
-	"razorpay":  {capPaymentLink, capAutoCharge, capListMethods},
+	"razorpay":  {capPaymentLink, capAutoCharge, capListMethods, capAddMethod},
 }
 
 // PaymentProbeOpts configures one gateway's payment probes.

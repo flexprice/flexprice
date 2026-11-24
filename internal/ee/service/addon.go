@@ -849,11 +849,6 @@ func (s *addonService) createAddonSyncLineItems(
 		return &dto.PriceResponse{Price: p}
 	})
 
-	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil {
-		return 0, 0, err
-	}
-
 	var toCreate []*subscription.SubscriptionLineItem
 	for _, ref := range refs {
 		sub, ok := subMap[ref.SubscriptionID]
@@ -870,8 +865,8 @@ func (s *addonService) createAddonSyncLineItems(
 			}
 			lineItem := s.buildAddonSyncLineItem(ctx, sub, price, addonResp, ref.AssociationID, ref.EndDate)
 			// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
-			// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
-			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+			// it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
+			if price.Type == types.PRICE_TYPE_USAGE {
 				found++
 				ok, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 				if err != nil {

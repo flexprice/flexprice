@@ -295,17 +295,6 @@ func (s *CommitmentServiceSuite) TestTriggerInstalment_RejectsInactiveOrPerPerio
 	_, err := s.svc.TriggerInstalment(ctx, "cmt_missing", "binst_any", req)
 	s.Require().Error(err)
 	s.True(ierr.IsNotFound(err), "got %v", err)
-
-	activeReq := s.milestoneRequest()
-	activeReq.Priority = 2
-	created, milestone := s.milestoneOf(activeReq)
-
-	before := s.storedInstalments()
-	setCommitmentsV2(s.T(), ctx, s.GetStores(), false)
-	_, err = s.svc.TriggerInstalment(ctx, created.ID, milestone.ID, req)
-	s.Require().Error(err)
-	s.True(ierr.IsInvalidOperation(err), "got %v", err)
-	s.Equal(before, s.storedInstalments())
 }
 
 // milestoneCommitment commits 100 a month from 1 Jan 2026 to end, billed as half at signing and half at go-live, a

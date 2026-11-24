@@ -128,7 +128,7 @@ func (p *Payment) Validate() error {
 				WithHint("Payment method id is invalid for payment links").
 				Mark(ierr.ErrValidation)
 		}
-	} else if p.PaymentMethodType == types.PaymentMethodTypeCard || p.PaymentMethodType == types.PaymentMethodTypeUPI {
+	} else if p.PaymentMethodType.IsSavedMethod() {
 		// For card payments, payment method ID is optional - it will be fetched automatically if empty
 		// No validation needed here as the payment processor will handle fetching the saved payment method
 	} else if p.PaymentMethodID == "" {
@@ -163,6 +163,24 @@ func (pa *PaymentAttempt) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// IsPaymentPaid reports whether the payment captured money (succeeded or overpaid).
+func (p *Payment) IsPaymentPaid() bool {
+	return p != nil && (p.PaymentStatus == types.PaymentStatusSucceeded || p.PaymentStatus == types.PaymentStatusOverpaid)
+}
+
+// SettlesByWebhook reports whether the payment is a saved-method charge whose outcome the gateway sends by webhook.
+// Like a link, it is INITIATED until the gateway has it and PENDING until the webhook settles it.
+func (p *Payment) SettlesByWebhook() bool {
+	return p != nil && p.PaymentGateway != nil && *p.PaymentGateway == string(types.PaymentGatewayTypeRazorpay) &&
+		p.PaymentMethodType.IsSavedMethod()
+}
+
+// IsChargeInFlight reports whether a charge was submitted to the gateway and awaits its outcome.
+func (p *Payment) IsChargeInFlight() bool {
+	return p != nil && (p.PaymentStatus == types.PaymentStatusProcessing ||
+		(p.PaymentStatus == types.PaymentStatusPending && p.SettlesByWebhook()))
 }
 
 // TableName returns the table name for the payment

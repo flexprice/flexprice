@@ -5,14 +5,20 @@ package webhook
 
 import (
 	"context"
-	"github.com/flexprice/flexprice/internal/metrics/metricstest"
-	"github.com/stretchr/testify/require"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/metrics/metricstest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -21,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
@@ -30,7 +37,9 @@ import (
 
 type webhookTestRazorpayClient struct {
 	razorpay.RazorpayClient
-	refundCalls []string // razorpayPaymentID per call
+	refundCalls  []string // razorpayPaymentID per call
+	refundErrors []error
+	refundStatus string
 }
 
 func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connection.Connection, error) {
@@ -38,11 +47,21 @@ func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connectio
 }
 
 func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
-	return map[string]interface{}{"refund_status": nil}, nil
+	var refundStatus interface{}
+	if c.refundStatus != "" {
+		refundStatus = c.refundStatus
+	}
+	return map[string]interface{}{"refund_status": refundStatus}, nil
 }
 
 func (c *webhookTestRazorpayClient) RefundPayment(_ context.Context, paymentID string, _ int64, _ string) (map[string]interface{}, error) {
 	c.refundCalls = append(c.refundCalls, paymentID)
+	if len(c.refundErrors) > 0 {
+		err := c.refundErrors[0]
+		c.refundErrors = c.refundErrors[1:]
+		return nil, err
+	}
+	c.refundStatus = "full"
 	return map[string]interface{}{"id": "rfnd_test001"}, nil
 }
 
@@ -92,7 +111,7 @@ type webhookTestPaymentService struct {
 	attempts    []dto.RecordAttemptRequest
 }
 
-func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	s.getCalls++
 	return s.payment, nil
 }
@@ -100,6 +119,9 @@ func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ string) (*dt
 func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, req dto.UpdatePaymentRequest) (*dto.PaymentResponse, error) {
 	s.updateCalls = append(s.updateCalls, req)
 	if req.PaymentStatus != nil {
+		if err := s.payment.PaymentStatus.ValidateTransitionTo(types.PaymentStatus(*req.PaymentStatus)); err != nil {
+			return nil, err
+		}
 		s.payment.PaymentStatus = types.PaymentStatus(*req.PaymentStatus)
 	}
 	return s.payment, nil
@@ -144,7 +166,9 @@ type webhookTestCheckoutSessionService struct {
 	interfaces.CheckoutSessionService
 	session       *dto.CheckoutSessionResponse // returned by List, matched by session.ID (see note on suite below)
 	listErr       error
+	completeErr   error // returned by CompleteCheckoutSession; on ErrAlreadyExists the session is expired first
 	completeCalls []string
+	cleanupCalls  []string
 }
 
 func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error) {
@@ -159,6 +183,18 @@ func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *type
 
 func (s *webhookTestCheckoutSessionService) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
 	s.completeCalls = append(s.completeCalls, sessionID)
+	if ierr.IsAlreadyExists(s.completeErr) {
+		s.session.CheckoutStatus = types.CheckoutStatusExpired
+	}
+	return s.completeErr
+}
+
+func (s *webhookTestCheckoutSessionService) Get(_ context.Context, _ string) (*dto.CheckoutSessionResponse, error) {
+	return s.session, nil
+}
+
+func (s *webhookTestCheckoutSessionService) CleanupCheckoutSession(_ context.Context, sessionID string, _ error) error {
+	s.cleanupCalls = append(s.cleanupCalls, sessionID)
 	return nil
 }
 
@@ -255,6 +291,31 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_Completes() {
 	s.Empty(s.client.refundCalls, "pending session must not trigger a refund")
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestPendingSession_PastExpiry_Refunds() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+	}
+	s.checkoutSvc.completeErr = ierr.NewError("checkout session expired").Mark(ierr.ErrAlreadyExists)
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.NoError(err)
+	s.Require().Len(s.checkoutSvc.completeCalls, 1)
+	s.Equal([]string{"pay_rzp_001"}, s.client.refundCalls, "a capture the expired session would not take is refunded")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPendingSession_CompleteError_Retries() {
+	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
+		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+	}
+	s.checkoutSvc.completeErr = ierr.NewError("db down").Mark(ierr.ErrDatabase)
+
+	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
+
+	s.Error(err, "the error reaches the webhook so Razorpay redelivers")
+	s.Empty(s.client.refundCalls)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
@@ -305,12 +366,25 @@ func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
 	s.Empty(s.client.refundCalls)
 }
 
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPayment_NotRetried() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
+
+	s.NoError(err)
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
 func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refunds() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
@@ -326,6 +400,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refund
 	}
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_001"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
@@ -348,6 +423,7 @@ func (s *WebhookCheckoutBranchingSuite) makeFailedEvent() *RazorpayWebhookEvent 
 func (s *WebhookCheckoutBranchingSuite) pendingSession() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusPending,
+		PaymentAction: &types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: "https://rzp.io/x"},
 	}
 }
 
@@ -370,6 +446,19 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_Records
 	}, s.paymentSvc.failedAttempts()[0].Metadata)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
+	s.Empty(s.checkoutSvc.cleanupCalls, "a link session stays open for the customer to retry")
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_AutoChargeSession_FailsSession() {
+	s.pendingSession()
+	s.checkoutSvc.session.PaymentAction = nil
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusPending
+
+	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
+
+	s.NoError(err)
+	s.Len(s.paymentSvc.failedAttempts(), 1)
+	s.Equal([]string{"pay_flex_001"}, s.checkoutSvc.cleanupCalls, "an off-session decline ends the session")
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_RepeatedDeclines_RecordEachAttempt() {
@@ -493,6 +582,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SyncedPaymentStillCo
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusSucceeded
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_checkout"
+	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	s.Require().NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
@@ -563,4 +653,262 @@ func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_rzp"), "env_gw"), &RazorpayWebhookEvent{Event: "attacker.chosen"}, "env_gw", nil))
 
 	require.Equal(t, int64(1), r.Sum("gateway.webhooks", map[string]string{"tenant_id": "ten_gw_rzp", "provider": "razorpay", "event_type": "other", "outcome": "ignored"}))
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ZeroAmountIsIgnored() {
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_reg"
+	event.Payload.Payment.Entity.Amount = 0
+
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+
+	s.Zero(s.paymentSvc.getCalls)
+	s.Empty(s.paymentSvc.updateCalls)
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentIsRefundedAndStaysFailed() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_late"
+	event.Payload.Payment.Entity.Amount = 50000
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+
+	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+	s.Require().Len(s.paymentSvc.updateCalls, 1)
+	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
+}
+
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentRefundRetriesAndDuplicateIsIdempotent() {
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+	s.client.refundErrors = []error{errors.New("temporary refund error")}
+	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+	event.Payload.Payment.Entity.ID = "pay_rzp_late"
+	event.Payload.Payment.Entity.Amount = 50000
+	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+
+	err := s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services)
+	s.Require().Error(err)
+	s.ErrorContains(err, "temporary refund error")
+	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
+	s.Empty(s.paymentSvc.updateCalls, "a failed provider refund must not be recorded as refunded")
+
+	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
+	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateCalls, 1)
+	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
+
+	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
+	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
+	s.Len(s.paymentSvc.updateCalls, 1, "a repeated delivery must not submit or record a second refund")
+	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+}
+
+type recordingPublisher struct {
+	events []*types.WebhookEvent
+}
+
+func (p *recordingPublisher) PublishWebhook(_ context.Context, event *types.WebhookEvent) error {
+	p.events = append(p.events, event)
+	return nil
+}
+
+func (p *recordingPublisher) Close() error { return nil }
+
+// customerMappingStore maps one Razorpay customer and one setup link to Flexprice customers.
+type customerMappingStore struct {
+	webhookTestMappingStore
+}
+
+func (customerMappingStore) List(_ context.Context, f *types.EntityIntegrationMappingFilter) ([]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	if len(f.ProviderEntityIDs) == 1 && f.ProviderEntityIDs[0] == "cust_rzp" {
+		return []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cust_mapped"}}, nil
+	}
+	if f.EntityType == types.IntegrationEntityTypePaymentMethodSetup &&
+		(len(f.ProviderEntityIDs) == 1 && f.ProviderEntityIDs[0] == "inv_link" || f.EntityID == "cust_notes") {
+		return []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cust_notes", ProviderEntityID: "inv_link"}}, nil
+	}
+	return nil, nil
+}
+
+// knownCustomers resolves the customers a token event names; any other id is not found.
+type knownCustomers struct {
+	interfaces.CustomerService
+}
+
+func (knownCustomers) GetCustomer(_ context.Context, id string) (*dto.CustomerResponse, error) {
+	if id == "cust_notes" || id == "cust_mapped" {
+		return &dto.CustomerResponse{Customer: &customer.Customer{ID: id, ExternalID: "ext_" + id}}, nil
+	}
+	return nil, ierr.NewError("customer not found").Mark(ierr.ErrNotFound)
+}
+
+func TestHandleTokenEvent(t *testing.T) {
+	token := func(extra string) map[string]interface{} {
+		var raw map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(`{
+			"id": "token_1", "method": "emandate", "recurring": true, "bank": "HDFC", "auth_type": "netbanking",
+			"max_amount": 100000, "expired_at": 3000000000,
+			"bank_details": {"account_number": "001234561234", "ifsc": "HDFC0001", "account_type": "savings"}`+extra+`}`), &raw))
+		return raw
+	}
+
+	tests := []struct {
+		name           string
+		event          RazorpayEventType
+		token          map[string]interface{}
+		wantEvent      types.WebhookEventName
+		wantCustomer   string
+		wantStatus     string
+		wantFailReason string
+		wantSetupLink  string
+	}{
+		{
+			name:          "confirmed, customer from link notes",
+			event:         EventTokenConfirmed,
+			token:         token(`, "recurring_details": {"status": "confirmed"}, "notes": {"flexprice_customer_id": "cust_notes"}`),
+			wantEvent:     types.WebhookEventMandateConfirmed,
+			wantCustomer:  "cust_notes",
+			wantStatus:    "confirmed",
+			wantSetupLink: "inv_link",
+		},
+		{
+			name:           "rejected, customer from Razorpay customer id",
+			event:          EventTokenRejected,
+			token:          token(`, "recurring": false, "recurring_details": {"status": "rejected", "failure_reason": "Rejected by bank"}, "customer_id": "cust_rzp"`),
+			wantEvent:      types.WebhookEventMandateRejected,
+			wantCustomer:   "cust_mapped",
+			wantStatus:     "rejected",
+			wantFailReason: "Rejected by bank",
+		},
+		{
+			name:  "a customer outside this environment is skipped",
+			event: EventTokenConfirmed,
+			token: token(`, "recurring_details": {"status": "confirmed"}, "notes": {"flexprice_customer_id": "cust_elsewhere"}`),
+		},
+		{
+			name:  "no customer is skipped",
+			event: EventTokenCancelled,
+			token: token(`, "recurring_details": {"status": "cancelled"}`),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pub := &recordingPublisher{}
+			h := NewHandler(nil, nil, customerMappingStore{}, nil, logger.NewNoopLogger())
+			event := &RazorpayWebhookEvent{Event: string(tt.event)}
+			event.Payload.Token.Entity = tt.token
+
+			require.NoError(t, h.HandleWebhookEvent(context.Background(), event, "env_1", &ServiceDependencies{WebhookPublisher: pub, CustomerService: knownCustomers{}}))
+
+			if tt.wantEvent == "" {
+				assert.Empty(t, pub.events)
+				return
+			}
+			require.Len(t, pub.events, 1)
+			assert.Equal(t, tt.wantEvent, pub.events[0].EventName)
+			assert.Equal(t, tt.wantCustomer, pub.events[0].EntityID)
+
+			var payload webhookDto.InternalMandateEvent
+			require.NoError(t, json.Unmarshal(pub.events[0].Payload, &payload))
+			m := payload.Mandate
+			assert.Equal(t, "token_1", m.ID)
+			assert.Equal(t, tt.wantSetupLink, m.SetupIntentID)
+			assert.Equal(t, tt.wantCustomer, m.CustomerID)
+			assert.Equal(t, "ext_"+tt.wantCustomer, m.ExternalCustomerID)
+			assert.Equal(t, types.PaymentMethodTypeENACH, m.Type)
+			assert.Equal(t, tt.wantStatus, m.Status)
+			assert.Equal(t, tt.wantFailReason, lo.FromPtr(m.FailureReason))
+			assert.Equal(t, "1000", m.MaxAmount.String())
+			assert.Equal(t, &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
+		})
+	}
+}
+
+func TestHandleSetupEvents(t *testing.T) {
+	// A real eNACH authorisation failure, with personal data masked.
+	setupFailure := `{"entity": "event", "event": "payment.failed", "payload": {"payment": {"entity": {
+		"id": "pay_1", "amount": 0, "currency": "INR", "status": "failed", "method": "emandate",
+		"invoice_id": "inv_link", "order_id": "order_1", "token_id": "token_1", "customer_id": "cust_rzp_x",
+		"notes": {"flexprice_customer_id": "%s"},
+		"error_code": "BAD_REQUEST_ERROR", "error_reason": "invalid_bank_account",
+		"error_description": "Your Aadhaar number does not match your bank account details. Please verify and update your information."}}}}`
+	expired := `{"entity": "event", "event": "invoice.expired", "payload": {"invoice": {"entity": {"id": "%s", "status": "expired"}}}}`
+
+	tests := []struct {
+		name     string
+		body     string
+		want     *webhookDto.Mandate
+		wantName types.WebhookEventName
+	}{
+		{
+			name:     "setup attempt failed",
+			body:     fmt.Sprintf(setupFailure, "cust_notes"),
+			wantName: types.WebhookEventMandateSetupAttemptFailed,
+			want: &webhookDto.Mandate{
+				ID: "token_1", SetupIntentID: "inv_link", CustomerID: "cust_notes", ExternalCustomerID: "ext_cust_notes",
+				Provider: types.PaymentGatewayTypeRazorpay, Type: types.PaymentMethodTypeENACH, Status: "setup_attempt_failed",
+				FailureReason: lo.ToPtr("Your Aadhaar number does not match your bank account details. Please verify and update your information."),
+				Currency:      "INR",
+			},
+		},
+		{
+			name: "setup attempt for a customer outside this environment is skipped",
+			body: fmt.Sprintf(setupFailure, "cust_elsewhere"),
+		},
+		{
+			name:     "setup link expired",
+			body:     fmt.Sprintf(expired, "inv_link"),
+			wantName: types.WebhookEventMandateSetupExpired,
+			want: &webhookDto.Mandate{
+				SetupIntentID: "inv_link", CustomerID: "cust_notes", ExternalCustomerID: "ext_cust_notes",
+				Provider: types.PaymentGatewayTypeRazorpay, Type: types.PaymentMethodTypeENACH, Status: "setup_expired", Currency: "INR",
+			},
+		},
+		{
+			name: "an expired invoice that is not a setup link is skipped",
+			body: fmt.Sprintf(expired, "inv_other"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var event RazorpayWebhookEvent
+			require.NoError(t, json.Unmarshal([]byte(tt.body), &event))
+			pub := &recordingPublisher{}
+			h := NewHandler(nil, nil, customerMappingStore{}, nil, logger.NewNoopLogger())
+
+			require.NoError(t, h.HandleWebhookEvent(context.Background(), &event, "env_1", &ServiceDependencies{WebhookPublisher: pub, CustomerService: knownCustomers{}}))
+
+			if tt.want == nil {
+				assert.Empty(t, pub.events)
+				return
+			}
+			require.Len(t, pub.events, 1)
+			assert.Equal(t, tt.wantName, pub.events[0].EventName)
+			var payload webhookDto.InternalMandateEvent
+			require.NoError(t, json.Unmarshal(pub.events[0].Payload, &payload))
+			assert.Equal(t, *tt.want, payload.Mandate)
+		})
+	}
+}
+
+func TestIsHandledEvent(t *testing.T) {
+	tests := []struct {
+		eventType string
+		want      bool
+	}{
+		{string(EventPaymentCaptured), true},
+		{string(EventRefundProcessed), true},
+		{string(EventInvoiceExpired), true},
+		{"payment.downtime.started", false},
+		{"payment.downtime.resolved", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, IsHandledEvent(tt.eventType), tt.eventType)
+	}
 }

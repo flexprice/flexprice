@@ -28,18 +28,13 @@ func instalmentBillAt(referencePoint types.InvoiceReferencePoint, periodStart, p
 }
 
 // dueInstalments returns the subscriptions' scheduled subscription-invoice instalments due by billAt that no termination
-// cancelled, in billing order, with their commitments by ID; none while commitments_v2 is off.
+// cancelled, in billing order, with their commitments by ID.
 func dueInstalments(
 	ctx context.Context,
 	params ServiceParams,
 	subscriptionIDs []string,
 	billAt time.Time,
 ) ([]*billingterm.Instalment, map[string]*commitment.Commitment, error) {
-	enabled, err := NewCommitmentService(params).IsEnabled(ctx)
-	if err != nil || !enabled {
-		return nil, nil, err
-	}
-
 	scheduled, err := params.BillingInstalmentRepo.List(ctx, &billingterm.InstalmentFilter{
 		OwnerType:       types.BillingTermOwnerCommitment,
 		SubscriptionIDs: subscriptionIDs,
@@ -127,8 +122,13 @@ func (s *billingService) dueInstalmentLines(
 // instalmentLine is the fixed invoice line that bills instalment i of commitment c.
 func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.CreateInvoiceLineItemRequest {
 	kind := types.CommitmentLineInstalment
-	if i.Kind == types.InstalmentKindSettlement {
+	name := c.InvoiceLabel + " - " + i.InvoiceLabel
+	switch i.Kind {
+	case types.InstalmentKindSettlement:
 		kind = types.CommitmentLineSettlement
+	case types.InstalmentKindCancellationFee:
+		kind = types.CommitmentLineCancellationFee
+		name = c.InvoiceLabel + " (cancellation fee)"
 	}
 
 	metadata := types.Metadata{
@@ -140,7 +140,7 @@ func instalmentLine(c *commitment.Commitment, i *billingterm.Instalment) dto.Cre
 	}
 
 	return dto.CreateInvoiceLineItemRequest{
-		DisplayName: lo.ToPtr(c.InvoiceLabel + " - " + i.InvoiceLabel),
+		DisplayName: lo.ToPtr(name),
 		Amount:      i.Amount,
 		Quantity:    decimal.NewFromInt(1),
 		PeriodStart: lo.ToPtr(i.ServicePeriodStart),

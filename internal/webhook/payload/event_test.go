@@ -6,9 +6,13 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -124,6 +128,95 @@ func TestPaymentAttemptPayloadBuilder_BuildPayload(t *testing.T) {
 			} else {
 				assert.NotContains(t, got, "checkout_session")
 			}
+		})
+	}
+}
+
+func TestMandatePayloadBuilder_BuildPayload(t *testing.T) {
+	b := NewMandatePayloadBuilder(nil)
+	maxAmount := decimal.NewFromInt(1000)
+	internal := webhookDto.InternalMandateEvent{Mandate: webhookDto.Mandate{
+		ID:            "token_1",
+		CustomerID:    "cust_1",
+		Provider:      types.PaymentGatewayTypeRazorpay,
+		Type:          types.PaymentMethodTypeENACH,
+		Status:        "rejected",
+		FailureReason: lo.ToPtr("Rejected by bank"),
+		MaxAmount:     &maxAmount,
+		Currency:      "INR",
+		BankAccount:   &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "4361"},
+	}}
+	data, err := json.Marshal(internal)
+	require.NoError(t, err)
+
+	out, err := b.BuildPayload(context.Background(), types.WebhookEventMandateRejected, data)
+	require.NoError(t, err)
+
+	var got webhookDto.MandateWebhookPayload
+	require.NoError(t, json.Unmarshal(out, &got))
+	assert.Equal(t, types.WebhookEventMandateRejected, got.EventType)
+	assert.Equal(t, internal.Mandate.ID, got.Mandate.ID)
+	assert.Equal(t, "Rejected by bank", lo.FromPtr(got.Mandate.FailureReason))
+	assert.True(t, maxAmount.Equal(lo.FromPtr(got.Mandate.MaxAmount)))
+	assert.Equal(t, internal.Mandate.BankAccount, got.Mandate.BankAccount)
+
+	_, err = b.BuildPayload(context.Background(), types.WebhookEventMandateRejected, []byte(`{"mandate":{"id":"token_1"}}`))
+	assert.Error(t, err, "a mandate without a customer is refused")
+}
+
+type paymentFailedTestInvoiceService struct {
+	service.InvoiceService
+}
+
+func (paymentFailedTestInvoiceService) GetInvoice(_ context.Context, id string) (*dto.InvoiceResponse, error) {
+	return &dto.InvoiceResponse{Invoice: invoice.Invoice{ID: id}}, nil
+}
+
+func (paymentFailedTestInvoiceService) WithHostedInvoiceURLs(_ context.Context, _ ...*dto.InvoiceResponse) error {
+	return nil
+}
+
+func (paymentFailedTestInvoiceService) GetInvoicePDFUrl(_ context.Context, _ dto.InvoicePDFRequest) (string, error) {
+	return "https://pdf", nil
+}
+
+func TestInvoicePaymentFailedPayloadBuilder_BuildPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		event   webhookDto.InternalInvoicePaymentFailedEvent
+		wantErr bool
+	}{
+		{name: "builds the payload", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+			Reason: types.InvoicePaymentFailureReasonPaymentMethodUnavailable, IsAutoChargeAttempt: true,
+		}},
+		{name: "rejects a missing reason", event: webhookDto.InternalInvoicePaymentFailedEvent{
+			InvoiceID: "inv_01", TenantID: "tenant_01", Provider: types.SecretProviderRazorpay,
+		}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewInvoicePaymentFailedPayloadBuilder(&Services{InvoiceService: paymentFailedTestInvoiceService{}})
+			raw, err := json.Marshal(tt.event)
+			require.NoError(t, err)
+
+			out, err := builder.BuildPayload(context.Background(), types.WebhookEventInvoicePaymentFailed, raw)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			var got map[string]any
+			require.NoError(t, json.Unmarshal(out, &got))
+			assert.Equal(t, string(types.WebhookEventInvoicePaymentFailed), got["event_type"])
+			assert.Equal(t, "inv_01", got["invoice"].(map[string]any)["id"])
+			assert.Equal(t, "razorpay", got["provider"])
+			assert.Equal(t, "payment_method_unavailable", got["reason"])
+			assert.Equal(t, true, got["is_auto_charge_attempt"])
+			assert.Nil(t, got["payment_id"])
+			assert.Nil(t, got["error"])
 		})
 	}
 }

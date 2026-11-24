@@ -58,6 +58,15 @@ const (
 	MetadataValueTrue = "true"
 )
 
+// Payment metadata marking which flow created the payment.
+const (
+	MetadataKeyPaymentTrigger       = "payment_trigger"
+	PaymentTriggerInvoiceAutoCharge = "invoice_auto_charge"
+)
+
+// GatewayMetadataKeyStripeInvoiceID is the Stripe invoice whose hosted page collects the payment.
+const GatewayMetadataKeyStripeInvoiceID = "stripe_invoice_id"
+
 // GetBool nil-safely reports whether key holds the canonical truthy value.
 func (m Metadata) GetBool(key string) bool {
 	if m == nil {

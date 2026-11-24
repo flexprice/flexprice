@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -154,7 +155,7 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 	metadata := map[string]string{
 		"customer_id":           req.CustomerID,
 		"flexprice_customer_id": req.CustomerID,
-		"set_default":           "true",
+		"set_default":           strconv.FormatBool(req.SetDefault),
 	}
 
 	// Cards only, matching what ListSavedMethods reports back.

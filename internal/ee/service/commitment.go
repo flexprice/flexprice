@@ -29,7 +29,6 @@ type CommitmentService interface {
 	Update(ctx context.Context, id string, req dto.UpdateCommitmentRequest) (*dto.CommitmentResponse, error)
 	Terminate(ctx context.Context, id string, req dto.TerminateCommitmentRequest) (*dto.CommitmentResponse, error)
 	TerminateForSubscription(ctx context.Context, subscriptionID string, effectiveAt time.Time) error
-	IsEnabled(ctx context.Context) (bool, error)
 	// GetBillingTerms returns the commitment's published terms and its current instalments.
 	GetBillingTerms(ctx context.Context, id string) (*dto.BillingTermsResponse, error)
 	// PreviewBillingTerms returns what ReplaceBillingTerms would, writing nothing.
@@ -43,8 +42,8 @@ type CommitmentService interface {
 	ListInstalments(ctx context.Context, id string, statuses []types.InstalmentStatus) (*dto.ListInstalmentsResponse, error)
 	// GetInstalment returns one instalment of any commitment in the environment.
 	GetInstalment(ctx context.Context, instalmentID string) (*billingterm.Instalment, error)
-	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment with
-	// commitments enabled. A failed instalment is logged and the rest still bill; the failures are returned together.
+	// BillDueInstalments issues a one-off invoice for each due separate-invoice instalment in every environment. A
+	// failed instalment is logged and the rest still bill; the failures are returned together.
 	BillDueInstalments(ctx context.Context) error
 	// ListOverlapping returns the subscription's active and terminated commitments whose term overlaps [from, to); a
 	// terminated one still bills up to terminated_at.
@@ -66,31 +65,6 @@ func NewCommitmentService(params ServiceParams) CommitmentService {
 // newCommitmentService hands same-package callers the concrete type, for create options beyond the public API.
 func newCommitmentService(params ServiceParams) *commitmentService {
 	return &commitmentService{ServiceParams: params}
-}
-
-func (s *commitmentService) IsEnabled(ctx context.Context) (bool, error) {
-	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	cfg, err := GetSetting[types.CommitmentsV2Config](settingsSvc, ctx, types.SettingKeyCommitmentsV2)
-	if err != nil {
-		return false, err
-	}
-
-	return cfg.Enabled, nil
-}
-
-func (s *commitmentService) requireEnabled(ctx context.Context) error {
-	enabled, err := s.IsEnabled(ctx)
-	if err != nil {
-		return err
-	}
-
-	if !enabled {
-		return ierr.NewError("commitments are not enabled for this environment").
-			WithHint("Enable the commitments_v2 setting").
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	return nil
 }
 
 func (s *commitmentService) Preview(
@@ -301,10 +275,6 @@ func (s *commitmentService) prepare(
 	req *dto.CreateCommitmentRequest,
 	opts commitmentCreateOptions,
 ) (*dto.CommitmentResponse, *commitmentContext, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, nil, err
-	}
-
 	cc, err := s.loadCommitmentContext(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, nil, err
@@ -553,10 +523,6 @@ func (s *commitmentService) Terminate(
 		return nil, err
 	}
 
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	now := clock.Now()
 	effectiveAt := lo.FromPtrOr(req.EffectiveAt, now)
 	if effectiveAt.After(now) {
@@ -779,14 +745,28 @@ func (s *commitmentService) terminate(
 		return nil, nil, ierr.Validation("cancellation_fee requires a binding commitment")
 	}
 
-	var settlement *billingterm.Instalment
+	var billed []*billingterm.Instalment
 	if lo.FromPtr(c.CollectionMethod) == types.CommitmentCollectionBillingTerms {
-		if settlement, err = s.settle(ctx, c, effectiveAt); err != nil {
+		settlement, err := s.settle(ctx, c, effectiveAt)
+		if err != nil {
 			return nil, nil, err
+		}
+
+		if settlement != nil {
+			billed = append(billed, settlement)
 		}
 	}
 
-	invoiceID, err := s.billTermination(ctx, c, sub, effectiveAt, fee, settlement)
+	feeInstalment, err := s.chargeCancellationFee(ctx, c, sub, effectiveAt, fee)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if feeInstalment != nil {
+		billed = append(billed, feeInstalment)
+	}
+
+	invoiceID, err := s.billTermination(ctx, c, sub, billed)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -804,35 +784,21 @@ func (s *commitmentService) terminate(
 	return out, invoiceID, nil
 }
 
-// billTermination issues the termination invoice carrying the settlement and the cancellation fee, either optional.
-// It returns nil when there is no settlement and the fee rounds to nothing.
+// billTermination issues the termination invoice carrying the settlement and the cancellation fee instalments, either
+// optional; finalizing it claims them. It returns nil when there is neither.
 func (s *commitmentService) billTermination(
 	ctx context.Context,
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
-	effectiveAt time.Time,
-	fee decimal.Decimal,
-	settlement *billingterm.Instalment,
+	instalments []*billingterm.Instalment,
 ) (*string, error) {
-	fee = types.RoundToCurrencyPrecision(fee, c.Currency)
-	if settlement == nil && !fee.IsPositive() {
+	if len(instalments) == 0 {
 		return nil, nil
 	}
 
-	var lines []dto.CreateInvoiceLineItemRequest
-	if settlement != nil {
-		lines = append(lines, instalmentLine(c, settlement))
-	}
-
-	if fee.IsPositive() {
-		line, err := cancellationFeeLine(c, sub, effectiveAt, fee)
-		if err != nil {
-			return nil, err
-		}
-
-		lines = append(lines, line)
-	}
-
+	lines := lo.Map(instalments, func(i *billingterm.Instalment, _ int) dto.CreateInvoiceLineItemRequest {
+		return instalmentLine(c, i)
+	})
 	total := sumAmounts(lines)
 
 	// The invoice period spans its lines: the settled term before effective_at, the rest the fee covers, or both.
@@ -862,17 +828,26 @@ func (s *commitmentService) billTermination(
 	return lo.ToPtr(inv.ID), nil
 }
 
-// cancellationFeeLine bills the fee from effectiveAt to the term end, or for an open-ended commitment to the end of
-// the billing period holding effectiveAt, cut at the subscription end.
-func cancellationFeeLine(
+// cancellationFeeLabel is the invoice label of the instalment that bills a termination's cancellation fee.
+const cancellationFeeLabel = "Cancellation fee"
+
+// chargeCancellationFee creates the instalment billing the fee from effectiveAt to the term end, or to the end of the
+// billing period for an open-ended commitment; nil when the fee rounds to nothing. It runs in the terminate transaction.
+func (s *commitmentService) chargeCancellationFee(
+	ctx context.Context,
 	c *commitment.Commitment,
 	sub *subscription.Subscription,
 	effectiveAt time.Time,
 	fee decimal.Decimal,
-) (dto.CreateInvoiceLineItemRequest, error) {
+) (*billingterm.Instalment, error) {
+	fee = types.RoundToCurrencyPrecision(fee, c.Currency)
+	if !fee.IsPositive() {
+		return nil, nil
+	}
+
 	// The fee is dated at effective_at, so a closed billing period must not gain it.
 	if effectiveAt.Before(sub.CurrentPeriodStart) {
-		return dto.CreateInvoiceLineItemRequest{}, ierr.Validationf(
+		return nil, ierr.Validationf(
 			"effective_at with a cancellation_fee cannot precede the current billing period start %s",
 			sub.CurrentPeriodStart.Format(time.RFC3339),
 		)
@@ -880,7 +855,7 @@ func cancellationFeeLine(
 
 	// Nor can it fall at or past the subscription end, which bounds the term the fee covers.
 	if sub.EndDate != nil && !effectiveAt.Before(*sub.EndDate) {
-		return dto.CreateInvoiceLineItemRequest{}, ierr.Validationf(
+		return nil, ierr.Validationf(
 			"effective_at with a cancellation_fee must be before the subscription end %s",
 			sub.EndDate.Format(time.RFC3339),
 		)
@@ -890,7 +865,7 @@ func cancellationFeeLine(
 	if c.OpenEnded() {
 		holding, err := periodAt(sub, effectiveAt)
 		if err != nil {
-			return dto.CreateInvoiceLineItemRequest{}, err
+			return nil, err
 		}
 
 		end = &holding.End
@@ -900,25 +875,23 @@ func cancellationFeeLine(
 		end = lo.ToPtr(minTime(*end, *sub.EndDate))
 	}
 
-	metadata := types.Metadata{
-		types.MetadataKeyCommitmentLineKind: string(types.CommitmentLineCancellationFee),
-		types.MetadataKeyCommitmentID:       c.ID,
-	}
-	if c.InvoiceDescription != nil {
-		metadata[types.MetadataKeyDescription] = *c.InvoiceDescription
+	instalment := billingterm.NewOwnerInstalment(ctx, c).
+		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_BILLING_INSTALMENT)).
+		WithKind(types.InstalmentKindCancellationFee).
+		WithDelivery(types.InstalmentDeliverySeparateInvoice).
+		WithBillOn(effectiveAt).
+		WithAmount(fee).
+		WithInvoiceLabel(cancellationFeeLabel).
+		WithServicePeriod(types.Period{Start: effectiveAt, End: *end}).
+		Build()
+
+	created, err := s.BillingInstalmentRepo.CreateMany(ctx, []*billingterm.Instalment{instalment})
+	if err != nil {
+		return nil, err
 	}
 
-	return dto.CreateInvoiceLineItemRequest{
-		DisplayName:  lo.ToPtr(c.InvoiceLabel + " (cancellation fee)"),
-		Quantity:     decimal.NewFromInt(1),
-		Amount:       fee,
-		PeriodStart:  lo.ToPtr(effectiveAt),
-		PeriodEnd:    end,
-		CommitmentID: lo.ToPtr(c.ID),
-		EntityType:   lo.ToPtr(string(types.InvoiceLineItemEntityTypeCommitment)),
-		EntityID:     lo.ToPtr(c.ID),
-		Metadata:     metadata,
-	}, nil
+	publishInstalmentEvents(ctx, s.ServiceParams, types.WebhookEventBillingInstalmentCreated, created)
+	return created[0], nil
 }
 
 // CoveringMeters returns the IDs of the subscription's active and terminated commitments whose scope covers, during their

@@ -102,6 +102,13 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
+			ID:        types.ScheduleIDRazorpayPaymentStatusSync,
+			Interval:  time.Hour,
+			Workflow:  cronWorkflows.RazorpayPaymentStatusSyncWorkflow,
+			Input:     struct{}{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			ID:        types.ScheduleIDCheckoutSessionExpiry,
 			Interval:  30 * time.Minute,
 			Workflow:  cronWorkflows.CheckoutSessionExpiryWorkflow,
@@ -150,6 +157,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
+			// Always declared; clickhouse.meter_usage_optimize.enabled is the kill switch.
+			ID:        types.ScheduleIDMeterUsageOptimize,
+			Interval:  24 * time.Hour,
+			Offset:    5 * time.Hour,
+			Workflow:  cronWorkflows.MeterUsageOptimizeWorkflow,
+			Input:     models.MeterUsageOptimizeInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			// Always declared; a no-op unless an environment enables revenue recognition.
 			ID:        types.ScheduleIDRevenueRecognition,
 			Interval:  24 * time.Hour,
@@ -168,11 +184,19 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			// Always declared; BillDueInstalments only visits environments that enable commitments_v2.
+			// Always declared; BillDueInstalments only visits environments holding a due instalment.
 			ID:        types.ScheduleIDBillingInstalmentsDue,
 			Interval:  15 * time.Minute,
 			Workflow:  cronWorkflows.BillingInstalmentsDueWorkflow,
 			Input:     models.BillingInstalmentsDueWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			// Always declared; a no-op unless customer emails are on (email.enabled and email.provider).
+			ID:        types.ScheduleIDEmailDispatch,
+			Interval:  1 * time.Minute,
+			Workflow:  cronWorkflows.EmailDispatchWorkflow,
+			Input:     models.EmailDispatchWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 	}

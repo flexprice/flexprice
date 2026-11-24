@@ -221,6 +221,8 @@ func (Subscription) Fields() []ent.Field {
 		field.Int64("synced_price_sequence").
 			Default(0).
 			Annotations(entsql.Default("0")),
+		field.JSON("settings", &types.SettingsOverride{}).
+			Optional(),
 	}
 }
 
@@ -266,5 +268,8 @@ func (Subscription) Indexes() []ent.Index {
 			StorageKey("idx_subscriptions_gated_active").
 			Annotations(entsql.IndexWhere(
 				"(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))")),
+		index.Fields("tenant_id", "environment_id").
+			StorageKey("idx_subscriptions_settings_override").
+			Annotations(entsql.IndexWhere("((settings IS NOT NULL) AND ((status)::text = 'published'::text))")),
 	}
 }

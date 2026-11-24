@@ -17,6 +17,56 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
+// DispatchOption narrows a dispatch.
+type DispatchOption func(*dispatchOptions)
+
+type dispatchOptions struct {
+	onlyProvider types.SecretProvider
+	manual       bool
+}
+
+// OnlyProvider limits a dispatch to one provider: a push the user chose for one
+// connection must not also reach every other connected provider.
+func OnlyProvider(provider types.SecretProvider) DispatchOption {
+	return func(o *dispatchOptions) { o.onlyProvider = provider }
+}
+
+// Manual marks a user-requested dispatch: a sync already running is reported, not skipped.
+func Manual() DispatchOption {
+	return func(o *dispatchOptions) { o.manual = true }
+}
+
+func resolveDispatchOptions(opts []DispatchOption) dispatchOptions {
+	var o dispatchOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+// providerTrigger is one provider's sync start, named so a dispatch can keep to one provider.
+type providerTrigger struct {
+	provider types.SecretProvider
+	run      func() error
+}
+
+// runTriggers starts each provider's sync (only the chosen provider's, when one is set)
+// and gathers the failures.
+func runTriggers(triggers []providerTrigger, o dispatchOptions) []error {
+	var errs []error
+	for _, trigger := range triggers {
+		if o.onlyProvider != "" && trigger.provider != o.onlyProvider {
+			continue
+		}
+		err := trigger.run()
+		// An automatic dispatch skips a sync that is already running instead of retrying it.
+		if err != nil && !(ierr.IsAlreadyExists(err) && !o.manual) {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
 // getConnectionIfExists returns the connection for a provider, or nil if none is configured.
 // A "not found" result is not an error — it simply means the tenant hasn't set up that provider.
 // Real DB errors are still propagated.
@@ -149,6 +199,7 @@ func DispatchInvoiceVendorSync(
 	event *types.WebhookEvent,
 	msgUUID string,
 	resync bool,
+	opts ...DispatchOption,
 ) error {
 	if cfg != nil && !cfg.IntegrationEvents.Enabled {
 		return nil
@@ -183,24 +234,19 @@ func DispatchInvoiceVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
-		if err := trigger(); err != nil {
-			dispatchErrs = append(dispatchErrs, err)
-		}
-	}
+	dispatchErrs := runTriggers([]providerTrigger{
+		{types.SecretProviderStripe, func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderRazorpay, func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderChargebee, func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderQuickBooks, func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderHubSpot, func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderMoyasar, func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderNomod, func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderPaddle, func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderZohoBooks, func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderWhop, func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderTabs, func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+	}, resolveDispatchOptions(opts))
 
 	if len(dispatchErrs) > 0 {
 		return fmt.Errorf("integration_events: one or more provider dispatches failed for invoice %s: %w", in.InvoiceID, errors.Join(dispatchErrs...))
@@ -220,6 +266,7 @@ func DispatchCustomerVendorSync(
 	log *logger.Logger,
 	event *types.WebhookEvent,
 	msgUUID string,
+	opts ...DispatchOption,
 ) error {
 	if cfg != nil && !cfg.IntegrationEvents.Enabled {
 		return nil
@@ -263,25 +310,20 @@ func DispatchCustomerVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error {
+	dispatchErrs := runTriggers([]providerTrigger{
+		{types.SecretProviderStripe, func() error { return triggerStripeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderRazorpay, func() error {
 			return triggerRazorpayCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error {
+		}},
+		{types.SecretProviderChargebee, func() error {
 			return triggerChargebeeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error {
+		}},
+		{types.SecretProviderQuickBooks, func() error {
 			return triggerQuickBooksCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error { return triggerNomodCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
-		if err := trigger(); err != nil {
-			dispatchErrs = append(dispatchErrs, err)
-		}
-	}
+		}},
+		{types.SecretProviderNomod, func() error { return triggerNomodCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderPaddle, func() error { return triggerPaddleCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+	}, resolveDispatchOptions(opts))
 
 	if len(dispatchErrs) > 0 {
 		return fmt.Errorf("integration_events: one or more provider dispatches failed for customer %s: %w", in.CustomerID, errors.Join(dispatchErrs...))
@@ -386,6 +428,14 @@ func executeWorkflow(
 	invoiceID string,
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
+	if ierr.IsAlreadyExists(err) {
+		log.Info(ctx, "integration_events: workflow already running",
+			"provider", provider,
+			"workflow_type", workflowType,
+			"invoice_id", invoiceID,
+		)
+		return err
+	}
 	if err != nil {
 		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,

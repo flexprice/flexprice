@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/samber/lo"
 
 	"github.com/lib/pq"
 
@@ -230,7 +231,7 @@ func (r *paymentRepository) ListScopedByDestinationStatusGateway(ctx context.Con
 	defer FinishSpan(span)
 
 	const query = `
-		SELECT id, tenant_id, environment_id, gateway_payment_id
+		SELECT id, tenant_id, environment_id, gateway_payment_id, payment_method_type
 		FROM payments
 		WHERE destination_type = $1
 		  AND payment_status   = $2
@@ -252,7 +253,7 @@ func (r *paymentRepository) ListScopedByDestinationStatusGateway(ctx context.Con
 	var result []domainPayment.ScopedPayment
 	for rows.Next() {
 		var row domainPayment.ScopedPayment
-		if err := rows.Scan(&row.PaymentID, &row.TenantID, &row.EnvironmentID, &row.GatewayPaymentID); err != nil {
+		if err := rows.Scan(&row.PaymentID, &row.TenantID, &row.EnvironmentID, &row.GatewayPaymentID, &row.PaymentMethodType); err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).WithHint("failed to scan scoped payment row").Mark(ierr.ErrDatabase)
 		}
@@ -829,6 +830,9 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.DestinationID != nil {
 		query = query.Where(payment.DestinationID(*f.DestinationID))
 	}
+	if len(f.DestinationIDs) > 0 {
+		query = query.Where(payment.DestinationIDIn(f.DestinationIDs...))
+	}
 
 	// Apply payment method type filter if specified
 	if f.PaymentMethodType != nil {
@@ -838,6 +842,9 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	// Apply payment status filter if specified
 	if f.PaymentStatus != nil {
 		query = query.Where(payment.PaymentStatus(*f.PaymentStatus))
+	}
+	if len(f.PaymentStatuses) > 0 {
+		query = query.Where(payment.PaymentStatusIn(lo.Map(f.PaymentStatuses, func(s types.PaymentStatus, _ int) string { return string(s) })...))
 	}
 
 	// Apply payment gateway filter if specified

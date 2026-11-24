@@ -150,6 +150,14 @@ func (s *CustomerService) RetrieveStripeCustomer(ctx context.Context, customerID
 	return stripeClient.V1Customers.Retrieve(ctx, stripeCustomerID, nil)
 }
 
+func (s *CustomerService) HasDefaultPaymentMethod(ctx context.Context, customerID string, customerService interfaces.CustomerService) (bool, error) {
+	customer, err := s.RetrieveStripeCustomer(ctx, customerID, customerService)
+	if err != nil {
+		return false, err
+	}
+	return defaultPaymentMethodID(customer) != "", nil
+}
+
 // existingStripeLink returns the customer when it is already linked to a Stripe customer,
 // either through metadata or through the integration mapping (which is backfilled into
 // metadata), and nil when the customer still needs to be created in Stripe.
@@ -404,7 +412,7 @@ func (s *CustomerService) CreateCustomerFromStripe(ctx context.Context, stripeCu
 	// Step 3: Create new customer
 	createReq := dto.CreateCustomerRequest{
 		ExternalID: externalID,
-		Name:       stripeCustomer.Name,
+		Name:       lo.CoalesceOrEmpty(stripeCustomer.Name, stripeCustomer.Email),
 		Email:      stripeCustomer.Email,
 		Metadata: map[string]string{
 			stripeCustomerIDMetadataKey: stripeCustomer.ID,

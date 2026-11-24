@@ -27,20 +27,8 @@ func TestPaymentMethodProbe(t *testing.T) {
 			provider: "chargebee",
 		},
 		{
-			name:     "razorpay refuses add and delete with 4xx",
+			name:     "razorpay lists methods and issues an add-method link",
 			provider: "razorpay",
-			setup: func(fx *paymentFixture) {
-				fx.fc.payments.portalAddErr = apiError(400)
-				fx.fc.payments.portalDeleteErr = apiError(400)
-			},
-		},
-		{
-			name:     "razorpay accepting add-method is a failure",
-			provider: "razorpay",
-			setup: func(fx *paymentFixture) {
-				fx.fc.payments.portalDeleteErr = apiError(400)
-			},
-			wantStep: "add_method_assert_rejected",
 		},
 		{
 			name:     "razorpay add-method 5xx is a failure",
@@ -48,7 +36,7 @@ func TestPaymentMethodProbe(t *testing.T) {
 			setup: func(fx *paymentFixture) {
 				fx.fc.payments.portalAddErr = apiError(502)
 			},
-			wantStep: "add_method_assert_rejected",
+			wantStep: "add_method_link",
 		},
 		{
 			name:     "listing reports a provider error",

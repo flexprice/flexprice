@@ -982,7 +982,6 @@ func partialHalves(t *testing.T, binding bool, used ...string) [][]dto.CreateInv
 		Value:       intDec(100),
 		Currency:    "usd",
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   apr,
 		EndDate:     lo.ToPtr(may),
 	}

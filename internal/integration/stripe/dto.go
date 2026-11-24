@@ -16,9 +16,10 @@ type CreateStripePaymentLinkRequest struct {
 	SuccessURL             string          `json:"success_url,omitempty"`
 	CancelURL              string          `json:"cancel_url,omitempty"`
 	Metadata               types.Metadata  `json:"metadata,omitempty"`
-	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default,omitempty"`
+	SaveCard               bool            `json:"save_card,omitempty"`
 	PaymentID              string          `json:"payment_id" validate:"required"`
 	TaxIDCollectionEnabled bool            `json:"tax_id_collection_enabled,omitempty"`
+	AllowPromotionCodes    bool            `json:"allow_promotion_codes,omitempty"`
 	ExpiresAt              *time.Time      `json:"expires_at,omitempty"`
 }
 
@@ -100,6 +101,8 @@ type StripeInvoiceSyncRequest struct {
 	CollectionMethod string `json:"collection_method" validate:"required,oneof=charge_automatically send_invoice"`
 	// LinkStripeProduct links invoice items to a synced Stripe Product instead of a bare amount.
 	LinkStripeProduct bool `json:"link_stripe_product,omitempty"`
+	AutoAdvance       bool `json:"auto_advance,omitempty"`
+	SendInvoiceEmail  bool `json:"send_invoice_email,omitempty"`
 }
 
 // StripeInvoiceSyncResponse represents the response from syncing an invoice to Stripe

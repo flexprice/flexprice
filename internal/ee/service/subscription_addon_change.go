@@ -14,6 +14,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -1025,12 +1026,53 @@ func validateAddonChangeCheckout(req AddonChangeRequest, checkout *dto.CheckoutP
 	return nil
 }
 
+// previewPriceOverrides repoints override line items at unsaved override prices and re-quotes,
+// so a preview prices what execute bills without minting prices.
+func (s *addonChangeService) previewPriceOverrides(ctx context.Context, config *addonChangeConfig) error {
+	if !config.hasPriceOverrides() {
+		return nil
+	}
+
+	sub := config.getSubscription()
+	for _, attach := range config.getAttaches() {
+		priceMap := attach.getPriceMap()
+		lineItems := lo.KeyBy(attach.getLineItems(), func(li *subscription.SubscriptionLineItem) string { return li.PriceID })
+		for _, override := range attach.getRequest().OverrideLineItems {
+			if err := override.Validate(priceMap, lineItems, sub.PlanID); err != nil {
+				return err
+			}
+			priceReq, err := buildOverridePriceRequest(priceMap[override.PriceID], override, sub.ID)
+			if err != nil {
+				return err
+			}
+			if err := priceReq.Validate(); err != nil {
+				return err
+			}
+			overridePrice, err := priceReq.ToPrice(ctx)
+			if err != nil {
+				return err
+			}
+
+			lineItem := lineItems[override.PriceID]
+			if override.Quantity != nil {
+				lineItem.Quantity = price.ApplyQuantityDefault(*override.Quantity, priceMap[override.PriceID].Price)
+			}
+			lineItem.PriceID, lineItem.Price = overridePrice.ID, overridePrice
+		}
+	}
+
+	return s.quote(ctx, config)
+}
+
 func (s *addonChangeService) Preview(
 	ctx context.Context,
 	req AddonChangeRequest,
 ) (*addonChangeConfig, *SettleProrationResult, error) {
 	config, err := s.Resolve(ctx, req)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.previewPriceOverrides(ctx, config); err != nil {
 		return nil, nil, err
 	}
 
@@ -1200,6 +1242,9 @@ func (s *addonChangeService) PreviewGrouped(
 
 		config, err := s.Resolve(ctx, req)
 		if err != nil {
+			return nil, nil, err
+		}
+		if err := s.previewPriceOverrides(ctx, config); err != nil {
 			return nil, nil, err
 		}
 		configs = append(configs, config)

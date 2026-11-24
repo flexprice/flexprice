@@ -115,8 +115,8 @@ type WalletWebhookPayload struct {
 // WalletAlertInfo contains details about the wallet alert
 type WalletAlertInfo struct {
 	State          string               `json:"state"`
-	CurrentBalance decimal.Decimal      `json:"current_balance"`
-	CreditBalance  decimal.Decimal      `json:"credit_balance"`
+	CurrentBalance decimal.Decimal      `json:"current_balance" swaggertype:"string"`
+	CreditBalance  decimal.Decimal      `json:"credit_balance" swaggertype:"string"`
 	AlertType      string               `json:"alert_type,omitempty"`
 	AlertSettings  *types.AlertSettings `json:"alert_settings,omitempty"`
 }

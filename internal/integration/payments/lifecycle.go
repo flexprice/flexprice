@@ -10,6 +10,7 @@ import (
 
 	"github.com/samber/lo"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -139,7 +140,7 @@ func (l *PaymentLifecycle) ConfirmGatewayPayment(ctx context.Context, flexpriceP
 		return ierr.NewError("gateway_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, flexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Payment not found").
@@ -199,7 +200,7 @@ func (l *PaymentLifecycle) RecordPaymentSuccess(ctx context.Context, params Reco
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for success recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -371,7 +372,7 @@ func (l *PaymentLifecycle) RecordPaymentFailure(ctx context.Context, params Reco
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for failure recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -460,7 +461,7 @@ func (l *PaymentLifecycle) RecordPaymentVoided(ctx context.Context, params Recor
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for void recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -541,7 +542,7 @@ func (l *PaymentLifecycle) RecordPaymentRefunded(ctx context.Context, params Rec
 		return ierr.NewError("flexprice_payment_id is required").Mark(ierr.ErrValidation)
 	}
 
-	existing, err := l.paymentService.GetPayment(ctx, params.FlexpricePaymentID)
+	existing, err := l.paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: params.FlexpricePaymentID})
 	if err != nil {
 		l.logger.Error(ctx, "failed to get payment for refund recording",
 			"flexprice_payment_id", params.FlexpricePaymentID,
@@ -633,7 +634,7 @@ func (l *PaymentLifecycle) validateInitiateParams(params InitiatePaymentParams) 
 const invoiceChargeLockTTL = 15 * time.Minute
 
 // LockInvoiceCharge takes the per-invoice charge lock and returns an ErrAlreadyExists error
-// when a charge other than paymentID is PROCESSING. Hold it until the charge is submitted.
+// when a charge other than paymentID is in flight. Hold it until the charge is submitted.
 func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo payment.Repository, environmentID, invoiceID, paymentID string) (cache.Lock, error) {
 	key := fmt.Sprintf("razorpay:autocharge:%s:%s:%s", types.GetTenantID(ctx), environmentID, invoiceID)
 	lock, err := locker.AcquireLock(ctx, key, invoiceChargeLockTTL)
@@ -641,17 +642,12 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 		return nil, err
 	}
 	if !lock.AcquiredSuccessfully() {
-		return nil, errChargeInFlight(invoiceID)
+		return nil, ErrChargeInFlight(invoiceID)
 	}
 
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusProcessing))
-	filter.Limit = lo.ToPtr(2)
-	inFlight, err := paymentRepo.List(ctx, filter)
-	if err == nil && lo.ContainsBy(inFlight, func(p *payment.Payment) bool { return p.ID != paymentID }) {
-		err = errChargeInFlight(invoiceID)
+	inFlight, err := ChargeInFlight(ctx, paymentRepo, invoiceID, paymentID)
+	if err == nil && inFlight {
+		err = ErrChargeInFlight(invoiceID)
 	}
 	if err != nil {
 		_ = lock.Release(ctx)
@@ -660,9 +656,26 @@ func LockInvoiceCharge(ctx context.Context, locker cache.Locker, paymentRepo pay
 	return lock, nil
 }
 
-func errChargeInFlight(invoiceID string) error {
+// ChargeInFlight reports whether a charge other than excludeID is in flight on the invoice.
+func ChargeInFlight(ctx context.Context, paymentRepo payment.Repository, invoiceID, excludeID string) (bool, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentStatuses = []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing}
+	pymnts, err := paymentRepo.List(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return lo.ContainsBy(pymnts, func(p *payment.Payment) bool {
+		return p.ID != excludeID && p.IsChargeInFlight()
+	}), nil
+}
+
+// ErrChargeInFlight refuses an action on an invoice while a charge on it may still settle.
+func ErrChargeInFlight(invoiceID string) error {
 	return ierr.NewError("a charge is already in progress for this invoice").
-		WithHint("A charge for this invoice is already in progress; wait for it to settle").
+		WithHint("A charge for this invoice is in progress. Wait for it to settle (up to 2 working days) and try again.").
 		WithReportableDetails(map[string]interface{}{"invoice_id": invoiceID}).
 		Mark(ierr.ErrAlreadyExists)
 }

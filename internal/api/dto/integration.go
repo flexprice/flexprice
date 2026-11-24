@@ -43,6 +43,10 @@ type IntegrationSyncRequest struct {
 	Method IntegrationSyncMethod `json:"method"`
 	// Resync updates an invoice that is already in the provider instead of skipping it.
 	Resync bool `json:"resync"`
+	// ConnectionID limits the sync to that one connection, so a push chosen for one
+	// provider does not also go to every other connected provider. Omitted, the
+	// entity syncs with each connection that syncs its type in that direction.
+	ConnectionID string `json:"connection_id,omitempty"`
 }
 
 func (r *IntegrationSyncRequest) Validate() error {

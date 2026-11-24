@@ -241,7 +241,7 @@ func (s *PaymentService) createExternalPaymentRecord(ctx context.Context, qbPaym
 	}
 
 	// Status read under the lock decides; the create response may be stale.
-	current, err := paymentService.GetPayment(ctx, paymentResp.ID)
+	current, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentResp.ID})
 	if err != nil {
 		return false, err
 	}

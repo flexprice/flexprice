@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"math"
 	"sort"
 	"strconv"
@@ -28,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
@@ -105,6 +107,7 @@ type InvoiceService interface {
 	SyncInvoiceToZohoBooksIfEnabled(ctx context.Context, invoiceID string) error
 	SyncInvoiceToMoyasarIfEnabled(ctx context.Context, inv *invoice.Invoice) error
 	PublishInvoiceSyncWebhook(ctx context.Context, invoiceID string, provider types.SecretProvider, syncErr string)
+	PublishInvoicePaymentFailed(ctx context.Context, event webhookDto.InternalInvoicePaymentFailedEvent)
 	IsFinalizationDue(ctx context.Context, invoiceID string) (bool, error)
 	IsInvoiceFinalizationDue(ctx context.Context, inv *invoice.Invoice) (bool, error)
 	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*invoice.Invoice, error)
@@ -577,13 +580,14 @@ func (s *invoiceService) MoveCycleDraft(ctx context.Context, sub *subscription.S
 		return nil, err
 	}
 	key := s.subscriptionInvoiceKey(ctx, draft.CustomerID, sub.ID, reason, draft.PeriodStart, &periodEnd)
+	issueDate := lo.FromPtrOr(invoice.IssueDateFor(reason, draft.PeriodStart, &periodEnd), lo.FromPtr(draft.IssueDate))
 
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Same row lock as ComputeInvoice, so the expiry job can't apply credits mid-move.
 		if _, err := s.InvoiceRepo.GetForUpdate(txCtx, draft.ID); err != nil {
 			return err
 		}
-		if err := s.InvoiceRepo.UpdateDraftInvoicePeriod(txCtx, draft.ID, periodEnd, string(reason), key); err != nil {
+		if err := s.InvoiceRepo.UpdateDraftInvoicePeriod(txCtx, draft.ID, periodEnd, issueDate, string(reason), key); err != nil {
 			return err
 		}
 		s.Logger.Info(ctx, "moved the open draft to the period's new end",
@@ -598,6 +602,7 @@ func (s *invoiceService) MoveCycleDraft(ctx context.Context, sub *subscription.S
 		return nil, err
 	}
 	draft.PeriodEnd = &periodEnd
+	draft.IssueDate = &issueDate
 	draft.BillingReason = string(reason)
 	draft.IdempotencyKey = &key
 	return draft, nil
@@ -1040,7 +1045,59 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 
 	response.WithTaxes(appliedTaxes.Items)
 
+	if err := s.attachInFlightCharges(ctx, []*dto.InvoiceResponse{response}); err != nil {
+		return nil, err
+	}
+	if err := s.attachLinkedWalletTransactions(ctx, []*dto.InvoiceResponse{response}); err != nil {
+		return nil, err
+	}
+
 	return response, nil
+}
+
+// attachInFlightCharges marks each invoice with the saved-method debit still waiting on the gateway, if any.
+func (s *invoiceService) attachInFlightCharges(ctx context.Context, items []*dto.InvoiceResponse) error {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationIDs = lo.Map(items, func(r *dto.InvoiceResponse, _ int) string { return r.ID })
+	pymnts, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	inFlight := lo.KeyBy(lo.Filter(pymnts, func(p *payment.Payment, _ int) bool { return p.IsChargeInFlight() }),
+		func(p *payment.Payment) string { return p.DestinationID })
+	for _, r := range items {
+		if p, ok := inFlight[r.ID]; ok {
+			r.WithInFlightCharge(p)
+		}
+	}
+	return nil
+}
+
+// attachLinkedWalletTransactions adds the wallet credit transaction a top-up invoice pays for.
+func (s *invoiceService) attachLinkedWalletTransactions(ctx context.Context, items []*dto.InvoiceResponse) error {
+	for _, r := range items {
+		txID := r.Metadata["wallet_transaction_id"]
+		if txID == "" {
+			continue
+		}
+		tx, err := s.WalletRepo.GetTransactionByID(ctx, txID)
+		if ierr.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		r.LinkedWalletTransactions = []*dto.LinkedWalletTransaction{{
+			ID:                tx.ID,
+			WalletID:          tx.WalletID,
+			CreditAmount:      tx.CreditAmount,
+			TransactionStatus: tx.TxStatus,
+			TransactionReason: tx.TransactionReason,
+		}}
+	}
+	return nil
 }
 
 // getBulkUsageAnalyticsForInvoice fetches analytics for all line items in a single ClickHouse call
@@ -1358,6 +1415,13 @@ func (s *invoiceService) ListInvoices(ctx context.Context, filter *types.Invoice
 		}
 	}
 
+	if err := s.attachInFlightCharges(ctx, items); err != nil {
+		return nil, err
+	}
+	if err := s.attachLinkedWalletTransactions(ctx, items); err != nil {
+		return nil, err
+	}
+
 	return &dto.ListInvoicesResponse{
 		Items: items,
 		Pagination: types.PaginationResponse{
@@ -1403,16 +1467,18 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	return nil
 }
 
-// issueSubscriptionInvoice dates a subscription invoice as it is finalized: the issue date is the finalization
-// time unless the caller set one, and the due date counts from it. Manually edited copies keep their dates.
+// issueSubscriptionInvoice caps the issue date at finalization; a subscription invoice is dated on its billing
+// boundary and its due date counts from it. Manually edited copies keep their dates.
 func issueSubscriptionInvoice(ctx context.Context, params ServiceParams, inv *invoice.Invoice, finalizedAt time.Time) error {
+	if inv.IssueDate != nil && inv.IssueDate.After(finalizedAt) {
+		inv.IssueDate = &finalizedAt
+	}
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil || inv.IsManuallyEdited {
 		return nil
 	}
-	// A defaulted issue date equals created_at; anything else was set by the caller.
-	issueDate := finalizedAt
-	if inv.IssueDate != nil && !inv.IssueDate.Equal(inv.CreatedAt) {
-		issueDate = *inv.IssueDate
+	issueDate := lo.FromPtrOr(lo.CoalesceOrEmpty(invoice.IssueDateFor(types.InvoiceBillingReason(inv.BillingReason), inv.PeriodStart, inv.PeriodEnd), inv.IssueDate), finalizedAt)
+	if issueDate.After(finalizedAt) {
+		issueDate = finalizedAt
 	}
 
 	sub, err := params.SubRepo.Get(ctx, *inv.SubscriptionID)
@@ -1887,6 +1953,14 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 			return errInvoiceCheckoutGated(id, "void")
 		}
 
+		inFlight, err := payments.ChargeInFlight(tx, s.PaymentRepo, id, "")
+		if err != nil {
+			return err
+		}
+		if inFlight {
+			return payments.ErrChargeInFlight(id)
+		}
+
 		if err := validateInvoiceVoidable(inv); err != nil {
 			return err
 		}
@@ -1944,6 +2018,23 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 		return nil, err
 	}
 	recordInvoiceTransition(ctx, inv)
+
+	// Gateway links are expired only once the void is committed.
+	closeLinksCtx := types.WithoutDBTransaction(ctx)
+	closeLinks := func() {
+		if err := NewPaymentService(s.ServiceParams).(*paymentService).voidOpenPaymentLinks(closeLinksCtx, inv.ID); err != nil {
+			s.Logger.Error(closeLinksCtx, "failed to close payment links on void",
+				"error", err,
+				"invoice_id", inv.ID)
+		}
+	}
+	if !types.RegisterPostCommit(ctx, closeLinks) {
+		closeLinks()
+	}
+	voidOnProviders := func() { s.voidInvoiceOnProviders(closeLinksCtx, inv.ID) }
+	if !types.RegisterPostCommit(ctx, voidOnProviders) {
+		voidOnProviders()
+	}
 
 	// A voided invoice will never be paid, so a purchased-credit transaction still
 	// waiting on it must not stay pending: it blocks the wallet's auto-topup guard
@@ -2066,15 +2157,6 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 		return err
 	}
 
-	// Stripe finalizes with auto-advance, so syncing a paid invoice would make Stripe collect it again.
-	if inv.PaymentStatus == types.PaymentStatusSucceeded ||
-		inv.PaymentStatus == types.PaymentStatusOverpaid {
-		s.Logger.Info(ctx, "invoice already paid, skipping Stripe sync",
-			"invoice_id", inv.ID,
-			"payment_status", inv.PaymentStatus)
-		return nil
-	}
-
 	// The marketplace collects for its subscriptions, so pushing to Stripe would charge the buyer twice.
 	if inv.SubscriptionID != nil {
 		mapped, err := NewSubscriptionService(s.ServiceParams).HasMarketplaceMapping(ctx, *inv.SubscriptionID)
@@ -2157,11 +2239,30 @@ func (s *invoiceService) SyncInvoiceToStripeIfEnabled(ctx context.Context, invoi
 	// Determine collection method from subscription
 	stripeCollectionMethod := types.CollectionMethod(sub.CollectionMethod)
 
+	syncSettings := conn.GetSyncConfig().InvoiceSyncSettings
+	autoAdvance := syncSettings.StripeAutoAdvance()
+	if autoAdvance == nil {
+		autoAdvance = lo.ToPtr(true)
+		if stripeCollectionMethod == types.CollectionMethodChargeAutomatically {
+			hasPaymentMethod, err := stripeIntegration.CustomerSvc.HasDefaultPaymentMethod(ctx, inv.CustomerID, customerService)
+			if err != nil {
+				s.Logger.Info(ctx, "could not read Stripe default payment method, keeping auto advance on",
+					"invoice_id", inv.ID,
+					"customer_id", inv.CustomerID,
+					"error", err)
+			} else {
+				autoAdvance = lo.ToPtr(hasPaymentMethod)
+			}
+		}
+	}
+
 	// Create sync request using the integration package's DTO
 	syncRequest := stripe.StripeInvoiceSyncRequest{
 		InvoiceID:         inv.ID,
 		CollectionMethod:  string(stripeCollectionMethod),
 		LinkStripeProduct: conn.IsPriceOutboundEnabled(),
+		AutoAdvance:       *autoAdvance,
+		SendInvoiceEmail:  syncSettings.IsStripeSendInvoiceEmailEnabled(),
 	}
 
 	// Perform the sync
@@ -2228,7 +2329,7 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 	}
 
 	// A submitted auto-charge skips the sync so the customer gets no payable link for it.
-	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.InvoiceSyncSvc)
+	charged, err := s.autoChargeRazorpayInvoice(ctx, inv, razorpayIntegration.PaymentSvc)
 	if err != nil || charged {
 		return err
 	}
@@ -2262,7 +2363,8 @@ func (s *invoiceService) SyncInvoiceToRazorpayIfEnabled(ctx context.Context, inv
 }
 
 // autoChargeRazorpayInvoice charges the saved Razorpay mandate when the invoice's subscription collects automatically.
-func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, syncSvc *razorpay.InvoiceSyncService) (bool, error) {
+// It returns true when nothing is left for the invoice sync to do.
+func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *invoice.Invoice, razorpaySvc *razorpay.PaymentService) (bool, error) {
 	if inv.SubscriptionID == nil {
 		return false, nil
 	}
@@ -2275,7 +2377,112 @@ func (s *invoiceService) autoChargeRazorpayInvoice(ctx context.Context, inv *inv
 		return false, nil
 	}
 
-	return syncSvc.TryAutoCharge(ctx, inv)
+	failedEvent := webhookDto.InternalInvoicePaymentFailedEvent{
+		InvoiceID:           inv.ID,
+		Provider:            types.SecretProviderRazorpay,
+		IsAutoChargeAttempt: true,
+	}
+
+	razorpayCustomerID, token, err := razorpaySvc.SelectSavedToken(ctx, inv.CustomerID, inv.AmountRemaining, "", "")
+	if err != nil {
+		s.Logger.Info(ctx, "list Razorpay tokens failed, sending the invoice instead",
+			"invoice_id", inv.ID, "customer_id", inv.CustomerID, "error", err)
+		return false, nil
+	}
+	if token == nil {
+		failedEvent.Reason = types.InvoicePaymentFailureReasonPaymentMethodUnavailable
+		s.PublishInvoicePaymentFailed(ctx, failedEvent)
+		return false, nil
+	}
+
+	if s.Locker != nil {
+		lock, err := payments.LockInvoiceCharge(ctx, s.Locker, s.PaymentRepo, inv.EnvironmentID, inv.ID, "")
+		if ierr.IsAlreadyExists(err) {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		defer func() {
+			if releaseErr := lock.Release(ctx); releaseErr != nil {
+				s.Logger.Error(ctx, "failed to release auto-charge lock", "error", releaseErr, "invoice_id", inv.ID)
+			}
+		}()
+	}
+
+	freshInv, err := s.InvoiceRepo.Get(ctx, inv.ID)
+	if err != nil {
+		return false, err
+	}
+	if freshInv.PaymentStatus == types.PaymentStatusSucceeded || freshInv.PaymentStatus == types.PaymentStatusOverpaid {
+		return true, nil
+	}
+
+	cust, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return false, err
+	}
+
+	paymentSvc := NewPaymentService(s.ServiceParams)
+	pymnt, err := paymentSvc.CreatePayment(ctx, &dto.CreatePaymentRequest{
+		IdempotencyKey:    "autocharge:" + inv.ID,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     inv.ID,
+		PaymentMethodType: token.Method,
+		PaymentMethodID:   token.GatewayMethodID,
+		PaymentGateway:    lo.ToPtr(types.PaymentGatewayTypeRazorpay),
+		Amount:            freshInv.AmountRemaining,
+		Currency:          freshInv.Currency,
+		PaymentTrigger:    types.PaymentTriggerInvoiceAutoCharge,
+	})
+	if err != nil {
+		return false, err
+	}
+	// A reused payment that already moved on was charged or reported by an earlier run.
+	if pymnt.PaymentStatus != types.PaymentStatusInitiated {
+		return true, nil
+	}
+
+	result, err := razorpaySvc.AutoCharge(ctx, razorpay.AutoChargeRequest{
+		InvoiceID:          inv.ID,
+		RazorpayCustomerID: razorpayCustomerID,
+		TokenID:            token.GatewayMethodID,
+		Amount:             freshInv.AmountRemaining,
+		Currency:           freshInv.Currency,
+		FlexPricePaymentID: pymnt.ID,
+		Contact:            lo.FromPtr(cust.Contact),
+		Email:              cust.Email,
+	})
+	if err != nil {
+		// TODO: a timeout can still capture at Razorpay after this; refund a capture that lands on this FAILED payment.
+		failed := string(types.PaymentStatusFailed)
+		errMsg := err.Error()
+		if _, updateErr := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
+			PaymentStatus: &failed,
+			FailedAt:      lo.ToPtr(clock.Now()),
+			ErrorMessage:  &errMsg,
+		}); updateErr != nil {
+			s.Logger.Error(ctx, "failed to mark auto-charge payment as failed",
+				"error", updateErr,
+				"invoice_id", inv.ID,
+				"payment_id", pymnt.ID)
+		}
+		return false, nil
+	}
+
+	pending := string(types.PaymentStatusPending)
+	if _, err := paymentSvc.UpdatePayment(ctx, pymnt.ID, dto.UpdatePaymentRequest{
+		PaymentStatus:    &pending,
+		GatewayPaymentID: lo.EmptyableToPtr(result.RazorpayPaymentID),
+		Amount:           &freshInv.AmountRemaining,
+	}); err != nil {
+		// The charge is submitted; the Razorpay webhook reconciles via flexprice_payment_id.
+		s.Logger.Error(ctx, "failed to mark auto-charge payment as pending",
+			"error", err,
+			"invoice_id", inv.ID,
+			"payment_id", pymnt.ID)
+	}
+	return true, nil
 }
 
 // SyncInvoiceToChargebeeIfEnabled syncs the invoice to Chargebee if Chargebee connection is enabled.
@@ -2832,17 +3039,6 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 				"subscription_status": subscription.SubscriptionStatus,
 			}).
 			Mark(ierr.ErrValidation)
-	}
-
-	// Denomination freshness at the money moment: materialize any pending entitlement
-	// grant overage (debounce gap) before charges are calculated. Idempotent;
-	// never blocks invoicing — worst case billing folds the last materialized
-	// values. Dep guard keeps partially-wired test services on the old path.
-	if s.EntitlementGrantRepo != nil && s.CustomerRepo != nil && s.SubRepo != nil && s.MeterUsageRepo != nil {
-		if err := NewAlertService(s.ServiceParams).RefreshEntitlementGrantsForCustomer(ctx, subscription.CustomerID); err != nil {
-			s.Logger.Error(ctx, "entitlement grant refresh before invoicing failed; using last materialized overage",
-				"subscription_id", subscription.ID, "error", err)
-		}
 	}
 
 	// Draft-first: create zero-dollar draft (idempotent; returns existing if same period)
@@ -3654,66 +3850,89 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 }
 
 func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, req dto.InvoicePDFRequest) (string, error) {
-	id := req.InvoiceID
-
-	// get invoice
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.InvoiceRepo.Get(ctx, req.InvoiceID)
 	if err != nil {
 		return "", err
 	}
 
-	if inv.InvoicePDFURL != nil {
-		return lo.FromPtr(inv.InvoicePDFURL), nil
+	src, err := s.pdfSource(ctx, inv, req.ForceGenerate)
+	if err != nil {
+		return "", err
+	}
+	if src.url != "" {
+		return src.url, nil
+	}
+	return src.store.PresignGet(ctx, src.key, src.presignExpiry)
+}
+
+// invoicePDFSource is where an invoice's PDF lives: a link from the invoice or its billing
+// provider, or Flexprice's stored copy at key (data is set when it was just rendered).
+type invoicePDFSource struct {
+	url           string
+	store         storage.Storage
+	key           string
+	presignExpiry time.Duration
+	data          []byte
+}
+
+// pdfSource resolves the invoice's PDF in order: its own link, its billing provider's, then
+// Flexprice's stored copy, rendered and uploaded only when missing or forced.
+func (s *invoiceService) pdfSource(ctx context.Context, inv *invoice.Invoice, forceGenerate bool) (*invoicePDFSource, error) {
+	if url := lo.FromPtr(inv.InvoicePDFURL); url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
-	if url, err := s.billingProviderPDFURL(ctx, id); err == nil && url != "" {
-		return url, nil
+	if url, err := s.billingProviderPDFURL(ctx, inv.ID); err == nil && url != "" {
+		return &invoicePDFSource{url: url}, nil
 	}
 
 	store, err := s.StorageResolver.ForPlatform(ctx, storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	bc, err := s.StorageResolver.BucketConfigFor(storage.PurposeInvoice)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	key := storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, id), "pdf", false)
 
 	presignExpiry, parseErr := time.ParseDuration(bc.PresignExpiryDuration)
 	if parseErr != nil {
-		return "", ierr.WithError(parseErr).
+		return nil, ierr.WithError(parseErr).
 			WithHint("Invalid invoice PDF presign expiry duration").
 			Mark(ierr.ErrValidation)
 	}
 
-	if !req.ForceGenerate {
-		exists, err := store.Exists(ctx, key)
+	src := &invoicePDFSource{
+		store:         store,
+		key:           storage.ObjectKey(bc.KeyPrefix, "", fmt.Sprintf("%s/%s", inv.TenantID, inv.ID), "pdf", false),
+		presignExpiry: presignExpiry,
+	}
+
+	if !forceGenerate {
+		exists, err := store.Exists(ctx, src.key)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if exists {
-			return store.PresignGet(ctx, key, presignExpiry)
+			return src, nil
 		}
 	}
 
-	data, err := s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: id})
+	src.data, err = s.GetInvoicePDF(ctx, dto.InvoicePDFRequest{InvoiceID: inv.ID})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	_, err = store.Upload(ctx, &storage.UploadRequest{
-		Key:    key,
-		Data:   data,
+		Key:    src.key,
+		Data:   src.data,
 		Format: storage.UploadFormatPDF,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	return store.PresignGet(ctx, key, presignExpiry)
+	return src, nil
 }
 
 // billingProviderPDFURL returns the enabled billing provider's own rendering of
@@ -3740,6 +3959,55 @@ func (s *invoiceService) billingProviderPDFURL(ctx context.Context, invoiceID st
 	return url, nil
 }
 
+// voidInvoiceOnProviders voids the invoice's synced copy at each billing provider in scope. Failures are logged: the void already stands.
+func (s *invoiceService) voidInvoiceOnProviders(ctx context.Context, invoiceID string) {
+	if s.ConnectionRepo == nil {
+		return
+	}
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to scope invoice for provider void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+	providers, err := NewBillingProviderResolver(s.ServiceParams).ListProviders(ctx)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to list billing providers for void", "error", err, "invoice_id", invoiceID)
+		return
+	}
+
+	for _, p := range providers {
+		voided, err := s.providerVoidInvoice(ctx, p.Provider, invoiceID)
+		if ierr.IsNotImplemented(err) {
+			continue
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "failed to void invoice on provider", "error", err, "invoice_id", invoiceID, "provider", p.Provider)
+			continue
+		}
+		if !voided {
+			s.Logger.Info(ctx, "provider invoice is already paid, left unvoided", "invoice_id", invoiceID, "provider", p.Provider)
+		}
+	}
+}
+
+// providerVoidInvoice voids the provider's copy of the invoice; false means the provider already has it paid.
+func (s *invoiceService) providerVoidInvoice(ctx context.Context, provider types.SecretProvider, invoiceID string) (bool, error) {
+	switch provider {
+	case types.SecretProviderStripe:
+		integration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		return integration.InvoiceSyncSvc.VoidInvoice(ctx, invoiceID)
+	default:
+		return false, ierr.NewErrorf("provider %s cannot void invoices", provider).
+			WithHint("This provider has no invoice void").
+			WithReportableDetails(map[string]any{"provider": provider, "invoice_id": invoiceID}).
+			Mark(ierr.ErrNotImplemented)
+	}
+}
+
 func (s *invoiceService) providerInvoicePDFURL(ctx context.Context, provider types.SecretProvider, invoiceID string) (string, error) {
 	switch provider {
 	case types.SecretProviderChargebee:
@@ -3749,6 +4017,13 @@ func (s *invoiceService) providerInvoicePDFURL(ctx context.Context, provider typ
 		}
 
 		return integration.InvoiceSvc.GetInvoicePDFURL(ctx, invoiceID)
+	case types.SecretProviderStripe:
+		integration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+		if err != nil {
+			return "", err
+		}
+
+		return integration.InvoiceSyncSvc.GetInvoicePDFURL(ctx, invoiceID)
 	default:
 		return "", ierr.NewErrorf("provider %s cannot serve invoice PDFs", provider).
 			WithHint("This provider has no on-demand invoice PDF").
@@ -4276,6 +4551,31 @@ func (s *invoiceService) PublishInvoiceSyncWebhook(ctx context.Context, invoiceI
 			"event_name", eventName,
 			"invoice_id", invoiceID,
 			"provider", provider)
+	}
+}
+
+// PublishInvoicePaymentFailed publishes invoice.payment.failed; the tenant comes from ctx.
+func (s *invoiceService) PublishInvoicePaymentFailed(ctx context.Context, internal webhookDto.InternalInvoicePaymentFailedEvent) {
+	internal.TenantID = types.GetTenantID(ctx)
+	event, err := types.NewWebhookEvent(types.WebhookEventInvoicePaymentFailed).
+		WithIdentityFromContext(ctx).
+		WithEntity(types.SystemEntityTypeInvoice, internal.InvoiceID).
+		WithPayload(internal).
+		Build()
+	if err != nil {
+		s.Logger.Error(ctx, "failed to build invoice payment failed webhook",
+			"error", err,
+			"invoice_id", internal.InvoiceID,
+			"provider", internal.Provider)
+		return
+	}
+
+	if err := s.WebhookPublisher.PublishWebhook(ctx, event); err != nil {
+		s.Logger.Error(ctx, "failed to publish invoice payment failed webhook",
+			"error", err,
+			"invoice_id", internal.InvoiceID,
+			"provider", internal.Provider,
+			"reason", internal.Reason)
 	}
 }
 

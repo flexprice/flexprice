@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -152,7 +153,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(
 	invoiceService interfaces.InvoiceService,
 ) error {
 	// Get the payment record to find the invoice
-	paymentRecord, err := paymentService.GetPayment(ctx, paymentID)
+	paymentRecord, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentID})
 	if err != nil {
 		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"payment_id", paymentID,

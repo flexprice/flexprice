@@ -194,35 +194,6 @@ func TestInstalmentCancelInvoiced_OnlyGivenRowsOnThatInvoice(t *testing.T) {
 	require.Empty(t, none)
 }
 
-func TestInstalmentListInvoiced_ByInvoicedDate(t *testing.T) {
-	f := newBillingTermFixture(t)
-	owner, otherOwner := "cmt_"+f.runID, "cmt_"+f.runID+"_2"
-	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
-	feb := jan.AddDate(0, 1, 0)
-	invoiced := func(id, ownerID string, at time.Time) *billingterm.Instalment {
-		in := f.instalment(f.ctx, id, ownerID, types.InstalmentStatusInvoiced, jan)
-		in.InvoiceID, in.InvoicedAt = lo.ToPtr("inv_"+f.runID+"_"+id), lo.ToPtr(at)
-		return in
-	}
-
-	late := invoiced("late", owner, jan.AddDate(0, 0, 20))
-	early := invoiced("early", owner, jan)
-	atEnd := invoiced("at_end", owner, feb)
-	other := invoiced("other", otherOwner, jan.Add(time.Hour))
-	scheduled := f.instalment(f.ctx, "scheduled", owner, types.InstalmentStatusScheduled, jan)
-	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{late, early, atEnd, other, scheduled})
-	require.NoError(t, err)
-
-	january := types.Period{Start: jan, End: feb}
-	got, err := f.instalments.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{owner}, january)
-	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, late.ID}, instalmentIDs(got))
-
-	got, err = f.instalments.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{owner, otherOwner}, january)
-	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, other.ID, late.ID}, instalmentIDs(got))
-}
-
 func TestInstalmentCancel_ByOwnerAndStatus(t *testing.T) {
 	f := newBillingTermFixture(t)
 	owner := "cmt_" + f.runID + "_1"
@@ -350,6 +321,16 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 			want: []string{first.ID, second.ID, third.ID},
 		},
 		{
+			name: "bill_on bounds on both sides are inclusive",
+			filter: billingterm.InstalmentFilter{
+				OwnerType:      types.BillingTermOwnerCommitment,
+				OwnerIDs:       []string{owner},
+				BillOnFrom:     &nextDay,
+				BillOnOrBefore: &dayAfter,
+			},
+			want: []string{second.ID, third.ID, fourth.ID},
+		},
+		{
 			name: "status and bill_on bound",
 			filter: billingterm.InstalmentFilter{
 				OwnerIDs:       []string{owner},
@@ -401,6 +382,29 @@ func TestInstalmentList_FiltersAndOrder(t *testing.T) {
 		require.Error(t, err)
 		require.True(t, ierr.IsNotFound(err))
 	})
+}
+
+// ListEnvironments finds the run's environment by a due instalment and skips it once nothing matches.
+func TestInstalmentListEnvironments_AcrossTenants(t *testing.T) {
+	f := newBillingTermFixture(t)
+	billOn := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	_, err := f.instalments.CreateMany(f.ctx, []*billingterm.Instalment{
+		f.instalment(f.ctx, "due", "cmt_"+f.runID, types.InstalmentStatusScheduled, billOn),
+	})
+	require.NoError(t, err)
+
+	env := types.TenantEnvironment{TenantID: types.DefaultTenantID, EnvironmentID: types.GetEnvironmentID(f.ctx)}
+	list := func(dueBy time.Time) []types.TenantEnvironment {
+		envs, err := f.instalments.ListEnvironments(context.Background(), &billingterm.InstalmentFilter{
+			Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+			BillOnOrBefore: &dueBy,
+		})
+		require.NoError(t, err)
+		return envs
+	}
+
+	require.Contains(t, list(billOn), env)
+	require.NotContains(t, list(billOn.AddDate(0, 0, -1)), env)
 }
 
 func TestTermArchive_HidesArchived(t *testing.T) {

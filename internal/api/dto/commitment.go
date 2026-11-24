@@ -95,7 +95,7 @@ type CreateCommitmentRequest struct {
 	OveragePrice       *CommitmentPriceInput             `json:"overage_price,omitempty"`
 	Measurement        types.CommitmentMeasurement       `json:"measurement" validate:"required"`
 	ActiveWindows      types.ActiveWindows               `json:"active_windows,omitempty"`
-	Timezone           string                            `json:"timezone,omitempty"`
+	Timezone           string                            `json:"timezone,omitempty" swaggerignore:"true"`
 	Priority           int                               `json:"priority"`
 	Binding            *bool                             `json:"binding,omitempty"` // default false
 	CollectionMethod   *types.CommitmentCollectionMethod `json:"collection_method,omitempty"`
@@ -110,14 +110,10 @@ type CreateCommitmentRequest struct {
 	Metadata types.Metadata `json:"metadata,omitempty"`
 }
 
-// ApplyDefaults fills the label, the timezone active_windows are read in (UTC) and the binding-dependent settings.
+// ApplyDefaults fills the label and the binding-dependent settings.
 func (r *CreateCommitmentRequest) ApplyDefaults() {
 	if r.InvoiceLabel == "" {
 		r.InvoiceLabel = r.Name
-	}
-
-	if r.Timezone == "" {
-		r.Timezone = types.DefaultTimezone
 	}
 
 	if r.Binding == nil {
@@ -177,14 +173,13 @@ func (r *CreateCommitmentRequest) Validate() error {
 		return ierr.Validation("overage_price is supported only on quantity commitments")
 	case len(r.ActiveWindows) > 0 && r.Measurement != types.CommitmentMeasurementWindow:
 		return ierr.Validation("active_windows require measurement=window")
+	// Windows are UTC: a client still sending another zone gets an error rather than shifted windows.
+	case r.Timezone != "" && r.Timezone != types.DefaultTimezone:
+		return ierr.Validation("timezone is no longer supported: send active_windows as UTC times")
 	}
 
 	if err := r.validatePrices(); err != nil {
 		return err
-	}
-
-	if _, err := time.LoadLocation(r.Timezone); err != nil || r.Timezone == "" {
-		return ierr.Validation("timezone must be a valid IANA name")
 	}
 
 	binding := lo.FromPtrOr(r.Binding, false)
@@ -309,7 +304,6 @@ func (r *CreateCommitmentRequest) ToCommitment(
 		Value:              r.Value,
 		Measurement:        r.Measurement,
 		ActiveWindows:      r.ActiveWindows,
-		Timezone:           r.Timezone,
 		Priority:           r.Priority,
 		Binding:            lo.FromPtrOr(r.Binding, false),
 		CollectionMethod:   r.CollectionMethod,

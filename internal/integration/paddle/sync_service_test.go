@@ -1148,6 +1148,9 @@ func (m *mockSubscriptionService) MarkCancellationScheduleAsExecuted(ctx context
 func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error {
 	return nil
 }
+func (m *mockSubscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil
 }

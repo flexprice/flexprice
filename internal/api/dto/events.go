@@ -391,25 +391,32 @@ type GetUsageAnalyticsResponse struct {
 	Currency        string               `json:"currency"`
 	Items           []UsageAnalyticItem  `json:"items"`
 	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
-	// Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-	// a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+	// Instalments lists the commitment instalments in the range with expand "instalments": start <= bill_on < end,
+	// or start < bill_on <= end for an ARREAR one.
 	Instalments []UsageAnalyticInstalment `json:"instalments,omitempty"`
-	// TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes "instalments".
+	// TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
+	// "instalments". Scheduled instalments are not billed yet, so they are left out.
 	TotalCostWithInstalments *decimal.Decimal `json:"total_cost_with_instalments,omitempty" swaggertype:"string"`
 }
 
-// UsageAnalyticInstalment is one commitment instalment billed inside an analytics range.
+// UsageAnalyticInstalment is one commitment instalment billed, or scheduled to be billed, inside an analytics range.
 type UsageAnalyticInstalment struct {
-	ID                 string          `json:"id"`
-	CommitmentID       string          `json:"commitment_id"`
-	SubscriptionID     string          `json:"subscription_id,omitempty"`
-	InvoiceID          string          `json:"invoice_id,omitempty"`
-	InvoiceLabel       string          `json:"invoice_label"`
-	Amount             decimal.Decimal `json:"amount" swaggertype:"string"`
-	Currency           string          `json:"currency"`
-	InvoicedAt         *time.Time      `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
-	ServicePeriodStart time.Time       `json:"service_period_start"`
-	ServicePeriodEnd   time.Time       `json:"service_period_end"`
+	ID             string `json:"id"`
+	CommitmentID   string `json:"commitment_id"`
+	SubscriptionID string `json:"subscription_id,omitempty"`
+	InvoiceID      string `json:"invoice_id,omitempty"`
+	// Kind tells a regular instalment from a termination's settlement and its cancellation_fee.
+	Kind             types.InstalmentKind   `json:"kind"`
+	InstalmentStatus types.InstalmentStatus `json:"instalment_status"`
+	InvoiceLabel     string                 `json:"invoice_label"`
+	Amount           decimal.Decimal        `json:"amount" swaggertype:"string"`
+	Currency         string                 `json:"currency"`
+	BillOn           time.Time              `json:"bill_on"` // when it becomes billable
+	// InvoiceCadence is the recurring term's cadence; empty for once terms, settlements and fees.
+	InvoiceCadence     *types.InvoiceCadence `json:"invoice_cadence,omitempty"`
+	InvoicedAt         *time.Time            `json:"invoiced_at,omitempty"` // when the invoice billing it was finalized
+	ServicePeriodStart time.Time             `json:"service_period_start"`
+	ServicePeriodEnd   time.Time             `json:"service_period_end"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response
@@ -472,9 +479,14 @@ type UsageAnalyticPoint struct {
 	EventCount uint64          `json:"event_count"`               // Number of events in this time window
 
 	// Commitment breakdown (only populated for windowed commitments)
-	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitempty" swaggertype:"string"`
-	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitempty" swaggertype:"string"`
-	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitempty" swaggertype:"string"`
+	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount,omitzero" swaggertype:"string"`
+	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount,omitzero" swaggertype:"string"`
+	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount,omitzero" swaggertype:"string"`
+
+	// Usage units behind the commitment breakdown, for v2 commitments
+	ComputedCommitmentUtilizedQuantity decimal.Decimal `json:"computed_commitment_utilized_quantity,omitzero" swaggertype:"string"`
+	ComputedOverageQuantity            decimal.Decimal `json:"computed_overage_quantity,omitzero" swaggertype:"string"`
+	ComputedTrueUpQuantity             decimal.Decimal `json:"computed_true_up_quantity,omitzero" swaggertype:"string"`
 
 	// Buckets lists every commitment bucket this (possibly rolled-up) window
 	// overlaps — only populated when BreakdownBucket=true and the line item has

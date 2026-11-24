@@ -35,6 +35,12 @@ func TestPaymentStatusValidateTransitionTo(t *testing.T) {
 		{"succeeded to refunded", PaymentStatusSucceeded, PaymentStatusRefunded, false},
 		{"succeeded to partially refunded", PaymentStatusSucceeded, PaymentStatusPartiallyRefunded, false},
 		{"succeeded to voided", PaymentStatusSucceeded, PaymentStatusVoided, false},
+
+		// A pending payment can be voided; one not started, in flight or failed cannot.
+		{"pending to voided", PaymentStatusPending, PaymentStatusVoided, false},
+		{"initiated cannot be voided", PaymentStatusInitiated, PaymentStatusVoided, true},
+		{"processing cannot be voided", PaymentStatusProcessing, PaymentStatusVoided, true},
+		{"failed cannot be voided", PaymentStatusFailed, PaymentStatusVoided, true},
 		{"partially refunded to refunded", PaymentStatusPartiallyRefunded, PaymentStatusRefunded, false},
 
 		// Self-transitions are no-ops, not errors.
@@ -84,6 +90,28 @@ func TestPaymentStatusIsDeletable(t *testing.T) {
 		t.Run(tt.status.String(), func(t *testing.T) {
 			if got := tt.status.IsDeletable(); got != tt.want {
 				t.Fatalf("IsDeletable() for %s = %v, want %v", tt.status, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPaymentMethodTypeIsSavedMethod(t *testing.T) {
+	tests := []struct {
+		method PaymentMethodType
+		want   bool
+	}{
+		{PaymentMethodTypeCard, true},
+		{PaymentMethodTypeUPI, true},
+		{PaymentMethodTypeENACH, true},
+		{PaymentMethodTypeACH, false},
+		{PaymentMethodTypeOffline, false},
+		{PaymentMethodTypeCredits, false},
+		{PaymentMethodTypePaymentLink, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.method), func(t *testing.T) {
+			if got := tt.method.IsSavedMethod(); got != tt.want {
+				t.Errorf("IsSavedMethod() = %v, want %v", got, tt.want)
 			}
 		})
 	}

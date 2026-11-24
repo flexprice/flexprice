@@ -189,26 +189,3 @@ func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Contex
 
 	return configs, nil
 }
-
-// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
-func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	var subscriptionConfigs []*types.TenantEnvSubscriptionConfig
-	for _, config := range configs {
-		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
-			TenantID:      config.TenantID,
-			EnvironmentID: config.EnvironmentID,
-			SubscriptionConfig: &types.SubscriptionConfig{
-				GracePeriodDays:         config.Config["grace_period_days"].(int),
-				AutoCancellationEnabled: config.Config["auto_cancellation_enabled"].(bool),
-			},
-		}
-		subscriptionConfigs = append(subscriptionConfigs, subscriptionConfig)
-	}
-
-	return subscriptionConfigs, nil
-}

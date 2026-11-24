@@ -420,6 +420,7 @@ func (r *subscriptionLineItemRepository) BulkTerminate(ctx context.Context, subs
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
 			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
 			subscriptionlineitem.SubscriptionID(subscriptionID),
+			subscriptionlineitem.Status(string(types.StatusPublished)),
 			subscriptionlineitem.StartDateLTE(effectiveDate),
 			subscriptionlineitem.Or(
 				subscriptionlineitem.EndDateIsNil(),

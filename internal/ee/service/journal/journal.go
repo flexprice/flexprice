@@ -104,10 +104,13 @@ type BackfillRequest struct {
 // RecognitionRunRequest is one run: billing changed since Since is posted, contracts are recognized as of AsOf, and
 // OnProgress receives the cursor after each contract.
 type RecognitionRunRequest struct {
-	Since      time.Time
-	AsOf       time.Time
-	Resume     *RecognitionCursor
-	OnProgress func(RecognitionCursor)
+	Since time.Time
+	AsOf  time.Time
+	// TenantID and EnvironmentID, when set, limit the run to them; empty runs every enabled environment.
+	TenantID      string
+	EnvironmentID string
+	Resume        *RecognitionCursor
+	OnProgress    func(RecognitionCursor)
 }
 
 func NewJournalService(
@@ -187,7 +190,7 @@ func (s *journalService) PostInvoice(ctx context.Context, inv *invoice.Invoice) 
 		{account: types.LedgerAccountCustomerCredit, amount: inv.TotalPrepaidCreditsApplied.Neg()},
 	}, revenuePostings...)
 
-	finalizeID, err := s.post(ctx, entry(types.JournalEventInvoiceFinalized, *inv.FinalizedAt, finalizePostings, ""))
+	finalizeID, err := s.post(ctx, entry(types.JournalEventInvoiceFinalized, lo.FromPtrOr(inv.IssueDate, *inv.FinalizedAt), finalizePostings, ""))
 	if err != nil {
 		return err
 	}
@@ -541,7 +544,8 @@ func (s *journalService) RunRecognition(ctx context.Context, req RecognitionRunR
 	}
 	envs := lo.Filter(configs, func(c *types.TenantEnvConfig, _ int) bool {
 		cfg, err := utils.ToStruct[types.RevenueRecognitionConfig](c.Config)
-		return err == nil && cfg.Enabled && c.TenantID != "" && c.EnvironmentID != ""
+		return err == nil && cfg.Enabled && c.TenantID != "" && c.EnvironmentID != "" &&
+			(req.TenantID == "" || c.TenantID == req.TenantID) && (req.EnvironmentID == "" || c.EnvironmentID == req.EnvironmentID)
 	})
 	// Stable order, so a cursor means the same thing on a retry.
 	sort.Slice(envs, func(i, j int) bool {
@@ -582,7 +586,7 @@ func (s *journalService) Backfill(ctx context.Context, req BackfillRequest) erro
 
 	syncErr := postChanged(func(page *types.QueryFilter) ([]*subscription.Subscription, error) {
 		f := types.NewNoLimitSubscriptionFilter()
-		f.QueryFilter = page
+		f.QueryFilter, f.SubscriptionStatus = page, types.AllSubscriptionStatuses()
 		return s.subRepo.List(ctx, f)
 	}, func(listed *subscription.Subscription) error {
 		defer req.OnProgress(unchanged)

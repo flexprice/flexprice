@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -57,6 +58,7 @@ import (
 	taxapplied "github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
+	"github.com/flexprice/flexprice/internal/domain/usageanalytics"
 	"github.com/flexprice/flexprice/internal/domain/usagerecord"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
@@ -286,6 +288,10 @@ func NewHostedInvoiceTokenRepository(p RepositoryParams) hostedinvoicetoken.Repo
 	return entRepo.NewHostedInvoiceTokenRepository(p.EntClient, p.Logger)
 }
 
+func NewEmailLogRepository(p RepositoryParams) emaillog.Repository {
+	return entRepo.NewEmailLogRepository(p.EntClient, p.Logger)
+}
+
 func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 	return entRepo.NewTaxAssociationRepository(p.EntClient, p.Logger, p.RedisCache)
 }
@@ -356,6 +362,11 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 
 func NewMeterUsageRepository(p RepositoryParams) events.MeterUsageRepository {
 	return clickhouseRepo.NewMeterUsageRepository(p.ClickHouseDB, p.Logger)
+}
+
+// NewUsageAnalyticsRepository returns the ClickHouse repository that prices meter_usage events for usage analytics.
+func NewUsageAnalyticsRepository(p RepositoryParams) usageanalytics.Repository {
+	return clickhouseRepo.NewUsageAnalyticsRepository(p.ClickHouseDB, p.Logger)
 }
 
 func NewActivityRepository(p RepositoryParams) domainActivity.Repository {

@@ -29,6 +29,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service/revenue"
 	revenuereportsvc "github.com/flexprice/flexprice/internal/ee/service/revenuereport"
 	"github.com/flexprice/flexprice/internal/ee/service/selfbilling"
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	integrationevents "github.com/flexprice/flexprice/internal/integration/events"
 	"github.com/flexprice/flexprice/internal/kafka"
@@ -156,6 +157,7 @@ func main() {
 			repository.NewEventRepository,
 			repository.NewProcessedEventRepository,
 			repository.NewMeterUsageRepository,
+			repository.NewUsageAnalyticsRepository,
 			repository.NewActivityRepository,
 			repository.NewMeterRepository,
 			repository.NewUserRepository,
@@ -196,6 +198,7 @@ func main() {
 			repository.NewTaxRateRepository,
 			repository.NewFXRateRepository,
 			repository.NewHostedInvoiceTokenRepository,
+			repository.NewEmailLogRepository,
 			repository.NewTaxAssociationRepository,
 			repository.NewCouponRepository,
 			repository.NewCouponAssociationRepository,
@@ -248,6 +251,7 @@ func main() {
 	opts = append(opts,
 		fx.Provide(
 			provideWalletBalanceAlertPubSub,
+			provideEmailEventsPubSub,
 		),
 	)
 
@@ -273,6 +277,8 @@ func main() {
 			// (invoices/exports/imports). Provided before service params so any
 			// service can reach it via ServiceParams.StorageResolver.
 			provideStorageResolver,
+			// Customer email provider (resend or log), chosen by email.provider.
+			email.NewProvider,
 			syncExport.NewExportService,
 			fx.Annotate(service.NewServiceParams, fx.ResultTags(`name:"base"`)),
 			service.NewOAuthService,
@@ -334,6 +340,7 @@ func main() {
 			provideBillingEntityScope,
 			service.NewHostedInvoiceTokenService,
 			service.NewHostedInvoiceService,
+			service.NewEmailNotificationService,
 			service.NewCouponService,
 			service.NewCommitmentService,
 			service.NewCouponAssociationService,
@@ -359,6 +366,7 @@ func main() {
 			service.NewWorkflowExecutionService,
 			service.NewWorkflowService,
 			service.NewAnalyticsService,
+			service.NewUsageAnalyticsService,
 		),
 	)
 
@@ -462,6 +470,7 @@ func provideHandlers(
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
 	hostedInvoiceService service.HostedInvoiceService,
+	emailNotificationService service.EmailNotificationService,
 	dashboardService service.DashboardService,
 	workflowService service.WorkflowService,
 	meterUsageService service.MeterUsageService,
@@ -470,6 +479,7 @@ func provideHandlers(
 	geminiPricingService service.GeminiPricingService,
 	webhookService *webhook.WebhookService,
 	analyticsService service.AnalyticsService,
+	usageAnalyticsService service.UsageAnalyticsService,
 	revenueService interfaces.RevenueService,
 	selfBillingService selfbilling.Service,
 ) api.Handlers {
@@ -514,7 +524,7 @@ func provideHandlers(
 		UsageRecord:              v1.NewUsageRecordHandler(usageRecordService, logger),
 		Integration:              v1.NewIntegrationHandler(integrationSyncService, entityIntegrationMappingService, connectionService, logger),
 		Paddle:                   v1.NewPaddleHandler(integrationFactory, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService, billingEntityService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, checkoutSessionService, refundService, db, webhookService, billingEntityService, emailNotificationService, serviceParams.WebhookPublisher),
 		Coupon:                   v1.NewCouponHandler(couponService, couponAssociationService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, entitlementService, temporalService, logger),
 		Product:                  v1.NewProductHandler(productService, logger),
@@ -535,12 +545,13 @@ func provideHandlers(
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		SelfBilling:              v1.NewSelfBillingHandler(selfBillingService),
 		HostedInvoice:            v1.NewHostedInvoiceHandler(hostedInvoiceService, logger),
+		EmailNotification:        v1.NewEmailNotificationHandler(emailNotificationService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 		Workflow:                 v1.NewWorkflowHandler(workflowService, logger),
 		MeterUsage:               v1.NewMeterUsageHandler(meterUsageService, logger),
 		SAML:                     saml.NewHandler(cfg, serviceParams, logger),
 		CheckoutSession:          v1.NewCheckoutSessionHandler(checkoutSessionService, logger),
-		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, logger),
+		Analytics:                v1.NewAnalyticsHandler(analyticsService, revenueService, usageAnalyticsService, logger),
 	}
 }
 
@@ -683,7 +694,9 @@ func startServer(
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
 	activityConsumer *activity.Consumer,
+	emailNotificationService service.EmailNotificationService,
 	params service.ServiceParams,
+	chStore *clickhouse.ClickHouseStore,
 ) {
 	mode := cfg.Deployment.Mode
 	if mode == "" {
@@ -698,15 +711,15 @@ func startServer(
 			log.Fatal(context.Background(), "Kafka consumer required for local mode")
 		}
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, chStore)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
 		startAPIServer(lc, r, cfg, log)
 	case types.ModeAPI:
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
 
 		// Registered last so fx's reverse-order stop drains HTTP before deps close.
@@ -716,16 +729,16 @@ func startServer(
 		// Register webhook handler and start router so that webhook events
 		// published by temporal activities (e.g. invoice finalization) are
 		// consumed and delivered via Svix/native in the same process.
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, false)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, false)
 		startRouter(lc, router, log)
-		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService)
+		startTemporalWorker(lc, log, temporalClient, temporalService, params, webhookService, chStore)
 	case types.ModeConsumer:
 		if consumer == nil {
 			log.Fatal(context.Background(), "Kafka consumer required for consumer mode")
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, cfg, true)
+		registerRouterHandlers(router, webhookService, integrationEventService, onboardingService, eventConsumptionSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, meterUsageTrackingSvc, activityConsumer, emailNotificationService, cfg, true)
 		startRouter(lc, router, log)
 	case types.ModeAdmin:
 		startAPIServer(lc, adminRouter, cfg, log)
@@ -741,6 +754,7 @@ func startTemporalWorker(
 	temporalService temporalservice.TemporalService,
 	params service.ServiceParams,
 	webhookService *webhook.WebhookService,
+	chStore *clickhouse.ClickHouseStore,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) (err error) {
@@ -761,7 +775,7 @@ func startTemporalWorker(
 			}
 
 			// Register workflows and activities first (this creates the workers)
-			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService); err != nil {
+			if err := temporal.RegisterWorkflowsAndActivities(temporalService, params, webhookService, chStore); err != nil {
 				return fmt.Errorf("failed to register workflows and activities: %w", err)
 			}
 
@@ -837,6 +851,7 @@ func registerRouterHandlers(
 	rawEventConsumptionSvc service.RawEventConsumptionService,
 	meterUsageTrackingSvc service.MeterUsageTrackingService,
 	activityConsumer *activity.Consumer,
+	emailNotificationService service.EmailNotificationService,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
@@ -854,6 +869,7 @@ func registerRouterHandlers(
 		meterUsageTrackingSvc.RegisterHandlerLazy(router, cfg)
 		meterUsageTrackingSvc.RegisterBulkHandler(router, cfg)
 		activityConsumer.RegisterHandler(router, cfg)
+		emailNotificationService.RegisterHandler(router, cfg)
 	}
 }
 
@@ -908,6 +924,22 @@ func provideActivityPubSub(
 		return types.ActivityPubSub{}
 	}
 	return types.ActivityPubSub{PubSub: pubSub}
+}
+
+func provideEmailEventsPubSub(
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) types.EmailEventsPubSub {
+	if !cfg.EmailEvents.Enabled || !cfg.Email.IsProviderConfigured() {
+		return types.EmailEventsPubSub{}
+	}
+	// A new group skips the topic's history so old invoices are never emailed late.
+	pubSub, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.EmailEvents.ConsumerGroup, kafkaPubsub.StartAtNewest())
+	if err != nil {
+		logger.Fatalw("failed to create pubsub for email events", "error", err)
+		return types.EmailEventsPubSub{}
+	}
+	return types.EmailEventsPubSub{PubSub: pubSub}
 }
 
 // serviceParamsProviders build the ServiceParams every service consumes from the base params.

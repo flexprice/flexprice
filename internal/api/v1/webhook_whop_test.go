@@ -108,6 +108,7 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 		nil, // temporalSvc
 		testutil.NewInMemoryRedisLocker(nil),
 		nil,
+		nil,
 	)
 
 	handler := NewWebhookHandler(
@@ -126,6 +127,8 @@ func setupWhopWebhookHandler(t *testing.T, webhookSecret string) (*WebhookHandle
 		nil, // db
 		nil, // webhookService
 		service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(), SettingsRepo: testutil.NewInMemorySettingsStore()}),
+		nil, // emailNotificationService
+		nil, // webhookPublisher
 	)
 
 	return handler, log

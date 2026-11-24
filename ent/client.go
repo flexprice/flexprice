@@ -40,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/ent/creditnote"
 	"github.com/flexprice/flexprice/ent/creditnotelineitem"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/emaillog"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/entitlementgrant"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -146,6 +147,8 @@ type Client struct {
 	CreditNoteLineItem *CreditNoteLineItemClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
+	// EmailLog is the client for interacting with the EmailLog builders.
+	EmailLog *EmailLogClient
 	// Entitlement is the client for interacting with the Entitlement builders.
 	Entitlement *EntitlementClient
 	// EntitlementGrant is the client for interacting with the EntitlementGrant builders.
@@ -276,6 +279,7 @@ func (c *Client) init() {
 	c.CreditNote = NewCreditNoteClient(c.config)
 	c.CreditNoteLineItem = NewCreditNoteLineItemClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
+	c.EmailLog = NewEmailLogClient(c.config)
 	c.Entitlement = NewEntitlementClient(c.config)
 	c.EntitlementGrant = NewEntitlementGrantClient(c.config)
 	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
@@ -440,6 +444,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CreditNote:                       NewCreditNoteClient(cfg),
 		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
 		Customer:                         NewCustomerClient(cfg),
+		EmailLog:                         NewEmailLogClient(cfg),
 		Entitlement:                      NewEntitlementClient(cfg),
 		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
@@ -531,6 +536,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CreditNote:                       NewCreditNoteClient(cfg),
 		CreditNoteLineItem:               NewCreditNoteLineItemClient(cfg),
 		Customer:                         NewCustomerClient(cfg),
+		EmailLog:                         NewEmailLogClient(cfg),
 		Entitlement:                      NewEntitlementClient(cfg),
 		EntitlementGrant:                 NewEntitlementGrantClient(cfg),
 		EntityIntegrationMapping:         NewEntityIntegrationMappingClient(cfg),
@@ -613,17 +619,17 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.EventDeletionRequest, c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken,
-		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.JournalEntry, c.JournalLine, c.Meter, c.MeterUsageCheckpoint, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
-		c.PerformanceObligationAssociation, c.Plan, c.Price, c.PriceUnit, c.Product,
-		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
+		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
+		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
+		c.MeterUsageCheckpoint, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Use(hooks...)
 	}
@@ -639,17 +645,17 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
 		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
-		c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping, c.Environment,
-		c.EventDeletionRequest, c.FXRate, c.Feature, c.Group, c.HostedInvoiceToken,
-		c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence,
-		c.JournalEntry, c.JournalLine, c.Meter, c.MeterUsageCheckpoint, c.Payment,
-		c.PaymentAttempt, c.PaymentMethod, c.PerformanceObligation,
-		c.PerformanceObligationAssociation, c.Plan, c.Price, c.PriceUnit, c.Product,
-		c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret, c.Settings, c.Subscription,
-		c.SubscriptionLineItem, c.SubscriptionPause, c.SubscriptionPhase,
-		c.SubscriptionSchedule, c.SystemEvent, c.Task, c.TaxApplied, c.TaxAssociation,
-		c.TaxRate, c.Tenant, c.UsageRecord, c.User, c.Wallet, c.WalletTransaction,
-		c.WorkflowExecution,
+		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
+		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
+		c.HostedInvoiceToken, c.IncomingWebhookEvent, c.Invoice, c.InvoiceLineItem,
+		c.InvoiceSequence, c.JournalEntry, c.JournalLine, c.Meter,
+		c.MeterUsageCheckpoint, c.Payment, c.PaymentAttempt, c.PaymentMethod,
+		c.PerformanceObligation, c.PerformanceObligationAssociation, c.Plan, c.Price,
+		c.PriceUnit, c.Product, c.Refund, c.RevenueFact, c.ScheduledTask, c.Secret,
+		c.Settings, c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
+		c.SubscriptionPhase, c.SubscriptionSchedule, c.SystemEvent, c.Task,
+		c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.UsageRecord, c.User,
+		c.Wallet, c.WalletTransaction, c.WorkflowExecution,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -708,6 +714,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CreditNoteLineItem.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
+	case *EmailLogMutation:
+		return c.EmailLog.mutate(ctx, m)
 	case *EntitlementMutation:
 		return c.Entitlement.mutate(ctx, m)
 	case *EntitlementGrantMutation:
@@ -4417,6 +4425,139 @@ func (c *CustomerClient) mutate(ctx context.Context, m *CustomerMutation) (Value
 		return (&CustomerDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Customer mutation op: %q", m.Op())
+	}
+}
+
+// EmailLogClient is a client for the EmailLog schema.
+type EmailLogClient struct {
+	config
+}
+
+// NewEmailLogClient returns a client for the EmailLog from the given config.
+func NewEmailLogClient(c config) *EmailLogClient {
+	return &EmailLogClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `emaillog.Hooks(f(g(h())))`.
+func (c *EmailLogClient) Use(hooks ...Hook) {
+	c.hooks.EmailLog = append(c.hooks.EmailLog, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `emaillog.Intercept(f(g(h())))`.
+func (c *EmailLogClient) Intercept(interceptors ...Interceptor) {
+	c.inters.EmailLog = append(c.inters.EmailLog, interceptors...)
+}
+
+// Create returns a builder for creating a EmailLog entity.
+func (c *EmailLogClient) Create() *EmailLogCreate {
+	mutation := newEmailLogMutation(c.config, OpCreate)
+	return &EmailLogCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of EmailLog entities.
+func (c *EmailLogClient) CreateBulk(builders ...*EmailLogCreate) *EmailLogCreateBulk {
+	return &EmailLogCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *EmailLogClient) MapCreateBulk(slice any, setFunc func(*EmailLogCreate, int)) *EmailLogCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &EmailLogCreateBulk{err: fmt.Errorf("calling to EmailLogClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*EmailLogCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &EmailLogCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for EmailLog.
+func (c *EmailLogClient) Update() *EmailLogUpdate {
+	mutation := newEmailLogMutation(c.config, OpUpdate)
+	return &EmailLogUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *EmailLogClient) UpdateOne(_m *EmailLog) *EmailLogUpdateOne {
+	mutation := newEmailLogMutation(c.config, OpUpdateOne, withEmailLog(_m))
+	return &EmailLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *EmailLogClient) UpdateOneID(id string) *EmailLogUpdateOne {
+	mutation := newEmailLogMutation(c.config, OpUpdateOne, withEmailLogID(id))
+	return &EmailLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for EmailLog.
+func (c *EmailLogClient) Delete() *EmailLogDelete {
+	mutation := newEmailLogMutation(c.config, OpDelete)
+	return &EmailLogDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *EmailLogClient) DeleteOne(_m *EmailLog) *EmailLogDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *EmailLogClient) DeleteOneID(id string) *EmailLogDeleteOne {
+	builder := c.Delete().Where(emaillog.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &EmailLogDeleteOne{builder}
+}
+
+// Query returns a query builder for EmailLog.
+func (c *EmailLogClient) Query() *EmailLogQuery {
+	return &EmailLogQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeEmailLog},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a EmailLog entity by its id.
+func (c *EmailLogClient) Get(ctx context.Context, id string) (*EmailLog, error) {
+	return c.Query().Where(emaillog.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *EmailLogClient) GetX(ctx context.Context, id string) *EmailLog {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *EmailLogClient) Hooks() []Hook {
+	return c.hooks.EmailLog
+}
+
+// Interceptors returns the client interceptors.
+func (c *EmailLogClient) Interceptors() []Interceptor {
+	return c.inters.EmailLog
+}
+
+func (c *EmailLogClient) mutate(ctx context.Context, m *EmailLogMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&EmailLogCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&EmailLogUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&EmailLogUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&EmailLogDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown EmailLog mutation op: %q", m.Op())
 	}
 }
 
@@ -11047,7 +11188,7 @@ type (
 		BillingTerm, CheckoutSession, Commitment, Connection, Contract,
 		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
+		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
 		EventDeletionRequest, FXRate, Feature, Group, HostedInvoiceToken,
 		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, JournalEntry,
 		JournalLine, Meter, MeterUsageCheckpoint, Payment, PaymentAttempt,
@@ -11064,7 +11205,7 @@ type (
 		BillingTerm, CheckoutSession, Commitment, Connection, Contract,
 		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
-		Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
+		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
 		EventDeletionRequest, FXRate, Feature, Group, HostedInvoiceToken,
 		IncomingWebhookEvent, Invoice, InvoiceLineItem, InvoiceSequence, JournalEntry,
 		JournalLine, Meter, MeterUsageCheckpoint, Payment, PaymentAttempt,

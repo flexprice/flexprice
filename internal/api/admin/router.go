@@ -71,6 +71,7 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 				tenantByID.GET("/environments", handlers.Environment.ListEnvironments)
 				tenantByID.GET("/users", handlers.User.ListUsersForTenant)
 				tenantByID.GET("/settings", handlers.Settings.ListTenantSettings)
+				tenantByID.PUT("/settings/:key", handlers.Settings.UpdateTenantSetting)
 			}
 		}
 
@@ -87,9 +88,9 @@ func NewRouter(handlers Handlers, log *logger.Logger, secret string) *Server {
 
 		revenueRecognition := group.Group("/revenue_recognition")
 		{
-			revenueRecognition.PUT("/config", handlers.RevenueRecognition.UpdateConfig)
 			revenueRecognition.POST("/backfill", handlers.RevenueRecognition.StartBackfill)
-			revenueRecognition.GET("/backfill/runs/:workflow_id", handlers.RevenueRecognition.GetBackfill)
+			revenueRecognition.POST("/run", handlers.RevenueRecognition.StartRun)
+			revenueRecognition.GET("/runs/:workflow_id", handlers.RevenueRecognition.GetRun)
 		}
 	}
 

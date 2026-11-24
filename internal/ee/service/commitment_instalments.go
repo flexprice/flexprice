@@ -19,10 +19,6 @@ func (s *commitmentService) TriggerInstalment(
 	id, instalmentID string,
 	req dto.TriggerInstalmentRequest,
 ) (*billingterm.Instalment, error) {
-	if err := s.requireEnabled(ctx); err != nil {
-		return nil, err
-	}
-
 	var triggered *billingterm.Instalment
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		if err := s.lockCommitment(txCtx, id); err != nil {

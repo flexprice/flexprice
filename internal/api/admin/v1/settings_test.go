@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto/admin"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +21,11 @@ type stubSettingsService struct {
 	listTenantID string
 	listResp     *admin.ListSettingsResponse
 	listErr      error
+
+	getTenantID      string
+	getEnvironmentID string
+	getKey           types.SettingKey
+	updateReq        admin.UpdateSettingRequest
 }
 
 func (s *stubSettingsService) UpdateTenantConfig(_ context.Context, req admin.UpdateTenantConfigRequest) (*admin.TenantConfigResponse, error) {
@@ -28,9 +34,14 @@ func (s *stubSettingsService) UpdateTenantConfig(_ context.Context, req admin.Up
 	return s.resp, s.err
 }
 
-func (s *stubSettingsService) ListTenantSettings(_ context.Context, tenantID string) (*admin.ListSettingsResponse, error) {
+func (s *stubSettingsService) ListTenantSettings(_ context.Context, tenantID, _ string) (*admin.ListSettingsResponse, error) {
 	s.listTenantID = tenantID
 	return s.listResp, s.listErr
+}
+
+func (s *stubSettingsService) UpdateTenantSetting(_ context.Context, tenantID, environmentID string, key types.SettingKey, req admin.UpdateSettingRequest) (*admin.SettingResponse, error) {
+	s.getTenantID, s.getEnvironmentID, s.getKey, s.updateReq = tenantID, environmentID, key, req
+	return &admin.SettingResponse{Key: key}, nil
 }
 
 const tenantConfigPath = "/v1/settings/tenant_config"
@@ -103,4 +114,30 @@ func TestListTenantSettings_UnknownTenant(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, "tenant_missing", stub.listTenantID)
+}
+
+func TestUpdateTenantSetting(t *testing.T) {
+	t.Run("passes the path and body to the service", func(t *testing.T) {
+		stub := &stubSettingsService{}
+		router := setupAdminRouter(http.MethodPut, tenantSettingsRoute+"/:key", NewSettingsHandler(stub).UpdateTenantSetting)
+
+		w := doAdminRequest(router, http.MethodPut, "/v1/tenants/tenant_1/settings/invoice_config",
+			`{"environment_id": "env_1", "value": {"prefix": "ACME"}, "updated_at": "2026-10-09T08:15:00Z"}`)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "tenant_1", stub.getTenantID)
+		assert.Equal(t, "env_1", stub.getEnvironmentID)
+		assert.Equal(t, types.SettingKeyInvoiceConfig, stub.getKey)
+		assert.Equal(t, admin.UpdateSettingRequest{EnvironmentID: "env_1", Value: map[string]interface{}{"prefix": "ACME"}, UpdatedAt: "2026-10-09T08:15:00Z"}, stub.updateReq)
+	})
+
+	t.Run("malformed JSON is refused before the service", func(t *testing.T) {
+		stub := &stubSettingsService{}
+		router := setupAdminRouter(http.MethodPut, tenantSettingsRoute+"/:key", NewSettingsHandler(stub).UpdateTenantSetting)
+
+		w := doAdminRequest(router, http.MethodPut, "/v1/tenants/tenant_1/settings/invoice_config", `{"value":`)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Empty(t, stub.getTenantID)
+	})
 }

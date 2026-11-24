@@ -116,6 +116,14 @@ func (b *subscriptionLineItemBuilder) WithSuccessorLineItemID(id *string) *subsc
 	return b
 }
 
+func (b *subscriptionLineItemBuilder) WithStatus(status types.Status) *subscriptionLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	b.item.Status = status
+	return b
+}
+
 func (b *subscriptionLineItemBuilder) WithBaseModel(baseModel types.BaseModel) *subscriptionLineItemBuilder {
 	if b == nil || b.item == nil {
 		return b

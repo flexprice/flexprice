@@ -22,6 +22,12 @@ func (s *customerPortalService) TopUpWallet(ctx context.Context, walletID string
 		return nil, ierr.NewError("request is required").Mark(ierr.ErrValidation)
 	}
 
+	if req.Checkout != nil {
+		if err := req.Checkout.RedirectionParams.Validate(); err != nil {
+			return nil, err
+		}
+	}
+
 	w, err := s.authorizeWallet(ctx, walletID)
 	if err != nil {
 		return nil, err
@@ -237,6 +243,11 @@ func (s *customerPortalService) validateSavedMethodForTopUp(
 	customerID string,
 	gateway types.PaymentGatewayType,
 ) error {
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
+	if err != nil {
+		return err
+	}
+
 	methodProvider, err := s.IntegrationFactory.GetPaymentMethodProvider(ctx, gateway, s.customerService)
 	if err != nil {
 		if ierr.IsNotImplemented(err) {

@@ -257,6 +257,11 @@ func TestInMemoryBillingInstalmentStore_ListFiltersAndOrder(t *testing.T) {
 			want:   []string{"binst_a", "binst_b", "binst_c"},
 		},
 		{
+			name:   "bill_on bounds on both sides are inclusive",
+			filter: &billingterm.InstalmentFilter{OwnerIDs: []string{"cmt_1"}, BillOnFrom: &nextDay, BillOnOrBefore: &dayAfter},
+			want:   []string{"binst_b", "binst_c", "binst_d"},
+		},
+		{
 			name:   "statuses",
 			filter: &billingterm.InstalmentFilter{OwnerIDs: []string{"cmt_1"}, Statuses: []types.InstalmentStatus{types.InstalmentStatusInvoiced}},
 			want:   []string{"binst_b"},
@@ -348,28 +353,29 @@ func TestInMemoryBillingInstalmentStore_UpdateOnlyScheduled(t *testing.T) {
 	}
 }
 
-func TestInMemoryBillingInstalmentStore_ListInvoiced(t *testing.T) {
+func TestInMemoryBillingInstalmentStore_ListEnvironments(t *testing.T) {
 	f := newInstalmentFixture(t)
-	jan, feb := f.start, f.start.AddDate(0, 1, 0)
-	invoiced := func(id, ownerID string, at time.Time) *billingterm.Instalment {
-		in := f.instalment(id, ownerID, types.InstalmentStatusInvoiced, jan)
-		in.InvoiceID, in.InvoicedAt = lo.ToPtr("inv_"+id), lo.ToPtr(at)
-		return in
-	}
+	due := f.instalment("binst_due", "cmt_1", types.InstalmentStatusScheduled, f.start)
+	future := f.instalment("binst_future", "cmt_1", types.InstalmentStatusScheduled, f.start.AddDate(0, 2, 0))
+	future.EnvironmentID = "env_future"
+	invoiced := f.instalment("binst_invoiced", "cmt_1", types.InstalmentStatusInvoiced, f.start)
+	invoiced.EnvironmentID = "env_invoiced"
+	f.seed(t, due, future, invoiced)
 
-	late := invoiced("binst_late", "cmt_1", jan.AddDate(0, 0, 20))
-	early := invoiced("binst_early", "cmt_1", jan)
-	atEnd := invoiced("binst_at_end", "cmt_1", feb)
-	otherOwner := invoiced("binst_other", "cmt_2", jan.Add(time.Hour))
-	scheduled := f.instalment("binst_scheduled", "cmt_1", types.InstalmentStatusScheduled, jan)
-	f.seed(t, late, early, atEnd, otherOwner, scheduled)
-
-	january := types.Period{Start: jan, End: feb}
-	got, err := f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1"}, january)
+	otherTenant := types.SetEnvironmentID(types.SetTenantID(f.ctx, "tenant_2"), "env_2")
+	other := f.instalment("binst_other", "cmt_2", types.InstalmentStatusScheduled, f.start)
+	other.TenantID, other.EnvironmentID = "tenant_2", "env_2"
+	_, err := f.store.CreateMany(otherTenant, []*billingterm.Instalment{other})
 	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, late.ID}, instalmentIDs(got))
 
-	got, err = f.store.ListInvoiced(f.ctx, types.BillingTermOwnerCommitment, []string{"cmt_1", "cmt_2"}, january)
+	dueBy := f.start.AddDate(0, 1, 0)
+	envs, err := f.store.ListEnvironments(context.Background(), &billingterm.InstalmentFilter{
+		Statuses:       []types.InstalmentStatus{types.InstalmentStatusScheduled},
+		BillOnOrBefore: &dueBy,
+	})
 	require.NoError(t, err)
-	require.Equal(t, []string{early.ID, otherOwner.ID, late.ID}, instalmentIDs(got))
+	require.ElementsMatch(t, []types.TenantEnvironment{
+		{TenantID: "tenant_1", EnvironmentID: "env_1"},
+		{TenantID: "tenant_2", EnvironmentID: "env_2"},
+	}, envs)
 }

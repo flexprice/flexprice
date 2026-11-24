@@ -453,11 +453,6 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 	}
 	terminationTotalDuration := time.Since(terminationStartTime)
 
-	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	creationStartTime := clock.Mono()
 	cursorSubID := ""
 
@@ -540,8 +535,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 			lineItem := createPlanLineItem(ctx, sub, price, plan)
 			// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
-			// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
-			if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+			// it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
+			if price.Type == types.PRICE_TYPE_USAGE {
 				created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 				if err != nil {
 					return nil, err
@@ -656,11 +651,6 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 		}, nil
 	}
 
-	commitmentsOn, err := NewCommitmentService(s.ServiceParams).IsEnabled(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Page through stale subs, doing discover → create → terminate → stamp.
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -740,8 +730,8 @@ func (s *planService) SyncPlanPricesV2(ctx context.Context, planID string) (*dto
 				}
 				lineItem := createPlanLineItem(ctx, sub, price, plan)
 				// A usage price joining a subscription can break an active commitment's scope rules (meter, bucket size, overage);
-				// with commitments on it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
-				if commitmentsOn && price.Type == types.PRICE_TYPE_USAGE {
+				// it is checked and inserted under the commitments lock, and a violating price is logged and skipped.
+				if price.Type == types.PRICE_TYPE_USAGE {
 					created, err := createPriceSyncLine(ctx, s.ServiceParams, sub, price, lineItem)
 					if err != nil {
 						return nil, err

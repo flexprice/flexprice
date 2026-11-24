@@ -143,7 +143,7 @@ type fakePaymentService struct {
 	updateReqs []dto.UpdatePaymentRequest
 }
 
-func (s *fakePaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (s *fakePaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	if s.getErr != nil {
 		return nil, s.getErr
 	}

@@ -352,19 +352,6 @@ func (s *CommitmentE2ESuite) TestInstalments_ReconcileKeepsSamePeriodPair() {
 	}
 }
 
-// With commitments_v2 off, no invoice bills instalments.
-func (s *CommitmentE2ESuite) TestInstalments_DisabledSettingAddsNothing() {
-	feb := s.jan.AddDate(0, 1, 0)
-	tokens := s.planWith("disabled", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
-	sub := s.subscribe(tokens, s.jan)
-	s.commit(sub.ID, termsRequest("Platform", tokens.ID, "100", s.jan, s.jan.AddDate(0, 10, 0), upfrontPlusRemainder()...))
-
-	setCommitmentsV2(s.T(), s.GetContext(), s.GetStores(), false)
-
-	s.Empty(instalmentLines(s.invoiceAt(types.ReferencePointPeriodStart, sub.ID, s.jan, feb)))
-	s.Empty(instalmentLines(s.invoiceFor(sub.ID, s.jan, feb)))
-}
-
 // An instalment back on schedule though its commitment was terminated before it fell due, as a void used to leave one,
 // is left off the subscription invoices rather than billed again.
 func (s *CommitmentE2ESuite) TestInstalments_SkipThoseATerminationCancelled() {

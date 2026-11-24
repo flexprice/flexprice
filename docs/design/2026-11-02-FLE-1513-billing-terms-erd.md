@@ -167,7 +167,6 @@ Both new tables use `BaseMixin` and `EnvironmentMixin`. Every query filters on `
 - `(tenant_id, environment_id, owner_type, owner_id)`
 - `(tenant_id, environment_id, subscription_id, instalment_status, bill_on)` for the subscription invoice build
 - `(tenant_id, environment_id, instalment_status, delivery, bill_on)` for separate-invoice pickup
-- `(tenant_id, environment_id, owner_id, invoiced_at)` for the instalments usage analytics lists by invoice date
 - `(tenant_id, environment_id, invoice_id)` for void and draft recompute
 
 ### 5.3 Changes to existing tables and types

@@ -16,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
 )
 
 type settingsRepository struct {
@@ -556,49 +555,4 @@ func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, 
 	}
 
 	return configs, nil
-}
-
-// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
-// Uses simple stateless conversion from map to struct
-func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	// Get all configs for subscription key
-	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert to subscription configs using simple stateless conversion
-	subscriptionConfigs := make([]*types.TenantEnvSubscriptionConfig, 0, len(configs))
-	for _, config := range configs {
-		// Simple conversion: map -> typed struct
-		subscriptionConfig, err := utils.ToStruct[types.SubscriptionConfig](config.Config)
-		if err != nil {
-			r.log.Info(ctx, "failed to convert subscription config",
-				"tenant_id", config.TenantID,
-				"environment_id", config.EnvironmentID,
-				"error", err)
-			continue
-		}
-
-		r.log.Debug(ctx, "processing subscription config",
-			"tenant_id", config.TenantID,
-			"environment_id", config.EnvironmentID,
-			"auto_cancellation_enabled", subscriptionConfig.AutoCancellationEnabled,
-			"grace_period_days", subscriptionConfig.GracePeriodDays)
-
-		// Only include if auto-cancellation is enabled
-		if subscriptionConfig.AutoCancellationEnabled {
-			subscriptionConfigs = append(subscriptionConfigs, &types.TenantEnvSubscriptionConfig{
-				TenantID:           config.TenantID,
-				EnvironmentID:      config.EnvironmentID,
-				SubscriptionConfig: &subscriptionConfig,
-			})
-		} else {
-			r.log.Info(ctx, "skipping subscription config - auto-cancellation disabled",
-				"tenant_id", config.TenantID,
-				"environment_id", config.EnvironmentID)
-		}
-	}
-
-	return subscriptionConfigs, nil
 }

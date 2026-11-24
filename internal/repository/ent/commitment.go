@@ -67,7 +67,8 @@ func (r *commitmentRepository) Create(ctx context.Context, c *domain.Commitment)
 		SetNillableOveragePriceID(c.OveragePriceID).
 		SetMeasurement(c.Measurement).
 		SetActiveWindows(c.ActiveWindows).
-		SetTimezone(c.Timezone).
+		// Active windows are UTC; the column stays until a migration drops it.
+		SetTimezone(types.DefaultTimezone).
 		SetPriority(c.Priority).
 		SetBinding(c.Binding).
 		SetNillableCollectionMethod(c.CollectionMethod).

@@ -57,7 +57,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	temporalSvc := &startupRollbackTemporalService{}
 	temporalClient := failingScheduleTemporalClient{}
 	lc := fxtest.NewLifecycle(t)
-	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil)
+	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil)
 
 	err := lc.Start(context.Background())
 	if !errors.Is(err, errEnsureSchedules) {
@@ -89,7 +89,8 @@ func TestServiceParamsProviders(t *testing.T) {
 			Region:       "us",
 			APIHost:      "https://billing.example.com/v1",
 			APIKey:       "sk_test",
-			PlanID:       "plan_free",
+			DefaultPlanID: "plan_free",
+			PlanIDs:       []string{"plan_free"},
 			DashboardURL: "https://app.example.com",
 		}},
 	}

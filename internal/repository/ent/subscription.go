@@ -59,7 +59,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		sub.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	subscription, err := client.Subscription.Create().
+	create := client.Subscription.Create().
 		SetID(sub.ID).
 		SetTenantID(sub.TenantID).
 		SetLookupKey(sub.LookupKey).
@@ -102,8 +102,12 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		SetNillablePaymentTerms(sub.PaymentTerms).
-		SetSyncedPriceSequence(sub.SyncedPriceSequence).
-		Save(ctx)
+		SetSyncedPriceSequence(sub.SyncedPriceSequence)
+	// SetSettings(nil) would store JSON null, so leave the column NULL when there are no overrides.
+	if sub.Settings != nil {
+		create.SetSettings(sub.Settings)
+	}
+	subscription, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -291,6 +295,11 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.SetPaymentTerms(*sub.PaymentTerms)
 	} else {
 		query.ClearPaymentTerms()
+	}
+	if sub.Settings != nil {
+		query.SetSettings(sub.Settings)
+	} else {
+		query.ClearSettings()
 	}
 
 	// Handle nullable date fields - explicitly clear if nil
@@ -1396,9 +1405,60 @@ func (r *subscriptionRepository) ListEnvironmentsWithGatedActiveSubscriptions(ct
 	return envs, nil
 }
 
+// listEnvironmentsForAutoCancellationQuery finds environments where auto-cancellation is on at any level;
+// the customer and subscription branches read only the settings_override partial indexes.
+const listEnvironmentsForAutoCancellationQuery = `
+	SELECT tenant_id, environment_id FROM settings
+	WHERE key = 'subscription_config' AND status = 'published'
+		AND (value ->> 'auto_cancellation_enabled')::boolean
+	UNION
+	SELECT tenant_id, environment_id FROM subscriptions
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean
+	UNION
+	SELECT tenant_id, environment_id FROM customers
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean`
+
+func (r *subscriptionRepository) ListEnvironmentsForAutoCancellation(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "subscription", "list_environments_for_auto_cancellation", nil)
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, listEnvironmentsForAutoCancellationQuery)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments for auto-cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var envs []types.TenantEnvironment
+	for rows.Next() {
+		var env types.TenantEnvironment
+		if err := rows.Scan(&env.TenantID, &env.EnvironmentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read environment for auto-cancellation").
+				Mark(ierr.ErrDatabase)
+		}
+		envs = append(envs, env)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read environments for auto-cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
 // markOverdueGatedIncompleteQuery is one UPDATE ... RETURNING, so the returned IDs are exactly the rows
 // changed. The subscription filter matches idx_subscriptions_gated_active; EXISTS re-checks the invoice at
-// write time, so an invoice paid mid-sweep never flips its subscription. $5 is due date minus grace.
+// write time, so an invoice paid mid-sweep never flips its subscription. $5 is the environment grace days,
+// overridden by the subscription's, then the customer's, settings.
 const markOverdueGatedIncompleteQuery = `
 	UPDATE subscriptions s
 	SET subscription_status = 'incomplete', updated_at = $3, updated_by = $4
@@ -1419,7 +1479,11 @@ const markOverdueGatedIncompleteQuery = `
 				AND i.payment_status IN ('PENDING', 'FAILED')
 				AND i.amount_remaining > 0
 				AND i.due_date <= $3
-				AND i.due_date > $5)
+				AND i.due_date > $3 - make_interval(days => COALESCE(
+					(s.settings->'subscription_config'->>'grace_period_days')::int,
+					(SELECT (c.settings->'subscription_config'->>'grace_period_days')::int FROM customers c
+						WHERE c.tenant_id = s.tenant_id AND c.environment_id = s.environment_id AND c.id = s.customer_id),
+					$5::int)))
 	RETURNING s.id`
 
 func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
@@ -1434,7 +1498,7 @@ func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx con
 		types.GetEnvironmentID(ctx),
 		asOf,
 		types.GetUserID(ctx),
-		asOf.AddDate(0, 0, -graceDays),
+		graceDays,
 	)
 	if err != nil {
 		SetSpanError(span, err)

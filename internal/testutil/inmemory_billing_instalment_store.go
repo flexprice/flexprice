@@ -42,7 +42,12 @@ func billingInstalmentFilterFn(ctx context.Context, in *billingterm.Instalment, 
 	}
 
 	f, ok := filter.(*billingterm.InstalmentFilter)
-	if !ok || f == nil {
+	return !ok || billingInstalmentMatches(in, f)
+}
+
+// billingInstalmentMatches applies the filter's predicates, ignoring scope.
+func billingInstalmentMatches(in *billingterm.Instalment, f *billingterm.InstalmentFilter) bool {
+	if f == nil {
 		return true
 	}
 
@@ -52,6 +57,7 @@ func billingInstalmentFilterFn(ctx context.Context, in *billingterm.Instalment, 
 		len(f.SubscriptionIDs) > 0 && (in.SubscriptionID == nil || !lo.Contains(f.SubscriptionIDs, *in.SubscriptionID)),
 		len(f.Statuses) > 0 && !lo.Contains(f.Statuses, in.InstalmentStatus),
 		len(f.Deliveries) > 0 && !lo.Contains(f.Deliveries, in.Delivery),
+		f.BillOnFrom != nil && in.BillOn.Before(*f.BillOnFrom),
 		f.BillOnOrBefore != nil && in.BillOn.After(*f.BillOnOrBefore),
 		len(f.InvoiceIDs) > 0 && (in.InvoiceID == nil || !lo.Contains(f.InvoiceIDs, *in.InvoiceID)),
 		len(f.IDs) > 0 && !lo.Contains(f.IDs, in.ID):
@@ -119,32 +125,17 @@ func (s *InMemoryBillingInstalmentStore) List(ctx context.Context, filter *billi
 	return lo.Map(rows, func(in *billingterm.Instalment, _ int) *billingterm.Instalment { return lo.ToPtr(*in) }), nil
 }
 
-func (s *InMemoryBillingInstalmentStore) ListInvoiced(
-	ctx context.Context,
-	ownerType types.BillingTermOwnerType,
-	ownerIDs []string,
-	period types.Period,
-) ([]*billingterm.Instalment, error) {
-	invoicedIn := func(ctx context.Context, in *billingterm.Instalment, _ interface{}) bool {
-		return billingInstalmentInScope(ctx, in) &&
-			in.OwnerType == ownerType &&
-			lo.Contains(ownerIDs, in.OwnerID) &&
-			in.InstalmentStatus == types.InstalmentStatusInvoiced &&
-			in.InvoicedAt != nil && !in.InvoicedAt.Before(period.Start) && in.InvoicedAt.Before(period.End)
-	}
-
-	rows, err := s.InMemoryStore.List(ctx, nil, invoicedIn, func(i, j *billingterm.Instalment) bool {
-		if !i.InvoicedAt.Equal(*j.InvoicedAt) {
-			return i.InvoicedAt.Before(*j.InvoicedAt)
-		}
-
-		return i.ID < j.ID
-	})
+func (s *InMemoryBillingInstalmentStore) ListEnvironments(ctx context.Context, filter *billingterm.InstalmentFilter) ([]types.TenantEnvironment, error) {
+	rows, err := s.InMemoryStore.List(ctx, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return lo.Map(rows, func(in *billingterm.Instalment, _ int) *billingterm.Instalment { return lo.ToPtr(*in) }), nil
+	envs := lo.FilterMap(rows, func(in *billingterm.Instalment, _ int) (types.TenantEnvironment, bool) {
+		env := types.TenantEnvironment{TenantID: in.TenantID, EnvironmentID: in.EnvironmentID}
+		return env, in.Status == types.StatusPublished && billingInstalmentMatches(in, filter)
+	})
+	return lo.Uniq(envs), nil
 }
 
 func (s *InMemoryBillingInstalmentStore) Update(ctx context.Context, in *billingterm.Instalment) (*billingterm.Instalment, error) {

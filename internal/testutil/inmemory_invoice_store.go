@@ -312,7 +312,7 @@ func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice)
 	return s.InMemoryStore.Update(ctx, inv.ID, updated)
 }
 
-func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd, issueDate time.Time, billingReason string, idempotencyKey string) error {
 	inv, err := s.InMemoryStore.Get(ctx, id)
 	if err != nil {
 		return err
@@ -322,6 +322,7 @@ func (s *InMemoryInvoiceStore) UpdateDraftInvoicePeriod(ctx context.Context, id 
 	}
 	updated := copyInvoice(inv)
 	updated.PeriodEnd = &periodEnd
+	updated.IssueDate = &issueDate
 	updated.BillingReason = billingReason
 	updated.IdempotencyKey = &idempotencyKey
 	return s.InMemoryStore.Update(ctx, id, updated)
@@ -748,10 +749,10 @@ func (s *InMemoryInvoiceStore) GetRevenueTrend(ctx context.Context, windowCount 
 		for currency := range currencies {
 			totalRevenue := decimal.Zero
 			for _, inv := range invoices {
-				if inv.Currency == currency && inv.FinalizedAt != nil {
-					finalizedTime := *inv.FinalizedAt
-					if (finalizedTime.Equal(windowStart) || finalizedTime.After(windowStart)) &&
-						(finalizedTime.Equal(windowEnd) || finalizedTime.Before(windowEnd)) {
+				if inv.Currency == currency && inv.FinalizedAt != nil && inv.IssueDate != nil {
+					issueTime := *inv.IssueDate
+					if (issueTime.Equal(windowStart) || issueTime.After(windowStart)) &&
+						(issueTime.Equal(windowEnd) || issueTime.Before(windowEnd)) {
 						totalRevenue = totalRevenue.Add(inv.Total)
 					}
 				}

@@ -24,6 +24,7 @@ const (
 	ScheduleIDOutboundWebhookStaleRetry               ScheduleID = "webhook-stale-retry"
 	ScheduleIDPaddleInvoicePullSync                   ScheduleID = "paddle-invoice-pull-sync"
 	ScheduleIDMoyasarAuthPaymentSettlement            ScheduleID = "moyasar-auth-payment-settlement"
+	ScheduleIDRazorpayPaymentStatusSync               ScheduleID = "razorpay-payment-status-sync"
 	ScheduleIDCheckoutSessionExpiry                   ScheduleID = "checkout-session-expiry"
 	ScheduleIDMarketplaceUsageSnapshot                ScheduleID = "marketplace-usage-snapshot"
 	ScheduleIDMarketplaceUsageReport                  ScheduleID = "marketplace-usage-report"
@@ -36,8 +37,12 @@ const (
 	ScheduleIDRevenueRecognition ScheduleID = "revenue-recognition"
 	// ScheduleIDSelfBillingHourly drives SelfBillingHourlyWorkflow; a no-op unless self-billing is enabled.
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
-	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow; a no-op unless an environment enables commitments_v2.
+	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow, billing due separate-invoice instalments.
 	ScheduleIDBillingInstalmentsDue ScheduleID = "billing-instalments-due"
+	// ScheduleIDEmailDispatch drives EmailDispatchWorkflow, sending queued customer emails.
+	ScheduleIDEmailDispatch ScheduleID = "email-dispatch"
+	// ScheduleIDMeterUsageOptimize drives MeterUsageOptimizeWorkflow; a no-op unless clickhouse.meter_usage_optimize.enabled.
+	ScheduleIDMeterUsageOptimize ScheduleID = "meter-usage-optimize"
 )
 
 // String returns the raw schedule id.
@@ -58,6 +63,7 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDOutboundWebhookStaleRetry,
 		ScheduleIDPaddleInvoicePullSync,
 		ScheduleIDMoyasarAuthPaymentSettlement,
+		ScheduleIDRazorpayPaymentStatusSync,
 		ScheduleIDCheckoutSessionExpiry,
 		ScheduleIDMarketplaceUsageSnapshot,
 		ScheduleIDMarketplaceUsageReport,
@@ -67,6 +73,8 @@ func AllTemporalServerScheduleIDs() []ScheduleID {
 		ScheduleIDRevenueRecognition,
 		ScheduleIDSelfBillingHourly,
 		ScheduleIDBillingInstalmentsDue,
+		ScheduleIDEmailDispatch,
+		ScheduleIDMeterUsageOptimize,
 	}
 }
 

@@ -23,7 +23,7 @@ require (
 	github.com/chargebee/chargebee-go/v3 v3.54.0
 	github.com/cockroachdb/errors v1.14.0
 	github.com/crewjam/saml v0.5.1
-	github.com/flexprice/go-sdk/v2 v2.1.40
+	github.com/flexprice/go-sdk/v2 v2.1.51
 	github.com/getsentry/sentry-go v0.49.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-playground/validator/v10 v10.30.5
@@ -253,7 +253,7 @@ require (
 	golang.org/x/arch v0.30.0 // indirect
 	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect

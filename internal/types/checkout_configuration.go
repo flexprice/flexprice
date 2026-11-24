@@ -527,6 +527,12 @@ type CheckoutPaymentProviderConfig struct {
 	// the customer is present, so a missed auto-charge may fall back to a hosted
 	// authorization link. Set true only from merchant-initiated paths (auto top-up).
 	CustomerNotPresent bool `json:"customer_not_present,omitempty"`
+
+	// NotifyCustomer lets the gateway email/SMS the payment link to the customer.
+	NotifyCustomer bool `json:"notify_customer,omitempty"`
+
+	// LinkExpiry overrides how long the hosted payment page stays payable; nil keeps the provider default.
+	LinkExpiry *Duration `json:"link_expiry,omitempty"`
 }
 
 func (c *CheckoutPaymentProviderConfig) Validate() error {
@@ -548,5 +554,5 @@ func (c *CheckoutPaymentProviderConfig) Validate() error {
 	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
 		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
 	}
-	return nil
+	return c.LinkExpiry.Validate()
 }

@@ -224,19 +224,22 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	}, nil
 }
 
-// refreshEntitlementGrantsAfterRollover refreshes each customer once when any of the
-// advanced subscriptions holds a NEVER-meter grant, so a quiet period still opens its allowance.
+// refreshEntitlementGrantsAfterRollover evaluates the new period of each advanced subscription that
+// holds a NEVER-meter grant, so a quiet period still opens its allowance.
 func (s *BillingActivities) refreshEntitlementGrantsAfterRollover(ctx context.Context, subs ...*subscription.Subscription) {
 	if s.serviceParams.EntitlementGrantRepo == nil {
 		return
 	}
-	refreshed := make(map[string]bool, len(subs))
+	alertService := service.NewAlertService(s.serviceParams)
 	for _, sub := range subs {
-		if refreshed[sub.CustomerID] || !s.hasNeverResetGrant(ctx, sub) {
+		if !s.hasNeverResetGrant(ctx, sub) {
 			continue
 		}
-		refreshed[sub.CustomerID] = true
-		if err := service.NewAlertService(s.serviceParams).RefreshEntitlementGrantsForCustomer(ctx, sub.CustomerID); err != nil {
+		cust, err := s.serviceParams.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err == nil {
+			err = alertService.EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, clock.Now())
+		}
+		if err != nil {
 			s.logger.Error(ctx, "entitlement grant refresh after rollover failed",
 				"error", err, "subscription_id", sub.ID)
 		}
@@ -423,6 +426,7 @@ func (s *BillingActivities) CheckCancellationActivity(
 		sub.SubscriptionStatus = types.SubscriptionStatusCancelled
 		sub.CancelledAt = cancelledAt
 		subscriptionService := service.NewSubscriptionService(s.serviceParams)
+		var cancelledGroupedChildren []*subscription.Subscription
 
 		err := s.serviceParams.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Update subscription
@@ -469,6 +473,11 @@ func (s *BillingActivities) CheckCancellationActivity(
 			if err := subscriptionService.CascadeCancelToInheritedSubscriptions(ctx, sub); err != nil {
 				return err
 			}
+			children, err := subscriptionService.CascadeCancelToGroupedInvoicingSubscriptions(ctx, sub)
+			if err != nil {
+				return err
+			}
+			cancelledGroupedChildren = children
 
 			return nil
 		})
@@ -481,6 +490,10 @@ func (s *BillingActivities) CheckCancellationActivity(
 
 		subscriptionService.PublishCancellationEvents(ctx, sub)
 		service.NotifySubscriptionChanged(ctx, s.serviceParams, sub.ID)
+		for _, child := range cancelledGroupedChildren {
+			subscriptionService.PublishCancellationEvents(ctx, child)
+			service.NotifySubscriptionChanged(ctx, s.serviceParams, child.ID)
+		}
 
 		s.logger.Info(ctx, "subscription cancelled successfully",
 			"subscription_id", sub.ID,

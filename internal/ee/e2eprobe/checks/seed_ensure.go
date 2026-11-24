@@ -630,9 +630,10 @@ func (s *SeedEnsure) ensurePlanEntitlements(ctx context.Context, out *e2eprobe.S
 			out.PlanEntitlementIDs = append(out.PlanEntitlementIDs, existID)
 			continue
 		}
+		featureType := types.FeatureTypeMetered
 		createResp, err := s.client.Entitlements().Create(ctx, types.CreateEntitlementRequest{
-			FeatureID:        featID,
-			FeatureType:      types.FeatureTypeMetered,
+			FeatureID:        &featID,
+			FeatureType:      &featureType,
 			EntityID:         &planIDCopy,
 			EntityType:       &entityType,
 			PlanID:           &planIDCopy,

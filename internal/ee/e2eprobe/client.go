@@ -332,7 +332,7 @@ func (o customerOps) Get(ctx context.Context, id string) (*dtos.GetCustomerRespo
 	return o.s.GetCustomer(ctx, id)
 }
 func (o customerOps) GetEntitlements(ctx context.Context, id string) (*dtos.GetCustomerEntitlementsResponse, error) {
-	return o.s.GetCustomerEntitlements(ctx, id)
+	return o.s.GetCustomerEntitlements(ctx, id, nil)
 }
 func (o customerOps) GetUsageSummary(ctx context.Context, req dtos.GetCustomerUsageSummaryRequest) (*dtos.GetCustomerUsageSummaryResponse, error) {
 	return o.s.GetCustomerUsageSummary(ctx, req)
@@ -471,7 +471,7 @@ func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, bo
 	return o.s.ActivateSubscription(ctx, id, body)
 }
 func (o subscriptionOps) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
-	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs)
+	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs, nil)
 }
 func (o subscriptionOps) GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
 	return o.s.GetSubscriptionUsage(ctx, req)

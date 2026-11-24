@@ -76,7 +76,7 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.GetPayment(c.Request.Context(), id)
+	resp, err := h.service.GetPayment(c.Request.Context(), dto.GetPaymentRequest{ID: id})
 	if err != nil {
 		h.log.Error(c.Request.Context(), "Failed to get payment", "error", err)
 		c.Error(err)

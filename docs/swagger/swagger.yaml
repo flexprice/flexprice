@@ -954,8 +954,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments allows setting commitment configuration per
-          addon line item (keyed by price_id)
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -997,8 +996,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments allows setting commitment configuration per
-          addon line item (keyed by price_id)
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       metadata:
         additionalProperties: true
@@ -2135,8 +2133,6 @@ definitions:
         type: string
       termination_invoice_id:
         type: string
-      timezone:
-        type: string
       total_amount:
         type: string
       type:
@@ -2746,8 +2742,6 @@ definitions:
         description: SubscriptionID is required on POST /commitments and set server-side
           on inline commitments.
         type: string
-      timezone:
-        type: string
       type:
         $ref: '#/definitions/types.CommitmentType'
       value:
@@ -3042,6 +3036,11 @@ definitions:
         description: onboarding_workflow_name is given if a custom onboarding workflow
           is to be triggered for this customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: settings overrides the environment settings for this customer's
+          subscriptions
       skip_onboarding_workflow:
         description: |-
           skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered
@@ -3483,6 +3482,8 @@ definitions:
   CreatePaymentRequest:
     properties:
       amount:
+        description: Amount defaults to the invoice's amount remaining for invoice
+          payments when zero or omitted.
         type: string
       cancel_url:
         type: string
@@ -3513,7 +3514,6 @@ definitions:
       success_url:
         type: string
     required:
-    - amount
     - currency
     - destination_id
     - destination_type
@@ -3767,23 +3767,32 @@ definitions:
   CreateSubscriptionLineItemRequest:
     properties:
       commitment_amount:
-        description: Commitment fields
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_duration:
-        $ref: '#/definitions/types.BillingPeriod'
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_overage_factor:
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_quantity:
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_time_buckets:
+        description: 'Deprecated: use POST /commitments instead.'
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
+        allOf:
+        - $ref: '#/definitions/types.CommitmentType'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_windowed:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       display_name:
         type: string
@@ -3809,7 +3818,7 @@ definitions:
         description: ProrationBehavior controls mid-period charge creation. Defaults
           to none.
       quantity:
-        type: number
+        type: string
       start_date:
         type: string
       subscription_phase_id:
@@ -3847,12 +3856,12 @@ definitions:
       collection_method:
         $ref: '#/definitions/types.CollectionMethod'
       commitment_amount:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration allows a different commitment period than
-          billing (e.g. ANNUAL on MONTHLY).
+        description: 'Deprecated: use POST /commitments instead.'
       commitments:
         description: |-
           Commitments are created with the subscription. subscription_id, and entity_id on a subscription scope,
@@ -3876,6 +3885,7 @@ definitions:
           provided.
         type: string
       enable_true_up:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       end_date:
         type: string
@@ -3912,8 +3922,7 @@ definitions:
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments sets per-line-item commitment config, keyed
-          by price_id.
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -3940,6 +3949,7 @@ definitions:
           type: string
         type: object
       overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       override_entitlements:
         items:
@@ -3965,6 +3975,11 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: 'ProrationBehavior: create_prorations or none (default). Ignored
           for anniversary billing.'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer and environment settings for
+          this subscription.
       start_date:
         type: string
       subscription_coupons:
@@ -4597,6 +4612,11 @@ definitions:
       name:
         description: Name is the name of the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the environment's settings for this customer's
+          subscriptions.
       status:
         $ref: '#/definitions/types.Status'
       tax_treatment:
@@ -4732,6 +4752,65 @@ definitions:
     - entity_id
     - entity_type
     - provider_type
+    type: object
+  EmailLogResponse:
+    properties:
+      cc_addresses:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer_id:
+        type: string
+      delivered_at:
+        type: string
+      delivery_status:
+        $ref: '#/definitions/types.EmailDeliveryStatus'
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      environment_id:
+        type: string
+      from_address:
+        type: string
+      id:
+        type: string
+      idempotency_key:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      provider:
+        $ref: '#/definitions/types.EmailProvider'
+      provider_message_id:
+        type: string
+      reply_to:
+        type: string
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      template_key:
+        $ref: '#/definitions/types.EmailTemplateKey'
+      tenant_id:
+        type: string
+      to_addresses:
+        items:
+          type: string
+        type: array
+      trigger:
+        $ref: '#/definitions/types.EmailTrigger'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   EntitlementResponse:
     properties:
@@ -5419,8 +5498,8 @@ definitions:
         type: array
       instalments:
         description: |-
-          Instalments lists, with expand "instalments", the instalments invoiced in the range for the v2 commitments covering
-          a queried meter; it is empty with property or source filters, or when no usage line runs in the range.
+          Instalments lists the commitment instalments in the range with expand "instalments": start <= bill_on < end,
+          or start < bill_on <= end for an ARREAR one.
         items:
           $ref: '#/definitions/UsageAnalyticInstalment'
         type: array
@@ -5434,8 +5513,9 @@ definitions:
         description: TotalCost is the final cost after discount (Subtotal - TotalDiscount)
         type: string
       total_cost_with_instalments:
-        description: TotalCostWithInstalments is TotalCost plus the amounts of Instalments,
-          set when expand includes "instalments".
+        description: |-
+          TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes
+          "instalments". Scheduled instalments are not billed yet, so they are left out.
         type: string
       total_discount:
         type: string
@@ -5727,12 +5807,12 @@ definitions:
           $ref: '#/definitions/AddAddonToSubscriptionRequest'
         type: array
       commitment_amount:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
-        description: CommitmentDuration allows a different commitment period than
-          billing (e.g. ANNUAL on MONTHLY).
+        description: 'Deprecated: use POST /commitments instead.'
       coupons:
         description: 'Deprecated: use SubscriptionCoupons instead.'
         items:
@@ -5743,14 +5823,14 @@ definitions:
           $ref: '#/definitions/CreateCreditGrantRequest'
         type: array
       enable_true_up:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       external_customer_id:
         type: string
       line_item_commitments:
         additionalProperties:
           $ref: '#/definitions/LineItemCommitmentConfig'
-        description: LineItemCommitments sets per-line-item commitment config, keyed
-          by price_id.
+        description: 'Deprecated: use POST /commitments instead.'
         type: object
       line_item_coupons:
         additionalProperties:
@@ -5765,6 +5845,7 @@ definitions:
           $ref: '#/definitions/CreateSubscriptionLineItemRequest'
         type: array
       overage_factor:
+        description: 'Deprecated: use POST /commitments instead.'
         type: string
       override_entitlements:
         items:
@@ -5809,6 +5890,19 @@ definitions:
     required:
     - external_customer_id
     - plan_id
+    type: object
+  InFlightCharge:
+    properties:
+      amount:
+        type: string
+      payment_gateway:
+        type: string
+      payment_id:
+        type: string
+      payment_method_type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      payment_status:
+        $ref: '#/definitions/types.PaymentStatus'
     type: object
   IngestEventRequest:
     properties:
@@ -5860,6 +5954,13 @@ definitions:
       start_date:
         type: string
     type: object
+  IntegrationCapability:
+    properties:
+      add_payment_method_options:
+        $ref: '#/definitions/types.AddPaymentMethodOptions'
+      type:
+        $ref: '#/definitions/types.IntegrationCapabilityType'
+    type: object
   IntegrationConfigEntry:
     properties:
       base_config:
@@ -5874,6 +5975,13 @@ definitions:
       integrations:
         items:
           $ref: '#/definitions/IntegrationConfigEntry'
+        type: array
+    type: object
+  IntegrationsResponse:
+    properties:
+      payment_integrations:
+        items:
+          $ref: '#/definitions/PaymentIntegration'
         type: array
     type: object
   InvoiceCoupon:
@@ -6214,6 +6322,11 @@ definitions:
         description: idempotency_key is a unique key used to prevent duplicate invoice
           creation when retrying API calls
         type: string
+      in_flight_charge:
+        allOf:
+        - $ref: '#/definitions/InFlightCharge'
+        description: in_flight_charge is a saved-method debit submitted for this invoice
+          that the gateway has not settled yet
       invoice_number:
         description: invoice_number is the human-readable invoice number displayed
           to customers (e.g., INV-2024-001)
@@ -6250,6 +6363,12 @@ definitions:
           (overrides embedded field)
         items:
           $ref: '#/definitions/InvoiceLineItemResponse'
+        type: array
+      linked_wallet_transactions:
+        description: linked_wallet_transactions are the wallet credits this invoice
+          pays for; pending ones are released when it is paid
+        items:
+          $ref: '#/definitions/LinkedWalletTransaction'
         type: array
       metadata:
         allOf:
@@ -6416,14 +6535,14 @@ definitions:
   LineItemCommitmentConfig:
     properties:
       commitment_amount:
-        type: number
+        type: string
       commitment_duration:
         allOf:
         - $ref: '#/definitions/types.BillingPeriod'
         description: CommitmentDuration allows a different period than billing (e.g.
           ANNUAL commitment on MONTHLY billing).
       commitment_quantity:
-        type: number
+        type: string
       commitment_time_buckets:
         description: CommitmentTimeBuckets scopes commitment to specific UTC-hour
           windows; requires IsWindowCommitment=true.
@@ -6442,7 +6561,7 @@ definitions:
       overage_factor:
         description: OverageFactor is a multiplier on usage beyond commitment; 1.0
           = base rate.
-        type: number
+        type: string
     type: object
   LineItemQuantityChange:
     properties:
@@ -6484,6 +6603,19 @@ definitions:
     properties:
       mapping:
         $ref: '#/definitions/EntityIntegrationMappingResponse'
+    type: object
+  LinkedWalletTransaction:
+    properties:
+      credit_amount:
+        type: string
+      id:
+        type: string
+      transaction_reason:
+        $ref: '#/definitions/types.TransactionReason'
+      transaction_status:
+        $ref: '#/definitions/types.TransactionStatus'
+      wallet_id:
+        type: string
     type: object
   ListActivityRequest:
     properties:
@@ -6559,6 +6691,15 @@ definitions:
       items:
         items:
           $ref: '#/definitions/CouponAssociationResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListEmailLogsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/EmailLogResponse'
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
@@ -6875,8 +7016,19 @@ definitions:
     type: object
   PaymentGatewayOptions:
     properties:
+      razorpay:
+        $ref: '#/definitions/RazorpayPaymentGatewayOptions'
       stripe:
         $ref: '#/definitions/StripePaymentGatewayOptions'
+    type: object
+  PaymentIntegration:
+    properties:
+      capabilities:
+        items:
+          $ref: '#/definitions/IntegrationCapability'
+        type: array
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
     type: object
   PaymentResponse:
     properties:
@@ -6933,6 +7085,10 @@ definitions:
       refunded_at:
         type: string
       save_card_and_make_default:
+        type: boolean
+      submitted_for_processing:
+        description: SubmittedForProcessing is true while the gateway has the charge
+          and its outcome is pending; it can't be processed again.
         type: boolean
       succeeded_at:
         type: string
@@ -7274,6 +7430,12 @@ definitions:
         type: string
       updated_by:
         type: string
+      warnings:
+        description: Warnings lists defaults applied on create that the caller may
+          want to set explicitly.
+        items:
+          type: string
+        type: array
     type: object
   PriceUnitConfig:
     properties:
@@ -7407,6 +7569,13 @@ definitions:
         type: array
       provider:
         $ref: '#/definitions/types.PaymentGatewayType'
+    type: object
+  RazorpayPaymentGatewayOptions:
+    properties:
+      notify_customer:
+        description: NotifyCustomer lets Razorpay SMS/email the payment link to the
+          customer.
+        type: boolean
     type: object
   RefundResponse:
     properties:
@@ -7827,14 +7996,14 @@ definitions:
           "commitment_trueup", "overage" or "revert". Empty for plain rows.
         type: string
       billable_qty:
-        type: number
+        type: string
       day:
         description: Day is set for day granularity; PeriodStart/PeriodEnd for period.
         type: string
       entitlement_amount:
-        type: number
+        type: string
       entitlement_qty:
-        type: number
+        type: string
       group:
         additionalProperties:
           type: string
@@ -7842,11 +8011,11 @@ definitions:
           bucket.
         type: object
       invoice_discount:
-        type: number
+        type: string
       line_discount:
-        type: number
+        type: string
       net_amount:
-        type: number
+        type: string
       period_end:
         type: string
       period_start:
@@ -7858,9 +8027,9 @@ definitions:
           Status is the row's fact status. It is part of the row's identity, so a
           FINAL and a PROVISIONAL row for the same bucket stay separate.
       tier_delta:
-        type: number
+        type: string
       usage_at_list_rate:
-        type: number
+        type: string
     type: object
   RevenueBreakdown:
     properties:
@@ -7959,6 +8128,19 @@ definitions:
       pob_id:
         type: string
     type: object
+  SavedBankAccountDetails:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
   SavedCardDetails:
     properties:
       brand:
@@ -7972,6 +8154,8 @@ definitions:
     type: object
   SavedPaymentMethod:
     properties:
+      bank_account:
+        $ref: '#/definitions/SavedBankAccountDetails'
       can_auto_charge:
         description: |-
           Capability, not permission: could this be charged with nobody present.
@@ -8159,6 +8343,10 @@ definitions:
         type: string
       name:
         type: string
+      plan_id:
+        description: PlanID is the offered plan to buy; empty means the default plan,
+          or a negotiated trial's own plan.
+        type: string
       tax_id:
         type: string
     required:
@@ -8234,8 +8422,13 @@ definitions:
         items:
           $ref: '#/definitions/SelfBillingInvoice'
         type: array
-      plan:
-        $ref: '#/definitions/SelfBillingPlanResponse'
+      plans:
+        description: |-
+          Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.
+          The first plan is the default.
+        items:
+          $ref: '#/definitions/SelfBillingPlanResponse'
+        type: array
       status:
         $ref: '#/definitions/types.TenantInternalStatus'
       subscription_status:
@@ -8244,6 +8437,44 @@ definitions:
         type: string
       usage:
         $ref: '#/definitions/CustomerUsageSummaryResponse'
+    type: object
+  SendInvoiceEmailRequest:
+    properties:
+      cc:
+        items:
+          type: string
+        maxItems: 50
+        type: array
+      idempotency_key:
+        maxLength: 128
+        minLength: 1
+        type: string
+      to:
+        items:
+          type: string
+        maxItems: 50
+        type: array
+    type: object
+  SetupIntentResponse:
+    properties:
+      checkout_session_id:
+        type: string
+      checkout_url:
+        type: string
+      client_secret:
+        type: string
+      created_at:
+        type: integer
+      customer_id:
+        type: string
+      expires_at:
+        type: integer
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      usage:
+        type: string
     type: object
   SourceUsageItem:
     properties:
@@ -8267,6 +8498,10 @@ definitions:
     type: object
   StripePaymentGatewayOptions:
     properties:
+      allow_promotion_codes:
+        description: AllowPromotionCodes lets the customer enter a promotion code;
+          nil keeps it on.
+        type: boolean
       tax_id_collection_enabled:
         description: TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout
           Sessions.
@@ -9284,6 +9519,11 @@ definitions:
         type: string
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer's and environment's settings
+          for this subscription.
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -9502,6 +9742,11 @@ definitions:
         type: boolean
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the customer's and environment's settings
+          for this subscription.
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -10283,6 +10528,11 @@ definitions:
       name:
         description: name is the updated name or company name for the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: settings merges into the customer's setting overrides when provided;
+          send {} to inherit the environment settings
       tax_treatment:
         allOf:
         - $ref: '#/definitions/types.TaxTreatment'
@@ -10577,29 +10827,40 @@ definitions:
           BucketSize overrides the windowing used to turn this meter's usage into
           billable units for this line item. See CreatePriceRequest.BucketSize.
       commitment_amount:
-        description: Commitment fields
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_duration:
-        $ref: '#/definitions/types.BillingPeriod'
+        allOf:
+        - $ref: '#/definitions/types.BillingPeriod'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_overage_factor:
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_quantity:
-        type: number
+        description: 'Deprecated: use POST /commitments instead.'
+        type: string
       commitment_time_buckets:
-        description: Pointer so an explicit empty array can clear existing buckets
-          (omission keeps them).
+        description: |-
+          Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+
+          Deprecated: use POST /commitments instead.
         items:
           $ref: '#/definitions/CommitmentBucketRequest'
         type: array
       commitment_true_up_enabled:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       commitment_type:
-        $ref: '#/definitions/types.CommitmentType'
+        allOf:
+        - $ref: '#/definitions/types.CommitmentType'
+        description: 'Deprecated: use POST /commitments instead.'
       commitment_windowed:
+        description: 'Deprecated: use POST /commitments instead.'
         type: boolean
       effective_from:
-        description: EffectiveFrom for the existing line item (if not provided, defaults
-          to now)
+        description: |-
+          EffectiveFrom is when the new version starts and the current one ends (defaults to now). A date before
+          the current version's start_date replaces it from that date instead, and price fields become optional.
         type: string
       metadata:
         additionalProperties:
@@ -10648,6 +10909,11 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: ProrationBehavior updates the stored behavior. Omit to leave
           it unchanged.
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings merges into the subscription's setting overrides when
+          provided; send {} to inherit.
       status:
         $ref: '#/definitions/types.SubscriptionStatus'
     type: object
@@ -10795,12 +11061,22 @@ definitions:
     properties:
       amount:
         type: string
+      bill_on:
+        description: when it becomes billable
+        type: string
       commitment_id:
         type: string
       currency:
         type: string
       id:
         type: string
+      instalment_status:
+        $ref: '#/definitions/types.InstalmentStatus'
+      invoice_cadence:
+        allOf:
+        - $ref: '#/definitions/types.InvoiceCadence'
+        description: InvoiceCadence is the recurring term's cadence; empty for once
+          terms, settlements and fees.
       invoice_id:
         type: string
       invoice_label:
@@ -10808,6 +11084,11 @@ definitions:
       invoiced_at:
         description: when the invoice billing it was finalized
         type: string
+      kind:
+        allOf:
+        - $ref: '#/definitions/types.InstalmentKind'
+        description: Kind tells a regular instalment from a termination's settlement
+          and its cancellation_fee.
       service_period_end:
         type: string
       service_period_start:
@@ -10948,9 +11229,16 @@ definitions:
       computed_commitment_utilized_amount:
         description: Commitment breakdown (only populated for windowed commitments)
         type: string
+      computed_commitment_utilized_quantity:
+        description: Usage units behind the commitment breakdown, for v2 commitments
+        type: string
       computed_overage_amount:
         type: string
+      computed_overage_quantity:
+        type: string
       computed_true_up_amount:
+        type: string
+      computed_true_up_quantity:
         type: string
       cost:
         description: Cost is the final cost after discount (Subtotal - Discount)
@@ -10993,7 +11281,7 @@ definitions:
   UsageRecordResponse:
     properties:
       amount:
-        type: number
+        type: string
       created_at:
         type: string
       created_by:
@@ -11015,7 +11303,7 @@ definitions:
       plan_id:
         type: string
       quantity:
-        type: number
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
@@ -11098,6 +11386,11 @@ definitions:
         $ref: '#/definitions/types.AutoTopup'
       balance:
         type: string
+      balance_alert_status:
+        allOf:
+        - $ref: '#/definitions/types.AlertState'
+        description: BalanceAlertStatus is ok, info, warning, or in_alarm. Absent
+          when wallet alerts are off.
       balance_updated_at:
         type: string
       config:
@@ -11604,6 +11897,11 @@ definitions:
       name:
         description: Name is the name of the customer
         type: string
+      settings:
+        allOf:
+        - $ref: '#/definitions/types.SettingsOverride'
+        description: Settings overrides the environment's settings for this customer's
+          subscriptions.
       status:
         $ref: '#/definitions/types.Status'
       tax_treatment:
@@ -11762,6 +12060,23 @@ definitions:
       region:
         type: string
     type: object
+  types.AccountingPeriodStatus:
+    enum:
+    - open
+    - closed
+    type: string
+    x-enum-comments:
+      AccountingPeriodStatusClosed: reserved; close is deferred
+    x-enum-varnames:
+    - AccountingPeriodStatusOpen
+    - AccountingPeriodStatusClosed
+  types.ActiveWindow:
+    properties:
+      end:
+        $ref: '#/definitions/types.Bucket'
+      start:
+        $ref: '#/definitions/types.Bucket'
+    type: object
   types.AddAddonParams:
     properties:
       addons:
@@ -11799,6 +12114,19 @@ definitions:
         description: Needed to prorate the addon's first credit grant.
       start_date:
         type: string
+    type: object
+  types.AddPaymentMethodOptions:
+    properties:
+      payment_method_types:
+        description: PaymentMethodTypes are the methods it sets up, e.g. ["enach"]
+          for Razorpay.
+        items:
+          type: string
+        type: array
+      sets_default:
+        description: SetsDefault reports whether it can make the saved method the
+          default (Stripe only).
+        type: boolean
     type: object
   types.AddonAssociationEntityType:
     enum:
@@ -11857,6 +12185,15 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.Status'
+    type: object
+  types.AddonPriceOverrideRef:
+    properties:
+      override_price_id:
+        type: string
+      price_id:
+        type: string
+      quantity:
+        type: string
     type: object
   types.AddonStatus:
     enum:
@@ -12075,6 +12412,16 @@ definitions:
     - AlertTypeSubscriptionGroupSpend
     - AlertTypeEntitlementGrantThreshold
     - AlertTypeEntitlementGrantExhausted
+  types.AmortizationMethod:
+    enum:
+    - daily
+    - period_even
+    - period_even_prorated
+    type: string
+    x-enum-varnames:
+    - AmortizationDaily
+    - AmortizationPeriodEven
+    - AmortizationPeriodEvenProrated
   types.ApplicationStatus:
     enum:
     - applied
@@ -12092,7 +12439,7 @@ definitions:
   types.AutoTopup:
     properties:
       amount:
-        type: number
+        type: string
       cooldown:
         allOf:
         - $ref: '#/definitions/types.Duration'
@@ -12103,7 +12450,22 @@ definitions:
       invoicing:
         type: boolean
       threshold:
-        type: number
+        type: string
+    type: object
+  types.BillingAddress:
+    properties:
+      address_city:
+        type: string
+      address_country:
+        type: string
+      address_line1:
+        type: string
+      address_line2:
+        type: string
+      address_postal_code:
+        type: string
+      address_state:
+        type: string
     type: object
   types.BillingCadence:
     enum:
@@ -12119,6 +12481,27 @@ definitions:
     x-enum-varnames:
     - BillingCycleAnniversary
     - BillingCycleCalendar
+  types.BillingDetails:
+    properties:
+      address:
+        $ref: '#/definitions/types.BillingAddress'
+      email:
+        type: string
+      help_email:
+        type: string
+      phone:
+        type: string
+    type: object
+  types.BillingEntityMode:
+    enum:
+    - "off"
+    - enabling
+    - enabled
+    type: string
+    x-enum-varnames:
+    - BillingEntityModeOff
+    - BillingEntityModeEnabling
+    - BillingEntityModeEnabled
   types.BillingModel:
     enum:
     - FLAT_FEE
@@ -12157,6 +12540,40 @@ definitions:
     - BillingPeriodBehaviourUnchanged
     - BillingPeriodBehaviourAnchorAtEffect
     - BillingPeriodBehaviourAnchorAtConfig
+  types.BillingTermKind:
+    enum:
+    - once
+    - recurring
+    type: string
+    x-enum-varnames:
+    - BillingTermKindOnce
+    - BillingTermKindRecurring
+  types.BillingTermOwnerType:
+    enum:
+    - commitment
+    type: string
+    x-enum-varnames:
+    - BillingTermOwnerCommitment
+  types.BillingTermSplit:
+    enum:
+    - even
+    - proportional
+    type: string
+    x-enum-varnames:
+    - BillingTermSplitEven
+    - BillingTermSplitProportional
+  types.BillingTermValueType:
+    description: fixed or remainder; percentage is reserved and rejected as not supported
+      yet
+    enum:
+    - fixed
+    - percentage
+    - remainder
+    type: string
+    x-enum-varnames:
+    - BillingTermValueFixed
+    - BillingTermValuePercentage
+    - BillingTermValueRemainder
   types.BillingTier:
     enum:
     - VOLUME
@@ -12184,6 +12601,15 @@ definitions:
     x-enum-varnames:
     - CancelImmediatelyInvoicePolicyGenerateInvoice
     - CancelImmediatelyInvoicePolicySkip
+  types.CancellationFeeType:
+    description: fixed; percentage is reserved and rejected as not supported yet
+    enum:
+    - fixed
+    - percentage
+    type: string
+    x-enum-varnames:
+    - CancellationFeeFixed
+    - CancellationFeePercentage
   types.CancellationType:
     enum:
     - immediate
@@ -12245,8 +12671,17 @@ definitions:
           the customer is present, so a missed auto-charge may fall back to a hosted
           authorization link. Set true only from merchant-initiated paths (auto top-up).
         type: boolean
+      link_expiry:
+        allOf:
+        - $ref: '#/definitions/types.Duration'
+        description: LinkExpiry overrides how long the hosted payment page stays payable;
+          nil keeps the provider default.
       max_mandate_limit:
         type: string
+      notify_customer:
+        description: NotifyCustomer lets the gateway email/SMS the payment link to
+          the customer.
+        type: boolean
       payment_method:
         $ref: '#/definitions/types.PaymentMethodType'
     type: object
@@ -12290,17 +12725,46 @@ definitions:
     - ColumnTypeString
     - ColumnTypeDecimal
     - ColumnTypeDatetime
+  types.CommitmentCollectionMethod:
+    enum:
+    - per_period
+    - billing_terms
+    type: string
+    x-enum-varnames:
+    - CommitmentCollectionPerPeriod
+    - CommitmentCollectionBillingTerms
+  types.CommitmentEarlyTermination:
+    enum:
+    - forfeit
+    - credit_note
+    - bill_remaining
+    type: string
+    x-enum-varnames:
+    - CommitmentTerminationForfeit
+    - CommitmentTerminationCreditNote
+    - CommitmentTerminationBillRemaining
   types.CommitmentInfo:
     properties:
       amount:
+        description: Amount is the commitment amount (v1), or computed_commitment_utilized_amount
+          + computed_true_up_amount (v2).
         type: string
       computed_commitment_utilized_amount:
         type: string
+      computed_commitment_utilized_quantity:
+        description: |-
+          Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no
+          charge, and a quantity commitment's true-up counts its unused units.
+        type: string
       computed_overage_amount:
+        type: string
+      computed_overage_quantity:
         type: string
       computed_true_up_amount:
         description: total_cost = computed_commitment_utilized_amount + computed_overage_amount
           + computed_true_up_amount
+        type: string
+      computed_true_up_quantity:
         type: string
       duration:
         $ref: '#/definitions/types.BillingPeriod'
@@ -12316,6 +12780,36 @@ definitions:
       type:
         $ref: '#/definitions/types.CommitmentType'
     type: object
+  types.CommitmentMeasurement:
+    enum:
+    - billing_period
+    - window
+    type: string
+    x-enum-varnames:
+    - CommitmentMeasurementBillingPeriod
+    - CommitmentMeasurementWindow
+  types.CommitmentScopeType:
+    enum:
+    - subscription
+    - group
+    - meter
+    - price
+    type: string
+    x-enum-varnames:
+    - CommitmentScopeSubscription
+    - CommitmentScopeGroup
+    - CommitmentScopeMeter
+    - CommitmentScopePrice
+  types.CommitmentStatus:
+    enum:
+    - active
+    - ended
+    - terminated
+    type: string
+    x-enum-varnames:
+    - CommitmentStatusActive
+    - CommitmentStatusEnded
+    - CommitmentStatusTerminated
   types.CommitmentType:
     enum:
     - amount
@@ -12324,6 +12818,18 @@ definitions:
     x-enum-varnames:
     - COMMITMENT_TYPE_AMOUNT
     - COMMITMENT_TYPE_QUANTITY
+  types.ContractStatus:
+    enum:
+    - draft
+    - active
+    - ended
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ContractStatusDraft
+    - ContractStatusActive
+    - ContractStatusEnded
+    - ContractStatusCancelled
   types.CouponCadence:
     enum:
     - once
@@ -12656,6 +13162,93 @@ definitions:
     - DurationUnitMinute
     - DurationUnitHour
     - DurationUnitDay
+  types.EmailDeliveryStatus:
+    enum:
+    - queued
+    - sent
+    - delivery_delayed
+    - delivered
+    - bounced
+    - complained
+    - failed
+    - suppressed
+    - skipped
+    type: string
+    x-enum-varnames:
+    - EmailDeliveryStatusQueued
+    - EmailDeliveryStatusSent
+    - EmailDeliveryStatusDeliveryDelayed
+    - EmailDeliveryStatusDelivered
+    - EmailDeliveryStatusBounced
+    - EmailDeliveryStatusComplained
+    - EmailDeliveryStatusFailed
+    - EmailDeliveryStatusSuppressed
+    - EmailDeliveryStatusSkipped
+  types.EmailLogFilter:
+    properties:
+      customer_ids:
+        items:
+          type: string
+        type: array
+      delivery_statuses:
+        items:
+          $ref: '#/definitions/types.EmailDeliveryStatus'
+        type: array
+      end_time:
+        type: string
+      entity_ids:
+        items:
+          type: string
+        type: array
+      entity_type:
+        $ref: '#/definitions/types.SystemEntityType'
+      expand:
+        type: string
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        type: string
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      triggers:
+        items:
+          $ref: '#/definitions/types.EmailTrigger'
+        type: array
+    type: object
+  types.EmailProvider:
+    enum:
+    - resend
+    - local
+    type: string
+    x-enum-varnames:
+    - EmailProviderResend
+    - EmailProviderLocal
+  types.EmailTemplateKey:
+    enum:
+    - invoice_finalized
+    type: string
+    x-enum-varnames:
+    - EmailTemplateInvoiceFinalized
+  types.EmailTrigger:
+    enum:
+    - auto
+    - manual
+    type: string
+    x-enum-varnames:
+    - EmailTriggerAuto
+    - EmailTriggerManual
   types.EntitlementAggregationMode:
     enum:
     - additive
@@ -12763,6 +13356,16 @@ definitions:
     x-enum-varnames:
     - EntitlementGrantMeasureQuantity
     - EntitlementGrantMeasureAmount
+  types.EntitlementGrantScopeEntityType:
+    enum:
+    - feature
+    - subscription
+    - group
+    type: string
+    x-enum-varnames:
+    - EntitlementGrantScopeFeature
+    - EntitlementGrantScopeSubscription
+    - EntitlementGrantScopeGroup
   types.EntitlementGrantStatus:
     enum:
     - active
@@ -13236,6 +13839,72 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.ImprovementDirection:
+    enum:
+    - higher
+    - lower
+    type: string
+    x-enum-varnames:
+    - ImprovementHigher
+    - ImprovementLower
+  types.InstalmentBillTrigger:
+    enum:
+    - date
+    - manual
+    type: string
+    x-enum-varnames:
+    - InstalmentBillTriggerDate
+    - InstalmentBillTriggerManual
+  types.InstalmentDelivery:
+    enum:
+    - subscription_invoice
+    - separate_invoice
+    type: string
+    x-enum-varnames:
+    - InstalmentDeliverySubscriptionInvoice
+    - InstalmentDeliverySeparateInvoice
+  types.InstalmentKind:
+    enum:
+    - instalment
+    - settlement
+    - cancellation_fee
+    type: string
+    x-enum-varnames:
+    - InstalmentKindInstalment
+    - InstalmentKindSettlement
+    - InstalmentKindCancellationFee
+  types.InstalmentStatus:
+    enum:
+    - scheduled
+    - invoiced
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - InstalmentStatusScheduled
+    - InstalmentStatusInvoiced
+    - InstalmentStatusCancelled
+  types.IntegrationCapabilityType:
+    enum:
+    - checkout
+    - auto_charge
+    - set_default_method
+    - payment_link
+    - payment_method_management
+    - invoice_sync
+    - list_payment_methods
+    - add_payment_method
+    - delete_payment_method
+    type: string
+    x-enum-varnames:
+    - IntegrationCapabilityCheckout
+    - IntegrationCapabilityAutoCharge
+    - IntegrationCapabilitySetDefaultMethod
+    - IntegrationCapabilityPaymentLink
+    - IntegrationCapabilityPaymentMethodManagement
+    - IntegrationCapabilityInvoiceSync
+    - IntegrationCapabilityListPaymentMethods
+    - IntegrationCapabilityAddPaymentMethod
+    - IntegrationCapabilityDeletePaymentMethod
   types.IntegrationEntityType:
     enum:
     - customer
@@ -13250,6 +13919,7 @@ definitions:
     - price
     - invoice_line_item
     - subscription_line_item
+    - payment_method_setup
     type: string
     x-enum-varnames:
     - IntegrationEntityTypeCustomer
@@ -13264,6 +13934,16 @@ definitions:
     - IntegrationEntityTypePrice
     - IntegrationEntityTypeInvoiceLineItem
     - IntegrationEntityTypeSubscriptionLineItem
+    - IntegrationEntityTypePaymentMethodSetup
+  types.InvoiceBillingEntity:
+    properties:
+      billing_details:
+        $ref: '#/definitions/types.BillingDetails'
+      billing_entity_id:
+        type: string
+      name:
+        type: string
+    type: object
   types.InvoiceBillingReason:
     enum:
     - SUBSCRIPTION_CREATE
@@ -13308,12 +13988,12 @@ definitions:
         description: |-
           amount_due_gt filters invoices with a total amount due greater than the specified value
           Useful for finding invoices above a certain threshold or identifying high-value invoices
-        type: number
+        type: string
       amount_remaining_gt:
         description: |-
           amount_remaining_gt filters invoices with an outstanding balance greater than the specified value
           Useful for finding invoices that still have significant unpaid amounts
-        type: number
+        type: string
       billing_entity_id:
         description: billing_entity_id filters by the customer's billing entity
         type: string
@@ -13435,6 +14115,16 @@ definitions:
         description: voided_at_gte filters invoices voided at or after the given instant
         type: string
     type: object
+  types.InvoicePaymentFailureReason:
+    enum:
+    - payment_method_unavailable
+    - provider_error
+    - declined
+    type: string
+    x-enum-varnames:
+    - InvoicePaymentFailureReasonPaymentMethodUnavailable
+    - InvoicePaymentFailureReasonProviderError
+    - InvoicePaymentFailureReasonDeclined
   types.InvoiceSourceType:
     enum:
     - checkout
@@ -13455,6 +14145,10 @@ definitions:
     - InvoiceStatusSkipped
   types.InvoiceSyncSettings:
     properties:
+      auto_advance:
+        description: Nil lets the sync decide from the collection method and saved
+          payment method.
+        type: boolean
       deposit_to_account_id:
         description: |-
           Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
@@ -13490,6 +14184,9 @@ definitions:
           Zoho payment modes are merchant-editable free strings with no id, so this is passed
           through verbatim. Empty means DefaultZohoPaymentMode.
         type: string
+      send_invoice_email:
+        description: Nil sends Stripe's invoice email for send_invoice invoices.
+        type: boolean
       service_period_custom_fields:
         allOf:
         - $ref: '#/definitions/types.ServicePeriodCustomFields'
@@ -13511,6 +14208,56 @@ definitions:
     - InvoiceTypeSubscription
     - InvoiceTypeOneOff
     - InvoiceTypeCredit
+  types.JournalDirection:
+    enum:
+    - debit
+    - credit
+    type: string
+    x-enum-varnames:
+    - JournalDirectionDebit
+    - JournalDirectionCredit
+  types.JournalEventType:
+    enum:
+    - invoice_finalized
+    - invoice_voided
+    - credit_note_finalized
+    - credit_note_voided
+    - payment_succeeded
+    - payment_reversed
+    - refund_succeeded
+    - revenue_earned
+    - revenue_offset
+    type: string
+    x-enum-varnames:
+    - JournalEventInvoiceFinalized
+    - JournalEventInvoiceVoided
+    - JournalEventCreditNoteFinalized
+    - JournalEventCreditNoteVoided
+    - JournalEventPaymentSucceeded
+    - JournalEventPaymentReversed
+    - JournalEventRefundSucceeded
+    - JournalEventRevenueEarned
+    - JournalEventRevenueOffset
+  types.LedgerAccountKey:
+    enum:
+    - cash
+    - accounts_receivable
+    - unbilled_receivable
+    - deferred_revenue
+    - customer_credit
+    - tax_payable
+    - revenue
+    - contra_revenue
+    type: string
+    x-enum-varnames:
+    - LedgerAccountCash
+    - LedgerAccountReceivable
+    - LedgerAccountUnbilledReceivable
+    - LedgerAccountDeferredRevenue
+    - LedgerAccountCustomerCredit
+    - LedgerAccountTaxPayable
+    - LedgerAccountRevenue
+    - LedgerAccountContraRevenue
   types.LineItemGrouping:
     enum:
     - per_charge_period
@@ -13550,8 +14297,6 @@ definitions:
     - credit_consumption
     - credit_topups
     - net_billing
-    - invoice_total_issued
-    - net_billing_issued
     - active_customers
     type: string
     x-enum-varnames:
@@ -13567,8 +14312,6 @@ definitions:
     - MetricCreditConsumption
     - MetricCreditTopups
     - MetricNetBilling
-    - MetricInvoiceTotalIssued
-    - MetricNetBillingIssued
     - MetricActiveCustomers
   types.ModifySubscriptionLineItem:
     properties:
@@ -13737,6 +14480,7 @@ definitions:
     - CREDITS
     - PAYMENT_LINK
     - UPI
+    - ENACH
     type: string
     x-enum-varnames:
     - PaymentMethodTypeCard
@@ -13745,6 +14489,7 @@ definitions:
     - PaymentMethodTypeCredits
     - PaymentMethodTypePaymentLink
     - PaymentMethodTypeUPI
+    - PaymentMethodTypeENACH
   types.PaymentStatus:
     enum:
     - INITIATED
@@ -13787,6 +14532,18 @@ definitions:
     - PaymentTerms90Net
     - PaymentTermsEndOfMonth
     - PaymentTermsEndOfNextMonth
+  types.PerformanceObligationStatus:
+    enum:
+    - draft
+    - active
+    - satisfied
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - PerformanceObligationStatusDraft
+    - PerformanceObligationStatusActive
+    - PerformanceObligationStatusSatisfied
+    - PerformanceObligationStatusCancelled
   types.PlanFilter:
     properties:
       end_time:
@@ -13999,6 +14756,16 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.RecognitionMethod:
+    enum:
+    - point_in_time
+    - straight_line
+    - as_consumed
+    type: string
+    x-enum-varnames:
+    - RecognitionMethodPointInTime
+    - RecognitionMethodStraightLine
+    - RecognitionMethodAsConsumed
   types.RecurringPaymentStatus:
     enum:
     - PENDING
@@ -14084,12 +14851,46 @@ definitions:
       reason:
         type: string
     type: object
+  types.ReportCategory:
+    enum:
+    - billing
+    - receivables
+    - customers
+    - credits
+    - usage
+    type: string
+    x-enum-varnames:
+    - ReportCategoryBilling
+    - ReportCategoryReceivables
+    - ReportCategoryCustomers
+    - ReportCategoryCredits
+    - ReportCategoryUsage
+  types.ReportKind:
+    enum:
+    - flow
+    - ratio
+    - snapshot
+    type: string
+    x-enum-varnames:
+    - ReportKindFlow
+    - ReportKindRatio
+    - ReportKindSnapshot
+  types.ReportValueType:
+    enum:
+    - money
+    - count
+    - days
+    type: string
+    x-enum-varnames:
+    - ReportValueTypeMoney
+    - ReportValueTypeCount
+    - ReportValueTypeDays
   types.ReportingUnit:
     properties:
       conversion_rate:
         description: 'Multiplier: reporting_unit_value = unit_value * conversion_rate;
           must be > 0'
-        type: number
+        type: string
       unit_plural:
         description: Display unit label, plural (e.g. "seconds")
         type: string
@@ -14115,6 +14916,24 @@ definitions:
     - ResumeModeImmediate
     - ResumeModeScheduled
     - ResumeModeAuto
+  types.RevRecEntityType:
+    enum:
+    - subscription
+    - subscription_line_item
+    - invoice
+    - credit_note
+    - payment
+    - refund
+    - pob
+    type: string
+    x-enum-varnames:
+    - RevRecEntityTypeSubscription
+    - RevRecEntityTypeSubscriptionLineItem
+    - RevRecEntityTypeInvoice
+    - RevRecEntityTypeCreditNote
+    - RevRecEntityTypePayment
+    - RevRecEntityTypeRefund
+    - RevRecEntityTypePOB
   types.RevenueAllocationPolicy:
     enum:
     - billed
@@ -14133,6 +14952,16 @@ definitions:
     - RevenueGranularityDay
     - RevenueGranularityPeriod
     - RevenueGranularityTotal
+  types.RevenueReportGroupBy:
+    enum:
+    - customer_id
+    - contract_id
+    - pob_id
+    type: string
+    x-enum-varnames:
+    - RevenueReportGroupByCustomer
+    - RevenueReportGroupByContract
+    - RevenueReportGroupByPOB
   types.RoundType:
     enum:
     - up
@@ -14315,6 +15144,11 @@ definitions:
       start_field_id:
         type: string
     type: object
+  types.SettingsOverride:
+    properties:
+      subscription_config:
+        $ref: '#/definitions/types.SubscriptionConfigOverride'
+    type: object
   types.Shape:
     enum:
     - timeseries
@@ -14399,6 +15233,14 @@ definitions:
     - SubscriptionChangeTypeUpgrade
     - SubscriptionChangeTypeDowngrade
     - SubscriptionChangeTypeLateral
+  types.SubscriptionConfigOverride:
+    properties:
+      auto_cancellation_enabled:
+        type: boolean
+      grace_period_days:
+        minimum: 0
+        type: integer
+    type: object
   types.SubscriptionFilter:
     properties:
       active_at:
@@ -14673,6 +15515,44 @@ definitions:
       subscription:
         $ref: '#/definitions/types.EntitySyncConfig'
     type: object
+  types.SystemEntityType:
+    enum:
+    - feature
+    - customer
+    - plan
+    - subscription
+    - invoice
+    - payment
+    - credit_note
+    - refund
+    - wallet
+    - entitlement
+    - checkout_session
+    - payment_method
+    - price
+    - event
+    - commitment
+    - billing_term
+    - billing_instalment
+    type: string
+    x-enum-varnames:
+    - SystemEntityTypeFeature
+    - SystemEntityTypeCustomer
+    - SystemEntityTypePlan
+    - SystemEntityTypeSubscription
+    - SystemEntityTypeInvoice
+    - SystemEntityTypePayment
+    - SystemEntityTypeCreditNote
+    - SystemEntityTypeRefund
+    - SystemEntityTypeWallet
+    - SystemEntityTypeEntitlement
+    - SystemEntityTypeCheckoutSession
+    - SystemEntityTypePaymentMethod
+    - SystemEntityTypePrice
+    - SystemEntityTypeEvent
+    - SystemEntityTypeCommitment
+    - SystemEntityTypeBillingTerm
+    - SystemEntityTypeBillingInstalment
   types.TaskStatus:
     enum:
     - PENDING
@@ -14807,6 +15687,16 @@ definitions:
     x-enum-varnames:
     - TaxTreatmentTaxable
     - TaxTreatmentExempt
+  types.TenantInternalStatus:
+    enum:
+    - trialing
+    - active
+    - suspended
+    type: string
+    x-enum-varnames:
+    - TenantInternalStatusTrialing
+    - TenantInternalStatusActive
+    - TenantInternalStatusSuspended
   types.TimeOfDayBucket:
     properties:
       commitment_type:
@@ -14821,7 +15711,7 @@ definitions:
           invoice breakdown and analytics responses reference this ID.
         type: string
       overage_factor:
-        type: number
+        type: string
       price_id:
         description: |-
           PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.
@@ -15120,7 +16010,7 @@ definitions:
       created_by:
         type: string
       credits_available_gt:
-        type: number
+        type: string
       end_time:
         type: string
       expand:
@@ -15253,6 +16143,7 @@ definitions:
     - invoice.update.voided
     - invoice.update
     - invoice.payment.overdue
+    - invoice.payment.failed
     - invoice.sync.success
     - invoice.sync.failed
     - wallet.credit_balance.dropped
@@ -15275,6 +16166,12 @@ definitions:
     - checkout.session.completed
     - checkout.session.failed
     - checkout.session.expired
+    - checkout.session.cancelled
+    - mandate.confirmed
+    - mandate.rejected
+    - mandate.cancelled
+    - mandate.setup_attempt_failed
+    - mandate.setup_expired
     - event.rejected
     type: string
     x-enum-varnames:
@@ -15327,6 +16224,7 @@ definitions:
     - WebhookEventInvoiceUpdateVoided
     - WebhookEventInvoiceUpdate
     - WebhookEventInvoicePaymentOverdue
+    - WebhookEventInvoicePaymentFailed
     - WebhookEventInvoiceSyncSuccess
     - WebhookEventInvoiceSyncFailed
     - WebhookEventWalletCreditBalanceDropped
@@ -15349,6 +16247,12 @@ definitions:
     - WebhookEventCheckoutSessionCompleted
     - WebhookEventCheckoutSessionFailed
     - WebhookEventCheckoutSessionExpired
+    - WebhookEventCheckoutSessionCancelled
+    - WebhookEventMandateConfirmed
+    - WebhookEventMandateRejected
+    - WebhookEventMandateCancelled
+    - WebhookEventMandateSetupAttemptFailed
+    - WebhookEventMandateSetupExpired
     - WebhookEventEventRejected
   types.WindowSize:
     enum:
@@ -15422,6 +16326,46 @@ definitions:
         type: string
       workflow_type:
         type: string
+    type: object
+  types.ZohoPayPalPaymentMethod:
+    enum:
+    - standard
+    - adaptive
+    type: string
+    x-enum-varnames:
+    - ZohoPayPalPaymentMethodStandard
+    - ZohoPayPalPaymentMethodAdaptive
+  types.ZohoPaymentGateway:
+    enum:
+    - paypal
+    - stripe
+    - authorize_net
+    - payflow_pro
+    - 2checkout
+    - braintree
+    - razorpay
+    type: string
+    x-enum-varnames:
+    - ZohoPaymentGatewayPayPal
+    - ZohoPaymentGatewayStripe
+    - ZohoPaymentGatewayAuthorizeNet
+    - ZohoPaymentGatewayPayflowPro
+    - ZohoPaymentGateway2Checkout
+    - ZohoPaymentGatewayBraintree
+    - ZohoPaymentGatewayRazorpay
+  types.ZohoPaymentGatewaySettings:
+    properties:
+      enabled:
+        type: boolean
+      gateways:
+        items:
+          $ref: '#/definitions/types.ZohoPaymentGateway'
+        type: array
+      paypal_payment_method:
+        allOf:
+        - $ref: '#/definitions/types.ZohoPayPalPaymentMethod'
+        description: Sent as additional_field1 on the PayPal gateway. Required when
+          PayPal is selected.
     type: object
   group.Group:
     properties:
@@ -16165,292 +17109,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  types.AccountingPeriodStatus:
-    enum:
-    - open
-    - closed
-    type: string
-    x-enum-comments:
-      AccountingPeriodStatusClosed: reserved; close is deferred
-    x-enum-varnames:
-    - AccountingPeriodStatusOpen
-    - AccountingPeriodStatusClosed
-  types.ActiveWindow:
-    properties:
-      end:
-        $ref: '#/definitions/types.Bucket'
-      start:
-        $ref: '#/definitions/types.Bucket'
-    type: object
-  types.AddonPriceOverrideRef:
-    properties:
-      override_price_id:
-        type: string
-      price_id:
-        type: string
-      quantity:
-        type: string
-    type: object
-  types.AmortizationMethod:
-    enum:
-    - daily
-    - period_even
-    - period_even_prorated
-    type: string
-    x-enum-varnames:
-    - AmortizationDaily
-    - AmortizationPeriodEven
-    - AmortizationPeriodEvenProrated
-  types.BillingAddress:
-    properties:
-      address_city:
-        type: string
-      address_country:
-        type: string
-      address_line1:
-        type: string
-      address_line2:
-        type: string
-      address_postal_code:
-        type: string
-      address_state:
-        type: string
-    type: object
-  types.BillingDetails:
-    properties:
-      address:
-        $ref: '#/definitions/types.BillingAddress'
-      email:
-        type: string
-      help_email:
-        type: string
-      phone:
-        type: string
-    type: object
-  types.BillingEntityMode:
-    enum:
-    - "off"
-    - enabling
-    - enabled
-    type: string
-    x-enum-varnames:
-    - BillingEntityModeOff
-    - BillingEntityModeEnabling
-    - BillingEntityModeEnabled
-  types.BillingTermKind:
-    enum:
-    - once
-    - recurring
-    type: string
-    x-enum-varnames:
-    - BillingTermKindOnce
-    - BillingTermKindRecurring
-  types.BillingTermOwnerType:
-    enum:
-    - commitment
-    type: string
-    x-enum-varnames:
-    - BillingTermOwnerCommitment
-  types.BillingTermSplit:
-    enum:
-    - even
-    - proportional
-    type: string
-    x-enum-varnames:
-    - BillingTermSplitEven
-    - BillingTermSplitProportional
-  types.BillingTermValueType:
-    description: fixed or remainder; percentage is reserved and rejected as not supported
-      yet
-    enum:
-    - fixed
-    - percentage
-    - remainder
-    type: string
-    x-enum-varnames:
-    - BillingTermValueFixed
-    - BillingTermValuePercentage
-    - BillingTermValueRemainder
-  types.CancellationFeeType:
-    description: fixed; percentage is reserved and rejected as not supported yet
-    enum:
-    - fixed
-    - percentage
-    type: string
-    x-enum-varnames:
-    - CancellationFeeFixed
-    - CancellationFeePercentage
-  types.CommitmentCollectionMethod:
-    enum:
-    - per_period
-    - billing_terms
-    type: string
-    x-enum-varnames:
-    - CommitmentCollectionPerPeriod
-    - CommitmentCollectionBillingTerms
-  types.CommitmentEarlyTermination:
-    enum:
-    - forfeit
-    - credit_note
-    - bill_remaining
-    type: string
-    x-enum-varnames:
-    - CommitmentTerminationForfeit
-    - CommitmentTerminationCreditNote
-    - CommitmentTerminationBillRemaining
-  types.CommitmentMeasurement:
-    enum:
-    - billing_period
-    - window
-    type: string
-    x-enum-varnames:
-    - CommitmentMeasurementBillingPeriod
-    - CommitmentMeasurementWindow
-  types.CommitmentScopeType:
-    enum:
-    - subscription
-    - group
-    - meter
-    - price
-    type: string
-    x-enum-varnames:
-    - CommitmentScopeSubscription
-    - CommitmentScopeGroup
-    - CommitmentScopeMeter
-    - CommitmentScopePrice
-  types.CommitmentStatus:
-    enum:
-    - active
-    - ended
-    - terminated
-    type: string
-    x-enum-varnames:
-    - CommitmentStatusActive
-    - CommitmentStatusEnded
-    - CommitmentStatusTerminated
-  types.ContractStatus:
-    enum:
-    - draft
-    - active
-    - ended
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - ContractStatusDraft
-    - ContractStatusActive
-    - ContractStatusEnded
-    - ContractStatusCancelled
-  types.EntitlementGrantScopeEntityType:
-    enum:
-    - feature
-    - subscription
-    - group
-    type: string
-    x-enum-varnames:
-    - EntitlementGrantScopeFeature
-    - EntitlementGrantScopeSubscription
-    - EntitlementGrantScopeGroup
-  types.ImprovementDirection:
-    enum:
-    - higher
-    - lower
-    type: string
-    x-enum-varnames:
-    - ImprovementHigher
-    - ImprovementLower
-  types.InstalmentBillTrigger:
-    enum:
-    - date
-    - manual
-    type: string
-    x-enum-varnames:
-    - InstalmentBillTriggerDate
-    - InstalmentBillTriggerManual
-  types.InstalmentDelivery:
-    enum:
-    - subscription_invoice
-    - separate_invoice
-    type: string
-    x-enum-varnames:
-    - InstalmentDeliverySubscriptionInvoice
-    - InstalmentDeliverySeparateInvoice
-  types.InstalmentKind:
-    enum:
-    - instalment
-    - settlement
-    type: string
-    x-enum-varnames:
-    - InstalmentKindInstalment
-    - InstalmentKindSettlement
-  types.InstalmentStatus:
-    enum:
-    - scheduled
-    - invoiced
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - InstalmentStatusScheduled
-    - InstalmentStatusInvoiced
-    - InstalmentStatusCancelled
-  types.InvoiceBillingEntity:
-    properties:
-      billing_details:
-        $ref: '#/definitions/types.BillingDetails'
-      billing_entity_id:
-        type: string
-      name:
-        type: string
-    type: object
-  types.JournalDirection:
-    enum:
-    - debit
-    - credit
-    type: string
-    x-enum-varnames:
-    - JournalDirectionDebit
-    - JournalDirectionCredit
-  types.JournalEventType:
-    enum:
-    - invoice_finalized
-    - invoice_voided
-    - credit_note_finalized
-    - credit_note_voided
-    - payment_succeeded
-    - payment_reversed
-    - refund_succeeded
-    - revenue_earned
-    - revenue_offset
-    type: string
-    x-enum-varnames:
-    - JournalEventInvoiceFinalized
-    - JournalEventInvoiceVoided
-    - JournalEventCreditNoteFinalized
-    - JournalEventCreditNoteVoided
-    - JournalEventPaymentSucceeded
-    - JournalEventPaymentReversed
-    - JournalEventRefundSucceeded
-    - JournalEventRevenueEarned
-    - JournalEventRevenueOffset
-  types.LedgerAccountKey:
-    enum:
-    - cash
-    - accounts_receivable
-    - unbilled_receivable
-    - deferred_revenue
-    - customer_credit
-    - tax_payable
-    - revenue
-    - contra_revenue
-    type: string
-    x-enum-varnames:
-    - LedgerAccountCash
-    - LedgerAccountReceivable
-    - LedgerAccountUnbilledReceivable
-    - LedgerAccountDeferredRevenue
-    - LedgerAccountCustomerCredit
-    - LedgerAccountTaxPayable
-    - LedgerAccountRevenue
-    - LedgerAccountContraRevenue
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -16463,140 +17121,6 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
-    type: object
-  types.PerformanceObligationStatus:
-    enum:
-    - draft
-    - active
-    - satisfied
-    - cancelled
-    type: string
-    x-enum-varnames:
-    - PerformanceObligationStatusDraft
-    - PerformanceObligationStatusActive
-    - PerformanceObligationStatusSatisfied
-    - PerformanceObligationStatusCancelled
-  types.RecognitionMethod:
-    enum:
-    - point_in_time
-    - straight_line
-    - as_consumed
-    type: string
-    x-enum-varnames:
-    - RecognitionMethodPointInTime
-    - RecognitionMethodStraightLine
-    - RecognitionMethodAsConsumed
-  types.ReportCategory:
-    enum:
-    - billing
-    - receivables
-    - customers
-    - credits
-    - usage
-    type: string
-    x-enum-varnames:
-    - ReportCategoryBilling
-    - ReportCategoryReceivables
-    - ReportCategoryCustomers
-    - ReportCategoryCredits
-    - ReportCategoryUsage
-  types.ReportKind:
-    enum:
-    - flow
-    - ratio
-    - snapshot
-    type: string
-    x-enum-varnames:
-    - ReportKindFlow
-    - ReportKindRatio
-    - ReportKindSnapshot
-  types.ReportValueType:
-    enum:
-    - money
-    - count
-    - days
-    type: string
-    x-enum-varnames:
-    - ReportValueTypeMoney
-    - ReportValueTypeCount
-    - ReportValueTypeDays
-  types.RevRecEntityType:
-    enum:
-    - subscription
-    - subscription_line_item
-    - invoice
-    - credit_note
-    - payment
-    - refund
-    - pob
-    type: string
-    x-enum-varnames:
-    - RevRecEntityTypeSubscription
-    - RevRecEntityTypeSubscriptionLineItem
-    - RevRecEntityTypeInvoice
-    - RevRecEntityTypeCreditNote
-    - RevRecEntityTypePayment
-    - RevRecEntityTypeRefund
-    - RevRecEntityTypePOB
-  types.RevenueReportGroupBy:
-    enum:
-    - customer_id
-    - contract_id
-    - pob_id
-    type: string
-    x-enum-varnames:
-    - RevenueReportGroupByCustomer
-    - RevenueReportGroupByContract
-    - RevenueReportGroupByPOB
-  types.TenantInternalStatus:
-    enum:
-    - trialing
-    - active
-    - suspended
-    type: string
-    x-enum-varnames:
-    - TenantInternalStatusTrialing
-    - TenantInternalStatusActive
-    - TenantInternalStatusSuspended
-  types.ZohoPayPalPaymentMethod:
-    enum:
-    - standard
-    - adaptive
-    type: string
-    x-enum-varnames:
-    - ZohoPayPalPaymentMethodStandard
-    - ZohoPayPalPaymentMethodAdaptive
-  types.ZohoPaymentGateway:
-    enum:
-    - paypal
-    - stripe
-    - authorize_net
-    - payflow_pro
-    - 2checkout
-    - braintree
-    - razorpay
-    type: string
-    x-enum-varnames:
-    - ZohoPaymentGatewayPayPal
-    - ZohoPaymentGatewayStripe
-    - ZohoPaymentGatewayAuthorizeNet
-    - ZohoPaymentGatewayPayflowPro
-    - ZohoPaymentGateway2Checkout
-    - ZohoPaymentGatewayBraintree
-    - ZohoPaymentGatewayRazorpay
-  types.ZohoPaymentGatewaySettings:
-    properties:
-      enabled:
-        type: boolean
-      gateways:
-        items:
-          $ref: '#/definitions/types.ZohoPaymentGateway'
-        type: array
-      paypal_payment_method:
-        allOf:
-        - $ref: '#/definitions/types.ZohoPayPalPaymentMethod'
-        description: Sent as additional_field1 on the PayPal gateway. Required when
-          PayPal is selected.
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -17024,6 +17548,23 @@ definitions:
       subscription_line_item_id:
         type: string
     type: object
+  webhookDto.InvoicePaymentFailedWebhookPayload:
+    properties:
+      error:
+        type: string
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      invoice:
+        $ref: '#/definitions/webhookDto.Invoice'
+      is_auto_charge_attempt:
+        type: boolean
+      payment_id:
+        type: string
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+      reason:
+        $ref: '#/definitions/types.InvoicePaymentFailureReason'
+    type: object
   webhookDto.InvoiceSyncWebhookPayload:
     properties:
       error:
@@ -17041,6 +17582,73 @@ definitions:
         $ref: '#/definitions/types.WebhookEventName'
       invoice:
         $ref: '#/definitions/webhookDto.Invoice'
+    type: object
+  webhookDto.Mandate:
+    properties:
+      bank_account:
+        $ref: '#/definitions/webhookDto.MandateBankAccount'
+      card:
+        $ref: '#/definitions/webhookDto.MandateCard'
+      currency:
+        type: string
+      customer_id:
+        type: string
+      expires_at:
+        type: string
+      external_customer_id:
+        type: string
+      failure_reason:
+        type: string
+      id:
+        type: string
+      max_amount:
+        type: string
+      provider:
+        $ref: '#/definitions/types.PaymentGatewayType'
+      setup_intent_id:
+        type: string
+      status:
+        type: string
+      type:
+        $ref: '#/definitions/types.PaymentMethodType'
+      upi:
+        $ref: '#/definitions/webhookDto.MandateUPI'
+    type: object
+  webhookDto.MandateBankAccount:
+    properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
+      bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateCard:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      last4:
+        type: string
+    type: object
+  webhookDto.MandateUPI:
+    properties:
+      vpa:
+        type: string
+    type: object
+  webhookDto.MandateWebhookPayload:
+    properties:
+      event_type:
+        $ref: '#/definitions/types.WebhookEventName'
+      mandate:
+        $ref: '#/definitions/webhookDto.Mandate'
     type: object
   webhookDto.Meter:
     properties:
@@ -17524,9 +18132,9 @@ definitions:
       alert_type:
         type: string
       credit_balance:
-        type: number
+        type: string
       current_balance:
-        type: number
+        type: string
       state:
         type: string
     type: object
@@ -20544,6 +21152,10 @@ paths:
         name: id
         required: true
         type: string
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:
@@ -20632,6 +21244,39 @@ paths:
       summary: Get customer invoice summary
       tags:
       - Invoices
+  /customers/{id}/payment-integrations:
+    get:
+      description: 'Use to learn which connected gateways can serve this customer
+        and what each can do: check out, auto-charge, list methods, add a method (with
+        the method types it sets up, e.g. enach for Razorpay), set a default.'
+      operationId: listCustomerPaymentIntegrations
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/IntegrationsResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List customer payment integrations
+      tags:
+      - Customers
+      x-scope: read
   /customers/{id}/payment-methods:
     get:
       description: Use when you need a customer's saved payment methods across every
@@ -20757,6 +21402,10 @@ paths:
         name: external_id
         required: true
         type: string
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:
@@ -20920,6 +21569,11 @@ paths:
           type: string
         name: feature_lookup_keys
         type: array
+      - description: RefreshGrants evaluates entitlement grants before returning their
+          usage, so the read is slower.
+        in: query
+        name: refresh_grants
+        type: boolean
       - collectionFormat: csv
         in: query
         items:
@@ -21001,6 +21655,42 @@ paths:
       summary: Get Customer Wallets
       tags:
       - Wallets
+  /emails/search:
+    post:
+      consumes:
+      - application/json
+      description: Use when reviewing emails sent to customers, for example every
+        bounced email this month or every email to one customer. Filter by delivery
+        status, trigger, customer, document and date. Newest first; paginated.
+      operationId: queryEmail
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.EmailLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Search emails
+      tags:
+      - Invoices
+      x-scope: read
   /entitlements:
     post:
       consumes:
@@ -22370,6 +23060,81 @@ paths:
       summary: Trigger invoice communication webhook
       tags:
       - Invoices
+  /invoices/{id}/email:
+    post:
+      consumes:
+      - application/json
+      description: Use when you want Flexprice to email a finalized invoice to the
+        customer, with a link to the hosted invoice and the PDF attached. Sends to
+        the customer's email unless `to` is given. Returns the queued email; delivery
+        happens in the background.
+      operationId: sendInvoiceEmail
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Recipients overriding the customer's email
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/SendInvoiceEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/EmailLogResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Email invoice to customer
+      tags:
+      - Invoices
+  /invoices/{id}/emails:
+    get:
+      description: Use when showing which emails were sent for an invoice and whether
+        each was delivered. Newest first.
+      operationId: listInvoiceEmails
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListEmailLogsResponse'
+        "404":
+          description: Resource not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List invoice emails
+      tags:
+      - Invoices
   /invoices/{id}/finalize:
     post:
       consumes:
@@ -22875,6 +23640,12 @@ paths:
       - in: query
         name: destination_id
         type: string
+      - collectionFormat: csv
+        in: query
+        items:
+          type: string
+        name: destination_ids
+        type: array
       - in: query
         name: destination_type
         type: string
@@ -23144,6 +23915,83 @@ paths:
       summary: Process payment
       tags:
       - Payments
+  /payments/customers/{id}/setup/intent:
+    get:
+      description: Returns the live state of the customer's latest setup link. Razorpay
+        only.
+      operationId: getSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get setup intent
+      tags:
+      - Payments
+  /payments/customers/{id}/setup/intent/cancel:
+    post:
+      description: Cancels the customer's latest setup link if it hasn't been completed.
+        Razorpay only.
+      operationId: cancelSetupIntent
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment provider
+        enum:
+        - razorpay
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/SetupIntentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel setup intent
+      tags:
+      - Payments
+      x-scope: delete
   /performance_obligations/{id}:
     get:
       description: Use when you need to load a single performance obligation with
@@ -25365,6 +26213,10 @@ paths:
           type: string
         name: feature_ids
         type: array
+      - description: Evaluate entitlement grants before returning their usage (slower)
+        in: query
+        name: refresh_grants
+        type: boolean
       produces:
       - application/json
       responses:
@@ -26649,68 +27501,6 @@ paths:
       summary: Trigger force run
       tags:
       - Scheduled Tasks
-  /tasks/scheduled/schedule-draft-finalization:
-    post:
-      consumes:
-      - application/json
-      description: Triggers the draft invoice finalization workflow that scans computed
-        draft invoices whose finalization delay has elapsed and finalizes them (assign
-        invoice number, sync to vendors, attempt payment).
-      operationId: scheduleDraftFinalization
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule draft finalization
-      tags:
-      - Scheduled Tasks
-  /tasks/scheduled/schedule-update-billing-period:
-    post:
-      consumes:
-      - application/json
-      description: Use when you need to trigger a billing-period update workflow (e.g.
-        to recalculate or sync billing windows).
-      operationId: scheduleUpdateBillingPeriod
-      parameters:
-      - description: Schedule Update Billing Period Request
-        in: body
-        name: request
-        required: true
-        schema:
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: object
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Schedule update billing period
-      tags:
-      - Scheduled Tasks
   /taxes/associations:
     get:
       consumes:
@@ -27349,8 +28139,9 @@ paths:
       - Users
   /users/{id}/remove:
     post:
-      description: Remove a human user (type=user) from the current tenant. Not supported
-        for service accounts; use DELETE /users/{id} for those.
+      description: Remove a human user (type=user) from the current tenant. Also revokes
+        every API key the user owns, in all environments. Not supported for service
+        accounts; use DELETE /users/{id} for those.
       operationId: removeUser
       parameters:
       - description: User ID
@@ -27778,7 +28569,7 @@ paths:
         type: string
       - in: query
         name: credits_available_gt
-        type: number
+        type: string
       - in: query
         name: end_time
         type: string
@@ -27988,7 +28779,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.cancelled
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.created:
     post:
       consumes:
@@ -28004,7 +28795,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.invoiced:
     post:
       consumes:
@@ -28020,7 +28811,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.invoiced
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_instalment.updated:
     post:
       consumes:
@@ -28036,7 +28827,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingInstalmentWebhookPayload'
       summary: billing_instalment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.created:
     post:
       consumes:
@@ -28052,7 +28843,7 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/billing_terms.updated:
     post:
       consumes:
@@ -28068,7 +28859,23 @@ paths:
             $ref: '#/definitions/webhookDto.BillingTermsWebhookPayload'
       summary: billing_terms.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
+  /webhook-events/checkout.session.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a Checkout Session is cancelled through the API, alongside
+        checkout.session.expired. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
+      summary: checkout.session.cancelled
+      tags:
+      - Checkout
   /webhook-events/checkout.session.completed:
     post:
       consumes:
@@ -28084,7 +28891,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.completed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.expired:
     post:
       consumes:
@@ -28100,7 +28907,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.expired
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.failed:
     post:
       consumes:
@@ -28116,7 +28923,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.failed
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/checkout.session.initiated:
     post:
       consumes:
@@ -28132,7 +28939,7 @@ paths:
             $ref: '#/definitions/webhookDto.CheckoutSessionWebhookPayload'
       summary: checkout.session.initiated
       tags:
-      - Webhook Events
+      - Checkout
   /webhook-events/commitment.created:
     post:
       consumes:
@@ -28148,7 +28955,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.created
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.terminated:
     post:
       consumes:
@@ -28163,7 +28970,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.terminated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/commitment.updated:
     post:
       consumes:
@@ -28179,7 +28986,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommitmentWebhookPayload'
       summary: commitment.updated
       tags:
-      - Webhook Events
+      - Commitment and billing terms
   /webhook-events/credit_note.created:
     post:
       consumes:
@@ -28194,7 +29001,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.created
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/credit_note.updated:
     post:
       consumes:
@@ -28209,7 +29016,7 @@ paths:
             $ref: '#/definitions/webhookDto.CreditNoteWebhookPayload'
       summary: credit_note.updated
       tags:
-      - Webhook Events
+      - Credit note
   /webhook-events/customer.created:
     post:
       consumes:
@@ -28224,7 +29031,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.created
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.deleted:
     post:
       consumes:
@@ -28239,7 +29046,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.deleted
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/customer.updated:
     post:
       consumes:
@@ -28254,7 +29061,7 @@ paths:
             $ref: '#/definitions/webhookDto.CustomerWebhookPayload'
       summary: customer.updated
       tags:
-      - Webhook Events
+      - Customer
   /webhook-events/entitlement.created:
     post:
       consumes:
@@ -28269,7 +29076,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.deleted:
     post:
       consumes:
@@ -28284,7 +29091,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/entitlement.updated:
     post:
       consumes:
@@ -28299,7 +29106,7 @@ paths:
             $ref: '#/definitions/webhookDto.EntitlementWebhookPayload'
       summary: entitlement.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/event.rejected:
     post:
       consumes:
@@ -28317,7 +29124,7 @@ paths:
             $ref: '#/definitions/webhookDto.RejectedEventWebhookPayload'
       summary: event.rejected
       tags:
-      - Webhook Events
+      - Usage ingestion
   /webhook-events/feature.created:
     post:
       consumes:
@@ -28332,7 +29139,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.created
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.deleted:
     post:
       consumes:
@@ -28347,7 +29154,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.deleted
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.updated:
     post:
       consumes:
@@ -28362,7 +29169,7 @@ paths:
             $ref: '#/definitions/webhookDto.FeatureWebhookPayload'
       summary: feature.updated
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/feature.wallet_balance.alert:
     post:
       consumes:
@@ -28378,7 +29185,7 @@ paths:
             $ref: '#/definitions/webhookDto.AlertWebhookPayload'
       summary: feature.wallet_balance.alert
       tags:
-      - Webhook Events
+      - Feature and entitlement
   /webhook-events/invoice.communication.triggered:
     post:
       consumes:
@@ -28397,7 +29204,7 @@ paths:
             $ref: '#/definitions/webhookDto.CommunicationWebhookPayload'
       summary: invoice.communication.triggered
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.create.drafted:
     post:
       consumes:
@@ -28416,7 +29223,24 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.create.drafted
       tags:
-      - Webhook Events
+      - Invoice
+  /webhook-events/invoice.payment.failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a payment of an invoice does not succeed. `reason` is
+        `payment_method_unavailable`, `provider_error` or `declined`; `is_auto_charge_attempt`
+        is true when Flexprice charged the saved payment method. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload'
+      summary: invoice.payment.failed
+      tags:
+      - Invoice
   /webhook-events/invoice.payment.overdue:
     post:
       consumes:
@@ -28435,7 +29259,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.payment.overdue
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.failed:
     post:
       consumes:
@@ -28451,7 +29275,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.failed
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.sync.success:
     post:
       consumes:
@@ -28466,7 +29290,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceSyncWebhookPayload'
       summary: invoice.sync.success
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update:
     post:
       consumes:
@@ -28485,7 +29309,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.finalized:
     post:
       consumes:
@@ -28504,7 +29328,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.finalized
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.payment:
     post:
       consumes:
@@ -28523,7 +29347,7 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.payment
       tags:
-      - Webhook Events
+      - Invoice
   /webhook-events/invoice.update.voided:
     post:
       consumes:
@@ -28542,6 +29366,86 @@ paths:
             $ref: '#/definitions/webhookDto.InvoiceWebhookPayload'
       summary: invoice.update.voided
       tags:
+      - Invoice
+  /webhook-events/mandate.cancelled:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a saved mandate is cancelled. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.cancelled
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.confirmed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank confirms a saved mandate (Razorpay eNACH).
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.confirmed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.rejected:
+    post:
+      consumes:
+      - application/json
+      description: Fired when the bank rejects a mandate; failure_reason carries the
+        bank's reason. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.rejected
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_attempt_failed:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a customer's mandate authorisation fails; failure_reason
+        carries the reason. The customer can retry the same link until it expires.
+        Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_attempt_failed
+      tags:
+      - Webhook Events
+  /webhook-events/mandate.setup_expired:
+    post:
+      consumes:
+      - application/json
+      description: Fired when a mandate setup link expires before the customer authorises
+        it. Doc-only for parsing.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook payload
+          schema:
+            $ref: '#/definitions/webhookDto.MandateWebhookPayload'
+      summary: mandate.setup_expired
+      tags:
       - Webhook Events
   /webhook-events/payment.attempt.failed:
     post:
@@ -28558,7 +29462,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentAttemptWebhookPayload'
       summary: payment.attempt.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.created:
     post:
       consumes:
@@ -28573,7 +29477,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.failed:
     post:
       consumes:
@@ -28588,7 +29492,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.pending:
     post:
       consumes:
@@ -28603,7 +29507,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.pending
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.success:
     post:
       consumes:
@@ -28618,7 +29522,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.success
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/payment.updated:
     post:
       consumes:
@@ -28633,7 +29537,7 @@ paths:
             $ref: '#/definitions/webhookDto.PaymentWebhookPayload'
       summary: payment.updated
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.created:
     post:
       consumes:
@@ -28649,7 +29553,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.created
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.failed:
     post:
       consumes:
@@ -28665,7 +29569,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.failed
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/refund.succeeded:
     post:
       consumes:
@@ -28681,7 +29585,7 @@ paths:
             $ref: '#/definitions/webhookDto.RefundWebhookPayload'
       summary: refund.succeeded
       tags:
-      - Webhook Events
+      - Payment and refund
   /webhook-events/subscription.activated:
     post:
       consumes:
@@ -28696,7 +29600,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.activated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.cancelled:
     post:
       consumes:
@@ -28712,7 +29616,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.cancelled
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.created:
     post:
       consumes:
@@ -28727,7 +29631,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.draft.created:
     post:
       consumes:
@@ -28743,7 +29647,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.draft.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_reached:
     post:
       consumes:
@@ -28760,7 +29664,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.group_spend.threshold_recovered:
     post:
       consumes:
@@ -28777,7 +29681,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.group_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_reached:
     post:
       consumes:
@@ -28794,7 +29698,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.line_item_spend.threshold_recovered:
     post:
       consumes:
@@ -28811,7 +29715,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.line_item_spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.paused:
     post:
       consumes:
@@ -28826,7 +29730,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.paused
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.created:
     post:
       consumes:
@@ -28841,7 +29745,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.created
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.deleted:
     post:
       consumes:
@@ -28856,7 +29760,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.deleted
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.phase.updated:
     post:
       consumes:
@@ -28871,7 +29775,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionPhaseWebhookPayload'
       summary: subscription.phase.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.plan_changed:
     post:
       consumes:
@@ -28887,7 +29791,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.plan_changed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.renewal.due:
     post:
       consumes:
@@ -28903,7 +29807,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.renewal.due
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.resumed:
     post:
       consumes:
@@ -28918,7 +29822,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.resumed
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_reached:
     post:
       consumes:
@@ -28935,7 +29839,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_reached
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.spend.threshold_recovered:
     post:
       consumes:
@@ -28952,7 +29856,7 @@ paths:
             $ref: '#/definitions/webhookDto.SpendAlertEvent'
       summary: subscription.spend.threshold_recovered
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/subscription.updated:
     post:
       consumes:
@@ -28968,7 +29872,7 @@ paths:
             $ref: '#/definitions/webhookDto.SubscriptionWebhookPayload'
       summary: subscription.updated
       tags:
-      - Webhook Events
+      - Subscription
   /webhook-events/wallet.created:
     post:
       consumes:
@@ -28983,7 +29887,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.dropped:
     post:
       consumes:
@@ -28999,7 +29903,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.credit_balance.recovered:
     post:
       consumes:
@@ -29015,7 +29919,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.credit_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.dropped:
     post:
       consumes:
@@ -29031,7 +29935,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.dropped
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.recovered:
     post:
       consumes:
@@ -29047,7 +29951,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.recovered
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.ongoing_balance.updated:
     post:
       consumes:
@@ -29063,7 +29967,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.ongoing_balance.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.terminated:
     post:
       consumes:
@@ -29078,7 +29982,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.terminated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.created:
     post:
       consumes:
@@ -29094,7 +29998,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionWebhookPayload'
       summary: wallet.transaction.created
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.transaction.updated:
     post:
       consumes:
@@ -29110,7 +30014,7 @@ paths:
             $ref: '#/definitions/webhookDto.TransactionUpdatedWebhookPayload'
       summary: wallet.transaction.updated
       tags:
-      - Webhook Events
+      - Wallet
   /webhook-events/wallet.updated:
     post:
       consumes:
@@ -29125,7 +30029,7 @@ paths:
             $ref: '#/definitions/webhookDto.WalletWebhookPayload'
       summary: wallet.updated
       tags:
-      - Webhook Events
+      - Wallet
   /workflows/search:
     post:
       consumes:

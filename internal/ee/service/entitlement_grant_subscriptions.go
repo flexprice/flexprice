@@ -193,15 +193,7 @@ func (s *entitlementGrantService) subscriptionEntitlementGrantStateAfter(ctx con
 // hasActiveCommitment reports a commitment live in the current period: its lines are priced
 // outside the per-line pass the grant reduces.
 func (s *entitlementGrantService) hasActiveCommitment(ctx context.Context, sub *subscription.Subscription) (bool, error) {
-	svc := newCommitmentService(s.ServiceParams)
-	enabled, err := svc.IsEnabled(ctx)
-	if err != nil {
-		return false, err
-	}
-	if !enabled {
-		return false, nil
-	}
-	active, err := svc.ListOverlapping(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
+	active, err := newCommitmentService(s.ServiceParams).ListOverlapping(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	if err != nil {
 		return false, err
 	}
@@ -538,45 +530,6 @@ func (s *entitlementGrantService) measureSubscriptionEntitlementGrantWindows(ctx
 		}
 		g.Usage = decimal.Max(usage, decimal.Zero)
 		g.LastComputedAt = &end
-	}
-	return nil
-}
-
-// refreshSubscriptionEntitlementGrantUsage measures each subscription entitlement grant window in the period up to `at` and
-// stores it, so billing does not read usage the alert refresh has not caught up with. It leaves
-// last_computed_at alone: finalizing a window, and firing its exhaustion alert, is alert evaluation's job.
-func refreshSubscriptionEntitlementGrantUsage(ctx context.Context, params ServiceParams, sub *subscription.Subscription, periodStart, periodEnd, at time.Time) error {
-	if params.EntitlementGrantRepo == nil || sub == nil {
-		return nil
-	}
-	filter := types.NewNoLimitEntitlementGrantFilter().
-		WithCustomerIDs(sub.CustomerID).
-		WithSubscriptionIDs(sub.ID).
-		WithScopeEntityType(types.EntitlementGrantScopeSubscription).
-		WithCycleOverlap(periodStart, periodEnd)
-	grants, err := params.EntitlementGrantRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-	for _, g := range grants {
-		if !at.After(g.ValidFrom) {
-			continue
-		}
-		// Stored usage already reaches as far as this refresh would measure: a finalized window, or a
-		// historical recalculation older than the last evaluation.
-		if g.LastComputedAt != nil && !g.LastComputedAt.Before(types.EarliestOf(at, g.ValidTo)) {
-			continue
-		}
-		usage, _, err := NewMeterUsageService(params).GetSubscriptionWindowSpend(ctx, sub, g.ValidFrom, types.EarliestOf(at, g.ValidTo))
-		if err != nil {
-			return err
-		}
-		refreshed := entitlementgrant.NewEntitlementGrantBuilder(grantUsageSnapshot(g, decimal.Max(usage, decimal.Zero), at)).
-			WithLastComputedAt(g.LastComputedAt).
-			Build()
-		if err := params.EntitlementGrantRepo.UpdateSnapshot(ctx, refreshed); err != nil {
-			return err
-		}
 	}
 	return nil
 }

@@ -47,6 +47,7 @@ swagger-3-0:
 		-d @docs/swagger/swagger.json > docs/swagger/swagger-3-0.json
 	@echo "Conversion complete. Output saved to docs/swagger/swagger-3-0.json"
 	@node scripts/fix_swagger_internal_types.mjs
+	@node scripts/build_webhooks_spec.mjs
 	@./scripts/update_swagger_servers.sh
 
 .PHONY: swagger-fix-refs
@@ -243,6 +244,7 @@ migrate-ent-dry-run:
 #     -p 5440:5432 postgres:16
 MIGRATIONS_PG  ?= migrations/versioned/postgres
 MIGRATIONS_CH  ?= migrations/versioned/clickhouse
+MIGRATIONS_CH_REPL ?= migrations/versioned/clickhouse/replicated
 
 .PHONY: migrate-up
 migrate-up:
@@ -277,9 +279,7 @@ migrate-fingerprint:
 
 # ── CI gates ─────────────────────────────────────────────────────────────────
 .PHONY: migrate-check
-# migrate-check-clickhouse is deliberately NOT in this list — see the note in
-# .github/workflows/migrations.yml. Run it by hand if you need it.
-migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order
+migrate-check: migrate-check-sync migrate-check-checksum migrate-check-order migrate-check-clickhouse migrate-check-clickhouse-replication migrate-check-clickhouse-parity
 	@echo "all migration checks passed"
 
 .PHONY: migrate-check-sync
@@ -296,7 +296,15 @@ migrate-check-order:
 
 .PHONY: migrate-check-clickhouse
 migrate-check-clickhouse:
-	@./scripts/migrations/clickhouse-check.sh $(MIGRATIONS_CH)
+	@./scripts/migrations/clickhouse-check.sh $(MIGRATIONS_CH) $(MIGRATIONS_CH_REPL)
+
+.PHONY: migrate-check-clickhouse-replication
+migrate-check-clickhouse-replication:
+	@./scripts/migrations/clickhouse-replication-check.sh $(MIGRATIONS_CH_REPL)
+
+.PHONY: migrate-check-clickhouse-parity
+migrate-check-clickhouse-parity:
+	@./scripts/migrations/clickhouse-parity-check.sh
 
 .PHONY: generate-migration
 generate-migration:

@@ -130,6 +130,7 @@ func TestPostInvoice(t *testing.T) {
 		invoice   func() *invoice.Invoice
 		taxes     []*taxapplied.TaxApplied
 		wantLines map[types.JournalEventType][]string
+		wantDate  string
 		wantErr   bool
 	}{
 		{
@@ -186,6 +187,18 @@ func TestPostInvoice(t *testing.T) {
 			wantLines: map[types.JournalEventType][]string{},
 		},
 		{
+			name: "backdated invoice is dated on its issue date",
+			invoice: func() *invoice.Invoice {
+				inv := newInvoice("inv_7", nil, newLine("l_7", nil, 50))
+				inv.IssueDate = lo.ToPtr(time.Date(2026, 1, 14, 20, 0, 0, 0, time.UTC))
+				return inv
+			},
+			wantLines: map[types.JournalEventType][]string{
+				types.JournalEventInvoiceFinalized: {"debit accounts_receivable 50", "credit revenue 50"},
+			},
+			wantDate: "2026-01-15",
+		},
+		{
 			name: "line item without a POB fails",
 			invoice: func() *invoice.Invoice {
 				return newInvoice("inv_6", sub, newLine("l_6", lo.ToPtr("sli_unsynced"), 100))
@@ -213,7 +226,7 @@ func TestPostInvoice(t *testing.T) {
 			for _, e := range saved {
 				require.ElementsMatch(t, tt.wantLines[e.EventType()], lineSummary(e))
 				require.Equal(t, lo.Ternary(inv.SubscriptionID == nil, "", "contract_1"), e.ContractID())
-				wantDate := lo.Ternary(e.EventType() == types.JournalEventInvoiceVoided, "2026-11-05", "2026-11-01")
+				wantDate := lo.Ternary(e.EventType() == types.JournalEventInvoiceVoided, "2026-11-05", lo.CoalesceOrEmpty(tt.wantDate, "2026-11-01"))
 				require.Equal(t, wantDate, e.BusinessDate().Format(time.DateOnly), "local date in the subscription or customer timezone")
 			}
 			requireReversal(t, saved, types.JournalEventInvoiceVoided, types.JournalEventInvoiceFinalized)
@@ -940,6 +953,16 @@ func TestRunRecognition(t *testing.T) {
 		require.Equal(t, []string{"2026-01-31"}, recognized(t, store))
 	})
 
+	t.Run("a scoped run covers only its tenant and environment", func(t *testing.T) {
+		s, store := newRun(t, true)
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, EnvironmentID: "env_other", OnProgress: func(RecognitionCursor) { t.Fatal("other environment") }}))
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, TenantID: "tenant_other", OnProgress: func(RecognitionCursor) { t.Fatal("other tenant") }}))
+		require.Empty(t, recognized(t, store))
+
+		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx), OnProgress: func(RecognitionCursor) {}}))
+		require.Equal(t, []string{"2026-01-31"}, recognized(t, store))
+	})
+
 	t.Run("a disabled environment is skipped", func(t *testing.T) {
 		s, store := newRun(t, false)
 		require.NoError(t, s.RunRecognition(ctx, RecognitionRunRequest{AsOf: feb1, OnProgress: func(RecognitionCursor) { t.Fatal("disabled") }}))
@@ -1020,4 +1043,52 @@ func TestBackfill(t *testing.T) {
 	count := len(saved())
 	backfill()
 	require.Len(t, saved(), count, "a rerun posts nothing")
+}
+
+// activeByDefault narrows a list without statuses to active subscriptions, as the Postgres repository does.
+type activeByDefault struct{ subscription.Repository }
+
+func (r activeByDefault) List(ctx context.Context, f *types.SubscriptionFilter) ([]*subscription.Subscription, error) {
+	if len(f.SubscriptionStatus) == 0 {
+		f.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
+	}
+	return r.Repository.List(ctx, f)
+}
+
+func TestBackfillCoversEverySubscriptionStatus(t *testing.T) {
+	ctx := testutil.SetupContext()
+	svc, _ := newTestService(t, ctx, testSources{})
+	s := svc.(*journalService)
+	s.subRepo = activeByDefault{s.subRepo}
+
+	tests := []struct {
+		status types.SubscriptionStatus
+		amount int64
+	}{
+		{types.SubscriptionStatusCancelled, 100},
+		{types.SubscriptionStatusTrialing, 0},
+	}
+	invoices := map[types.SubscriptionStatus]*invoice.Invoice{}
+	for _, tt := range tests {
+		subID, lineID := "subs_"+string(tt.status), "sli_"+string(tt.status)
+		require.NoError(t, s.subRepo.CreateWithLineItems(ctx, &subscription.Subscription{ID: subID, CustomerID: "cust_1", Currency: "usd",
+			Timezone: "Asia/Kolkata", SubscriptionStatus: tt.status, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)},
+			[]*subscription.SubscriptionLineItem{{ID: lineID, SubscriptionID: subID, PriceID: "price_" + string(tt.status), PriceType: types.PRICE_TYPE_FIXED,
+				BillingPeriod: types.BILLING_PERIOD_MONTHLY, StartDate: inIST(time.January, 1), BaseModel: types.GetDefaultBaseModel(ctx)}}))
+		inv := subscriptionInvoice(ctx, "inv_"+string(tt.status), types.InvoiceTypeSubscription, tt.amount, inIST(time.January, 1), inIST(time.January, 1), inIST(time.February, 1))
+		inv.SubscriptionID = lo.ToPtr(subID)
+		inv.LineItems[0].SubscriptionLineItemID = lo.ToPtr(lineID)
+		require.NoError(t, s.invoiceRepo.CreateWithLineItems(ctx, inv))
+		invoices[tt.status] = inv
+	}
+
+	require.NoError(t, s.Backfill(ctx, BackfillRequest{AsOf: inIST(time.March, 1), OnProgress: func(RecognitionCursor) {}}))
+	for _, tt := range tests {
+		t.Run(string(tt.status), func(t *testing.T) {
+			_, err := s.contractRepo.GetBySubscriptionID(ctx, "subs_"+string(tt.status))
+			require.NoError(t, err, "the contract was created")
+			_, err = s.pobService.POBIDForInvoiceLine(ctx, invoices[tt.status].LineItems[0])
+			require.NoError(t, err, "the POB was created")
+		})
+	}
 }

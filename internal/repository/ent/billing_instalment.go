@@ -149,45 +149,24 @@ func (r *billingInstalmentRepository) List(ctx context.Context, filter *billingt
 	return billingterm.InstalmentsFromEnt(rows), nil
 }
 
-func (r *billingInstalmentRepository) ListInvoiced(
-	ctx context.Context,
-	ownerType types.BillingTermOwnerType,
-	ownerIDs []string,
-	period types.Period,
-) ([]*billingterm.Instalment, error) {
-	if len(ownerIDs) == 0 {
-		return []*billingterm.Instalment{}, nil
-	}
-
-	span := StartRepositorySpan(ctx, "billing_instalment", "list_invoiced", map[string]interface{}{
-		"owner_type": ownerType,
-		"owners":     len(ownerIDs),
-	})
+func (r *billingInstalmentRepository) ListEnvironments(ctx context.Context, filter *billingterm.InstalmentFilter) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "billing_instalment", "list_environments", nil)
 	defer FinishSpan(span)
 
-	rows, err := r.client.Reader(ctx).BillingInstalment.Query().
-		Where(r.scope(ctx)...).
-		Where(
-			entbillinginstalment.OwnerTypeEQ(ownerType),
-			entbillinginstalment.OwnerIDIn(ownerIDs...),
-			entbillinginstalment.InstalmentStatusEQ(types.InstalmentStatusInvoiced),
-			entbillinginstalment.InvoicedAtGTE(period.Start),
-			entbillinginstalment.InvoicedAtLT(period.End),
-		).
-		Order(
-			ent.Asc(entbillinginstalment.FieldInvoicedAt),
-			ent.Asc(entbillinginstalment.FieldID),
-		).
-		All(ctx)
+	var envs []types.TenantEnvironment
+	query := r.client.Reader(ctx).BillingInstalment.Query().Where(entbillinginstalment.Status(string(types.StatusPublished)))
+	err := applyInstalmentFilter(query, filter).
+		GroupBy(entbillinginstalment.FieldTenantID, entbillinginstalment.FieldEnvironmentID).
+		Scan(ctx, &envs)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to list invoiced billing instalments").
+			WithHint("Failed to list environments with billing instalments").
 			Mark(ierr.ErrDatabase)
 	}
 
 	SetSpanSuccess(span)
-	return billingterm.InstalmentsFromEnt(rows), nil
+	return envs, nil
 }
 
 func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.InstalmentFilter) *ent.BillingInstalmentQuery {
@@ -210,6 +189,10 @@ func applyInstalmentFilter(q *ent.BillingInstalmentQuery, f *billingterm.Instalm
 
 	if len(f.Deliveries) > 0 {
 		preds = append(preds, entbillinginstalment.DeliveryIn(f.Deliveries...))
+	}
+
+	if f.BillOnFrom != nil {
+		preds = append(preds, entbillinginstalment.BillOnGTE(*f.BillOnFrom))
 	}
 
 	if f.BillOnOrBefore != nil {

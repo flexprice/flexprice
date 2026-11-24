@@ -305,6 +305,20 @@ func FullBillingPeriod(t time.Time, grid *billingPeriodGrid) Period {
 	}
 }
 
+// BillingPeriodsIn returns the full billing periods on the grid that overlap [start, end), in order.
+func BillingPeriodsIn(grid *billingPeriodGrid, start, end time.Time) []Period {
+	var out []Period
+	for t := start; t.Before(end); {
+		p := FullBillingPeriod(t, grid)
+		if !p.End.After(t) {
+			break
+		}
+		out = append(out, p)
+		t = p.End
+	}
+	return out
+}
+
 // billingPeriodGrid is a billing schedule: the dates anchor + k periods, for any integer k.
 // Think of it like a time with origin at anchor
 // The next point at anchor + unit * period

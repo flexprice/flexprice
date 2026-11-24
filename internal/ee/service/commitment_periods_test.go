@@ -47,7 +47,6 @@ func TestCommitmentPeriods(t *testing.T) {
 				Type:        types.COMMITMENT_TYPE_AMOUNT,
 				Value:       decimal.NewFromInt(100),
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   jan,
 				EndDate:     lo.ToPtr(jan.AddDate(1, 0, 0)),
 			},
@@ -62,7 +61,6 @@ func TestCommitmentPeriods(t *testing.T) {
 				Type:        types.COMMITMENT_TYPE_AMOUNT,
 				Value:       decimal.NewFromInt(100),
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC),
 				EndDate:     lo.ToPtr(jan.AddDate(1, 0, 0)),
 			},
@@ -77,7 +75,6 @@ func TestCommitmentPeriods(t *testing.T) {
 				Type:        types.COMMITMENT_TYPE_QUANTITY,
 				Value:       decimal.NewFromInt(8),
 				Measurement: types.CommitmentMeasurementWindow,
-				Timezone:    "UTC",
 				StartDate:   time.Date(2027, 8, 1, 0, 0, 0, 0, time.UTC),
 				EndDate:     lo.ToPtr(time.Date(2027, 9, 1, 0, 0, 0, 0, time.UTC)),
 			},
@@ -109,7 +106,8 @@ func TestCommitmentPeriods(t *testing.T) {
 	}
 }
 
-func TestCommitmentPeriods_ActiveWindowsIST(t *testing.T) {
+// Windows are UTC: 03:30-15:30 is 09:00-21:00 in Kolkata.
+func TestCommitmentPeriods_ActiveWindowsOnAKolkataSubscription(t *testing.T) {
 	ist, _ := time.LoadLocation("Asia/Kolkata")
 	start := time.Date(2026, 8, 25, 0, 0, 0, 0, ist)
 	end := time.Date(2026, 9, 1, 0, 0, 0, 0, ist)
@@ -117,11 +115,10 @@ func TestCommitmentPeriods_ActiveWindowsIST(t *testing.T) {
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
 		Value:       decimal.NewFromInt(32),
 		Measurement: types.CommitmentMeasurementWindow,
-		Timezone:    "Asia/Kolkata",
 		ActiveWindows: types.ActiveWindows{
 			{
-				Start: types.Bucket{Hour: 9},
-				End:   types.Bucket{Hour: 21},
+				Start: types.Bucket{Hour: 3, Minute: 30},
+				End:   types.Bucket{Hour: 15, Minute: 30},
 			},
 		},
 		StartDate: start.UTC(),
@@ -182,7 +179,6 @@ func TestCommitmentPeriods_ProratesAgainstTheFullBillingPeriod(t *testing.T) {
 				Type:        types.COMMITMENT_TYPE_AMOUNT,
 				Value:       decimal.NewFromInt(100),
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   tc.start,
 				EndDate:     lo.ToPtr(tc.end),
 			}
@@ -200,13 +196,12 @@ func TestCommitmentPeriods_ProratesAgainstTheFullBillingPeriod(t *testing.T) {
 	}
 }
 
-func TestCommitmentPeriods_SkipsBucketsBeforeStart(t *testing.T) {
+func TestCommitmentPeriods_HoldsTheBucketItsStartCuts(t *testing.T) {
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
 		Value:       decimal.NewFromInt(1),
 		Measurement: types.CommitmentMeasurementWindow,
-		Timezone:    "UTC",
 		StartDate:   time.Date(2027, 1, 31, 12, 30, 0, 0, time.UTC),
 		EndDate:     lo.ToPtr(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)),
 	}
@@ -220,18 +215,17 @@ func TestCommitmentPeriods_SkipsBucketsBeforeStart(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
-	require.Equal(t, int64(11), periods[0].ActiveBuckets) // 13:00 to 23:00; the 12:00 bucket starts before the term
+	require.Equal(t, int64(12), periods[0].ActiveBuckets) // 12:00 to 23:00; the 12:00 bucket ends inside the term
 }
 
 func TestCommitmentPeriods_BucketStraddlingAPeriodBoundaryCountsOnce(t *testing.T) {
 	// Weekly (Monday) buckets on a monthly subscription: the bucket starting Mon 26 Jan 2026
-	// runs into February. It belongs to January; February's period must not count it again.
+	// runs into February. It belongs to February, where it ends; January's period must not count it too.
 	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
 		Value:       decimal.NewFromInt(1),
 		Measurement: types.CommitmentMeasurementWindow,
-		Timezone:    "UTC",
 		StartDate:   jan,
 		EndDate:     lo.ToPtr(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)),
 	}
@@ -239,19 +233,18 @@ func TestCommitmentPeriods_BucketStraddlingAPeriodBoundaryCountsOnce(t *testing.
 	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeWeek, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 2)
-	require.Equal(t, int64(4), periods[0].ActiveBuckets) // Mondays 5, 12, 19, 26 Jan; 29 Dec starts before the term
-	require.Equal(t, int64(4), periods[1].ActiveBuckets) // Mondays 2, 9, 16, 23 Feb; 26 Jan already counted in January
+	require.Equal(t, int64(4), periods[0].ActiveBuckets) // Mondays 29 Dec, 5, 12, 19 Jan; 29 Dec ends inside the term
+	require.Equal(t, int64(4), periods[1].ActiveBuckets) // Mondays 26 Jan, 2, 9, 16 Feb; 23 Feb ends after the term
 	require.True(t, commitmentValue(periods).Equal(decimal.NewFromInt(8)))
 }
 
 func TestCommitmentPeriods_CountsPartialEdgeBuckets(t *testing.T) {
-	// A term starting mid-minute skips the straddling bucket; one ending mid-minute keeps its last.
+	// A term holds the buckets ending within it: the minute its start cuts, not the minute its end cuts.
 	jan := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	c := &commitment.Commitment{
 		Type:        types.COMMITMENT_TYPE_QUANTITY,
 		Value:       decimal.NewFromInt(1),
 		Measurement: types.CommitmentMeasurementWindow,
-		Timezone:    "UTC",
 		StartDate:   jan.Add(10*time.Hour + 30*time.Second),
 		EndDate:     lo.ToPtr(jan.Add(12*time.Hour + 10*time.Second)),
 	}
@@ -259,7 +252,7 @@ func TestCommitmentPeriods_CountsPartialEdgeBuckets(t *testing.T) {
 	periods, err := commitmentPeriods(c, monthlySub(jan), mulFn(decimal.NewFromInt(1)), types.WindowSizeMinute, types.Period{Start: c.StartDate, End: *c.EndDate})
 	require.NoError(t, err)
 	require.Len(t, periods, 1)
-	// 10:01 through 12:00 inclusive: the 10:00 bucket starts before the term, 12:00 starts before its end.
+	// 10:00 through 11:59 inclusive: the 10:00 bucket ends inside the term, 12:00 ends after it.
 	require.Equal(t, int64(120), periods[0].ActiveBuckets)
 }
 
@@ -328,7 +321,6 @@ func TestClipCommitmentPeriod_PartialFloorsSumToTheRoundedWhole(t *testing.T) {
 				Value:       decimal.RequireFromString(tc.value),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   tc.month,
 				EndDate:     lo.ToPtr(end),
 			}
@@ -405,7 +397,6 @@ func TestCommitmentPeriods_ProratedCapacityHasNoNoise(t *testing.T) {
 				Value:       decimal.RequireFromString(tc.value),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   tc.start,
 				EndDate:     lo.ToPtr(tc.end),
 			}
@@ -459,7 +450,6 @@ func TestClipCommitmentPeriod_PartialCapacitiesSumToTheWhole(t *testing.T) {
 				Value:       decimal.RequireFromString(tc.value),
 				Currency:    "usd",
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   apr,
 				EndDate:     lo.ToPtr(end),
 			}
@@ -497,7 +487,6 @@ func TestCommitmentPeriods_MidPeriodEndProratesTheLastPeriod(t *testing.T) {
 		Value:       decimal.NewFromInt(100),
 		Currency:    "usd",
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   start,
 		EndDate:     lo.ToPtr(end),
 	}
@@ -578,7 +567,6 @@ func TestCommitmentPeriods_OpenEndedRunsThroughTheWindow(t *testing.T) {
 				Type:        types.COMMITMENT_TYPE_AMOUNT,
 				Value:       decimal.NewFromInt(100),
 				Measurement: types.CommitmentMeasurementBillingPeriod,
-				Timezone:    "UTC",
 				StartDate:   tc.start,
 			}
 
@@ -605,7 +593,6 @@ func TestCommitmentPeriods_StopAtTheSpan(t *testing.T) {
 		Type:        types.COMMITMENT_TYPE_AMOUNT,
 		Value:       decimal.NewFromInt(100),
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   jan,
 		EndDate:     lo.ToPtr(jan.AddDate(1, 0, 0)),
 	}
@@ -628,7 +615,6 @@ func TestCommitmentPeriods_OpenEndedStopsAtTheSubscriptionEnd(t *testing.T) {
 		Type:        types.COMMITMENT_TYPE_AMOUNT,
 		Value:       decimal.NewFromInt(100),
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   jan,
 	}
 
@@ -649,7 +635,6 @@ func TestTermValue(t *testing.T) {
 		Type:        types.COMMITMENT_TYPE_AMOUNT,
 		Value:       decimal.NewFromInt(100),
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   jan,
 	}
 
@@ -807,7 +792,6 @@ func TestCommitmentPeriods_FromWindowMatchesFullGeneration(t *testing.T) {
 					Type:        types.COMMITMENT_TYPE_AMOUNT,
 					Value:       decimal.NewFromInt(100),
 					Measurement: types.CommitmentMeasurementBillingPeriod,
-					Timezone:    "UTC",
 					StartDate:   sub.StartDate,
 				}
 				through := sub.StartDate.AddDate(3, 0, 0)
@@ -845,7 +829,6 @@ func TestCommitmentPeriods_MidSecondWeeklyAnchorMatchesTheStoredEdges(t *testing
 		Type:        types.COMMITMENT_TYPE_AMOUNT,
 		Value:       decimal.NewFromInt(20),
 		Measurement: types.CommitmentMeasurementBillingPeriod,
-		Timezone:    "UTC",
 		StartDate:   anchor.Truncate(time.Second),
 	}
 

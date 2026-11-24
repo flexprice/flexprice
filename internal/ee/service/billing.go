@@ -1635,6 +1635,20 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 	return nil
 }
 
+// periodLineItems returns the line items billed in the period starting at periodStart, with prices attached.
+// Line items loaded via GetWithLineItems are filtered by sub.CurrentPeriodStart, so historical periods
+// (recalculation, past invoices) reload them by the invoice's period start.
+func (s *billingService) periodLineItems(ctx context.Context, subscriptionID string, periodStart time.Time) ([]*subscription.SubscriptionLineItem, error) {
+	lineItems, err := listActiveLineItems(ctx, s.SubscriptionLineItemRepo, subscriptionID, periodStart)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachPricesToLineItems(ctx, lineItems); err != nil {
+		return nil, err
+	}
+	return lineItems, nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	params *dto.PrepareSubscriptionInvoiceRequestParams,
@@ -1674,8 +1688,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	isPreview := lo.Contains([]types.InvoiceReferencePoint{
 		types.ReferencePointPreview, types.ReferencePointInternalPreview, types.ReferencePointRevenueFacts,
 	}, referencePoint)
-	if !isPreview {
-		if err := refreshSubscriptionEntitlementGrantUsage(ctx, s.ServiceParams, sub, periodStart, periodEnd, asOf); err != nil {
+	if !isPreview && s.EntitlementGrantRepo != nil {
+		if err := s.refreshEntitlementGrantsForInvoice(ctx, sub, periodStart, periodEnd, asOf); err != nil {
 			return nil, err
 		}
 	}
@@ -1729,7 +1743,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 
 	var calculationResult *dto.BillingCalculationResult
 	var metadata types.Metadata = make(types.Metadata)
-	var description string
 
 	switch referencePoint {
 	case types.ReferencePointPeriodStart:
@@ -1761,8 +1774,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return nil, err
 		}
 
-		description = fmt.Sprintf("Invoice for advance charges - subscription %s", sub.ID)
-
 	case types.ReferencePointPeriodEnd:
 		// Include both arrear charges for current period and advance charges for next period
 		// Use calculateMeterUsageCharges for arrear so cumulative commitment is applied
@@ -1792,13 +1803,15 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// Combine both sets of line items
 		combinedLineItems := append(arrearLineItems, advanceLineItems...)
 		if len(combinedLineItems) == 0 && len(instalments) == 0 {
-			return zeroAmountInvoice, nil
+			// A parent that ended this period has nothing of its own left, but still bills its children.
+			return s.mergeGroupedInvoicingChildren(ctx, sub, zeroAmountInvoice, periodStart, periodEnd, referencePoint)
 		}
 
 		// For current period arrear charges (meter_usage path when enabled for
 		// cumulative commitment support; falls back to raw-events CalculateCharges otherwise)
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -1814,6 +1827,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			advanceLineItems,
 			nextPeriodStart,
@@ -1834,8 +1848,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	case types.ReferencePointPreview, types.ReferencePointRevenueFacts:
 		// Both include current-period arrear and next-period advance without
 		// filtering already-invoiced items; usage reads meter_usage (FINAL).
@@ -1845,6 +1857,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.CurrentPeriodArrear,
 			periodStart,
@@ -1860,6 +1873,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For next period advance charges
 		advanceResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			classification.NextPeriodAdvance,
 			nextPeriodStart,
@@ -1880,7 +1894,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointInternalPreview:
@@ -1919,7 +1932,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Preview invoice for subscription %s", sub.ID)
 		metadata[types.MetadataKeyIsPreview] = types.MetadataValueTrue
 
 	case types.ReferencePointCancel:
@@ -1938,6 +1950,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// For current period arrear charges
 		arrearResult, err := s.calculateMeterUsageCharges(
 			ctx,
+			types.UsageSourceInvoiceCreation,
 			sub,
 			arrearLineItems,
 			periodStart,
@@ -1957,8 +1970,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			Currency:     sub.Currency,
 		}
 
-		description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
-
 	default:
 		return nil, ierr.NewError("invalid reference point").
 			WithHint(fmt.Sprintf("Reference point '%s' is not supported", referencePoint)).
@@ -1974,7 +1985,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		Result:         calculationResult,
 		PeriodStart:    periodStart,
 		PeriodEnd:      periodEnd,
-		Description:    description,
 		Metadata:       metadata,
 		ReferencePoint: referencePoint,
 	})
@@ -1982,7 +1992,17 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		return nil, err
 	}
 
-	// For parent subscriptions, merge line items from all grouped_invoicing children.
+	return s.mergeGroupedInvoicingChildren(ctx, sub, invReq, periodStart, periodEnd, referencePoint)
+}
+
+// mergeGroupedInvoicingChildren adds a parent's grouped_invoicing children's charges to its invoice request.
+func (s *billingService) mergeGroupedInvoicingChildren(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	invReq *dto.CreateInvoiceRequest,
+	periodStart, periodEnd time.Time,
+	referencePoint types.InvoiceReferencePoint,
+) (*dto.CreateInvoiceRequest, error) {
 	if sub.SubscriptionType == types.SubscriptionTypeParent {
 		children, err := getGroupedInvoicingChildren(ctx, s.ServiceParams, sub, false)
 		if err != nil {
@@ -2350,7 +2370,7 @@ func (s *billingService) SumUsageAmountForSubscription(
 	sub *subscription.Subscription,
 	periodStart, periodEnd time.Time,
 ) (decimal.Decimal, error) {
-	result, err := s.calculateMeterUsageCharges(ctx, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
+	result, err := s.calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, periodStart, periodEnd, true, nil, nil)
 	if err != nil {
 		return decimal.Zero, err
 	}
@@ -2369,9 +2389,11 @@ func (s *billingService) SumUsageAmountForSubscription(
 // GetMeterUsageBySubscription call per sub-window and emit one line item per
 // sub-window. Same-cadence USAGE line items keep today's single-call behavior.
 //
-// periodLineItems, when set, are the active line items at periodStart.
+// periodLineItems, when set, are the active line items at periodStart. source sets how usage is read:
+// only invoice creation deduplicates with FINAL.
 func (s *billingService) calculateMeterUsageCharges(
 	ctx context.Context,
+	source types.UsageSource,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
 	periodStart,
@@ -2438,14 +2460,14 @@ func (s *billingService) calculateMeterUsageCharges(
 					SubscriptionID: sub.ID,
 					StartTime:      w.Start,
 					EndTime:        w.End,
-					Source:         string(types.UsageSourceInvoiceCreation),
+					Source:         string(source),
 					LineItems:      windowLineItems,
 				})
 				if err != nil {
 					return nil, err
 				}
 
-				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, types.UsageSourceInvoiceCreation, asOfOverride)
+				lines, cost, err := s.CalculateMeterUsageCharges(ctx, &windowSub, usage, w.Start, w.End, source, asOfOverride)
 				if err != nil {
 					return nil, err
 				}
@@ -2506,12 +2528,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
-	// from when it is issued.
+	// Provisional due date, counted from the invoice's billing boundary, else period end or now if later.
 	issueDate := clock.Now()
 	if periodEnd.After(issueDate) {
 		issueDate = periodEnd
 	}
+	reason := lo.CoalesceOrEmpty(params.BillingReason, types.InvoiceBillingReasonSubscriptionCycle)
+	issueDate = lo.FromPtrOr(invoice.IssueDateFor(reason, &periodStart, &periodEnd), issueDate)
 	invoiceDueDate := subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate)
 
 	if result == nil {
@@ -2615,7 +2638,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
 		PeriodStart:      &periodStart,
 		PeriodEnd:        &periodEnd,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
+		BillingReason:    reason,
 		Metadata:         metadata,
 		LineItems:        append(result.FixedCharges, result.UsageCharges...),
 		InvoiceCoupons:   validCoupons,
@@ -2625,9 +2648,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 
 	if params.InvoiceType != "" {
 		req.InvoiceType = params.InvoiceType
-	}
-	if params.BillingReason != "" {
-		req.BillingReason = params.BillingReason
 	}
 
 	// The revenue-facts rollup needs discount amounts, which normal previews
@@ -3067,6 +3087,16 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		SubscriptionID: subscriptions[0].ID,
 	})
 
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead {
+		cust, err := s.CustomerRepo.Get(ctx, customerID)
+		if err == nil {
+			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, subscriptions, clock.Now())
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before read failed; returning stored usage",
+				"error", err, "customer_id", customerID)
+		}
+	}
 	s.attachGrantState(ctx, aggregatedFeatures, subscriptions)
 
 	// Build final response
@@ -3156,6 +3186,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
 		SubscriptionIDs: req.SubscriptionIDs,
 		FeatureIDs:      featureIDs,
+		RefreshGrants:   req.RefreshGrants,
 	}
 
 	entitlements, err := s.GetCustomerEntitlements(ctx, customerID, entitlementsReq)

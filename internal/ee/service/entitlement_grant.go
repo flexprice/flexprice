@@ -45,6 +45,9 @@ type EntitlementGrantService interface {
 	CloseEntitlementGrants(ctx context.Context, grants []*entitlementgrant.EntitlementGrant, closeAt time.Time, preserveWindows bool) (map[string]*entitlementgrant.EntitlementGrant, error)
 	ReissueEntitlementGrants(ctx context.Context, req *dto.ReissueEntitlementGrantsRequest) ([]*entitlementgrant.EntitlementGrant, error)
 	OpenFeatureBasedEntitlementGrants(ctx context.Context, reqs []OpenFeatureBasedEntitlementGrantsRequest) ([]*entitlementgrant.EntitlementGrant, error)
+
+	// MeasureEntitlementGrantUsage is a feature or subscription grant's consumption through min(at, valid_to).
+	MeasureEntitlementGrantUsage(ctx context.Context, meta *grantEvalMeta, sub *subscription.Subscription, g *entitlementgrant.EntitlementGrant, at time.Time) (decimal.Decimal, error)
 }
 
 type entitlementGrantService struct {
@@ -417,6 +420,23 @@ func (m *grantEvalMeta) externalIDs(ctx context.Context, sub *subscription.Subsc
 	}
 	m.extIDsBySub[sub.ID] = ids
 	return ids, nil
+}
+
+// featureMeter is the meter of a feature grant; ErrNotFound when the feature or its meter is missing.
+func (m *grantEvalMeta) featureMeter(g *entitlementgrant.EntitlementGrant) (*meter.Meter, error) {
+	var mtr *meter.Meter
+	if m != nil {
+		if f, ok := m.featureByID[g.ScopeEntityID]; ok && f.MeterID != "" {
+			mtr = m.meterByID[f.MeterID]
+		}
+	}
+	if mtr == nil {
+		return nil, ierr.NewError("entitlement grant's feature or meter not found").
+			WithHint("The entitlement grant's feature or meter is missing. Fix the entitlement, then compute the invoice again.").
+			WithReportableDetails(map[string]interface{}{"grant_id": g.ID, "feature_id": g.ScopeEntityID}).
+			Mark(ierr.ErrNotFound)
+	}
+	return mtr, nil
 }
 
 // -----------------------------------------------------------------------------
@@ -1461,4 +1481,83 @@ func grantUsageSnapshot(g *entitlementgrant.EntitlementGrant, usage decimal.Deci
 		WithQuotaCrossedAt(cross).
 		WithGrantStatus(status).
 		Build()
+}
+
+// MeasureEntitlementGrantUsage is the grant's consumption through min(at, valid_to), floored at 0.
+// It fails with ErrNotFound when meta lacks the grant's feature or meter.
+func (s *entitlementGrantService) MeasureEntitlementGrantUsage(
+	ctx context.Context,
+	meta *grantEvalMeta,
+	sub *subscription.Subscription,
+	g *entitlementgrant.EntitlementGrant,
+	at time.Time,
+) (decimal.Decimal, error) {
+	var rawUsage decimal.Decimal
+	var err error
+	switch g.ScopeEntityType {
+	case types.EntitlementGrantScopeSubscription:
+		rawUsage, _, err = NewMeterUsageService(s.ServiceParams).GetSubscriptionWindowSpend(ctx, sub, g.ValidFrom, types.EarliestOf(at, g.ValidTo))
+	case types.EntitlementGrantScopeFeature:
+		m, lookupErr := meta.featureMeter(g)
+		if lookupErr != nil {
+			return decimal.Zero, lookupErr
+		}
+		extIDs, extErr := meta.externalIDs(ctx, sub)
+		if extErr != nil {
+			return decimal.Zero, extErr
+		}
+		rawUsage, err = s.measureFeatureGrantUsage(ctx, g, m, sub, extIDs, at)
+	default:
+		return decimal.Zero, ierr.NewError("only feature and subscription entitlement grants can be measured").
+			WithReportableDetails(map[string]interface{}{"grant_id": g.ID, "scope_entity_type": g.ScopeEntityType}).
+			Mark(ierr.ErrValidation)
+	}
+	if err != nil {
+		return decimal.Zero, err
+	}
+	// Grant consumption is nonnegative; each refresh starts from signed metering data.
+	return decimal.Max(rawUsage, decimal.Zero), nil
+}
+
+// measureFeatureGrantUsage evaluates a feature grant through min(at, valid_to). NEVER SUM
+// quantity grants use the running balance; other quantity grants use their own window.
+//
+//   - quantity measure: signed window usage or checkpoint-backed running balance.
+//   - amount measure: rides the billing path (GetSubscriptionMeterUsageWithSub +
+//     ConvertToBillingCharges), which splits the window into per-line-item date
+//     ranges — a mid-window price change produces a new line-item segment, so
+//     each segment is priced at its own price. No price pinning required.
+func (s *entitlementGrantService) measureFeatureGrantUsage(
+	ctx context.Context,
+	g *entitlementgrant.EntitlementGrant,
+	m *meter.Meter,
+	sub *subscription.Subscription,
+	extCustomerIDs []string,
+	at time.Time,
+) (decimal.Decimal, error) {
+	end := at
+	if end.After(g.ValidTo) {
+		end = g.ValidTo
+	}
+	if end.Before(g.ValidFrom) {
+		return decimal.Zero, nil
+	}
+
+	meterUsageSvc := NewMeterUsageService(s.ServiceParams)
+	if g.Measure == types.EntitlementGrantMeasureQuantity && keepsRunningAggregate(m) {
+		return meterUsageSvc.GetCheckpointedUsage(ctx, CheckpointedUsageRequest{
+			CustomerID: sub.CustomerID, ExternalCustomerIDs: extCustomerIDs,
+			MeterID: m.ID, AggregationType: m.Aggregation.Type, Until: end,
+			IgnoreCheckpoints: !usesCheckpoints(sub),
+		})
+	}
+	usage, err := meterUsageSvc.GetGrantUsage(ctx, sub, m, extCustomerIDs, g.Measure, []events.TimeRange{{Start: g.ValidFrom, End: end}})
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	s.Logger.Debug(ctx, "entitlement grant evaluation: usage refreshed",
+		"grant_id", g.ID, "measure", g.Measure, "usage", usage,
+	)
+	return usage, nil
 }

@@ -40,9 +40,9 @@ const (
 	SettingKeyRevenueAnalyticsConfig      SettingKey = "revenue_analytics_config"
 	SettingKeyUsageAlertConfig            SettingKey = "usage_alert_config"
 	SettingKeyTaxConfig                   SettingKey = "tax_config"
-	SettingKeyCommitmentsV2               SettingKey = "commitments_v2"
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
+	SettingKeyEmailNotificationConfig     SettingKey = "email_notification_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -69,9 +69,9 @@ func (s *SettingKey) Validate() error {
 		SettingKeyRevenueAnalyticsConfig,
 		SettingKeyUsageAlertConfig,
 		SettingKeyTaxConfig,
-		SettingKeyCommitmentsV2,
 		SettingKeyRevenueRecognitionConfig,
 		SettingKeyBillingEntityConfig,
+		SettingKeyEmailNotificationConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -96,6 +96,17 @@ type DefaultSettingValue struct {
 type SubscriptionConfig struct {
 	GracePeriodDays         int  `json:"grace_period_days" validate:"required,min=1"`
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
+}
+
+// SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
+type SettingsOverride struct {
+	SubscriptionConfig *SubscriptionConfigOverride `json:"subscription_config,omitempty"`
+}
+
+// SubscriptionConfigOverride is the overridable subset of SubscriptionConfig.
+type SubscriptionConfigOverride struct {
+	GracePeriodDays         *int  `json:"grace_period_days,omitempty" validate:"omitempty,min=0"`
+	AutoCancellationEnabled *bool `json:"auto_cancellation_enabled,omitempty"`
 }
 
 // Validate implements SettingConfig interface
@@ -965,11 +976,6 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: map[string]interface{}{},
 			Description:  "Which external tax engine calculates tax, if any. Absent or disabled means the native engine",
 		},
-		SettingKeyCommitmentsV2: {
-			Key:          SettingKeyCommitmentsV2,
-			DefaultValue: map[string]interface{}{"enabled": false},
-			Description:  "Enable first-class commitments",
-		},
 		SettingKeyRevenueRecognitionConfig: {
 			Key:          SettingKeyRevenueRecognitionConfig,
 			DefaultValue: map[string]interface{}{"enabled": false},
@@ -979,6 +985,15 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyBillingEntityConfig,
 			DefaultValue: map[string]interface{}{"mode": string(BillingEntityModeOff)},
 			Description:  "Billing entities mode of the environment; set only by enabling billing entities",
+		},
+		SettingKeyEmailNotificationConfig: {
+			Key: SettingKeyEmailNotificationConfig,
+			DefaultValue: map[string]interface{}{
+				"enabled":            false,
+				"attach_invoice_pdf": true,
+				"auto_send":          map[string]interface{}{"enabled": false, "entities": []string{string(SystemEntityTypeInvoice)}},
+			},
+			Description: "How Flexprice emails customers in this environment",
 		},
 	}, nil
 }
@@ -1152,13 +1167,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyCommitmentsV2:
-		cfg, err := utils.ToStruct[CommitmentsV2Config](value)
-		if err != nil {
-			return err
-		}
-		return cfg.Validate()
-
 	case SettingKeyRevenueRecognitionConfig:
 		cfg, err := utils.ToStruct[RevenueRecognitionConfig](value)
 		if err != nil {
@@ -1172,6 +1180,10 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			return err
 		}
 		return cfg.Validate()
+
+	case SettingKeyEmailNotificationConfig:
+		// Lenient here: a partial update fragment may omit fields the merged result already has.
+		return nil
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
@@ -1313,15 +1325,6 @@ func validateSAMLConfig(value map[string]interface{}) error {
 // in step.
 func (c SAMLConfig) Validate() error { return nil }
 
-// CommitmentsV2Config gates first-class commitments per environment.
-type CommitmentsV2Config struct {
-	Enabled bool `json:"enabled"`
-}
-
-func (c CommitmentsV2Config) Validate() error {
-	return nil
-}
-
 // RevenueRecognitionConfig gates every revenue recognition write per environment.
 type RevenueRecognitionConfig struct {
 	Enabled bool `json:"enabled"`
@@ -1338,4 +1341,51 @@ type BillingEntityConfig struct {
 
 func (c BillingEntityConfig) Validate() error {
 	return c.Mode.Normalize().Validate()
+}
+
+// EmailNotificationConfig is how Flexprice emails customers in an environment.
+type EmailNotificationConfig struct {
+	// Enabled lets this environment email customers; every send needs it.
+	Enabled bool `json:"enabled"`
+	// AttachInvoicePDF attaches the invoice PDF to invoice emails.
+	AttachInvoicePDF bool `json:"attach_invoice_pdf"`
+	// AutoSend emails the customer when a document of a listed type is finalized.
+	AutoSend EmailAutoSendConfig `json:"auto_send"`
+}
+
+type EmailAutoSendConfig struct {
+	Enabled  bool               `json:"enabled"`
+	Entities []SystemEntityType `json:"entities"`
+}
+
+func (c EmailNotificationConfig) Validate() error {
+	if !c.AutoSend.Enabled {
+		return nil
+	}
+	if !c.Enabled {
+		return ierr.NewError("auto-send needs emails to be enabled").
+			WithHint("Turn on emails before auto-send, and turn off auto-send before emails").
+			Mark(ierr.ErrValidation)
+	}
+	if len(c.AutoSend.Entities) == 0 {
+		return ierr.NewError("auto-send has no document types").
+			WithHint("Choose at least one document type to email automatically").
+			Mark(ierr.ErrValidation)
+	}
+	for _, e := range c.AutoSend.Entities {
+		if e == "" {
+			return ierr.NewError("empty auto-send document type").
+				WithHint("Document types to email automatically cannot be empty").
+				Mark(ierr.ErrValidation)
+		}
+		if err := validateEnum("auto_send.entities", e, []SystemEntityType{SystemEntityTypeInvoice}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AutoSends reports whether finalizing a document of this type emails the customer.
+func (c EmailNotificationConfig) AutoSends(entity SystemEntityType) bool {
+	return c.Enabled && c.AutoSend.Enabled && lo.Contains(c.AutoSend.Entities, entity)
 }

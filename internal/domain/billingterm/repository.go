@@ -32,8 +32,8 @@ type InstalmentRepository interface {
 	// List returns the matching instalments ordered by bill_on, then id.
 	List(ctx context.Context, filter *InstalmentFilter) ([]*Instalment, error)
 
-	// ListInvoiced returns the owners' instalments invoiced in [period.Start, period.End), ordered by invoiced_at, then id.
-	ListInvoiced(ctx context.Context, ownerType types.BillingTermOwnerType, ownerIDs []string, period types.Period) ([]*Instalment, error)
+	// ListEnvironments returns, across all tenants, every environment holding a published instalment the filter matches.
+	ListEnvironments(ctx context.Context, filter *InstalmentFilter) ([]types.TenantEnvironment, error)
 
 	// Update writes bill_on and triggered_at of a scheduled instalment. It fails with ErrInvalidOperation when the
 	// instalment is no longer scheduled, e.g. claimed by a finalizing invoice.
@@ -62,6 +62,9 @@ type InstalmentFilter struct {
 	SubscriptionIDs []string
 	Statuses        []types.InstalmentStatus
 	Deliveries      []types.InstalmentDelivery
+
+	// BillOnFrom selects instalments whose bill_on is at or after it.
+	BillOnFrom *time.Time
 
 	// BillOnOrBefore selects instalments whose bill_on is at or before it.
 	BillOnOrBefore *time.Time

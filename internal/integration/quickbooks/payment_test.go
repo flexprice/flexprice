@@ -87,10 +87,10 @@ func (f *fakePaymentService) CreatePayment(_ context.Context, req *dto.CreatePay
 	return &p, nil
 }
 
-func (f *fakePaymentService) GetPayment(_ context.Context, id string) (*dto.PaymentResponse, error) {
+func (f *fakePaymentService) GetPayment(_ context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	p, ok := f.byID[id]
+	p, ok := f.byID[req.ID]
 	if !ok {
 		return nil, ierr.NewError("payment not found").Mark(ierr.ErrNotFound)
 	}

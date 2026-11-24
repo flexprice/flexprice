@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"strings"
 	"time"
 
@@ -319,10 +320,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 
 	baseModel := types.GetDefaultBaseModel(ctx)
 
-	issueDate := r.IssueDate
-	if issueDate == nil {
-		issueDate = &baseModel.CreatedAt
-	}
+	issueDate := lo.CoalesceOrEmpty(r.IssueDate, invoice.IssueDateFor(r.BillingReason, r.PeriodStart, r.PeriodEnd), &baseModel.CreatedAt)
 
 	return &invoice.Invoice{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
@@ -544,6 +542,16 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return r.validateIssueDate()
+}
+
+func (r *CreateInvoiceRequest) validateIssueDate() error {
+	if r.IssueDate != nil && r.IssueDate.After(clock.Now()) {
+		return ierr.NewError("issue_date cannot be in the future").
+			WithHint("Issue date cannot be in the future").
+			WithReportableDetails(map[string]any{"issue_date": r.IssueDate}).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
@@ -553,6 +561,10 @@ func (r *CreateInvoiceRequest) Validate() error {
 	}
 
 	if err := r.InvoiceType.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.validateIssueDate(); err != nil {
 		return err
 	}
 
@@ -1278,6 +1290,30 @@ type InvoiceResponse struct {
 
 	// checkout_session is the payment session gating this invoice, when it was created with checkout
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+
+	// in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet
+	InFlightCharge *InFlightCharge `json:"in_flight_charge,omitempty"`
+
+	// linked_wallet_transactions are the wallet credits this invoice pays for; pending ones are released when it is paid
+	LinkedWalletTransactions []*LinkedWalletTransaction `json:"linked_wallet_transactions,omitempty"`
+}
+
+// LinkedWalletTransaction is a wallet credit transaction paid for by an invoice.
+type LinkedWalletTransaction struct {
+	ID                string                  `json:"id"`
+	WalletID          string                  `json:"wallet_id"`
+	CreditAmount      decimal.Decimal         `json:"credit_amount" swaggertype:"string"`
+	TransactionStatus types.TransactionStatus `json:"transaction_status"`
+	TransactionReason types.TransactionReason `json:"transaction_reason"`
+}
+
+// InFlightCharge is a saved-method debit still waiting on the gateway.
+type InFlightCharge struct {
+	PaymentID         string                  `json:"payment_id"`
+	PaymentMethodType types.PaymentMethodType `json:"payment_method_type"`
+	PaymentGateway    string                  `json:"payment_gateway,omitempty"`
+	PaymentStatus     types.PaymentStatus     `json:"payment_status"`
+	Amount            decimal.Decimal         `json:"amount" swaggertype:"string"`
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
@@ -1386,6 +1422,17 @@ func (r *InvoiceResponse) WithHostedInvoiceURL(url string) *InvoiceResponse {
 }
 
 // WithCustomer adds customer information to the invoice response
+func (r *InvoiceResponse) WithInFlightCharge(p *payment.Payment) *InvoiceResponse {
+	r.InFlightCharge = &InFlightCharge{
+		PaymentID:         p.ID,
+		PaymentMethodType: p.PaymentMethodType,
+		PaymentGateway:    lo.FromPtr(p.PaymentGateway),
+		PaymentStatus:     p.PaymentStatus,
+		Amount:            p.Amount,
+	}
+	return r
+}
+
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
 	return r

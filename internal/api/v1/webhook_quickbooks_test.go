@@ -72,10 +72,11 @@ func setupQuickBooksWebhookHandler(t *testing.T, verifierToken string) *WebhookH
 		nil,
 		testutil.NewInMemoryRedisLocker(nil),
 		nil,
+		nil,
 	)
 
 	billingEntitySvc := service.NewBillingEntityService(service.ServiceParams{EnvironmentRepo: testutil.NewInMemoryEnvironmentStore(), SettingsRepo: testutil.NewInMemorySettingsStore()})
-	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc)
+	return NewWebhookHandler(cfg, nil, log, factory, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, billingEntitySvc, nil, nil)
 }
 
 func quickBooksSignature(token, body string) string {

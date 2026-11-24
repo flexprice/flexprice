@@ -4442,6 +4442,12 @@ const docTemplate = `{
                         "name": "external_id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -4688,6 +4694,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "description": "RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.",
+                        "name": "refresh_grants",
+                        "in": "query"
+                    },
+                    {
                         "type": "array",
                         "items": {
                             "type": "string"
@@ -4920,6 +4932,12 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -5047,6 +5065,54 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/{id}/payment-integrations": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to learn which connected gateways can serve this customer and what each can do: check out, auto-charge, list methods, add a method (with the method types it sets up, e.g. enach for Razorpay), set a default.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customer payment integrations",
+                "operationId": "listCustomerPaymentIntegrations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/IntegrationsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/customers/{id}/payment-methods": {
             "get": {
                 "security": [
@@ -5162,6 +5228,59 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/emails/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when reviewing emails sent to customers, for example every bounced email this month or every email to one customer. Filter by delivery status, trigger, customer, document and date. Newest first; paginated.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Search emails",
+                "operationId": "queryEmail",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.EmailLogFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListEmailLogsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/entitlements": {
@@ -7316,6 +7435,117 @@ const docTemplate = `{
                 }
             }
         },
+        "/invoices/{id}/email": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you want Flexprice to email a finalized invoice to the customer, with a link to the hosted invoice and the PDF attached. Sends to the customer's email unless ` + "`" + `to` + "`" + ` is given. Returns the queued email; delivery happens in the background.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Email invoice to customer",
+                "operationId": "sendInvoiceEmail",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Recipients overriding the customer's email",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/SendInvoiceEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/EmailLogResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/emails": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when showing which emails were sent for an invoice and whether each was delivered. Newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "List invoice emails",
+                "operationId": "listInvoiceEmails",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListEmailLogsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Resource not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/invoices/{id}/finalize": {
             "post": {
                 "security": [
@@ -7953,6 +8183,15 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "destination_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "destination_type",
                         "in": "query"
@@ -8126,6 +8365,121 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/payments/customers/{id}/setup/intent": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the live state of the customer's latest setup link. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Get setup intent",
+                "operationId": "getSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/customers/{id}/setup/intent/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cancels the customer's latest setup link if it hasn't been completed. Razorpay only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Cancel setup intent",
+                "operationId": "cancelSetupIntent",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "razorpay"
+                        ],
+                        "type": "string",
+                        "description": "Payment provider",
+                        "name": "provider",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/SetupIntentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
             }
         },
         "/payments/{id}": {
@@ -12279,6 +12633,12 @@ const docTemplate = `{
                         "description": "Feature IDs to filter by",
                         "name": "feature_ids",
                         "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Evaluate entitlement grants before returning their usage (slower)",
+                        "name": "refresh_grants",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -13151,99 +13511,6 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/ScheduledTaskResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/scheduled/schedule-draft-finalization": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Triggers the draft invoice finalization workflow that scans computed draft invoices whose finalization delay has elapsed and finalizes them (assign invoice number, sync to vendors, attempt payment).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule draft finalization",
-                "operationId": "scheduleDraftFinalization",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/tasks/scheduled/schedule-update-billing-period": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Scheduled Tasks"
-                ],
-                "summary": "Schedule update billing period",
-                "operationId": "scheduleUpdateBillingPeriod",
-                "parameters": [
-                    {
-                        "description": "Schedule Update Billing Period Request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object"
                         }
                     },
                     "400": {
@@ -14787,7 +15054,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Remove a human user (type=user) from the current tenant. Not supported for service accounts; use DELETE /users/{id} for those.",
+                "description": "Remove a human user (type=user) from the current tenant. Also revokes every API key the user owns, in all environments. Not supported for service accounts; use DELETE /users/{id} for those.",
                 "produces": [
                     "application/json"
                 ],
@@ -15392,7 +15659,7 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "type": "number",
+                        "type": "string",
                         "name": "credits_available_gt",
                         "in": "query"
                     },
@@ -15578,7 +15845,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.cancelled",
                 "responses": {
@@ -15601,7 +15868,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.created",
                 "responses": {
@@ -15624,7 +15891,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.invoiced",
                 "responses": {
@@ -15647,7 +15914,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_instalment.updated",
                 "responses": {
@@ -15670,7 +15937,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.created",
                 "responses": {
@@ -15693,7 +15960,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "billing_terms.updated",
                 "responses": {
@@ -15701,6 +15968,29 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.BillingTermsWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/checkout.session.cancelled": {
+            "post": {
+                "description": "Fired when a Checkout Session is cancelled through the API, alongside checkout.session.expired. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "checkout.session.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.CheckoutSessionWebhookPayload"
                         }
                     }
                 }
@@ -15716,7 +16006,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.completed",
                 "responses": {
@@ -15739,7 +16029,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.expired",
                 "responses": {
@@ -15762,7 +16052,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.failed",
                 "responses": {
@@ -15785,7 +16075,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Checkout"
                 ],
                 "summary": "checkout.session.initiated",
                 "responses": {
@@ -15808,7 +16098,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.created",
                 "responses": {
@@ -15831,7 +16121,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.terminated",
                 "responses": {
@@ -15854,7 +16144,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Commitment and billing terms"
                 ],
                 "summary": "commitment.updated",
                 "responses": {
@@ -15877,7 +16167,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.created",
                 "responses": {
@@ -15900,7 +16190,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Credit note"
                 ],
                 "summary": "credit_note.updated",
                 "responses": {
@@ -15923,7 +16213,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.created",
                 "responses": {
@@ -15946,7 +16236,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.deleted",
                 "responses": {
@@ -15969,7 +16259,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Customer"
                 ],
                 "summary": "customer.updated",
                 "responses": {
@@ -15992,7 +16282,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.created",
                 "responses": {
@@ -16015,7 +16305,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.deleted",
                 "responses": {
@@ -16038,7 +16328,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "entitlement.updated",
                 "responses": {
@@ -16061,7 +16351,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Usage ingestion"
                 ],
                 "summary": "event.rejected",
                 "responses": {
@@ -16084,7 +16374,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.created",
                 "responses": {
@@ -16107,7 +16397,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.deleted",
                 "responses": {
@@ -16130,7 +16420,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.updated",
                 "responses": {
@@ -16153,7 +16443,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Feature and entitlement"
                 ],
                 "summary": "feature.wallet_balance.alert",
                 "responses": {
@@ -16176,7 +16466,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.communication.triggered",
                 "responses": {
@@ -16199,7 +16489,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.create.drafted",
                 "responses": {
@@ -16207,6 +16497,29 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/invoice.payment.failed": {
+            "post": {
+                "description": "Fired when a payment of an invoice does not succeed. ` + "`" + `reason` + "`" + ` is ` + "`" + `payment_method_unavailable` + "`" + `, ` + "`" + `provider_error` + "`" + ` or ` + "`" + `declined` + "`" + `; ` + "`" + `is_auto_charge_attempt` + "`" + ` is true when Flexprice charged the saved payment method. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice"
+                ],
+                "summary": "invoice.payment.failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.InvoicePaymentFailedWebhookPayload"
                         }
                     }
                 }
@@ -16222,7 +16535,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.payment.overdue",
                 "responses": {
@@ -16245,7 +16558,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.failed",
                 "responses": {
@@ -16268,7 +16581,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.sync.success",
                 "responses": {
@@ -16291,7 +16604,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update",
                 "responses": {
@@ -16314,7 +16627,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.finalized",
                 "responses": {
@@ -16337,7 +16650,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.payment",
                 "responses": {
@@ -16360,7 +16673,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Invoice"
                 ],
                 "summary": "invoice.update.voided",
                 "responses": {
@@ -16368,6 +16681,121 @@ const docTemplate = `{
                         "description": "Webhook payload",
                         "schema": {
                             "$ref": "#/definitions/webhookDto.InvoiceWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.cancelled": {
+            "post": {
+                "description": "Fired when a saved mandate is cancelled. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.cancelled",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.confirmed": {
+            "post": {
+                "description": "Fired when the bank confirms a saved mandate (Razorpay eNACH). Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.confirmed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.rejected": {
+            "post": {
+                "description": "Fired when the bank rejects a mandate; failure_reason carries the bank's reason. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.rejected",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.setup_attempt_failed": {
+            "post": {
+                "description": "Fired when a customer's mandate authorisation fails; failure_reason carries the reason. The customer can retry the same link until it expires. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_attempt_failed",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
+        "/webhook-events/mandate.setup_expired": {
+            "post": {
+                "description": "Fired when a mandate setup link expires before the customer authorises it. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhook Events"
+                ],
+                "summary": "mandate.setup_expired",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.MandateWebhookPayload"
                         }
                     }
                 }
@@ -16383,7 +16811,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.attempt.failed",
                 "responses": {
@@ -16406,7 +16834,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.created",
                 "responses": {
@@ -16429,7 +16857,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.failed",
                 "responses": {
@@ -16452,7 +16880,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.pending",
                 "responses": {
@@ -16475,7 +16903,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.success",
                 "responses": {
@@ -16498,7 +16926,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "payment.updated",
                 "responses": {
@@ -16521,7 +16949,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.created",
                 "responses": {
@@ -16544,7 +16972,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.failed",
                 "responses": {
@@ -16567,7 +16995,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Payment and refund"
                 ],
                 "summary": "refund.succeeded",
                 "responses": {
@@ -16590,7 +17018,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.activated",
                 "responses": {
@@ -16613,7 +17041,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.cancelled",
                 "responses": {
@@ -16636,7 +17064,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.created",
                 "responses": {
@@ -16659,7 +17087,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.draft.created",
                 "responses": {
@@ -16682,7 +17110,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_reached",
                 "responses": {
@@ -16705,7 +17133,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.group_spend.threshold_recovered",
                 "responses": {
@@ -16728,7 +17156,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_reached",
                 "responses": {
@@ -16751,7 +17179,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.line_item_spend.threshold_recovered",
                 "responses": {
@@ -16774,7 +17202,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.paused",
                 "responses": {
@@ -16797,7 +17225,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.created",
                 "responses": {
@@ -16820,7 +17248,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.deleted",
                 "responses": {
@@ -16843,7 +17271,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.phase.updated",
                 "responses": {
@@ -16866,7 +17294,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.plan_changed",
                 "responses": {
@@ -16889,7 +17317,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.renewal.due",
                 "responses": {
@@ -16912,7 +17340,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.resumed",
                 "responses": {
@@ -16935,7 +17363,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_reached",
                 "responses": {
@@ -16958,7 +17386,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.spend.threshold_recovered",
                 "responses": {
@@ -16981,7 +17409,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Subscription"
                 ],
                 "summary": "subscription.updated",
                 "responses": {
@@ -17004,7 +17432,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.created",
                 "responses": {
@@ -17027,7 +17455,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.dropped",
                 "responses": {
@@ -17050,7 +17478,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.credit_balance.recovered",
                 "responses": {
@@ -17073,7 +17501,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.dropped",
                 "responses": {
@@ -17096,7 +17524,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.recovered",
                 "responses": {
@@ -17119,7 +17547,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.ongoing_balance.updated",
                 "responses": {
@@ -17142,7 +17570,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.terminated",
                 "responses": {
@@ -17165,7 +17593,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.created",
                 "responses": {
@@ -17188,7 +17616,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.transaction.updated",
                 "responses": {
@@ -17211,7 +17639,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Webhook Events"
+                    "Wallet"
                 ],
                 "summary": "wallet.updated",
                 "responses": {
@@ -18711,7 +19139,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -18767,7 +19195,7 @@ const docTemplate = `{
                     }
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -20422,9 +20850,6 @@ const docTemplate = `{
                 "termination_invoice_id": {
                     "type": "string"
                 },
-                "timezone": {
-                    "type": "string"
-                },
                 "total_amount": {
                     "type": "string"
                 },
@@ -21318,9 +21743,6 @@ const docTemplate = `{
                     "description": "SubscriptionID is required on POST /commitments and set server-side on inline commitments.",
                     "type": "string"
                 },
-                "timezone": {
-                    "type": "string"
-                },
                 "type": {
                     "$ref": "#/definitions/types.CommitmentType"
                 },
@@ -21688,6 +22110,14 @@ const docTemplate = `{
                 "onboarding_workflow_name": {
                     "description": "onboarding_workflow_name is given if a custom onboarding workflow is to be triggered for this customer",
                     "type": "string"
+                },
+                "settings": {
+                    "description": "settings overrides the environment settings for this customer's subscriptions",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "skip_onboarding_workflow": {
                     "description": "skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered\nThis is used internally when a customer is created via a workflow to prevent infinite loops\nDefault: false",
@@ -22247,7 +22677,6 @@ const docTemplate = `{
         "CreatePaymentRequest": {
             "type": "object",
             "required": [
-                "amount",
                 "currency",
                 "destination_id",
                 "destination_type",
@@ -22255,6 +22684,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "amount": {
+                    "description": "Amount defaults to the invoice's amount remaining for invoice payments when zero or omitted.",
                     "type": "string"
                 },
                 "cancel_url": {
@@ -22634,31 +23064,46 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "description": "Commitment fields",
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_quantity": {
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "display_name": {
@@ -22694,7 +23139,7 @@ const docTemplate = `{
                     ]
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "start_date": {
                     "type": "string"
@@ -22748,10 +23193,11 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CollectionMethod"
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -22786,6 +23232,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "end_date": {
@@ -22820,7 +23267,7 @@ const docTemplate = `{
                     ]
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -22861,6 +23308,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -22896,6 +23344,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "settings": {
+                    "description": "Settings overrides the customer and environment settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
                         }
                     ]
                 },
@@ -23732,6 +24188,14 @@ const docTemplate = `{
                     "description": "Name is the name of the customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -23917,6 +24381,95 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.IntegrationEntityType"
                 },
                 "provider_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "EmailLogResponse": {
+            "type": "object",
+            "properties": {
+                "cc_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "delivered_at": {
+                    "type": "string"
+                },
+                "delivery_status": {
+                    "$ref": "#/definitions/types.EmailDeliveryStatus"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SystemEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "from_address": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.EmailProvider"
+                },
+                "provider_message_id": {
+                    "type": "string"
+                },
+                "reply_to": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "template_key": {
+                    "$ref": "#/definitions/types.EmailTemplateKey"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "to_addresses": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.EmailTrigger"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
                     "type": "string"
                 }
             }
@@ -24884,7 +25437,7 @@ const docTemplate = `{
                     }
                 },
                 "instalments": {
-                    "description": "Instalments lists, with expand \"instalments\", the instalments invoiced in the range for the v2 commitments covering\na queried meter; it is empty with property or source filters, or when no usage line runs in the range.",
+                    "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start \u003c= bill_on \u003c end,\nor start \u003c bill_on \u003c= end for an ARREAR one.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/UsageAnalyticInstalment"
@@ -24904,7 +25457,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_cost_with_instalments": {
-                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of Instalments, set when expand includes \"instalments\".",
+                    "description": "TotalCostWithInstalments is TotalCost plus the amounts of the invoiced Instalments, set when expand includes\n\"instalments\". Scheduled instalments are not billed yet, so they are left out.",
                     "type": "string"
                 },
                 "total_discount": {
@@ -25275,10 +25828,11 @@ const docTemplate = `{
                     }
                 },
                 "commitment_amount": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "commitment_duration": {
-                    "description": "CommitmentDuration allows a different commitment period than billing (e.g. ANNUAL on MONTHLY).",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.BillingPeriod"
@@ -25299,13 +25853,14 @@ const docTemplate = `{
                     }
                 },
                 "enable_true_up": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "external_customer_id": {
                     "type": "string"
                 },
                 "line_item_commitments": {
-                    "description": "LineItemCommitments sets per-line-item commitment config, keyed by price_id.",
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "object",
                     "additionalProperties": {
                         "$ref": "#/definitions/LineItemCommitmentConfig"
@@ -25329,6 +25884,7 @@ const docTemplate = `{
                     }
                 },
                 "overage_factor": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "string"
                 },
                 "override_entitlements": {
@@ -25384,6 +25940,26 @@ const docTemplate = `{
                 "trial_period_days": {
                     "description": "TrialPeriodDays: nil = inherit from plan prices, 0 = no trial, \u003e0 = override in days.",
                     "type": "integer"
+                }
+            }
+        },
+        "InFlightCharge": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "payment_gateway": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "payment_method_type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
                 }
             }
         },
@@ -25457,6 +26033,17 @@ const docTemplate = `{
                 }
             }
         },
+        "IntegrationCapability": {
+            "type": "object",
+            "properties": {
+                "add_payment_method_options": {
+                    "$ref": "#/definitions/types.AddPaymentMethodOptions"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.IntegrationCapabilityType"
+                }
+            }
+        },
         "IntegrationConfigEntry": {
             "type": "object",
             "properties": {
@@ -25478,6 +26065,17 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/IntegrationConfigEntry"
+                    }
+                }
+            }
+        },
+        "IntegrationsResponse": {
+            "type": "object",
+            "properties": {
+                "payment_integrations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PaymentIntegration"
                     }
                 }
             }
@@ -25925,6 +26523,14 @@ const docTemplate = `{
                     "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls",
                     "type": "string"
                 },
+                "in_flight_charge": {
+                    "description": "in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InFlightCharge"
+                        }
+                    ]
+                },
                 "invoice_number": {
                     "description": "invoice_number is the human-readable invoice number displayed to customers (e.g., INV-2024-001)",
                     "type": "string"
@@ -25966,6 +26572,13 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/InvoiceLineItemResponse"
+                    }
+                },
+                "linked_wallet_transactions": {
+                    "description": "linked_wallet_transactions are the wallet credits this invoice pays for; pending ones are released when it is paid",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/LinkedWalletTransaction"
                     }
                 },
                 "metadata": {
@@ -26188,7 +26801,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "commitment_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_duration": {
                     "description": "CommitmentDuration allows a different period than billing (e.g. ANNUAL commitment on MONTHLY billing).",
@@ -26199,7 +26812,7 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
                     "description": "CommitmentTimeBuckets scopes commitment to specific UTC-hour windows; requires IsWindowCommitment=true.",
@@ -26221,7 +26834,7 @@ const docTemplate = `{
                 },
                 "overage_factor": {
                     "description": "OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate.",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -26278,6 +26891,26 @@ const docTemplate = `{
             "properties": {
                 "mapping": {
                     "$ref": "#/definitions/EntityIntegrationMappingResponse"
+                }
+            }
+        },
+        "LinkedWalletTransaction": {
+            "type": "object",
+            "properties": {
+                "credit_amount": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "transaction_reason": {
+                    "$ref": "#/definitions/types.TransactionReason"
+                },
+                "transaction_status": {
+                    "$ref": "#/definitions/types.TransactionStatus"
+                },
+                "wallet_id": {
+                    "type": "string"
                 }
             }
         },
@@ -26394,6 +27027,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CouponAssociationResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListEmailLogsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/EmailLogResponse"
                     }
                 },
                 "pagination": {
@@ -26851,8 +27498,25 @@ const docTemplate = `{
         "PaymentGatewayOptions": {
             "type": "object",
             "properties": {
+                "razorpay": {
+                    "$ref": "#/definitions/RazorpayPaymentGatewayOptions"
+                },
                 "stripe": {
                     "$ref": "#/definitions/StripePaymentGatewayOptions"
+                }
+            }
+        },
+        "PaymentIntegration": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/IntegrationCapability"
+                    }
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
                 }
             }
         },
@@ -26936,6 +27600,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "save_card_and_make_default": {
+                    "type": "boolean"
+                },
+                "submitted_for_processing": {
+                    "description": "SubmittedForProcessing is true while the gateway has the charge and its outcome is pending; it can't be processed again.",
                     "type": "boolean"
                 },
                 "succeeded_at": {
@@ -27409,6 +28077,13 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                },
+                "warnings": {
+                    "description": "Warnings lists defaults applied on create that the caller may want to set explicitly.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -27605,6 +28280,15 @@ const docTemplate = `{
                 },
                 "provider": {
                     "$ref": "#/definitions/types.PaymentGatewayType"
+                }
+            }
+        },
+        "RazorpayPaymentGatewayOptions": {
+            "type": "object",
+            "properties": {
+                "notify_customer": {
+                    "description": "NotifyCustomer lets Razorpay SMS/email the payment link to the customer.",
+                    "type": "boolean"
                 }
             }
         },
@@ -28196,17 +28880,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "billable_qty": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "day": {
                     "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period.",
                     "type": "string"
                 },
                 "entitlement_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "entitlement_qty": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "group": {
                     "description": "Group holds the requested dimensions and their values for this bucket.",
@@ -28216,13 +28900,13 @@ const docTemplate = `{
                     }
                 },
                 "invoice_discount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "line_discount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "net_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "period_end": {
                     "type": "string"
@@ -28239,10 +28923,10 @@ const docTemplate = `{
                     ]
                 },
                 "tier_delta": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "usage_at_list_rate": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -28385,6 +29069,26 @@ const docTemplate = `{
                 }
             }
         },
+        "SavedBankAccountDetails": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
         "SavedCardDetails": {
             "type": "object",
             "properties": {
@@ -28405,6 +29109,9 @@ const docTemplate = `{
         "SavedPaymentMethod": {
             "type": "object",
             "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/SavedBankAccountDetails"
+                },
                 "can_auto_charge": {
                     "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate.",
                     "type": "boolean"
@@ -28688,6 +29395,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "plan_id": {
+                    "description": "PlanID is the offered plan to buy; empty means the default plan, or a negotiated trial's own plan.",
+                    "type": "string"
+                },
                 "tax_id": {
                     "type": "string"
                 }
@@ -28793,8 +29504,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/SelfBillingInvoice"
                     }
                 },
-                "plan": {
-                    "$ref": "#/definitions/SelfBillingPlanResponse"
+                "plans": {
+                    "description": "Plans are the plans a tenant can buy at checkout: during a self-serve trial and once no subscription is live.\nThe first plan is the default.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/SelfBillingPlanResponse"
+                    }
                 },
                 "status": {
                     "$ref": "#/definitions/types.TenantInternalStatus"
@@ -28807,6 +29522,62 @@ const docTemplate = `{
                 },
                 "usage": {
                     "$ref": "#/definitions/CustomerUsageSummaryResponse"
+                }
+            }
+        },
+        "SendInvoiceEmailRequest": {
+            "type": "object",
+            "properties": {
+                "cc": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "idempotency_key": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "minLength": 1
+                },
+                "to": {
+                    "type": "array",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "SetupIntentResponse": {
+            "type": "object",
+            "properties": {
+                "checkout_session_id": {
+                    "type": "string"
+                },
+                "checkout_url": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "integer"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "integer"
+                },
+                "setup_intent_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "usage": {
+                    "type": "string"
                 }
             }
         },
@@ -28838,6 +29609,10 @@ const docTemplate = `{
         "StripePaymentGatewayOptions": {
             "type": "object",
             "properties": {
+                "allow_promotion_codes": {
+                    "description": "AllowPromotionCodes lets the customer enter a promotion code; nil keeps it on.",
+                    "type": "boolean"
+                },
                 "tax_id_collection_enabled": {
                     "description": "TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout Sessions.",
                     "type": "boolean"
@@ -30251,6 +31026,14 @@ const docTemplate = `{
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
                     "type": "string"
@@ -30512,6 +31295,14 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "settings": {
+                    "description": "Settings overrides the customer's and environment's settings for this subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -31595,6 +32386,14 @@ const docTemplate = `{
                     "description": "name is the updated name or company name for the customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "settings merges into the customer's setting overrides when provided; send {} to inherit the environment settings",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "tax_treatment": {
                     "description": "tax_treatment is the updated tax treatment for the customer",
                     "allOf": [
@@ -32014,36 +32813,50 @@ const docTemplate = `{
                     ]
                 },
                 "commitment_amount": {
-                    "description": "Commitment fields",
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_duration": {
-                    "$ref": "#/definitions/types.BillingPeriod"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_overage_factor": {
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_quantity": {
-                    "type": "number"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "type": "string"
                 },
                 "commitment_time_buckets": {
-                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).",
+                    "description": "Pointer so an explicit empty array can clear existing buckets (omission keeps them).\n\nDeprecated: use POST /commitments instead.",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/CommitmentBucketRequest"
                     }
                 },
                 "commitment_true_up_enabled": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "commitment_type": {
-                    "$ref": "#/definitions/types.CommitmentType"
+                    "description": "Deprecated: use POST /commitments instead.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CommitmentType"
+                        }
+                    ]
                 },
                 "commitment_windowed": {
+                    "description": "Deprecated: use POST /commitments instead.",
                     "type": "boolean"
                 },
                 "effective_from": {
-                    "description": "EffectiveFrom for the existing line item (if not provided, defaults to now)",
+                    "description": "EffectiveFrom is when the new version starts and the current one ends (defaults to now). A date before\nthe current version's start_date replaces it from that date instead, and price fields become optional.",
                     "type": "string"
                 },
                 "metadata": {
@@ -32108,6 +32921,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.ProrationBehavior"
+                        }
+                    ]
+                },
+                "settings": {
+                    "description": "Settings merges into the subscription's setting overrides when provided; send {} to inherit.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
                         }
                     ]
                 },
@@ -32333,6 +33154,10 @@ const docTemplate = `{
                 "amount": {
                     "type": "string"
                 },
+                "bill_on": {
+                    "description": "when it becomes billable",
+                    "type": "string"
+                },
                 "commitment_id": {
                     "type": "string"
                 },
@@ -32341,6 +33166,17 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
+                },
+                "instalment_status": {
+                    "$ref": "#/definitions/types.InstalmentStatus"
+                },
+                "invoice_cadence": {
+                    "description": "InvoiceCadence is the recurring term's cadence; empty for once terms, settlements and fees.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceCadence"
+                        }
+                    ]
                 },
                 "invoice_id": {
                     "type": "string"
@@ -32351,6 +33187,14 @@ const docTemplate = `{
                 "invoiced_at": {
                     "description": "when the invoice billing it was finalized",
                     "type": "string"
+                },
+                "kind": {
+                    "description": "Kind tells a regular instalment from a termination's settlement and its cancellation_fee.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InstalmentKind"
+                        }
+                    ]
                 },
                 "service_period_end": {
                     "type": "string"
@@ -32555,10 +33399,20 @@ const docTemplate = `{
                     "description": "Commitment breakdown (only populated for windowed commitments)",
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the commitment breakdown, for v2 commitments",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
                     "type": "string"
                 },
+                "computed_overage_quantity": {
+                    "type": "string"
+                },
                 "computed_true_up_amount": {
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "cost": {
@@ -32615,7 +33469,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -32648,7 +33502,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -32774,6 +33628,14 @@ const docTemplate = `{
                 },
                 "balance": {
                     "type": "string"
+                },
+                "balance_alert_status": {
+                    "description": "BalanceAlertStatus is ok, info, warning, or in_alarm. Absent when wallet alerts are off.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.AlertState"
+                        }
+                    ]
                 },
                 "balance_updated_at": {
                     "type": "string"
@@ -33463,6 +34325,14 @@ const docTemplate = `{
                     "description": "Name is the name of the customer",
                     "type": "string"
                 },
+                "settings": {
+                    "description": "Settings overrides the environment's settings for this customer's subscriptions.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SettingsOverride"
+                        }
+                    ]
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -33687,6 +34557,31 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AccountingPeriodStatus": {
+            "type": "string",
+            "enum": [
+                "open",
+                "closed"
+            ],
+            "x-enum-comments": {
+                "AccountingPeriodStatusClosed": "reserved; close is deferred"
+            },
+            "x-enum-varnames": [
+                "AccountingPeriodStatusOpen",
+                "AccountingPeriodStatusClosed"
+            ]
+        },
+        "types.ActiveWindow": {
+            "type": "object",
+            "properties": {
+                "end": {
+                    "$ref": "#/definitions/types.Bucket"
+                },
+                "start": {
+                    "$ref": "#/definitions/types.Bucket"
+                }
+            }
+        },
         "types.AddAddonParams": {
             "type": "object",
             "properties": {
@@ -33742,6 +34637,22 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                }
+            }
+        },
+        "types.AddPaymentMethodOptions": {
+            "type": "object",
+            "properties": {
+                "payment_method_types": {
+                    "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sets_default": {
+                    "description": "SetsDefault reports whether it can make the saved method the default (Stripe only).",
+                    "type": "boolean"
                 }
             }
         },
@@ -33824,6 +34735,20 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
+        "types.AddonPriceOverrideRef": {
+            "type": "object",
+            "properties": {
+                "override_price_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "string"
                 }
             }
         },
@@ -34124,6 +35049,19 @@ const docTemplate = `{
                 "AlertTypeEntitlementGrantExhausted"
             ]
         },
+        "types.AmortizationMethod": {
+            "type": "string",
+            "enum": [
+                "daily",
+                "period_even",
+                "period_even_prorated"
+            ],
+            "x-enum-varnames": [
+                "AmortizationDaily",
+                "AmortizationPeriodEven",
+                "AmortizationPeriodEvenProrated"
+            ]
+        },
         "types.ApplicationStatus": {
             "type": "string",
             "enum": [
@@ -34145,7 +35083,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "cooldown": {
                     "description": "Cooldown is an optional cooloff after a successful auto top-up before another may run.",
@@ -34162,7 +35100,30 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "threshold": {
-                    "type": "number"
+                    "type": "string"
+                }
+            }
+        },
+        "types.BillingAddress": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "type": "string"
+                },
+                "address_country": {
+                    "type": "string"
+                },
+                "address_line1": {
+                    "type": "string"
+                },
+                "address_line2": {
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "type": "string"
+                },
+                "address_state": {
+                    "type": "string"
                 }
             }
         },
@@ -34184,6 +35145,36 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "BillingCycleAnniversary",
                 "BillingCycleCalendar"
+            ]
+        },
+        "types.BillingDetails": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "$ref": "#/definitions/types.BillingAddress"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "help_email": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.BillingEntityMode": {
+            "type": "string",
+            "enum": [
+                "off",
+                "enabling",
+                "enabled"
+            ],
+            "x-enum-varnames": [
+                "BillingEntityModeOff",
+                "BillingEntityModeEnabling",
+                "BillingEntityModeEnabled"
             ]
         },
         "types.BillingModel": {
@@ -34233,6 +35224,51 @@ const docTemplate = `{
                 "BillingPeriodBehaviourAnchorAtConfig"
             ]
         },
+        "types.BillingTermKind": {
+            "type": "string",
+            "enum": [
+                "once",
+                "recurring"
+            ],
+            "x-enum-varnames": [
+                "BillingTermKindOnce",
+                "BillingTermKindRecurring"
+            ]
+        },
+        "types.BillingTermOwnerType": {
+            "type": "string",
+            "enum": [
+                "commitment"
+            ],
+            "x-enum-varnames": [
+                "BillingTermOwnerCommitment"
+            ]
+        },
+        "types.BillingTermSplit": {
+            "type": "string",
+            "enum": [
+                "even",
+                "proportional"
+            ],
+            "x-enum-varnames": [
+                "BillingTermSplitEven",
+                "BillingTermSplitProportional"
+            ]
+        },
+        "types.BillingTermValueType": {
+            "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
+            "type": "string",
+            "enum": [
+                "fixed",
+                "percentage",
+                "remainder"
+            ],
+            "x-enum-varnames": [
+                "BillingTermValueFixed",
+                "BillingTermValuePercentage",
+                "BillingTermValueRemainder"
+            ]
+        },
         "types.BillingTier": {
             "type": "string",
             "enum": [
@@ -34268,6 +35304,18 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "CancelImmediatelyInvoicePolicyGenerateInvoice",
                 "CancelImmediatelyInvoicePolicySkip"
+            ]
+        },
+        "types.CancellationFeeType": {
+            "description": "fixed; percentage is reserved and rejected as not supported yet",
+            "type": "string",
+            "enum": [
+                "fixed",
+                "percentage"
+            ],
+            "x-enum-varnames": [
+                "CancellationFeeFixed",
+                "CancellationFeePercentage"
             ]
         },
         "types.CancellationType": {
@@ -34349,8 +35397,20 @@ const docTemplate = `{
                     "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up).",
                     "type": "boolean"
                 },
+                "link_expiry": {
+                    "description": "LinkExpiry overrides how long the hosted payment page stays payable; nil keeps the provider default.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Duration"
+                        }
+                    ]
+                },
                 "max_mandate_limit": {
                     "type": "string"
+                },
+                "notify_customer": {
+                    "description": "NotifyCustomer lets the gateway email/SMS the payment link to the customer.",
+                    "type": "boolean"
                 },
                 "payment_method": {
                     "$ref": "#/definitions/types.PaymentMethodType"
@@ -34409,20 +35469,55 @@ const docTemplate = `{
                 "ColumnTypeDatetime"
             ]
         },
+        "types.CommitmentCollectionMethod": {
+            "type": "string",
+            "enum": [
+                "per_period",
+                "billing_terms"
+            ],
+            "x-enum-varnames": [
+                "CommitmentCollectionPerPeriod",
+                "CommitmentCollectionBillingTerms"
+            ]
+        },
+        "types.CommitmentEarlyTermination": {
+            "type": "string",
+            "enum": [
+                "forfeit",
+                "credit_note",
+                "bill_remaining"
+            ],
+            "x-enum-varnames": [
+                "CommitmentTerminationForfeit",
+                "CommitmentTerminationCreditNote",
+                "CommitmentTerminationBillRemaining"
+            ]
+        },
         "types.CommitmentInfo": {
             "type": "object",
             "properties": {
                 "amount": {
+                    "description": "Amount is the commitment amount (v1), or computed_commitment_utilized_amount + computed_true_up_amount (v2).",
                     "type": "string"
                 },
                 "computed_commitment_utilized_amount": {
                     "type": "string"
                 },
+                "computed_commitment_utilized_quantity": {
+                    "description": "Usage units behind the computed amounts: usage a billing-terms commitment covers counts as utilized at no\ncharge, and a quantity commitment's true-up counts its unused units.",
+                    "type": "string"
+                },
                 "computed_overage_amount": {
+                    "type": "string"
+                },
+                "computed_overage_quantity": {
                     "type": "string"
                 },
                 "computed_true_up_amount": {
                     "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
+                    "type": "string"
+                },
+                "computed_true_up_quantity": {
                     "type": "string"
                 },
                 "duration": {
@@ -34446,6 +35541,45 @@ const docTemplate = `{
                 }
             }
         },
+        "types.CommitmentMeasurement": {
+            "type": "string",
+            "enum": [
+                "billing_period",
+                "window"
+            ],
+            "x-enum-varnames": [
+                "CommitmentMeasurementBillingPeriod",
+                "CommitmentMeasurementWindow"
+            ]
+        },
+        "types.CommitmentScopeType": {
+            "type": "string",
+            "enum": [
+                "subscription",
+                "group",
+                "meter",
+                "price"
+            ],
+            "x-enum-varnames": [
+                "CommitmentScopeSubscription",
+                "CommitmentScopeGroup",
+                "CommitmentScopeMeter",
+                "CommitmentScopePrice"
+            ]
+        },
+        "types.CommitmentStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "ended",
+                "terminated"
+            ],
+            "x-enum-varnames": [
+                "CommitmentStatusActive",
+                "CommitmentStatusEnded",
+                "CommitmentStatusTerminated"
+            ]
+        },
         "types.CommitmentType": {
             "type": "string",
             "enum": [
@@ -34455,6 +35589,21 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "COMMITMENT_TYPE_AMOUNT",
                 "COMMITMENT_TYPE_QUANTITY"
+            ]
+        },
+        "types.ContractStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "active",
+                "ended",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ContractStatusDraft",
+                "ContractStatusActive",
+                "ContractStatusEnded",
+                "ContractStatusCancelled"
             ]
         },
         "types.CouponCadence": {
@@ -34913,6 +36062,125 @@ const docTemplate = `{
                 "DurationUnitDay"
             ]
         },
+        "types.EmailDeliveryStatus": {
+            "type": "string",
+            "enum": [
+                "queued",
+                "sent",
+                "delivery_delayed",
+                "delivered",
+                "bounced",
+                "complained",
+                "failed",
+                "suppressed",
+                "skipped"
+            ],
+            "x-enum-varnames": [
+                "EmailDeliveryStatusQueued",
+                "EmailDeliveryStatusSent",
+                "EmailDeliveryStatusDeliveryDelayed",
+                "EmailDeliveryStatusDelivered",
+                "EmailDeliveryStatusBounced",
+                "EmailDeliveryStatusComplained",
+                "EmailDeliveryStatusFailed",
+                "EmailDeliveryStatusSuppressed",
+                "EmailDeliveryStatusSkipped"
+            ]
+        },
+        "types.EmailLogFilter": {
+            "type": "object",
+            "properties": {
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "delivery_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.EmailDeliveryStatus"
+                    }
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.SystemEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "triggers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.EmailTrigger"
+                    }
+                }
+            }
+        },
+        "types.EmailProvider": {
+            "type": "string",
+            "enum": [
+                "resend",
+                "local"
+            ],
+            "x-enum-varnames": [
+                "EmailProviderResend",
+                "EmailProviderLocal"
+            ]
+        },
+        "types.EmailTemplateKey": {
+            "type": "string",
+            "enum": [
+                "invoice_finalized"
+            ],
+            "x-enum-varnames": [
+                "EmailTemplateInvoiceFinalized"
+            ]
+        },
+        "types.EmailTrigger": {
+            "type": "string",
+            "enum": [
+                "auto",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "EmailTriggerAuto",
+                "EmailTriggerManual"
+            ]
+        },
         "types.EntitlementAggregationMode": {
             "type": "string",
             "enum": [
@@ -35056,6 +36324,19 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "EntitlementGrantMeasureQuantity",
                 "EntitlementGrantMeasureAmount"
+            ]
+        },
+        "types.EntitlementGrantScopeEntityType": {
+            "type": "string",
+            "enum": [
+                "feature",
+                "subscription",
+                "group"
+            ],
+            "x-enum-varnames": [
+                "EntitlementGrantScopeFeature",
+                "EntitlementGrantScopeSubscription",
+                "EntitlementGrantScopeGroup"
             ]
         },
         "types.EntitlementGrantStatus": {
@@ -35693,6 +36974,90 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ImprovementDirection": {
+            "type": "string",
+            "enum": [
+                "higher",
+                "lower"
+            ],
+            "x-enum-varnames": [
+                "ImprovementHigher",
+                "ImprovementLower"
+            ]
+        },
+        "types.InstalmentBillTrigger": {
+            "type": "string",
+            "enum": [
+                "date",
+                "manual"
+            ],
+            "x-enum-varnames": [
+                "InstalmentBillTriggerDate",
+                "InstalmentBillTriggerManual"
+            ]
+        },
+        "types.InstalmentDelivery": {
+            "type": "string",
+            "enum": [
+                "subscription_invoice",
+                "separate_invoice"
+            ],
+            "x-enum-varnames": [
+                "InstalmentDeliverySubscriptionInvoice",
+                "InstalmentDeliverySeparateInvoice"
+            ]
+        },
+        "types.InstalmentKind": {
+            "type": "string",
+            "enum": [
+                "instalment",
+                "settlement",
+                "cancellation_fee"
+            ],
+            "x-enum-varnames": [
+                "InstalmentKindInstalment",
+                "InstalmentKindSettlement",
+                "InstalmentKindCancellationFee"
+            ]
+        },
+        "types.InstalmentStatus": {
+            "type": "string",
+            "enum": [
+                "scheduled",
+                "invoiced",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "InstalmentStatusScheduled",
+                "InstalmentStatusInvoiced",
+                "InstalmentStatusCancelled"
+            ]
+        },
+        "types.IntegrationCapabilityType": {
+            "type": "string",
+            "enum": [
+                "checkout",
+                "auto_charge",
+                "set_default_method",
+                "payment_link",
+                "payment_method_management",
+                "invoice_sync",
+                "list_payment_methods",
+                "add_payment_method",
+                "delete_payment_method"
+            ],
+            "x-enum-varnames": [
+                "IntegrationCapabilityCheckout",
+                "IntegrationCapabilityAutoCharge",
+                "IntegrationCapabilitySetDefaultMethod",
+                "IntegrationCapabilityPaymentLink",
+                "IntegrationCapabilityPaymentMethodManagement",
+                "IntegrationCapabilityInvoiceSync",
+                "IntegrationCapabilityListPaymentMethods",
+                "IntegrationCapabilityAddPaymentMethod",
+                "IntegrationCapabilityDeletePaymentMethod"
+            ]
+        },
         "types.IntegrationEntityType": {
             "type": "string",
             "enum": [
@@ -35707,7 +37072,8 @@ const docTemplate = `{
                 "item_price",
                 "price",
                 "invoice_line_item",
-                "subscription_line_item"
+                "subscription_line_item",
+                "payment_method_setup"
             ],
             "x-enum-varnames": [
                 "IntegrationEntityTypeCustomer",
@@ -35721,8 +37087,23 @@ const docTemplate = `{
                 "IntegrationEntityTypeItemPrice",
                 "IntegrationEntityTypePrice",
                 "IntegrationEntityTypeInvoiceLineItem",
-                "IntegrationEntityTypeSubscriptionLineItem"
+                "IntegrationEntityTypeSubscriptionLineItem",
+                "IntegrationEntityTypePaymentMethodSetup"
             ]
+        },
+        "types.InvoiceBillingEntity": {
+            "type": "object",
+            "properties": {
+                "billing_details": {
+                    "$ref": "#/definitions/types.BillingDetails"
+                },
+                "billing_entity_id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
         },
         "types.InvoiceBillingReason": {
             "type": "string",
@@ -35773,11 +37154,11 @@ const docTemplate = `{
             "properties": {
                 "amount_due_gt": {
                     "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_remaining_gt": {
                     "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_entity_id": {
                     "description": "billing_entity_id filters by the customer's billing entity",
@@ -35925,6 +37306,19 @@ const docTemplate = `{
                 }
             }
         },
+        "types.InvoicePaymentFailureReason": {
+            "type": "string",
+            "enum": [
+                "payment_method_unavailable",
+                "provider_error",
+                "declined"
+            ],
+            "x-enum-varnames": [
+                "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+                "InvoicePaymentFailureReasonProviderError",
+                "InvoicePaymentFailureReasonDeclined"
+            ]
+        },
         "types.InvoiceSourceType": {
             "type": "string",
             "enum": [
@@ -35952,6 +37346,10 @@ const docTemplate = `{
         "types.InvoiceSyncSettings": {
             "type": "object",
             "properties": {
+                "auto_advance": {
+                    "description": "Nil lets the sync decide from the collection method and saved payment method.",
+                    "type": "boolean"
+                },
                 "deposit_to_account_id": {
                     "description": "Zoho chart-of-accounts id (\"Deposit To\"). Empty omits account_id, leaving Zoho's\nUndeposited Funds default.a",
                     "type": "string"
@@ -35990,6 +37388,10 @@ const docTemplate = `{
                     "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode.",
                     "type": "string"
                 },
+                "send_invoice_email": {
+                    "description": "Nil sends Stripe's invoice email for send_invoice invoices.",
+                    "type": "boolean"
+                },
                 "service_period_custom_fields": {
                     "description": "Zoho custom fields that receive the invoice's service start and end dates.",
                     "allOf": [
@@ -36015,6 +37417,65 @@ const docTemplate = `{
                 "InvoiceTypeSubscription",
                 "InvoiceTypeOneOff",
                 "InvoiceTypeCredit"
+            ]
+        },
+        "types.JournalDirection": {
+            "type": "string",
+            "enum": [
+                "debit",
+                "credit"
+            ],
+            "x-enum-varnames": [
+                "JournalDirectionDebit",
+                "JournalDirectionCredit"
+            ]
+        },
+        "types.JournalEventType": {
+            "type": "string",
+            "enum": [
+                "invoice_finalized",
+                "invoice_voided",
+                "credit_note_finalized",
+                "credit_note_voided",
+                "payment_succeeded",
+                "payment_reversed",
+                "refund_succeeded",
+                "revenue_earned",
+                "revenue_offset"
+            ],
+            "x-enum-varnames": [
+                "JournalEventInvoiceFinalized",
+                "JournalEventInvoiceVoided",
+                "JournalEventCreditNoteFinalized",
+                "JournalEventCreditNoteVoided",
+                "JournalEventPaymentSucceeded",
+                "JournalEventPaymentReversed",
+                "JournalEventRefundSucceeded",
+                "JournalEventRevenueEarned",
+                "JournalEventRevenueOffset"
+            ]
+        },
+        "types.LedgerAccountKey": {
+            "type": "string",
+            "enum": [
+                "cash",
+                "accounts_receivable",
+                "unbilled_receivable",
+                "deferred_revenue",
+                "customer_credit",
+                "tax_payable",
+                "revenue",
+                "contra_revenue"
+            ],
+            "x-enum-varnames": [
+                "LedgerAccountCash",
+                "LedgerAccountReceivable",
+                "LedgerAccountUnbilledReceivable",
+                "LedgerAccountDeferredRevenue",
+                "LedgerAccountCustomerCredit",
+                "LedgerAccountTaxPayable",
+                "LedgerAccountRevenue",
+                "LedgerAccountContraRevenue"
             ]
         },
         "types.LineItemGrouping": {
@@ -36068,8 +37529,6 @@ const docTemplate = `{
                 "credit_consumption",
                 "credit_topups",
                 "net_billing",
-                "invoice_total_issued",
-                "net_billing_issued",
                 "active_customers"
             ],
             "x-enum-varnames": [
@@ -36085,8 +37544,6 @@ const docTemplate = `{
                 "MetricCreditConsumption",
                 "MetricCreditTopups",
                 "MetricNetBilling",
-                "MetricInvoiceTotalIssued",
-                "MetricNetBillingIssued",
                 "MetricActiveCustomers"
             ]
         },
@@ -36314,7 +37771,8 @@ const docTemplate = `{
                 "OFFLINE",
                 "CREDITS",
                 "PAYMENT_LINK",
-                "UPI"
+                "UPI",
+                "ENACH"
             ],
             "x-enum-varnames": [
                 "PaymentMethodTypeCard",
@@ -36322,7 +37780,8 @@ const docTemplate = `{
                 "PaymentMethodTypeOffline",
                 "PaymentMethodTypeCredits",
                 "PaymentMethodTypePaymentLink",
-                "PaymentMethodTypeUPI"
+                "PaymentMethodTypeUPI",
+                "PaymentMethodTypeENACH"
             ]
         },
         "types.PaymentStatus": {
@@ -36371,6 +37830,21 @@ const docTemplate = `{
                 "PaymentTerms90Net",
                 "PaymentTermsEndOfMonth",
                 "PaymentTermsEndOfNextMonth"
+            ]
+        },
+        "types.PerformanceObligationStatus": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "active",
+                "satisfied",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "PerformanceObligationStatusDraft",
+                "PerformanceObligationStatusActive",
+                "PerformanceObligationStatusSatisfied",
+                "PerformanceObligationStatusCancelled"
             ]
         },
         "types.PlanFilter": {
@@ -36670,6 +38144,19 @@ const docTemplate = `{
                 }
             }
         },
+        "types.RecognitionMethod": {
+            "type": "string",
+            "enum": [
+                "point_in_time",
+                "straight_line",
+                "as_consumed"
+            ],
+            "x-enum-varnames": [
+                "RecognitionMethodPointInTime",
+                "RecognitionMethodStraightLine",
+                "RecognitionMethodAsConsumed"
+            ]
+        },
         "types.RecurringPaymentStatus": {
             "type": "string",
             "enum": [
@@ -36779,12 +38266,55 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ReportCategory": {
+            "type": "string",
+            "enum": [
+                "billing",
+                "receivables",
+                "customers",
+                "credits",
+                "usage"
+            ],
+            "x-enum-varnames": [
+                "ReportCategoryBilling",
+                "ReportCategoryReceivables",
+                "ReportCategoryCustomers",
+                "ReportCategoryCredits",
+                "ReportCategoryUsage"
+            ]
+        },
+        "types.ReportKind": {
+            "type": "string",
+            "enum": [
+                "flow",
+                "ratio",
+                "snapshot"
+            ],
+            "x-enum-varnames": [
+                "ReportKindFlow",
+                "ReportKindRatio",
+                "ReportKindSnapshot"
+            ]
+        },
+        "types.ReportValueType": {
+            "type": "string",
+            "enum": [
+                "money",
+                "count",
+                "days"
+            ],
+            "x-enum-varnames": [
+                "ReportValueTypeMoney",
+                "ReportValueTypeCount",
+                "ReportValueTypeDays"
+            ]
+        },
         "types.ReportingUnit": {
             "type": "object",
             "properties": {
                 "conversion_rate": {
                     "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be \u003e 0",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unit_plural": {
                     "description": "Display unit label, plural (e.g. \"seconds\")",
@@ -36820,6 +38350,27 @@ const docTemplate = `{
                 "ResumeModeAuto"
             ]
         },
+        "types.RevRecEntityType": {
+            "type": "string",
+            "enum": [
+                "subscription",
+                "subscription_line_item",
+                "invoice",
+                "credit_note",
+                "payment",
+                "refund",
+                "pob"
+            ],
+            "x-enum-varnames": [
+                "RevRecEntityTypeSubscription",
+                "RevRecEntityTypeSubscriptionLineItem",
+                "RevRecEntityTypeInvoice",
+                "RevRecEntityTypeCreditNote",
+                "RevRecEntityTypePayment",
+                "RevRecEntityTypeRefund",
+                "RevRecEntityTypePOB"
+            ]
+        },
         "types.RevenueAllocationPolicy": {
             "type": "string",
             "enum": [
@@ -36842,6 +38393,19 @@ const docTemplate = `{
                 "RevenueGranularityDay",
                 "RevenueGranularityPeriod",
                 "RevenueGranularityTotal"
+            ]
+        },
+        "types.RevenueReportGroupBy": {
+            "type": "string",
+            "enum": [
+                "customer_id",
+                "contract_id",
+                "pob_id"
+            ],
+            "x-enum-varnames": [
+                "RevenueReportGroupByCustomer",
+                "RevenueReportGroupByContract",
+                "RevenueReportGroupByPOB"
             ]
         },
         "types.RoundType": {
@@ -37077,6 +38641,14 @@ const docTemplate = `{
                 }
             }
         },
+        "types.SettingsOverride": {
+            "type": "object",
+            "properties": {
+                "subscription_config": {
+                    "$ref": "#/definitions/types.SubscriptionConfigOverride"
+                }
+            }
+        },
         "types.Shape": {
             "type": "string",
             "enum": [
@@ -37191,6 +38763,18 @@ const docTemplate = `{
                 "SubscriptionChangeTypeDowngrade",
                 "SubscriptionChangeTypeLateral"
             ]
+        },
+        "types.SubscriptionConfigOverride": {
+            "type": "object",
+            "properties": {
+                "auto_cancellation_enabled": {
+                    "type": "boolean"
+                },
+                "grace_period_days": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
         },
         "types.SubscriptionFilter": {
             "type": "object",
@@ -37567,6 +39151,47 @@ const docTemplate = `{
                 }
             }
         },
+        "types.SystemEntityType": {
+            "type": "string",
+            "enum": [
+                "feature",
+                "customer",
+                "plan",
+                "subscription",
+                "invoice",
+                "payment",
+                "credit_note",
+                "refund",
+                "wallet",
+                "entitlement",
+                "checkout_session",
+                "payment_method",
+                "price",
+                "event",
+                "commitment",
+                "billing_term",
+                "billing_instalment"
+            ],
+            "x-enum-varnames": [
+                "SystemEntityTypeFeature",
+                "SystemEntityTypeCustomer",
+                "SystemEntityTypePlan",
+                "SystemEntityTypeSubscription",
+                "SystemEntityTypeInvoice",
+                "SystemEntityTypePayment",
+                "SystemEntityTypeCreditNote",
+                "SystemEntityTypeRefund",
+                "SystemEntityTypeWallet",
+                "SystemEntityTypeEntitlement",
+                "SystemEntityTypeCheckoutSession",
+                "SystemEntityTypePaymentMethod",
+                "SystemEntityTypePrice",
+                "SystemEntityTypeEvent",
+                "SystemEntityTypeCommitment",
+                "SystemEntityTypeBillingTerm",
+                "SystemEntityTypeBillingInstalment"
+            ]
+        },
         "types.TaskStatus": {
             "type": "string",
             "enum": [
@@ -37747,6 +39372,19 @@ const docTemplate = `{
                 "TaxTreatmentExempt"
             ]
         },
+        "types.TenantInternalStatus": {
+            "type": "string",
+            "enum": [
+                "trialing",
+                "active",
+                "suspended"
+            ],
+            "x-enum-varnames": [
+                "TenantInternalStatusTrialing",
+                "TenantInternalStatusActive",
+                "TenantInternalStatusSuspended"
+            ]
+        },
         "types.TimeOfDayBucket": {
             "type": "object",
             "properties": {
@@ -37764,7 +39402,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "overage_factor": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_id": {
                     "description": "PriceID is the SUBSCRIPTION-scoped price created at bucket-creation time.\nImmutable post-create; changing pricing requires a successor line item.",
@@ -38162,7 +39800,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "credits_available_gt": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "end_time": {
                     "type": "string"
@@ -38332,6 +39970,7 @@ const docTemplate = `{
                 "invoice.update.voided",
                 "invoice.update",
                 "invoice.payment.overdue",
+                "invoice.payment.failed",
                 "invoice.sync.success",
                 "invoice.sync.failed",
                 "wallet.credit_balance.dropped",
@@ -38354,6 +39993,12 @@ const docTemplate = `{
                 "checkout.session.completed",
                 "checkout.session.failed",
                 "checkout.session.expired",
+                "checkout.session.cancelled",
+                "mandate.confirmed",
+                "mandate.rejected",
+                "mandate.cancelled",
+                "mandate.setup_attempt_failed",
+                "mandate.setup_expired",
                 "event.rejected"
             ],
             "x-enum-varnames": [
@@ -38406,6 +40051,7 @@ const docTemplate = `{
                 "WebhookEventInvoiceUpdateVoided",
                 "WebhookEventInvoiceUpdate",
                 "WebhookEventInvoicePaymentOverdue",
+                "WebhookEventInvoicePaymentFailed",
                 "WebhookEventInvoiceSyncSuccess",
                 "WebhookEventInvoiceSyncFailed",
                 "WebhookEventWalletCreditBalanceDropped",
@@ -38428,6 +40074,12 @@ const docTemplate = `{
                 "WebhookEventCheckoutSessionCompleted",
                 "WebhookEventCheckoutSessionFailed",
                 "WebhookEventCheckoutSessionExpired",
+                "WebhookEventCheckoutSessionCancelled",
+                "WebhookEventMandateConfirmed",
+                "WebhookEventMandateRejected",
+                "WebhookEventMandateCancelled",
+                "WebhookEventMandateSetupAttemptFailed",
+                "WebhookEventMandateSetupExpired",
                 "WebhookEventEventRejected"
             ]
         },
@@ -38523,6 +40175,60 @@ const docTemplate = `{
                 },
                 "workflow_type": {
                     "type": "string"
+                }
+            }
+        },
+        "types.ZohoPayPalPaymentMethod": {
+            "type": "string",
+            "enum": [
+                "standard",
+                "adaptive"
+            ],
+            "x-enum-varnames": [
+                "ZohoPayPalPaymentMethodStandard",
+                "ZohoPayPalPaymentMethodAdaptive"
+            ]
+        },
+        "types.ZohoPaymentGateway": {
+            "type": "string",
+            "enum": [
+                "paypal",
+                "stripe",
+                "authorize_net",
+                "payflow_pro",
+                "2checkout",
+                "braintree",
+                "razorpay"
+            ],
+            "x-enum-varnames": [
+                "ZohoPaymentGatewayPayPal",
+                "ZohoPaymentGatewayStripe",
+                "ZohoPaymentGatewayAuthorizeNet",
+                "ZohoPaymentGatewayPayflowPro",
+                "ZohoPaymentGateway2Checkout",
+                "ZohoPaymentGatewayBraintree",
+                "ZohoPaymentGatewayRazorpay"
+            ]
+        },
+        "types.ZohoPaymentGatewaySettings": {
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "gateways": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.ZohoPaymentGateway"
+                    }
+                },
+                "paypal_payment_method": {
+                    "description": "Sent as additional_field1 on the PayPal gateway. Required when PayPal is selected.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ZohoPayPalPaymentMethod"
+                        }
+                    ]
                 }
             }
         },
@@ -39523,389 +41229,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.AccountingPeriodStatus": {
-            "type": "string",
-            "enum": [
-                "open",
-                "closed"
-            ],
-            "x-enum-comments": {
-                "AccountingPeriodStatusClosed": "reserved; close is deferred"
-            },
-            "x-enum-varnames": [
-                "AccountingPeriodStatusOpen",
-                "AccountingPeriodStatusClosed"
-            ]
-        },
-        "types.ActiveWindow": {
-            "type": "object",
-            "properties": {
-                "end": {
-                    "$ref": "#/definitions/types.Bucket"
-                },
-                "start": {
-                    "$ref": "#/definitions/types.Bucket"
-                }
-            }
-        },
-        "types.AddonPriceOverrideRef": {
-            "type": "object",
-            "properties": {
-                "override_price_id": {
-                    "type": "string"
-                },
-                "price_id": {
-                    "type": "string"
-                },
-                "quantity": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.AmortizationMethod": {
-            "type": "string",
-            "enum": [
-                "daily",
-                "period_even",
-                "period_even_prorated"
-            ],
-            "x-enum-varnames": [
-                "AmortizationDaily",
-                "AmortizationPeriodEven",
-                "AmortizationPeriodEvenProrated"
-            ]
-        },
-        "types.BillingAddress": {
-            "type": "object",
-            "properties": {
-                "address_city": {
-                    "type": "string"
-                },
-                "address_country": {
-                    "type": "string"
-                },
-                "address_line1": {
-                    "type": "string"
-                },
-                "address_line2": {
-                    "type": "string"
-                },
-                "address_postal_code": {
-                    "type": "string"
-                },
-                "address_state": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.BillingDetails": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "$ref": "#/definitions/types.BillingAddress"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "help_email": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.BillingEntityMode": {
-            "type": "string",
-            "enum": [
-                "off",
-                "enabling",
-                "enabled"
-            ],
-            "x-enum-varnames": [
-                "BillingEntityModeOff",
-                "BillingEntityModeEnabling",
-                "BillingEntityModeEnabled"
-            ]
-        },
-        "types.BillingTermKind": {
-            "type": "string",
-            "enum": [
-                "once",
-                "recurring"
-            ],
-            "x-enum-varnames": [
-                "BillingTermKindOnce",
-                "BillingTermKindRecurring"
-            ]
-        },
-        "types.BillingTermOwnerType": {
-            "type": "string",
-            "enum": [
-                "commitment"
-            ],
-            "x-enum-varnames": [
-                "BillingTermOwnerCommitment"
-            ]
-        },
-        "types.BillingTermSplit": {
-            "type": "string",
-            "enum": [
-                "even",
-                "proportional"
-            ],
-            "x-enum-varnames": [
-                "BillingTermSplitEven",
-                "BillingTermSplitProportional"
-            ]
-        },
-        "types.BillingTermValueType": {
-            "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
-            "type": "string",
-            "enum": [
-                "fixed",
-                "percentage",
-                "remainder"
-            ],
-            "x-enum-varnames": [
-                "BillingTermValueFixed",
-                "BillingTermValuePercentage",
-                "BillingTermValueRemainder"
-            ]
-        },
-        "types.CancellationFeeType": {
-            "description": "fixed; percentage is reserved and rejected as not supported yet",
-            "type": "string",
-            "enum": [
-                "fixed",
-                "percentage"
-            ],
-            "x-enum-varnames": [
-                "CancellationFeeFixed",
-                "CancellationFeePercentage"
-            ]
-        },
-        "types.CommitmentCollectionMethod": {
-            "type": "string",
-            "enum": [
-                "per_period",
-                "billing_terms"
-            ],
-            "x-enum-varnames": [
-                "CommitmentCollectionPerPeriod",
-                "CommitmentCollectionBillingTerms"
-            ]
-        },
-        "types.CommitmentEarlyTermination": {
-            "type": "string",
-            "enum": [
-                "forfeit",
-                "credit_note",
-                "bill_remaining"
-            ],
-            "x-enum-varnames": [
-                "CommitmentTerminationForfeit",
-                "CommitmentTerminationCreditNote",
-                "CommitmentTerminationBillRemaining"
-            ]
-        },
-        "types.CommitmentMeasurement": {
-            "type": "string",
-            "enum": [
-                "billing_period",
-                "window"
-            ],
-            "x-enum-varnames": [
-                "CommitmentMeasurementBillingPeriod",
-                "CommitmentMeasurementWindow"
-            ]
-        },
-        "types.CommitmentScopeType": {
-            "type": "string",
-            "enum": [
-                "subscription",
-                "group",
-                "meter",
-                "price"
-            ],
-            "x-enum-varnames": [
-                "CommitmentScopeSubscription",
-                "CommitmentScopeGroup",
-                "CommitmentScopeMeter",
-                "CommitmentScopePrice"
-            ]
-        },
-        "types.CommitmentStatus": {
-            "type": "string",
-            "enum": [
-                "active",
-                "ended",
-                "terminated"
-            ],
-            "x-enum-varnames": [
-                "CommitmentStatusActive",
-                "CommitmentStatusEnded",
-                "CommitmentStatusTerminated"
-            ]
-        },
-        "types.ContractStatus": {
-            "type": "string",
-            "enum": [
-                "draft",
-                "active",
-                "ended",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "ContractStatusDraft",
-                "ContractStatusActive",
-                "ContractStatusEnded",
-                "ContractStatusCancelled"
-            ]
-        },
-        "types.EntitlementGrantScopeEntityType": {
-            "type": "string",
-            "enum": [
-                "feature",
-                "subscription",
-                "group"
-            ],
-            "x-enum-varnames": [
-                "EntitlementGrantScopeFeature",
-                "EntitlementGrantScopeSubscription",
-                "EntitlementGrantScopeGroup"
-            ]
-        },
-        "types.ImprovementDirection": {
-            "type": "string",
-            "enum": [
-                "higher",
-                "lower"
-            ],
-            "x-enum-varnames": [
-                "ImprovementHigher",
-                "ImprovementLower"
-            ]
-        },
-        "types.InstalmentBillTrigger": {
-            "type": "string",
-            "enum": [
-                "date",
-                "manual"
-            ],
-            "x-enum-varnames": [
-                "InstalmentBillTriggerDate",
-                "InstalmentBillTriggerManual"
-            ]
-        },
-        "types.InstalmentDelivery": {
-            "type": "string",
-            "enum": [
-                "subscription_invoice",
-                "separate_invoice"
-            ],
-            "x-enum-varnames": [
-                "InstalmentDeliverySubscriptionInvoice",
-                "InstalmentDeliverySeparateInvoice"
-            ]
-        },
-        "types.InstalmentKind": {
-            "type": "string",
-            "enum": [
-                "instalment",
-                "settlement"
-            ],
-            "x-enum-varnames": [
-                "InstalmentKindInstalment",
-                "InstalmentKindSettlement"
-            ]
-        },
-        "types.InstalmentStatus": {
-            "type": "string",
-            "enum": [
-                "scheduled",
-                "invoiced",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "InstalmentStatusScheduled",
-                "InstalmentStatusInvoiced",
-                "InstalmentStatusCancelled"
-            ]
-        },
-        "types.InvoiceBillingEntity": {
-            "type": "object",
-            "properties": {
-                "billing_details": {
-                    "$ref": "#/definitions/types.BillingDetails"
-                },
-                "billing_entity_id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "types.JournalDirection": {
-            "type": "string",
-            "enum": [
-                "debit",
-                "credit"
-            ],
-            "x-enum-varnames": [
-                "JournalDirectionDebit",
-                "JournalDirectionCredit"
-            ]
-        },
-        "types.JournalEventType": {
-            "type": "string",
-            "enum": [
-                "invoice_finalized",
-                "invoice_voided",
-                "credit_note_finalized",
-                "credit_note_voided",
-                "payment_succeeded",
-                "payment_reversed",
-                "refund_succeeded",
-                "revenue_earned",
-                "revenue_offset"
-            ],
-            "x-enum-varnames": [
-                "JournalEventInvoiceFinalized",
-                "JournalEventInvoiceVoided",
-                "JournalEventCreditNoteFinalized",
-                "JournalEventCreditNoteVoided",
-                "JournalEventPaymentSucceeded",
-                "JournalEventPaymentReversed",
-                "JournalEventRefundSucceeded",
-                "JournalEventRevenueEarned",
-                "JournalEventRevenueOffset"
-            ]
-        },
-        "types.LedgerAccountKey": {
-            "type": "string",
-            "enum": [
-                "cash",
-                "accounts_receivable",
-                "unbilled_receivable",
-                "deferred_revenue",
-                "customer_credit",
-                "tax_payable",
-                "revenue",
-                "contra_revenue"
-            ],
-            "x-enum-varnames": [
-                "LedgerAccountCash",
-                "LedgerAccountReceivable",
-                "LedgerAccountUnbilledReceivable",
-                "LedgerAccountDeferredRevenue",
-                "LedgerAccountCustomerCredit",
-                "LedgerAccountTaxPayable",
-                "LedgerAccountRevenue",
-                "LedgerAccountContraRevenue"
-            ]
-        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -39924,178 +41247,6 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
-            }
-        },
-        "types.PerformanceObligationStatus": {
-            "type": "string",
-            "enum": [
-                "draft",
-                "active",
-                "satisfied",
-                "cancelled"
-            ],
-            "x-enum-varnames": [
-                "PerformanceObligationStatusDraft",
-                "PerformanceObligationStatusActive",
-                "PerformanceObligationStatusSatisfied",
-                "PerformanceObligationStatusCancelled"
-            ]
-        },
-        "types.RecognitionMethod": {
-            "type": "string",
-            "enum": [
-                "point_in_time",
-                "straight_line",
-                "as_consumed"
-            ],
-            "x-enum-varnames": [
-                "RecognitionMethodPointInTime",
-                "RecognitionMethodStraightLine",
-                "RecognitionMethodAsConsumed"
-            ]
-        },
-        "types.ReportCategory": {
-            "type": "string",
-            "enum": [
-                "billing",
-                "receivables",
-                "customers",
-                "credits",
-                "usage"
-            ],
-            "x-enum-varnames": [
-                "ReportCategoryBilling",
-                "ReportCategoryReceivables",
-                "ReportCategoryCustomers",
-                "ReportCategoryCredits",
-                "ReportCategoryUsage"
-            ]
-        },
-        "types.ReportKind": {
-            "type": "string",
-            "enum": [
-                "flow",
-                "ratio",
-                "snapshot"
-            ],
-            "x-enum-varnames": [
-                "ReportKindFlow",
-                "ReportKindRatio",
-                "ReportKindSnapshot"
-            ]
-        },
-        "types.ReportValueType": {
-            "type": "string",
-            "enum": [
-                "money",
-                "count",
-                "days"
-            ],
-            "x-enum-varnames": [
-                "ReportValueTypeMoney",
-                "ReportValueTypeCount",
-                "ReportValueTypeDays"
-            ]
-        },
-        "types.RevRecEntityType": {
-            "type": "string",
-            "enum": [
-                "subscription",
-                "subscription_line_item",
-                "invoice",
-                "credit_note",
-                "payment",
-                "refund",
-                "pob"
-            ],
-            "x-enum-varnames": [
-                "RevRecEntityTypeSubscription",
-                "RevRecEntityTypeSubscriptionLineItem",
-                "RevRecEntityTypeInvoice",
-                "RevRecEntityTypeCreditNote",
-                "RevRecEntityTypePayment",
-                "RevRecEntityTypeRefund",
-                "RevRecEntityTypePOB"
-            ]
-        },
-        "types.RevenueReportGroupBy": {
-            "type": "string",
-            "enum": [
-                "customer_id",
-                "contract_id",
-                "pob_id"
-            ],
-            "x-enum-varnames": [
-                "RevenueReportGroupByCustomer",
-                "RevenueReportGroupByContract",
-                "RevenueReportGroupByPOB"
-            ]
-        },
-        "types.TenantInternalStatus": {
-            "type": "string",
-            "enum": [
-                "trialing",
-                "active",
-                "suspended"
-            ],
-            "x-enum-varnames": [
-                "TenantInternalStatusTrialing",
-                "TenantInternalStatusActive",
-                "TenantInternalStatusSuspended"
-            ]
-        },
-        "types.ZohoPayPalPaymentMethod": {
-            "type": "string",
-            "enum": [
-                "standard",
-                "adaptive"
-            ],
-            "x-enum-varnames": [
-                "ZohoPayPalPaymentMethodStandard",
-                "ZohoPayPalPaymentMethodAdaptive"
-            ]
-        },
-        "types.ZohoPaymentGateway": {
-            "type": "string",
-            "enum": [
-                "paypal",
-                "stripe",
-                "authorize_net",
-                "payflow_pro",
-                "2checkout",
-                "braintree",
-                "razorpay"
-            ],
-            "x-enum-varnames": [
-                "ZohoPaymentGatewayPayPal",
-                "ZohoPaymentGatewayStripe",
-                "ZohoPaymentGatewayAuthorizeNet",
-                "ZohoPaymentGatewayPayflowPro",
-                "ZohoPaymentGateway2Checkout",
-                "ZohoPaymentGatewayBraintree",
-                "ZohoPaymentGatewayRazorpay"
-            ]
-        },
-        "types.ZohoPaymentGatewaySettings": {
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean"
-                },
-                "gateways": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.ZohoPaymentGateway"
-                    }
-                },
-                "paypal_payment_method": {
-                    "description": "Sent as additional_field1 on the PayPal gateway. Required when PayPal is selected.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ZohoPayPalPaymentMethod"
-                        }
-                    ]
-                }
             }
         },
         "webhookDto.AlertWebhookPayload": {
@@ -40747,6 +41898,32 @@ const docTemplate = `{
                 }
             }
         },
+        "webhookDto.InvoicePaymentFailedWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "invoice": {
+                    "$ref": "#/definitions/webhookDto.Invoice"
+                },
+                "is_auto_charge_attempt": {
+                    "type": "boolean"
+                },
+                "payment_id": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "reason": {
+                    "$ref": "#/definitions/types.InvoicePaymentFailureReason"
+                }
+            }
+        },
         "webhookDto.InvoiceSyncWebhookPayload": {
             "type": "object",
             "properties": {
@@ -40772,6 +41949,109 @@ const docTemplate = `{
                 },
                 "invoice": {
                     "$ref": "#/definitions/webhookDto.Invoice"
+                }
+            }
+        },
+        "webhookDto.Mandate": {
+            "type": "object",
+            "properties": {
+                "bank_account": {
+                    "$ref": "#/definitions/webhookDto.MandateBankAccount"
+                },
+                "card": {
+                    "$ref": "#/definitions/webhookDto.MandateCard"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "external_customer_id": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_amount": {
+                    "type": "string"
+                },
+                "provider": {
+                    "$ref": "#/definitions/types.PaymentGatewayType"
+                },
+                "setup_intent_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentMethodType"
+                },
+                "upi": {
+                    "$ref": "#/definitions/webhookDto.MandateUPI"
+                }
+            }
+        },
+        "webhookDto.MandateBankAccount": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
+                "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateCard": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "exp_month": {
+                    "type": "integer"
+                },
+                "exp_year": {
+                    "type": "integer"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateUPI": {
+            "type": "object",
+            "properties": {
+                "vpa": {
+                    "type": "string"
+                }
+            }
+        },
+        "webhookDto.MandateWebhookPayload": {
+            "type": "object",
+            "properties": {
+                "event_type": {
+                    "$ref": "#/definitions/types.WebhookEventName"
+                },
+                "mandate": {
+                    "$ref": "#/definitions/webhookDto.Mandate"
                 }
             }
         },
@@ -41503,10 +42783,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "credit_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "current_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "state": {
                     "type": "string"

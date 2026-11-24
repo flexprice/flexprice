@@ -70,6 +70,6 @@ func (Connection) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "billing_entity_id", "provider_type").
 			Unique().
 			StorageKey(ConnectionOwnerProviderUnique).
-			Annotations(entsql.IndexWhere("((status)::text = 'published'::text AND billing_entity_id IS NOT NULL)")),
+			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND (billing_entity_id IS NOT NULL))")),
 	}
 }

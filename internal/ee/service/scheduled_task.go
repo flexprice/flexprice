@@ -19,11 +19,7 @@ import (
 	"github.com/flexprice/flexprice/internal/storage"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
-	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
-	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
-	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -37,8 +33,6 @@ type ScheduledTaskService interface {
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
-	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
-	ScheduleDraftFinalization(ctx context.Context) (string, error)
 }
 
 type scheduledTaskService struct {
@@ -879,86 +873,4 @@ func (s *scheduledTaskService) CalculateIntervalBoundaries(currentTime time.Time
 	}
 
 	return startTime, endTime
-}
-
-func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) (string, error) {
-
-	scheduleID := types.GenerateUUIDWithPrefix("schtask_billing")
-	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery15Minutes)
-
-	scheduleSpec := client.ScheduleSpec{
-		CronExpressions: []string{cronExpr},
-	}
-
-	action := &client.ScheduleWorkflowAction{
-		Workflow: subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
-		Args: []interface{}{
-			subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
-				BatchSize: types.DEFAULT_BATCH_SIZE,
-			},
-		},
-		TaskQueue:                string(types.TemporalTaskQueueSubscription),
-		WorkflowExecutionTimeout: 1 * time.Hour,
-		WorkflowRunTimeout:       1 * time.Hour,
-		WorkflowTaskTimeout:      1 * time.Hour,
-	}
-
-	scheduleOptions := models.CreateScheduleOptions{
-		ID:     scheduleID,
-		Spec:   scheduleSpec,
-		Action: action,
-		Paused: false,
-	}
-
-	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
-	if err != nil {
-		s.logger.Error(ctx, "failed to create temporal schedule", "error", err)
-		return "", ierr.WithError(err).
-			WithHint("Failed to create Temporal schedule").
-			Mark(ierr.ErrInternal)
-	}
-
-	return "Triggered update billing period workflow successfully", nil
-}
-
-// ScheduleDraftFinalization creates a Temporal schedule that runs every 30 minutes
-// to finalize draft invoices whose finalization delay has elapsed.
-func (s *scheduledTaskService) ScheduleDraftFinalization(ctx context.Context) (string, error) {
-	scheduleID := types.GenerateUUIDWithPrefix("schtask_draft_finalize")
-
-	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery30Minutes)
-
-	scheduleSpec := client.ScheduleSpec{
-		CronExpressions: []string{cronExpr}, // Every 30 minutes
-	}
-
-	action := &client.ScheduleWorkflowAction{
-		Workflow: invoiceWorkflows.ScheduleDraftFinalizationWorkflow,
-		Args: []interface{}{
-			invoiceModels.ScheduleDraftFinalizationWorkflowInput{
-				BatchSize: 100,
-			},
-		},
-		TaskQueue:                string(types.TemporalTaskQueueInvoice),
-		WorkflowExecutionTimeout: 1 * time.Hour,
-		WorkflowRunTimeout:       1 * time.Hour,
-		WorkflowTaskTimeout:      1 * time.Hour,
-	}
-
-	scheduleOptions := models.CreateScheduleOptions{
-		ID:     scheduleID,
-		Spec:   scheduleSpec,
-		Action: action,
-		Paused: false,
-	}
-
-	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
-	if err != nil {
-		s.logger.Error(ctx, "failed to create draft finalization schedule", "error", err)
-		return "", ierr.WithError(err).
-			WithHint("Failed to create draft finalization schedule").
-			Mark(ierr.ErrInternal)
-	}
-
-	return "Triggered draft finalization schedule successfully", nil
 }

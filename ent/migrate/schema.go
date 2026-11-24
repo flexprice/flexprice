@@ -360,11 +360,6 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[24]},
 			},
-			{
-				Name:    "idx_billing_instalments_tenant_env_owner_invoiced_at",
-				Unique:  false,
-				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[9], BillingInstalmentsColumns[25]},
-			},
 		},
 	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
@@ -597,7 +592,7 @@ var (
 				Unique:  true,
 				Columns: []*schema.Column{ConnectionsColumns[1], ConnectionsColumns[7], ConnectionsColumns[13], ConnectionsColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "((status)::text = 'published'::text AND billing_entity_id IS NOT NULL)",
+					Where: "(((status)::text = 'published'::text) AND (billing_entity_id IS NOT NULL))",
 				},
 			},
 		},
@@ -1163,6 +1158,7 @@ var (
 		{Name: "tax_treatment", Type: field.TypeString, Default: "taxable", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
 		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 	}
 	// CustomersTable holds the schema information for the "customers" table.
 	CustomersTable = &schema.Table{
@@ -1203,6 +1199,98 @@ var (
 				Name:    "idx_customers_tenant_env_billing_entity",
 				Unique:  false,
 				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[23]},
+			},
+			{
+				Name:    "idx_customers_settings_override",
+				Unique:  false,
+				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((settings IS NOT NULL) AND ((status)::text = 'published'::text))",
+				},
+			},
+		},
+	}
+	// EmailLogsColumns holds the columns for the "email_logs" table.
+	EmailLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "template_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "trigger", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "from_address", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(320)"}},
+		{Name: "reply_to", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(320)"}},
+		{Name: "to_addresses", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "cc_addresses", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "subject", Type: field.TypeString, Size: 2147483647},
+		{Name: "provider", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "provider_message_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "delivery_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "status_reason", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "sent_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "delivered_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "idempotency_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(128)"}},
+		{Name: "metadata", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// EmailLogsTable holds the schema information for the "email_logs" table.
+	EmailLogsTable = &schema.Table{
+		Name:       "email_logs",
+		Columns:    EmailLogsColumns,
+		PrimaryKey: []*schema.Column{EmailLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "emaillog_provider_provider_message_id",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[18], EmailLogsColumns[19]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "provider_message_id IS NOT NULL",
+				},
+			},
+			{
+				Name:    "idx_email_log_entity_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[8], EmailLogsColumns[9], EmailLogsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						EmailLogsColumns[3].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "idx_email_log_auto_once",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[9], EmailLogsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "\"trigger\" = 'auto'",
+				},
+			},
+			{
+				Name:    "emaillog_tenant_id_environment_id_delivery_status_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[20], EmailLogsColumns[3]},
+			},
+			{
+				Name:    "idx_email_log_idempotency_key",
+				Unique:  true,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[24]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "idempotency_key IS NOT NULL",
+				},
+			},
+			{
+				Name:    "idx_email_log_queued",
+				Unique:  false,
+				Columns: []*schema.Column{EmailLogsColumns[1], EmailLogsColumns[7], EmailLogsColumns[3]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "delivery_status = 'queued'",
+				},
 			},
 		},
 	}
@@ -1898,7 +1986,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(6)"}},
+		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(8)"}},
 		{Name: "prefix", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_value", Type: field.TypeInt64, Default: 0, SchemaType: map[string]string{"postgres": "bigint"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
@@ -2124,6 +2212,14 @@ var (
 				Columns: []*schema.Column{PaymentsColumns[1], PaymentsColumns[7], PaymentsColumns[13], PaymentsColumns[14]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "((payment_gateway IS NOT NULL) AND (gateway_payment_id IS NOT NULL))",
+				},
+			},
+			{
+				Name:    "idx_in_flight_gateway_payments",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentsColumns[13], PaymentsColumns[19]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((payment_status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PROCESSING'::character varying)::text])))",
 				},
 			},
 			{
@@ -2792,6 +2888,7 @@ var (
 		{Name: "subscription_type", Type: field.TypeString, Default: "standalone", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "auto_invoice_threshold", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
 		{Name: "synced_price_sequence", Type: field.TypeInt64, Default: "0"},
+		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
@@ -2802,7 +2899,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[46]},
+				Columns:    []*schema.Column{SubscriptionsColumns[47]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -2845,6 +2942,14 @@ var (
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "(((status)::text = 'published'::text) AND ((subscription_status)::text = 'active'::text) AND ((payment_behavior)::text = ANY (ARRAY[('allow_incomplete'::character varying)::text, ('default_incomplete'::character varying)::text, ('error_if_incomplete'::character varying)::text])))",
+				},
+			},
+			{
+				Name:    "idx_subscriptions_settings_override",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((settings IS NOT NULL) AND ((status)::text = 'published'::text))",
 				},
 			},
 		},
@@ -3667,6 +3772,7 @@ var (
 		CreditNotesTable,
 		CreditNoteLineItemsTable,
 		CustomersTable,
+		EmailLogsTable,
 		EntitlementsTable,
 		EntitlementGrantsTable,
 		EntityIntegrationMappingsTable,

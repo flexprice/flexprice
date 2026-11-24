@@ -52,7 +52,7 @@ func TestHandleInvoicePaymentFailed_AlreadyPaidInvoiceIsSkipped(t *testing.T) {
 		ID:         "conn_1",
 		SyncConfig: &types.SyncConfig{Invoice: &types.EntitySyncConfig{Outbound: true}},
 	}}
-	invoiceSyncSvc := stripe.NewInvoiceSyncService(stripe.NewClient(connRepo, nil, log), nil, invoiceRepo, mappingRepo, nil, log)
+	invoiceSyncSvc := stripe.NewInvoiceSyncService(stripe.NewClient(connRepo, nil, log), nil, invoiceRepo, mappingRepo, nil, nil, nil, log)
 	paymentSvc := stripe.NewPaymentService(nil, nil, invoiceSyncSvc, nil, invoiceRepo, nil, nil, log)
 	h := webhook.NewHandler(nil, nil, paymentSvc, invoiceSyncSvc, nil, nil, mappingRepo, connRepo, log)
 

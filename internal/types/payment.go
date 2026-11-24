@@ -56,7 +56,8 @@ func (s PaymentStatus) IsDeletable() bool {
 // public update API. Self-transitions are allowed so that an update which
 // resends the current status is a no-op rather than an error. Terminal statuses
 // (see IsTerminal) have no outgoing transitions except SUCCEEDED, which is not
-// terminal because AUTH payments can still be voided or refunded.
+// terminal because AUTH payments can still be voided or refunded. A pending link
+// nobody paid is voided when its invoice is.
 var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 	// INITIATED reaches SUCCEEDED and OVERPAID directly because payments created
 	// with ProcessPayment=false (external gateways, backfills, checkout
@@ -76,6 +77,7 @@ var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 		PaymentStatusSucceeded,
 		PaymentStatusOverpaid,
 		PaymentStatusFailed,
+		PaymentStatusVoided,
 	},
 	PaymentStatusProcessing: {
 		PaymentStatusProcessing,
@@ -165,10 +167,16 @@ const (
 	PaymentMethodTypeCredits     PaymentMethodType = "CREDITS"
 	PaymentMethodTypePaymentLink PaymentMethodType = "PAYMENT_LINK"
 	PaymentMethodTypeUPI         PaymentMethodType = "UPI"
+	PaymentMethodTypeENACH       PaymentMethodType = "ENACH"
 )
 
 func (s PaymentMethodType) String() string {
 	return string(s)
+}
+
+// IsSavedMethod reports whether a charge of this type debits the customer's saved card or mandate.
+func (s PaymentMethodType) IsSavedMethod() bool {
+	return s == PaymentMethodTypeCard || s == PaymentMethodTypeUPI || s == PaymentMethodTypeENACH
 }
 
 func (s PaymentMethodType) Validate() error {
@@ -179,6 +187,7 @@ func (s PaymentMethodType) Validate() error {
 		PaymentMethodTypeCredits,
 		PaymentMethodTypePaymentLink,
 		PaymentMethodTypeUPI,
+		PaymentMethodTypeENACH,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment method type").
@@ -229,6 +238,7 @@ type PaymentFilter struct {
 	PaymentIDs        []string `form:"payment_ids"`
 	DestinationType   *string  `form:"destination_type"`
 	DestinationID     *string  `form:"destination_id"`
+	DestinationIDs    []string `form:"destination_ids"`
 	PaymentMethodType *string  `form:"payment_method_type"`
 	PaymentStatus     *string  `form:"payment_status"`
 	PaymentGateway    *string  `form:"payment_gateway"`
@@ -238,6 +248,9 @@ type PaymentFilter struct {
 
 	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
 	UpdatedAtGTE *time.Time `form:"updated_at_gte"`
+
+	// PaymentStatuses matches any of these statuses; internal only.
+	PaymentStatuses []PaymentStatus `form:"-" json:"-"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
@@ -456,3 +469,12 @@ func (f *PaymentMethodFilter) IsUnlimited() bool {
 	}
 	return f.QueryFilter.IsUnlimited()
 }
+
+// InvoicePaymentFailureReason is why a payment of an invoice did not succeed.
+type InvoicePaymentFailureReason string
+
+const (
+	InvoicePaymentFailureReasonPaymentMethodUnavailable InvoicePaymentFailureReason = "payment_method_unavailable"
+	InvoicePaymentFailureReasonProviderError            InvoicePaymentFailureReason = "provider_error"
+	InvoicePaymentFailureReasonDeclined                 InvoicePaymentFailureReason = "declined"
+)
