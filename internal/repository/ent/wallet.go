@@ -114,9 +114,12 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
-		return cachedWallet, nil
+	// Skip cache inside transactions.
+	inTx := r.client.TxFromContext(ctx) != nil
+	if !inTx {
+		if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
+			return cachedWallet, nil
+		}
 	}
 
 	client := r.client.Reader(ctx)
@@ -149,7 +152,7 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 	}
 
 	walletData := walletdomain.FromEnt(w)
-	if ctx.Value(types.CtxDBTransaction) == nil {
+	if !inTx {
 		r.SetCache(ctx, walletData)
 	}
 	return walletData, nil

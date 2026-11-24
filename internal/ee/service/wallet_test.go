@@ -4931,13 +4931,14 @@ func (s *WalletServiceSuite) TestConcurrentOperationsKeepLedgerChain() {
 
 	const n = 40
 	var wg sync.WaitGroup
+	errs := make([]error, n)
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			ctx := s.GetContext()
 			if i%2 == 0 {
-				_ = svc.CreditWallet(ctx, &wallet.WalletOperation{
+				errs[i] = svc.CreditWallet(ctx, &wallet.WalletOperation{
 					WalletID:          s.testData.wallet.ID,
 					Type:              types.TransactionTypeCredit,
 					CreditAmount:      decimal.NewFromInt(7),
@@ -4946,7 +4947,7 @@ func (s *WalletServiceSuite) TestConcurrentOperationsKeepLedgerChain() {
 				})
 				return
 			}
-			_ = svc.DebitWallet(ctx, &wallet.WalletOperation{
+			errs[i] = svc.DebitWallet(ctx, &wallet.WalletOperation{
 				WalletID:          s.testData.wallet.ID,
 				Type:              types.TransactionTypeDebit,
 				CreditAmount:      decimal.NewFromInt(3),
@@ -4957,9 +4958,15 @@ func (s *WalletServiceSuite) TestConcurrentOperationsKeepLedgerChain() {
 	}
 	wg.Wait()
 
+	for i, err := range errs {
+		s.NoError(err, "operation %d failed", i)
+	}
+	ledger := s.ledger()
+	s.Len(ledger, n+1)
+
 	sum := decimal.Zero
 	prevAfter := decimal.Zero
-	for i, tx := range s.ledger() {
+	for i, tx := range ledger {
 		s.True(prevAfter.Equal(tx.CreditBalanceBefore), "tx %d before=%s prevAfter=%s", i, tx.CreditBalanceBefore, prevAfter)
 		prevAfter = tx.CreditBalanceAfter
 		if tx.Type == types.TransactionTypeCredit {
