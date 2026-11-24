@@ -5735,6 +5735,85 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_NilMeter() {
 	s.True(totalCost.Equal(decimal.NewFromFloat(0.10)), "expected 10 * $0.01, got %s", totalCost)
 }
 
+// Tier flat fees are prorated on the share of January (31 days) the priced window covers.
+func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_ProratesTierFlatFees() {
+	ctx := s.GetContext()
+	jan1, jan16 := s.periodStart, time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)
+	feb1, feb20 := s.periodEnd, time.Date(2026, 2, 20, 0, 0, 0, 0, time.UTC)
+
+	tieredPrice := func(mode types.BillingTier, period types.BillingPeriod) *price.Price {
+		return &price.Price{
+			ID: "price_tiered_" + string(mode) + "_" + string(period), Currency: "usd",
+			Type: types.PRICE_TYPE_USAGE, BillingModel: types.BILLING_MODEL_TIERED, TierMode: mode,
+			MeterID: s.meterAPI.ID, BillingPeriod: period, BillingPeriodCount: 1,
+			InvoiceCadence: types.InvoiceCadenceArrear,
+			Tiers: price.JSONBTiers{
+				{UpTo: lo.ToPtr(uint64(1000)), UnitAmount: decimal.NewFromFloat(0.01), FlatAmount: lo.ToPtr(decimal.NewFromInt(100))},
+				{UnitAmount: decimal.NewFromFloat(0.02), FlatAmount: lo.ToPtr(decimal.NewFromInt(30))},
+			},
+		}
+	}
+	slab := tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_MONTHLY)
+	bucketed := tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_MONTHLY)
+	bucketed.BucketSize = types.WindowSizeHour
+
+	tests := []struct {
+		name       string
+		price      *price.Price
+		behavior   types.ProrationBehavior
+		subStart   time.Time // zero = Jan 1
+		start, end time.Time // line item dates; zero end = open
+		window     types.Period
+		usage      int64
+		bucketed   bool
+		want       string
+	}{
+		// 500 calls: $5 + $100 flat. 3,000 calls (slab): $10 + $40 + $130 flat.
+		{name: "full period keeps the whole flat fee", price: slab, start: jan1, window: types.Period{Start: jan1, End: feb1}, usage: 500, want: "105"},
+		{name: "item starting mid-period", price: slab, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "56.61"},                                                                                      // 5 + 100×16/31
+		{name: "item ending mid-period", price: slab, start: jan1, end: jan16, window: types.Period{Start: jan1, End: jan16}, usage: 500, want: "53.39"},                                                                             // 5 + 100×15/31
+		{name: "slab prorates every flat fee reached", price: slab, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 3000, want: "117.1"},                                                                         // 50 + 130×16/31
+		{name: "volume prorates the selected tier's flat fee", price: tieredPrice(types.BILLING_TIER_VOLUME, types.BILLING_PERIOD_MONTHLY), start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 3000, want: "75.48"}, // 60 + 30×16/31
+		{name: "window ending mid-period with the item still open (cancellation invoice)", price: slab, start: jan1, window: types.Period{Start: jan1, End: jan16}, usage: 500, want: "53.39"},
+		{name: "none: item from the period start keeps the whole flat fee when it ends mid-period", price: slab, behavior: types.ProrationBehaviorNone, start: jan1, end: jan16, window: types.Period{Start: jan1, End: jan16}, usage: 500, want: "105"},
+		{name: "none: item starting mid-period pays no flat fee until its next period", price: slab, behavior: types.ProrationBehaviorNone, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "5"},
+		{name: "none: first calendar period starting mid-month keeps the whole flat fee", price: slab, behavior: types.ProrationBehaviorNone, subStart: jan16, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "105"},
+		{name: "window spanning periods is not prorated", price: slab, start: jan16, window: types.Period{Start: jan16, End: feb20}, usage: 500, want: "105"},
+		{name: "bucketed meter keeps per-bucket flat fees", price: bucketed, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, bucketed: true, want: "105"},
+		{name: "longer-cadence item is not prorated", price: tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_ANNUAL), start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "105"},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			sub := *s.sub
+			sub.Timezone = "UTC"
+			sub.ProrationBehavior = tt.behavior
+			if !tt.subStart.IsZero() {
+				sub.StartDate = tt.subStart
+			}
+			usage := decimal.NewFromInt(tt.usage)
+			lu := &LineItemMeterUsage{
+				LineItem: &subscription.SubscriptionLineItem{
+					ID: "li_tiered", PriceID: tt.price.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: s.meterAPI.ID,
+					BillingPeriod: tt.price.BillingPeriod, BillingPeriodCount: 1, StartDate: tt.start, EndDate: tt.end,
+				},
+				MeterID: s.meterAPI.ID, Meter: s.meterAPI, Price: tt.price,
+				PeriodStart: tt.window.Start, PeriodEnd: tt.window.End, Usage: usage,
+			}
+			if tt.bucketed {
+				lu.BucketedResult = &events.AggregationResult{Results: []events.UsageResult{{Value: usage}}, Value: usage}
+			}
+
+			charges, total, err := s.svc.ConvertToBillingCharges(ctx, &SubscriptionMeterUsage{Subscription: &sub, LineItemUsages: []*LineItemMeterUsage{lu}})
+			s.Require().NoError(err)
+			s.Require().Len(charges, 1)
+			s.Equal(tt.want, charges[0].AmountDecimal().String())
+			s.Equal(tt.want, total.Round(2).String())
+		})
+	}
+	s.True(slab.Tiers[0].FlatAmount.Equal(decimal.NewFromInt(100)), "the cached price must not be modified")
+}
+
 func (s *MeterUsageServiceSuite) TestAggregationPropertyKeys() {
 	ctx := s.GetContext()
 	meters := []*meter.Meter{

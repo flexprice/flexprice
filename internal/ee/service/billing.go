@@ -618,6 +618,57 @@ func prorateFixedCharge(
 	return amount.Mul(fraction), false, nil
 }
 
+// prorateUsageFlatFees prices a tiered usage price's flat fees the way prorateFixedCharge prices a fixed charge:
+// on the share of the item's billing period that window (the priced usage, bounded by the item's dates) covers.
+// Under none an item starting after the period start pays no flat fee until its next period.
+// p is returned unchanged for bucketed meters (each bucket carries its own flat fee) and when window spans periods.
+// e.g. $100 flat, window [Nov 16, Dec 1): $50; under none $0, or $100 if Nov 16 starts the subscription's period.
+func prorateUsageFlatFees(
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	p *price.Price,
+	m *meter.Meter,
+	window types.Period,
+) (*price.Price, error) {
+	if p == nil || item == nil || p.Type != types.PRICE_TYPE_USAGE || p.BillingModel != types.BILLING_MODEL_TIERED ||
+		!p.HasTierFlatAmount() || price.IsBucketed(p, m) ||
+		item.BillingPeriod == types.BILLING_PERIOD_ONETIME ||
+		types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+		return p, nil
+	}
+
+	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
+	if err != nil {
+		return nil, err
+	}
+	full := types.FullBillingPeriod(window.Start, grid)
+	if window.End.After(full.End) {
+		return p, nil
+	}
+
+	if sub.ProrationBehavior == types.ProrationBehaviorNone {
+		subPeriodStart, err := subPeriodStartAt(sub, window.Start)
+		if err != nil {
+			return nil, err
+		}
+		if item.StartDate.Sub(types.LatestOf(full.Start, subPeriodStart)).Round(time.Second) > 0 {
+			return p.WithTierFlatAmountsScaled(decimal.Zero), nil
+		}
+		return p, nil
+	}
+
+	fraction, _, err := proration.CalculateProrationCoefficient(sub, item.BillingPeriod, item.BillingPeriodCount,
+		window, types.StrategySecondBased)
+	if err != nil {
+		return nil, err
+	}
+	if !fraction.LessThan(decimal.NewFromInt(1)) {
+		return p, nil
+	}
+
+	return p.WithTierFlatAmountsScaled(fraction), nil
+}
+
 // subPeriodStartAt is the start of the sub's billing period containing t, never before the sub start.
 // e.g. calendar monthly sub from Jan 15: t = Jan 20 → Jan 15; t = Mar 20 → Mar 1.
 func subPeriodStartAt(sub *subscription.Subscription, t time.Time) (time.Time, error) {
