@@ -2267,6 +2267,10 @@ func (s *subscriptionService) CancelSubscription(
 	if err != nil {
 		return nil, err
 	}
+	// A paused subscription ends at its auto-cancel at the latest, even before the billing run cancels it.
+	if isPaused && subscription.CancelAt != nil && effectiveDate.After(*subscription.CancelAt) {
+		effectiveDate = *subscription.CancelAt
+	}
 
 	// Built before the cancellation mutates the subscription. The immediate-cancellation key is
 	// derived from the current period precisely because effectiveDate is clock.Now(), and

@@ -1055,7 +1055,7 @@ func (r *subscriptionRepository) CreatePause(ctx context.Context, pause *domainS
 		SetPauseStatus(string(pause.PauseStatus)).
 		SetPauseMode(string(pause.PauseMode)).
 		SetResumeMode(string(pause.ResumeMode)).
-		SetProrationBehavior(string(pause.ProrationBehavior)).
+		SetNillableProrationBehavior(lo.EmptyableToPtr(string(pause.ProrationBehavior))).
 		SetPauseStart(pause.PauseStart).
 		SetNillablePauseEnd(pause.PauseEnd).
 		SetNillableResumedAt(pause.ResumedAt).

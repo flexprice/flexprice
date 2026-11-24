@@ -162,6 +162,11 @@ func (s *subscriptionScheduleService) Cancel(ctx context.Context, scheduleID str
 					}).
 					Mark(ierr.ErrValidation)
 			}
+			// A resume may have cancelled the schedule before the lock was taken.
+			schedule, err = s.SubScheduleRepo.Get(txCtx, scheduleID)
+			if err != nil {
+				return fmt.Errorf("failed to get schedule: %w", err)
+			}
 		}
 
 		return s.cancelSchedule(txCtx, schedule)
@@ -517,6 +522,10 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	// updateSubscriptionForCancellation at scheduling time) stays permanently non-nil after a
 	// revert, which later spuriously blocks executePlanChange's cancellation guard.
 	sub.CancelledAt = nil
+	// For the same reason, the cancellation keys written at scheduling time had no prior value.
+	delete(sub.Metadata, "cancellation_type")
+	delete(sub.Metadata, "cancellation_reason")
+	delete(sub.Metadata, "effective_date")
 	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
 	// Nil-safe: old schedule records without this field are handled gracefully.
 	if config.OriginalCurrentPeriodEnd != nil {

@@ -26,7 +26,7 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 
 // @Summary Pause subscription
 // @ID pauseSubscription
-// @Description Use when a customer stops temporarily. Pauses an active subscription now: usage and arrear fixed charges up to the pause are billed on a closing invoice, and every paused period after it gets a $0 skipped invoice.
+// @Description Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice: the period keeps its one invoice, billed at the period end. The subscription is cancelled if it is not resumed within its pause grace period.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -67,7 +67,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 
 // @Summary Resume subscription
 // @ID resumeSubscription
-// @Description Use when a paused customer comes back. Resumes a paused subscription now on its existing billing anchor: the first period runs from the resume to the next billing date and its advance charges are invoiced at once.
+// @Description Use when a paused customer comes back. Resumes a paused subscription now without raising an invoice: its scheduled cancellation is removed and the period's invoice is billed at the period end.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json

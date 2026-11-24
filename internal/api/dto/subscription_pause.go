@@ -7,7 +7,7 @@ import (
 )
 
 // PauseSubscriptionRequest pauses an active subscription immediately.
-// @Description Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation over the time the subscription was active.
+// @Description Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation. Usage is billed for the time the subscription was active, and fixed charges for the paused days follow proration_behavior.
 type PauseSubscriptionRequest struct {
 	// ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.
 	// @Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet when the period's invoice is finalized.

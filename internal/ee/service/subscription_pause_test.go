@@ -924,6 +924,9 @@ func (s *SubscriptionPauseSuite) TestResume_RevertsTheAutoCancelAndRaisesNoInvoi
 	s.True(resumed.CurrentPeriodEnd.Equal(periodEnd), "period end restored")
 	s.True(resumed.BillingAnchor.Equal(periodStart), "anchor unchanged")
 	s.Equal(types.ProrationBehaviorNone, resumed.ProrationBehavior)
+	for _, key := range []string{"cancellation_type", "cancellation_reason", "effective_date"} {
+		s.NotContains(resumed.Metadata, key, "the auto-cancel's metadata is removed")
+	}
 
 	s.Nil(s.cancellationSchedule(sub.ID), "no pending cancellation")
 	cancelledSchedule, err := s.GetStores().SubscriptionScheduleRepo.Get(s.GetContext(), schedule.ID)
@@ -1277,6 +1280,134 @@ func (s *SubscriptionPauseSuite) TestClosedPeriod_AnnualAdvanceFeeCreditsProrate
 	s.InDelta(pauseAdvanceFee*proratedShare, credits[0].CreditAmount.InexactFloat64(), 0.01, "credit %s", credits[0].CreditAmount)
 }
 
+// lineItemsTo switches the stored line items of sub and their prices to period.
+func (s *SubscriptionPauseSuite) lineItemsTo(sub *subscription.Subscription, period types.BillingPeriod) {
+	ctx := s.GetContext()
+	for _, item := range s.subscription(sub.ID).LineItems {
+		p, err := s.GetStores().PriceRepo.Get(ctx, item.PriceID)
+		s.Require().NoError(err)
+		p.BillingPeriod = period
+		s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
+		item.BillingPeriod = period
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, item))
+	}
+}
+
+// A quarterly arrear fee on a monthly subscription is billed on the quarter's last month, without the
+// create_prorations paused days of any month in the quarter. Days of none pauses stay billed.
+func (s *SubscriptionPauseSuite) TestClosedPeriod_QuarterlyArrearOnMonthlyDropsProratedPausedDays() {
+	quarterStart := time.Now().UTC().Truncate(time.Second).AddDate(0, -3, -5)
+	quarterEnd := quarterStart.AddDate(0, 3, 0)
+	lastMonthStart := quarterStart.AddDate(0, 2, 0)
+	firstMonthEnd := quarterStart.AddDate(0, 1, 0)
+	quarter := quarterEnd.Sub(quarterStart)
+
+	tests := []struct {
+		name     string
+		behavior types.ProrationBehavior
+		paused   bool
+		want     float64
+	}{
+		{name: "no pause", want: pauseArrearFee},
+		{name: "first-month pause with none", paused: true, behavior: types.ProrationBehaviorNone, want: pauseArrearFee},
+		{
+			name:     "first-month pause with create_prorations",
+			paused:   true,
+			behavior: types.ProrationBehaviorCreateProrations,
+			want:     pauseArrearFee * (1 - (10*24*time.Hour).Seconds()/quarter.Seconds()),
+		},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			sub := s.subscriptionWithCharges("subs_quarterly_arrear_"+string(rune('a'+i)), quarterStart, firstMonthEnd, chargeArrear)
+			s.lineItemsTo(sub, types.BILLING_PERIOD_QUARTER)
+			if tt.paused {
+				s.NoError(s.GetStores().SubscriptionRepo.CreatePause(ctx, &subscription.SubscriptionPause{
+					ID:                  sub.ID + "_pause",
+					SubscriptionID:      sub.ID,
+					PauseStatus:         types.PauseStatusCompleted,
+					PauseMode:           types.PauseModeImmediate,
+					ResumeMode:          types.ResumeModeImmediate,
+					ProrationBehavior:   tt.behavior,
+					PauseStart:          quarterStart.AddDate(0, 0, 5),
+					ResumedAt:           lo.ToPtr(quarterStart.AddDate(0, 0, 15)),
+					OriginalPeriodStart: quarterStart,
+					OriginalPeriodEnd:   firstMonthEnd,
+					EnvironmentID:       types.GetEnvironmentID(ctx),
+					BaseModel:           types.GetDefaultBaseModel(ctx),
+				}))
+			}
+			stored := s.subscription(sub.ID)
+			stored.CurrentPeriodStart, stored.CurrentPeriodEnd = lastMonthStart, quarterEnd
+			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, stored))
+
+			inv := s.billPeriod(sub.ID, lastMonthStart, quarterEnd)
+
+			arrear, ok := s.lineAmount(inv.ID, "price_arrear_"+sub.ID)
+			s.Require().True(ok, "the quarter's arrear fee is billed on its last month")
+			s.InDelta(tt.want, arrear.InexactFloat64(), 0.01, "arrear %s", arrear)
+		})
+	}
+}
+
+// Monthly advance charges on a quarterly subscription refund the paused share of each month, not of
+// the whole quarter: a pause over the second half of the first month refunds half of that month.
+func (s *SubscriptionPauseSuite) TestClosedPeriod_AdvanceCreditUsesEachChargePeriod() {
+	quarterStart := time.Now().UTC().Truncate(time.Second).AddDate(0, -3, -5)
+	quarterEnd := quarterStart.AddDate(0, 3, 0)
+	firstMonthEnd := quarterStart.AddDate(0, 1, 0)
+	pausedFrom := quarterStart.AddDate(0, 0, 15)
+	sub := s.subscriptionWithCharges("subs_quarterly_advance_credit", quarterStart, quarterEnd, chargeAdvance)
+	sub.BillingPeriod = types.BILLING_PERIOD_QUARTER
+	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub))
+	s.completedPause(s.subscription(sub.ID), "pause_quarterly_advance_credit", pausedFrom, firstMonthEnd, types.ProrationBehaviorCreateProrations)
+
+	s.billPeriod(sub.ID, quarterStart, quarterEnd)
+
+	credits := s.pauseCredits(sub.ID, quarterStart)
+	s.Require().Len(credits, 1)
+	s.InDelta(pauseAdvanceFee*fraction(pausedFrom, firstMonthEnd, quarterStart, firstMonthEnd), credits[0].CreditAmount.InexactFloat64(), 0.01,
+		"credit %s", credits[0].CreditAmount)
+}
+
+// A converted invoice is issued in the billing currency, so the paused advance credit is converted
+// at the invoice's frozen rate and credited in that currency.
+func (s *SubscriptionPauseSuite) TestClosedPeriod_ConvertedInvoiceCreditsInBillingCurrency() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := s.closedPeriod()
+	sub := s.subscriptionWithCharges("subs_closed_converted", periodStart, periodEnd, chargeAdvance)
+	pausedFrom := periodStart.AddDate(0, 0, 10)
+	s.completedPause(sub, "pause_closed_converted", pausedFrom, periodEnd, types.ProrationBehaviorCreateProrations)
+
+	converted := &invoice.Invoice{
+		ID:             "inv_closed_converted",
+		CustomerID:     s.cust.ID,
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		BillingReason:  string(types.InvoiceBillingReasonSubscriptionCycle),
+		Currency:       "eur",
+		PeriodStart:    lo.ToPtr(periodStart),
+		PeriodEnd:      lo.ToPtr(periodEnd),
+		FxConversion:   &types.FxConversion{ChargeCurrency: "usd", BillingCurrency: "eur", Rate: decimal.RequireFromString("0.9")},
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.Require().NoError(s.invoiceService.(*invoiceService).creditPausedAdvanceCharges(ctx, converted))
+
+	wallets, err := s.GetStores().WalletRepo.GetWalletsByCustomerID(ctx, s.cust.ID)
+	s.Require().NoError(err)
+	eurWallet, ok := lo.Find(wallets, func(w *wallet.Wallet) bool { return types.IsMatchingCurrency(w.Currency, "eur") })
+	s.Require().True(ok, "the credit goes to a wallet in the billing currency")
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.WalletID = &eurWallet.ID
+	txs, err := s.GetStores().WalletRepo.ListWalletTransactions(ctx, filter)
+	s.Require().NoError(err)
+	s.Require().Len(txs, 1)
+	want := pauseAdvanceFee * 0.9 * fraction(pausedFrom, periodEnd, periodStart, periodEnd)
+	s.InDelta(want, txs[0].CreditAmount.InexactFloat64(), 0.01, "credit %s", txs[0].CreditAmount)
+}
+
 // The credit is given once per subscription per period: finalizing again, or another invoice of the
 // same period, credits nothing more.
 func (s *SubscriptionPauseSuite) TestClosedPeriod_CreditGivenOncePerPeriod() {
@@ -1433,6 +1564,45 @@ func (s *SubscriptionPauseSuite) TestCancelWhilePaused_ImmediateBillsActiveTimeU
 	s.InDelta(arrearByBehavior[types.ProrationBehaviorNone]*activeShare, arrearByBehavior[types.ProrationBehaviorCreateProrations], 0.02,
 		"create_prorations bills the arrear fee for the active time only")
 	s.Len(s.prorationCredits(), 1, "only the create_prorations pause credited")
+}
+
+// An immediate cancel that runs after the pause's auto-cancel time, before the billing run cancelled
+// the subscription, ends the subscription and bills the period up to the auto-cancel time.
+func (s *SubscriptionPauseSuite) TestCancelWhilePaused_AfterAutoCancelTimeEndsAtIt() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := s.openPeriod()
+	cancelAt := periodStart.AddDate(0, 0, 5)
+	sub := s.billedSubscription("subs_cancel_after_auto_cancel", periodStart, periodEnd)
+	pause := &subscription.SubscriptionPause{
+		ID:                  "pause_cancel_after_auto_cancel",
+		SubscriptionID:      sub.ID,
+		PauseStatus:         types.PauseStatusActive,
+		PauseMode:           types.PauseModeImmediate,
+		ProrationBehavior:   types.ProrationBehaviorNone,
+		PauseStart:          periodStart.AddDate(0, 0, 2),
+		OriginalPeriodStart: periodStart,
+		OriginalPeriodEnd:   periodEnd,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreatePause(ctx, pause))
+	sub.SubscriptionStatus = types.SubscriptionStatusPaused
+	sub.PauseStatus = types.PauseStatusActive
+	sub.ActivePauseID = lo.ToPtr(pause.ID)
+	sub.CancelAt, sub.EndDate, sub.CancelAtPeriodEnd = lo.ToPtr(cancelAt), lo.ToPtr(cancelAt), true
+	sub.CurrentPeriodEnd = cancelAt
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+	_, err := s.service.CancelSubscription(ctx, sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
+	})
+	s.Require().NoError(err)
+
+	cancelled := s.subscription(sub.ID)
+	s.Equal(types.SubscriptionStatusCancelled, cancelled.SubscriptionStatus)
+	s.True(cancelled.EndDate.Equal(cancelAt), "ends at the auto-cancel time, got %s", cancelled.EndDate)
+	final := s.onlyInvoiceWithReason(sub.ID, types.InvoiceBillingReasonProration)
+	s.True(final.PeriodEnd.Equal(cancelAt), "billed up to the auto-cancel time, got %s", final.PeriodEnd)
 }
 
 // Scheduled cancellations are refused while paused.

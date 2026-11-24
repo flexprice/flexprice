@@ -477,6 +477,7 @@ func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_PausedPeriodGet
 	draft, err := s.GetStores().InvoiceRepo.Get(ctx, output.InvoiceIDs[0])
 	s.Require().NoError(err)
 	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), draft.BillingReason)
+	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
 	s.True(draft.PeriodStart.Equal(p1Start))
 	s.True(draft.PeriodEnd.Equal(p1End))
 }

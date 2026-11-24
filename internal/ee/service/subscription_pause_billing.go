@@ -178,8 +178,17 @@ func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *in
 	if err != nil {
 		return err
 	}
-	refundableShare := decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(billedPeriod, refundable))
-	creditAmount := types.RoundToCurrencyPrecision(advance.TotalAmount.Mul(refundableShare), inv.Currency)
+	// Each charge refunds the paused share of its own service period.
+	credit := decimal.Zero
+	for _, line := range advance.LineItems {
+		linePeriod := types.Period{Start: lo.FromPtr(line.PeriodStart), End: lo.FromPtr(line.PeriodEnd)}
+		credit = credit.Add(line.Amount.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, refundable))))
+	}
+	// A converted invoice is issued in the billing currency, so the credit takes its frozen rate.
+	if inv.FxConversion != nil && !inv.FxConversion.Rate.IsZero() {
+		credit = credit.Mul(inv.FxConversion.Rate)
+	}
+	creditAmount := types.RoundToCurrencyPrecision(credit, inv.Currency)
 	if !creditAmount.IsPositive() {
 		return nil
 	}

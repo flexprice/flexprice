@@ -13474,7 +13474,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when a customer stops temporarily. Pauses an active subscription now: usage and arrear fixed charges up to the pause are billed on a closing invoice, and every paused period after it gets a $0 skipped invoice.",
+                "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice: the period keeps its one invoice, billed at the period end. The subscription is cancelled if it is not resumed within its pause grace period.",
                 "consumes": [
                     "application/json"
                 ],
@@ -13539,7 +13539,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when a paused customer comes back. Resumes a paused subscription now on its existing billing anchor: the first period runs from the resume to the next billing date and its advance charges are invoiced at once.",
+                "description": "Use when a paused customer comes back. Resumes a paused subscription now without raising an invoice: its scheduled cancellation is removed and the period's invoice is billed at the period end.",
                 "consumes": [
                     "application/json"
                 ],
@@ -28373,7 +28373,7 @@ const docTemplate = `{
             }
         },
         "PauseSubscriptionRequest": {
-            "description": "Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation over the time the subscription was active.",
+            "description": "Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation. Usage is billed for the time the subscription was active, and fixed charges for the paused days follow proration_behavior.",
             "type": "object",
             "properties": {
                 "metadata": {
