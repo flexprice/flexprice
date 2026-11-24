@@ -22888,6 +22888,10 @@ paths:
           description: Server error
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
+        "503":
+          description: Event could not be accepted, retry
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
       summary: Ingest event
@@ -22961,6 +22965,10 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "503":
+          description: Events could not be accepted, retry
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:

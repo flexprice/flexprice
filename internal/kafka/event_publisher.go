@@ -3,9 +3,11 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 
+	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
@@ -23,9 +25,9 @@ type messagePublisher interface {
 // EventPublisher publishes source events to Kafka. It always writes to the deployment's
 // local cluster (cfg.Kafka); during the AWS→GCP migration, if a second cluster is
 // configured (cfg.KafkaSecondary), it also writes there (presence-based dual-write). Writes
-// are independent: one cluster failing does not block the other. Ingest is fire-and-forget
-// at the service layer (CreateEvent logs and returns 202), so a failure here is logged
-// per-cluster and returned, not customer-facing. See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
+// are independent: one cluster failing does not block the other. Only the local cluster's
+// error is returned; a secondary failure is logged and never fails the caller.
+// See infrastructure/docs/GCP-CUTOVER-STEPWISE.md.
 type EventPublisher struct {
 	primary      messagePublisher
 	primaryCfg   *config.KafkaConfig
@@ -77,20 +79,23 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	// A fresh message per cluster (the watermill publisher consumes the message it is handed);
 	// same event.ID + payload everywhere keeps the streams dedup-identical.
 	// The local cluster is always present (NewEventPublisher guarantees it).
-	var firstErr error
+	var primaryErr error
 	if err := p.primary.Publish(determineTopic(p.primaryCfg, event), p.buildMessage(event, payload, partitionKey)); err != nil {
 		p.logFailure("primary", event, err)
-		firstErr = err
+		primaryErr = err
 	}
 	if p.secondary != nil {
 		if err := p.secondary.Publish(determineTopic(p.secondaryCfg, event), p.buildMessage(event, payload, partitionKey)); err != nil {
 			p.logFailure("secondary", event, err)
-			if firstErr == nil {
-				firstErr = err
-			}
 		}
 	}
-	return firstErr
+	return primaryErr
+}
+
+// IsMessageTooLarge reports whether a publish error is the broker client's
+// max-message-size rejection, which a retry cannot fix.
+func IsMessageTooLarge(err error) bool {
+	return errors.Is(err, sarama.ErrMessageSizeTooLarge)
 }
 
 func (p *EventPublisher) logFailure(cluster string, event *events.Event, err error) {
@@ -150,8 +155,12 @@ func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event)
 		return err
 	}
 
-	var firstErr error
+	var errs []error
 	for _, g := range groups {
+		// Earlier groups stay published.
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
 		payload, err := json.Marshal(events.EventBatch{
 			Events:        g.events,
 			TenantID:      g.tenantID,
@@ -165,11 +174,11 @@ func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event)
 
 		// No single event id to use as the message UUID; dedup still holds because
 		// ClickHouse dedupes on the ids inside the payload.
-		if err := p.publishBatchMessage(ctx, payload, g, len(g.events)); err != nil && firstErr == nil {
-			firstErr = err
+		if err := p.publishBatchMessage(ctx, payload, g, len(g.events)); err != nil {
+			errs = append(errs, err)
 		}
 	}
-	return firstErr
+	return errors.Join(errs...)
 }
 
 type eventGroup struct {
@@ -247,20 +256,17 @@ func (p *EventPublisher) publishBatchMessage(ctx context.Context, payload []byte
 	msg.Metadata.Set("environment_id", g.environmentID)
 	msg.Metadata.Set("batch_size", fmt.Sprintf("%d", count))
 
-	var firstErr error
+	var primaryErr error
 	if err := p.primary.Publish(determineBulkTopic(p.primaryCfg), msg); err != nil {
 		p.logBatchFailure(ctx, "primary", g, count, err)
-		firstErr = err
+		primaryErr = err
 	}
 	if p.secondary != nil {
 		if err := p.secondary.Publish(determineBulkTopic(p.secondaryCfg), msg); err != nil {
 			p.logBatchFailure(ctx, "secondary", g, count, err)
-			if firstErr == nil {
-				firstErr = err
-			}
 		}
 	}
-	return firstErr
+	return primaryErr
 }
 
 func (p *EventPublisher) logBatchFailure(ctx context.Context, cluster string, g eventGroup, count int, err error) {

@@ -6244,6 +6244,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
+                    },
+                    "503": {
+                        "description": "Event could not be accepted, retry",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -6348,6 +6354,12 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Events could not be accepted, retry",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }

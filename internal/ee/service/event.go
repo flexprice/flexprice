@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -99,11 +100,11 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 	}
 
 	if err := s.publisher.Publish(ctx, event); err != nil {
-		// Log the error but don't fail the request
 		s.logger.With(
 			"event_id", event.ID,
 			"error", err,
 		).Error("failed to publish event")
+		return publishFailure(err, "Event could not be accepted, please retry")
 	}
 
 	createEventRequest.EventID = event.ID
@@ -122,14 +123,44 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		return s.bulkCreateEventsBatched(ctx, events)
 	}
 
-	// publish events to Kafka for downstream processing
+	// Publish failures don't stop the remaining events.
+	var failed []error
+	allTooLarge := true
 	for _, event := range events.Events {
-		if err := s.CreateEvent(ctx, event); err != nil {
+		err := s.CreateEvent(ctx, event)
+		if err == nil {
+			continue
+		}
+		tooLarge := kafka.IsMessageTooLarge(err)
+		if !tooLarge && !ierr.IsServiceUnavailable(err) {
 			return err
 		}
+		allTooLarge = allTooLarge && tooLarge
+		failed = append(failed, err)
 	}
 
-	return nil
+	switch {
+	case len(failed) == 0:
+		return nil
+	case allTooLarge:
+		return failed[0]
+	}
+	s.logger.Error(ctx, "failed to publish some events", "failed_count", len(failed), "event_count", len(events.Events), "error", errors.Join(failed...))
+	return ierr.NewError(fmt.Sprintf("%d of %d events could not be published", len(failed), len(events.Events))).
+		WithHint("Some events could not be accepted, please retry").
+		Mark(ierr.ErrServiceUnavailable)
+}
+
+// publishFailure maps a publish error: oversize is a client error, the rest is retryable.
+func publishFailure(err error, retryHint string) error {
+	if kafka.IsMessageTooLarge(err) {
+		return ierr.WithError(err).
+			WithHint("Event exceeds the maximum allowed message size").
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.WithError(err).
+		WithHint(retryHint).
+		Mark(ierr.ErrServiceUnavailable)
 }
 
 // bulkCreateEventsBatched validates every event up front so a bad event fails the request
@@ -149,8 +180,8 @@ func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.Bul
 	}
 
 	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
-		// Accepted-then-published (202): a broker failure is logged, not surfaced, as in CreateEvent.
 		s.logger.Error(ctx, "failed to publish event batch", "event_count", len(domainEvents), "error", err)
+		return publishFailure(err, "Events could not be accepted, please retry")
 	}
 
 	return nil

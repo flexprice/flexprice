@@ -876,6 +876,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Event could not be accepted, retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -1004,6 +1014,16 @@
           },
           "500": {
             "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Events could not be accepted, retry",
             "content": {
               "application/json": {
                 "schema": {

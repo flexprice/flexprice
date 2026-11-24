@@ -55,6 +55,7 @@ func NewEventsHandler(eventService service.EventService, rawEventsReprocessingSe
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 503 {object} ierr.ErrorResponse "Event could not be accepted, retry"
 // @Router /events [post]
 func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -97,6 +98,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 503 {object} ierr.ErrorResponse "Events could not be accepted, retry"
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
