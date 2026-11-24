@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // PerformanceObligationUpdate is the builder for updating PerformanceObligation entities.
@@ -158,6 +159,20 @@ func (_u *PerformanceObligationUpdate) SetNillablePobStatus(v *string) *Performa
 	return _u
 }
 
+// SetAllocatedAmount sets the "allocated_amount" field.
+func (_u *PerformanceObligationUpdate) SetAllocatedAmount(v decimal.Decimal) *PerformanceObligationUpdate {
+	_u.mutation.SetAllocatedAmount(v)
+	return _u
+}
+
+// SetNillableAllocatedAmount sets the "allocated_amount" field if the given value is not nil.
+func (_u *PerformanceObligationUpdate) SetNillableAllocatedAmount(v *decimal.Decimal) *PerformanceObligationUpdate {
+	if v != nil {
+		_u.SetAllocatedAmount(*v)
+	}
+	return _u
+}
+
 // Mutation returns the PerformanceObligationMutation object of the builder.
 func (_u *PerformanceObligationUpdate) Mutation() *PerformanceObligationMutation {
 	return _u.mutation
@@ -274,6 +289,12 @@ func (_u *PerformanceObligationUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if value, ok := _u.mutation.PobStatus(); ok {
 		_spec.SetField(performanceobligation.FieldPobStatus, field.TypeString, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(performanceobligation.FieldProductID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllocatedAmount(); ok {
+		_spec.SetField(performanceobligation.FieldAllocatedAmount, field.TypeOther, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -425,6 +446,20 @@ func (_u *PerformanceObligationUpdateOne) SetNillablePobStatus(v *string) *Perfo
 	return _u
 }
 
+// SetAllocatedAmount sets the "allocated_amount" field.
+func (_u *PerformanceObligationUpdateOne) SetAllocatedAmount(v decimal.Decimal) *PerformanceObligationUpdateOne {
+	_u.mutation.SetAllocatedAmount(v)
+	return _u
+}
+
+// SetNillableAllocatedAmount sets the "allocated_amount" field if the given value is not nil.
+func (_u *PerformanceObligationUpdateOne) SetNillableAllocatedAmount(v *decimal.Decimal) *PerformanceObligationUpdateOne {
+	if v != nil {
+		_u.SetAllocatedAmount(*v)
+	}
+	return _u
+}
+
 // Mutation returns the PerformanceObligationMutation object of the builder.
 func (_u *PerformanceObligationUpdateOne) Mutation() *PerformanceObligationMutation {
 	return _u.mutation
@@ -571,6 +606,12 @@ func (_u *PerformanceObligationUpdateOne) sqlSave(ctx context.Context) (_node *P
 	}
 	if value, ok := _u.mutation.PobStatus(); ok {
 		_spec.SetField(performanceobligation.FieldPobStatus, field.TypeString, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(performanceobligation.FieldProductID, field.TypeString)
+	}
+	if value, ok := _u.mutation.AllocatedAmount(); ok {
+		_spec.SetField(performanceobligation.FieldAllocatedAmount, field.TypeOther, value)
 	}
 	_node = &PerformanceObligation{config: _u.config}
 	_spec.Assign = _node.assignValues

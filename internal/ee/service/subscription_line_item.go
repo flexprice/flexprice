@@ -44,10 +44,10 @@ func (s *subscriptionService) addSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
-	// 3. Validate subscription status
-	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+	// 3. Validate subscription status; a draft's line items start when it is activated.
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive && sub.SubscriptionStatus != types.SubscriptionStatusDraft {
 		return nil, ierr.NewError("subscription is not active").
-			WithHint("Only active subscriptions can have line items added").
+			WithHint("Only active or draft subscriptions can have line items added").
 			WithReportableDetails(map[string]interface{}{
 				"subscription_id": subscriptionID,
 				"status":          sub.SubscriptionStatus,

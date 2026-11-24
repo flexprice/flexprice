@@ -10,18 +10,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/product"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	productRepo "github.com/flexprice/flexprice/internal/repository/product"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// ProductService owns product validation and the delete guard.
-type ProductService interface {
-	CreateProduct(ctx context.Context, req dto.CreateProductRequest) (*dto.ProductResponse, error)
-	GetProduct(ctx context.Context, id string) (*dto.ProductResponse, error)
-	GetProducts(ctx context.Context, filter *productRepo.Filter) (*dto.ListProductsResponse, error)
-	UpdateProduct(ctx context.Context, id string, req dto.UpdateProductRequest) (*dto.ProductResponse, error)
-	DeleteProduct(ctx context.Context, id string) error
-}
+type ProductService = interfaces.ProductService
 
 type productService struct {
 	ServiceParams

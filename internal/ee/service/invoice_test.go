@@ -1213,20 +1213,23 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 	s.Equal(draftSubscriptionInvoice.ID, pl.InvoiceID)
 }
 
-func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFinalization() {
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtItsBoundary() {
 	ctx := s.GetContext()
 	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	boundary := early.AddDate(0, 0, 10)
 
 	tests := []struct {
 		name            string
+		periodEnd       *time.Time
 		explicitIssue   bool
 		manuallyEdited  bool
 		wantIssuedEarly bool
 		wantDueRedated  bool
 	}{
-		{name: "draft created early is issued at finalization", wantDueRedated: true},
+		{name: "cycle draft is issued at its period end", periodEnd: &boundary, wantDueRedated: true},
+		{name: "future period end is capped at finalization", periodEnd: lo.ToPtr(time.Now().UTC().AddDate(0, 0, 10)), wantDueRedated: true},
 		{name: "caller-set issue date is kept and due counts from it", explicitIssue: true, wantIssuedEarly: true, wantDueRedated: true},
-		{name: "manually edited copy keeps its dates", manuallyEdited: true, wantIssuedEarly: true},
+		{name: "manually edited copy keeps its dates", periodEnd: &boundary, manuallyEdited: true, wantIssuedEarly: true},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -1250,6 +1253,10 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFin
 				IssueDate:        lo.ToPtr(early),
 				DueDate:          lo.ToPtr(early.AddDate(0, 0, 3)),
 				IsManuallyEdited: tt.manuallyEdited,
+				BillingReason:    lo.Ternary(tt.periodEnd != nil, string(types.InvoiceBillingReasonSubscriptionCycle), ""),
+				PeriodStart:      lo.Ternary(tt.periodEnd != nil, lo.ToPtr(early), nil),
+				PeriodEnd:        tt.periodEnd,
+				LastComputedAt:   lo.ToPtr(early),
 				BaseModel:        baseModel,
 			}
 			s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
@@ -1261,6 +1268,8 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFin
 
 			if tt.wantIssuedEarly {
 				s.WithinDuration(early, *got.IssueDate, time.Second)
+			} else if tt.periodEnd == &boundary {
+				s.WithinDuration(boundary, *got.IssueDate, time.Second)
 			} else {
 				s.False(got.IssueDate.Before(finalizeStart))
 			}
@@ -1273,9 +1282,10 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFin
 	}
 }
 
-func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
+func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtItsBoundary() {
 	ctx := s.GetContext()
 	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	boundary := early.AddDate(0, 0, 10)
 	baseModel := types.GetDefaultBaseModel(ctx)
 	baseModel.CreatedAt = early
 
@@ -1294,6 +1304,10 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 		AmountRemaining: decimal.NewFromFloat(15),
 		IssueDate:       lo.ToPtr(early),
 		DueDate:         lo.ToPtr(early.AddDate(0, 0, 3)),
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
+		PeriodStart:     lo.ToPtr(early),
+		PeriodEnd:       lo.ToPtr(boundary),
+		LastComputedAt:  lo.ToPtr(early),
 		BaseModel:       baseModel,
 	}
 	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
@@ -1310,14 +1324,13 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 	}
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
-	finalizeStart := time.Now().UTC()
 	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
-	s.False(got.IssueDate.Before(finalizeStart))
+	s.WithinDuration(boundary, *got.IssueDate, time.Second)
 	s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
 }
 

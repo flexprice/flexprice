@@ -2,6 +2,7 @@ package contract
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -38,50 +39,77 @@ func NewRepository(client postgres.IClient, log *logger.Logger) Repository {
 	}
 }
 
-func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContract.Contract, a *domainContract.Association) error {
-	span := entRepo.StartRepositorySpan(ctx, "contract", "create_with_association", map[string]interface{}{
+func (r *repository) Create(ctx context.Context, c *domainContract.Contract) error {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "create", map[string]interface{}{
 		"contract_id": c.ID(),
+	})
+	defer entRepo.FinishSpan(span)
+
+	create := r.client.Writer(ctx).Contract.Create().
+		SetID(c.ID()).
+		SetTenantID(types.GetTenantID(ctx)).
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetStatus(string(c.Status())).
+		SetNillableTermStart(c.TermStart()).
+		SetNillableTermEnd(c.TermEnd()).
+		SetNillableContractValue(c.ContractValue()).
+		SetNillableEndedAt(c.EndedAt()).
+		SetContractStatus(string(c.ContractStatus())).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(c.CreatedAt()).
+		SetUpdatedAt(c.UpdatedAt())
+	if c.CustomerID() != "" {
+		create.SetCustomerID(c.CustomerID())
+	}
+	if c.Currency() != "" {
+		create.SetCurrency(c.Currency())
+	}
+	if c.Document() != nil {
+		create.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() != "" {
+		create.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) > 0 {
+		create.SetExtraction(types.NewContractJSON(c.Extraction()))
+	}
+	if c.ExtractionError() != "" {
+		create.SetExtractionError(c.ExtractionError())
+	}
+
+	if _, err := create.Save(ctx); err != nil {
+		entRepo.SetSpanError(span, err)
+		return ierr.WithError(err).
+			WithHint("Failed to create contract").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return nil
+}
+
+func (r *repository) CreateAssociation(ctx context.Context, a *domainContract.Association) error {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "create_association", map[string]interface{}{
+		"contract_id": a.ContractID(),
 		"entity_type": a.EntityType(),
 		"entity_id":   a.EntityID(),
 	})
 	defer entRepo.FinishSpan(span)
 
-	err := r.client.WithTx(ctx, func(txCtx context.Context) error {
-		_, err := r.client.Writer(txCtx).Contract.Create().
-			SetID(c.ID()).
-			SetTenantID(types.GetTenantID(txCtx)).
-			SetEnvironmentID(types.GetEnvironmentID(txCtx)).
-			SetStatus(string(c.Status())).
-			SetCustomerID(c.CustomerID()).
-			SetCurrency(c.Currency()).
-			SetNillableTermStart(c.TermStart()).
-			SetNillableTermEnd(c.TermEnd()).
-			SetNillableEndedAt(c.EndedAt()).
-			SetContractStatus(string(c.ContractStatus())).
-			SetCreatedBy(types.GetUserID(txCtx)).
-			SetUpdatedBy(types.GetUserID(txCtx)).
-			SetCreatedAt(c.CreatedAt()).
-			SetUpdatedAt(c.UpdatedAt()).
-			Save(txCtx)
-		if err != nil {
-			return err
-		}
-
-		_, err = r.client.Writer(txCtx).ContractAssociation.Create().
-			SetID(a.ID()).
-			SetTenantID(types.GetTenantID(txCtx)).
-			SetEnvironmentID(types.GetEnvironmentID(txCtx)).
-			SetStatus(string(a.Status())).
-			SetContractID(c.ID()).
-			SetEntityType(string(a.EntityType())).
-			SetEntityID(a.EntityID()).
-			SetCreatedBy(types.GetUserID(txCtx)).
-			SetUpdatedBy(types.GetUserID(txCtx)).
-			SetCreatedAt(a.CreatedAt()).
-			SetUpdatedAt(a.CreatedAt()).
-			Save(txCtx)
-		return err
-	})
+	_, err := r.client.Writer(ctx).ContractAssociation.Create().
+		SetID(a.ID()).
+		SetTenantID(types.GetTenantID(ctx)).
+		SetEnvironmentID(types.GetEnvironmentID(ctx)).
+		SetStatus(string(a.Status())).
+		SetContractID(a.ContractID()).
+		SetEntityType(string(a.EntityType())).
+		SetEntityID(a.EntityID()).
+		SetCreatedBy(types.GetUserID(ctx)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetCreatedAt(a.CreatedAt()).
+		SetUpdatedAt(a.CreatedAt()).
+		Save(ctx)
 	if err != nil {
 		entRepo.SetSpanError(span, err)
 		var pqErr *pq.Error
@@ -96,7 +124,7 @@ func (r *repository) CreateWithAssociation(ctx context.Context, c *domainContrac
 				Mark(ierr.ErrAlreadyExists)
 		}
 		return ierr.WithError(err).
-			WithHint("Failed to create contract").
+			WithHint("Failed to link the contract").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -245,6 +273,14 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 		SetStatus(string(c.Status())).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
+	if c.CustomerID() == "" {
+		update.ClearCustomerID()
+	} else {
+		update.SetCustomerID(c.CustomerID())
+	}
+	if c.Currency() != "" {
+		update.SetCurrency(c.Currency())
+	}
 	if c.TermStart() == nil {
 		update.ClearTermStart()
 	} else {
@@ -255,10 +291,35 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 	} else {
 		update.SetTermEnd(*c.TermEnd())
 	}
+	if c.ContractValue() == nil {
+		update.ClearContractValue()
+	} else {
+		update.SetContractValue(*c.ContractValue())
+	}
 	if c.EndedAt() == nil {
 		update.ClearEndedAt()
 	} else {
 		update.SetEndedAt(*c.EndedAt())
+	}
+	if c.Document() == nil {
+		update.ClearDocument()
+	} else {
+		update.SetDocument(c.Document())
+	}
+	if c.ExtractionStatus() == "" {
+		update.ClearExtractionStatus()
+	} else {
+		update.SetExtractionStatus(string(c.ExtractionStatus()))
+	}
+	if len(c.Extraction()) == 0 {
+		update.ClearExtraction()
+	} else {
+		update.SetExtraction(types.NewContractJSON(c.Extraction()))
+	}
+	if c.ExtractionError() == "" {
+		update.ClearExtractionError()
+	} else {
+		update.SetExtractionError(c.ExtractionError())
 	}
 
 	if _, err := update.Save(ctx); err != nil {
@@ -273,6 +334,45 @@ func (r *repository) Update(ctx context.Context, c *domainContract.Contract) err
 
 	entRepo.SetSpanSuccess(span)
 	return nil
+}
+
+func (r *repository) UpdateReview(ctx context.Context, id string, review json.RawMessage, version int) (int, error) {
+	span := entRepo.StartRepositorySpan(ctx, "contract", "update_review", map[string]interface{}{
+		"contract_id": id,
+	})
+	defer entRepo.FinishSpan(span)
+
+	_, err := r.client.Writer(ctx).Contract.UpdateOneID(id).
+		Where(
+			entContract.TenantID(types.GetTenantID(ctx)),
+			entContract.EnvironmentID(types.GetEnvironmentID(ctx)),
+			entContract.ReviewVersion(version),
+		).
+		SetReview(types.NewContractJSON(review)).
+		SetReviewVersion(version + 1).
+		SetUpdatedAt(clock.Now()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if ent.IsNotFound(err) {
+		if _, getErr := r.GetByID(ctx, id); getErr != nil {
+			entRepo.SetSpanError(span, getErr)
+			return 0, getErr
+		}
+		entRepo.SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("The review was changed by someone else. Reload it and try again").
+			WithReportableDetails(map[string]any{"contract_id": id, "version": version}).
+			Mark(ierr.ErrVersionConflict)
+	}
+	if err != nil {
+		entRepo.SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to save the contract review").
+			Mark(ierr.ErrDatabase)
+	}
+
+	entRepo.SetSpanSuccess(span)
+	return version + 1, nil
 }
 
 func (r *repository) readError(err error, key, value string) error {

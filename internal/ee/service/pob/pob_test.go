@@ -5,84 +5,52 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	domainContract "github.com/flexprice/flexprice/internal/domain/contract"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/revenuefact"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	pobRepo "github.com/flexprice/flexprice/internal/repository/pob"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
-func TestDeriveRecognitionMethod(t *testing.T) {
-	tests := []struct {
-		name          string
-		priceType     types.PriceType
-		billingPeriod types.BillingPeriod
-		want          types.RecognitionMethod
-	}{
-		{"fixed monthly", types.PRICE_TYPE_FIXED, types.BILLING_PERIOD_MONTHLY, types.RecognitionMethodStraightLine},
-		{"fixed annual", types.PRICE_TYPE_FIXED, types.BILLING_PERIOD_ANNUAL, types.RecognitionMethodStraightLine},
-		{"fixed one-time", types.PRICE_TYPE_FIXED, types.BILLING_PERIOD_ONETIME, types.RecognitionMethodPointInTime},
-		{"usage monthly", types.PRICE_TYPE_USAGE, types.BILLING_PERIOD_MONTHLY, types.RecognitionMethodAsConsumed},
-		{"usage one-time", types.PRICE_TYPE_USAGE, types.BILLING_PERIOD_ONETIME, types.RecognitionMethodAsConsumed},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			li := &subscription.SubscriptionLineItem{PriceType: tt.priceType, BillingPeriod: tt.billingPeriod}
-			assert.Equal(t, tt.want, deriveRecognitionMethod(li))
-		})
-	}
-}
-
 func TestDerivePOB(t *testing.T) {
-	start := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
 	mar31 := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
 	jun30 := time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC)
-	may10 := time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
-	now := time.Date(2026, 4, 15, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name           string
-		method         types.RecognitionMethod
 		contractStatus types.ContractStatus
-		contractEnded  *time.Time
-		lineItemEnds   []time.Time
-		wantStatus     types.PerformanceObligationStatus
-		wantServiceEnd *time.Time
+		serviceEnd     *time.Time
+		want           types.PerformanceObligationStatus
 	}{
-		{name: "draft contract keeps the POB draft", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusDraft, lineItemEnds: []time.Time{{}}, wantStatus: types.PerformanceObligationStatusDraft},
-		{name: "cancelled contract cancels the POB", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusCancelled, lineItemEnds: []time.Time{{}}, wantStatus: types.PerformanceObligationStatusCancelled},
-		{name: "active contract with an open line item is active", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusActive, lineItemEnds: []time.Time{mar31, {}}, wantStatus: types.PerformanceObligationStatusActive},
-		{name: "service end is the latest line item end, satisfied once passed", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusActive, lineItemEnds: []time.Time{start, mar31}, wantStatus: types.PerformanceObligationStatusSatisfied, wantServiceEnd: &mar31},
-		{name: "service end not yet passed stays active", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusActive, lineItemEnds: []time.Time{mar31, jun30}, wantStatus: types.PerformanceObligationStatusActive, wantServiceEnd: &jun30},
-		{name: "open line item of an ended contract ends with it", method: types.RecognitionMethodStraightLine, contractStatus: types.ContractStatusEnded, contractEnded: &may10, lineItemEnds: []time.Time{{}}, wantStatus: types.PerformanceObligationStatusActive, wantServiceEnd: &may10},
-		{name: "point_in_time is delivered at its start", method: types.RecognitionMethodPointInTime, contractStatus: types.ContractStatusActive, lineItemEnds: []time.Time{{}}, wantStatus: types.PerformanceObligationStatusSatisfied, wantServiceEnd: &start},
+		{name: "draft contract keeps the POB draft", contractStatus: types.ContractStatusDraft, serviceEnd: &mar31, want: types.PerformanceObligationStatusDraft},
+		{name: "cancelled contract cancels the POB", contractStatus: types.ContractStatusCancelled, want: types.PerformanceObligationStatusCancelled},
+		{name: "ended contract satisfies the POB", contractStatus: types.ContractStatusEnded, serviceEnd: &jun30, want: types.PerformanceObligationStatusSatisfied},
+		{name: "open service is active", contractStatus: types.ContractStatusActive, want: types.PerformanceObligationStatusActive},
+		{name: "service end not yet passed is active", contractStatus: types.ContractStatusActive, serviceEnd: &jun30, want: types.PerformanceObligationStatusActive},
+		{name: "service end passed is satisfied", contractStatus: types.ContractStatusActive, serviceEnd: &mar31, want: types.PerformanceObligationStatusSatisfied},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			existing := domainPOB.NewBuilder(nil).
-				WithRecognitionMethod(tt.method).
-				WithPOBStatus(types.PerformanceObligationStatusDraft).
-				Build()
-			c := domainContract.NewBuilder(nil).WithContractStatus(tt.contractStatus).WithEndedAt(tt.contractEnded).Build()
-			lineItems := lo.Map(tt.lineItemEnds, func(end time.Time, _ int) *subscription.SubscriptionLineItem {
-				return &subscription.SubscriptionLineItem{StartDate: start, EndDate: end}
-			})
+			existing := domainPOB.NewBuilder(nil).WithServiceEnd(tt.serviceEnd).WithPOBStatus(types.PerformanceObligationStatusDraft).Build()
+			c := domainContract.NewBuilder(nil).WithContractStatus(tt.contractStatus).Build()
 
-			got := derivePOB(existing, lineItems, c, now)
+			got := derivePOB(existing, c, now)
 
-			require.Equal(t, tt.wantStatus, got.POBStatus())
-			require.Equal(t, tt.wantServiceEnd, got.ServiceEnd(), "service_end")
-			require.Equal(t, tt.method, got.RecognitionMethod())
+			require.Equal(t, tt.want, got.POBStatus())
+			require.Equal(t, tt.serviceEnd, got.ServiceEnd(), "service end is kept")
 		})
 	}
 }
@@ -92,7 +60,6 @@ type POBServiceSuite struct {
 	ctx        context.Context
 	pobService PerformanceObligationService
 	pobRepo    *testutil.InMemoryPOBStore
-	sub        *subscription.Subscription
 	contract   *domainContract.Contract
 }
 
@@ -102,136 +69,59 @@ func TestPOBService(t *testing.T) {
 
 func (s *POBServiceSuite) SetupTest() {
 	s.ctx = testutil.SetupContext()
-	s.pobRepo = testutil.NewInMemoryPOBStore(testutil.NewInMemoryContractStore())
-	s.pobService = NewPerformanceObligationService(s.pobRepo, nil, nil, nil, nil, nil)
-	s.sub = &subscription.Subscription{
-		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
-		BaseModel: types.GetDefaultBaseModel(s.ctx),
-	}
+	contracts := testutil.NewInMemoryContractStore()
+	s.pobRepo = testutil.NewInMemoryPOBStore(contracts)
+	s.pobService = NewPerformanceObligationService(s.pobRepo, contracts, nil, nil, nil, nil, nil)
 	s.contract = domainContract.NewBuilder(nil).
 		WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CONTRACT)).
-		WithContractStatus(types.ContractStatusActive).
+		WithContractStatus(types.ContractStatusDraft).
 		WithStatus(types.StatusPublished).
 		Build()
 }
 
-func (s *POBServiceSuite) addLineItem(priceType types.PriceType, start time.Time, predecessorID string) *subscription.SubscriptionLineItem {
-	li := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: s.sub.ID,
-		PriceID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		PriceType:      priceType,
-		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
-		StartDate:      start,
-		Metadata:       map[string]string{},
-		BaseModel:      types.GetDefaultBaseModel(s.ctx),
-	}
-	if predecessorID != "" {
-		li.PredecessorLineItemID = lo.ToPtr(predecessorID)
-	}
-	s.sub.LineItems = append(s.sub.LineItems, li)
-	return li
+func (s *POBServiceSuite) TestCreateForContract() {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
+
+	pobs, err := s.pobService.CreateForContract(s.ctx, s.contract, []dto.CreatePOBRequest{
+		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: start, ServiceEnd: end, AllocatedAmount: decimal.NewFromInt(60000)},
+		{Name: "API usage", ProductID: "prod_api", RecognitionMethod: types.RecognitionMethodAsConsumed, ServiceStart: start, ServiceEnd: end},
+	})
+	s.Require().NoError(err)
+	s.Require().Len(pobs, 2)
+
+	got, err := s.pobRepo.GetByID(s.ctx, pobs[0].ID())
+	s.Require().NoError(err)
+	s.Equal(s.contract.ID(), got.ContractID())
+	s.Equal("Platform", got.Name())
+	s.Equal("prod_platform", got.ProductID())
+	s.Equal(types.RecognitionMethodStraightLine, got.RecognitionMethod())
+	s.True(got.ServiceStart().Equal(start))
+	s.True(got.ServiceEnd().Equal(end))
+	s.Equal("60000", got.AllocatedAmount().String())
+	s.Equal(types.PerformanceObligationStatusDraft, got.POBStatus(), "a draft contract's POBs are drafts")
+	s.True(pobs[1].AllocatedAmount().IsZero())
 }
 
-func (s *POBServiceSuite) countPOBs() int {
-	count, err := s.pobRepo.Count(s.ctx, pobRepo.NewFilter())
-	s.Require().NoError(err)
-	return count
-}
-
-func (s *POBServiceSuite) pobOf(lineItemID string) *domainPOB.PerformanceObligation {
-	p, err := s.pobRepo.GetByLineItemID(s.ctx, lineItemID)
-	s.Require().NoError(err)
-	return p
-}
-
-func (s *POBServiceSuite) TestOnePOBPerLineItemAndIdempotent() {
-	jan := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	fixed := s.addLineItem(types.PRICE_TYPE_FIXED, jan, "")
-	usage := s.addLineItem(types.PRICE_TYPE_USAGE, jan, "")
-
-	first, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-	second, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-
-	s.Len(first, 2)
-	s.Len(second, 2)
-	s.Equal(2, s.countPOBs())
-	s.Equal(types.RecognitionMethodStraightLine, s.pobOf(fixed.ID).RecognitionMethod())
-	s.Equal(types.RecognitionMethodAsConsumed, s.pobOf(usage.ID).RecognitionMethod())
-	s.Equal(types.PerformanceObligationStatusActive, s.pobOf(fixed.ID).POBStatus())
-	s.Equal(s.contract.ID(), s.pobOf(fixed.ID).ContractID())
-}
-
-func (s *POBServiceSuite) TestSuccessorJoinsPredecessorWithSameMethod() {
-	predecessor := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "")
-	successor := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), predecessor.ID)
-
-	_, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-
-	s.Equal(1, s.countPOBs())
-	s.Equal(s.pobOf(predecessor.ID).ID(), s.pobOf(successor.ID).ID())
-	associations, err := s.pobRepo.ListAssociations(s.ctx, s.pobOf(predecessor.ID).ID())
-	s.Require().NoError(err)
-	s.Len(associations, 2)
-}
-
-func (s *POBServiceSuite) TestSuccessorJoinsPredecessorFromLegacyMetadata() {
-	predecessor := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "")
-	successor := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), "")
-	successor.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID] = predecessor.ID
-
-	_, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-
-	s.Equal(1, s.countPOBs())
-	s.Equal(s.pobOf(predecessor.ID).ID(), s.pobOf(successor.ID).ID())
-}
-
-func (s *POBServiceSuite) TestSuccessorWithDifferentMethodGetsNewPOB() {
-	predecessor := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "")
-	successor := s.addLineItem(types.PRICE_TYPE_USAGE, time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), predecessor.ID)
-
-	_, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-
-	s.Equal(2, s.countPOBs())
-	s.NotEqual(s.pobOf(predecessor.ID).ID(), s.pobOf(successor.ID).ID())
-}
-
-func (s *POBServiceSuite) TestStatusFollowsContract() {
-	li := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "")
-	draft := domainContract.NewBuilder(s.contract).WithContractStatus(types.ContractStatusDraft).Build()
-
-	_, err := s.pobService.SyncForSubscription(s.ctx, s.sub, draft)
-	s.Require().NoError(err)
-	s.Equal(types.PerformanceObligationStatusDraft, s.pobOf(li.ID).POBStatus())
-
-	_, err = s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-	s.Equal(types.PerformanceObligationStatusActive, s.pobOf(li.ID).POBStatus())
-}
-
-func (s *POBServiceSuite) TestPOBOfDroppedLineItemIsSatisfiedOnceItsServiceEnds() {
-	li := s.addLineItem(types.PRICE_TYPE_FIXED, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "")
-	li.EndDate = time.Now().UTC().Add(time.Hour)
-
-	_, err := s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
-	s.Require().NoError(err)
-	p := s.pobOf(li.ID)
-	s.Equal(types.PerformanceObligationStatusActive, p.POBStatus())
-	s.Require().NotNil(p.ServiceEnd())
-
-	// The renewal drops the ended line item from sub.LineItems after its service end has passed.
+func (s *POBServiceSuite) TestSyncForContractFollowsContract() {
 	past := time.Now().UTC().Add(-time.Hour)
-	s.Require().NoError(s.pobRepo.Update(s.ctx, domainPOB.NewBuilder(p).WithServiceEnd(&past).Build()))
-	s.sub.LineItems = nil
-
-	_, err = s.pobService.SyncForSubscription(s.ctx, s.sub, s.contract)
+	pobs, err := s.pobService.CreateForContract(s.ctx, s.contract, []dto.CreatePOBRequest{
+		{Name: "Platform", ProductID: "prod_platform", RecognitionMethod: types.RecognitionMethodStraightLine, ServiceStart: past.AddDate(0, -1, 0), ServiceEnd: past.AddDate(1, 0, 0)},
+		{Name: "Setup", ProductID: "prod_setup", RecognitionMethod: types.RecognitionMethodPointInTime, ServiceStart: past.AddDate(0, -1, 0), ServiceEnd: past},
+	})
 	s.Require().NoError(err)
-	s.Equal(types.PerformanceObligationStatusSatisfied, s.pobOf(li.ID).POBStatus())
+
+	active := domainContract.NewBuilder(s.contract).WithContractStatus(types.ContractStatusActive).Build()
+	synced, err := s.pobService.SyncForContract(s.ctx, active)
+	s.Require().NoError(err)
+	s.Len(synced, 2)
+
+	open, err := s.pobRepo.GetByID(s.ctx, pobs[0].ID())
+	s.Require().NoError(err)
+	s.Equal(types.PerformanceObligationStatusActive, open.POBStatus())
+	ended, err := s.pobRepo.GetByID(s.ctx, pobs[1].ID())
+	s.Require().NoError(err)
+	s.Equal(types.PerformanceObligationStatusSatisfied, ended.POBStatus())
 }
 
 func TestEarnedByPOB(t *testing.T) {
@@ -239,16 +129,16 @@ func TestEarnedByPOB(t *testing.T) {
 	at := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
 	seats := domainPOB.NewBuilder(nil).WithID("pob_seats").WithRecognitionMethod(types.RecognitionMethodStraightLine).WithAmortizationMethod(types.AmortizationDaily).Build()
 	setup := domainPOB.NewBuilder(nil).WithID("pob_setup").WithRecognitionMethod(types.RecognitionMethodPointInTime).WithAmortizationMethod(types.AmortizationDaily).Build()
-	lineItemPOBs := map[string]*domainPOB.PerformanceObligation{"sli_seats": seats, "sli_setup": setup}
+	pricePOBs := map[string]*domainPOB.PerformanceObligation{"price_sli_seats": seats, "price_sli_setup": setup}
 
 	line := func(id, sli, amount string, start, end *time.Time) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), Amount: d(amount), PeriodStart: start, PeriodEnd: end}
+		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: d(amount), PeriodStart: start, PeriodEnd: end}
 	}
 	inv := func(id string, invoiceType types.InvoiceType, finalizedAt time.Time, lines ...*invoice.InvoiceLineItem) *invoice.Invoice {
 		return &invoice.Invoice{ID: id, InvoiceType: invoiceType, Currency: "usd", FinalizedAt: lo.ToPtr(finalizedAt), LineItems: lines}
 	}
 	fact := func(sli, net string, day time.Time) *revenuefact.RevenueFact {
-		return &revenuefact.RevenueFact{SubLineItemID: lo.ToPtr(sli), NetAmount: d(net), Day: day, DecompositionMode: types.Marginal}
+		return &revenuefact.RevenueFact{SubLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), NetAmount: d(net), Day: day, DecompositionMode: types.Marginal}
 	}
 
 	april := inv("inv_apr", types.InvoiceTypeSubscription, at(4, 1),
@@ -298,7 +188,7 @@ func TestEarnedByPOB(t *testing.T) {
 		{
 			name: "a period_only fact spreads over its period",
 			inputs: &earningInputs{facts: []*revenuefact.RevenueFact{{
-				SubLineItemID: lo.ToPtr("sli_seats"), NetAmount: d("31"), DecompositionMode: types.PeriodOnly,
+				SubLineItemID: lo.ToPtr("sli_seats"), PriceID: lo.ToPtr("price_sli_seats"), NetAmount: d("31"), DecompositionMode: types.PeriodOnly,
 				Day: at(5, 1), PeriodStart: at(5, 1), PeriodEnd: at(5, 31),
 			}}},
 			asOf: at(5, 11),
@@ -317,7 +207,7 @@ func TestEarnedByPOB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := earnedByPOB(lineItemPOBs, tt.inputs, tt.asOf, time.UTC)
+			got := earnedByPOB(pricePOBs, tt.inputs, tt.asOf, time.UTC)
 
 			require.Len(t, got, len(tt.want))
 			for id, want := range tt.want {
@@ -327,7 +217,8 @@ func TestEarnedByPOB(t *testing.T) {
 	}
 }
 
-// TestEarnedToDate runs the contract → POB → invoice/fact path through the in-memory stores.
+// TestEarnedToDate earns a straight-line POB from its allocation and an as-consumed POB from the invoice/fact path,
+// through the in-memory stores.
 func TestEarnedToDate(t *testing.T) {
 	ctx := testutil.SetupContext()
 	at := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
@@ -337,7 +228,8 @@ func TestEarnedToDate(t *testing.T) {
 	subs := testutil.NewInMemorySubscriptionStore()
 	invoices := testutil.NewInMemoryInvoiceStore()
 	facts := testutil.NewInMemoryRevenueFactStore()
-	service := NewPerformanceObligationService(pobs, contracts, subs, invoices, testutil.NewInMemoryTaxAppliedStore(), facts)
+	prices := testutil.NewInMemoryPriceStore()
+	service := NewPerformanceObligationService(pobs, contracts, subs, invoices, testutil.NewInMemoryTaxAppliedStore(), facts, prices)
 
 	sub := &subscription.Subscription{ID: "subs_1", Timezone: "UTC", BaseModel: types.GetDefaultBaseModel(ctx)}
 	require.NoError(t, subs.Create(ctx, sub))
@@ -350,15 +242,24 @@ func TestEarnedToDate(t *testing.T) {
 	c := domainContract.NewBuilder(nil).WithID("contract_1").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
 		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID(sub.ID).WithStatus(types.StatusPublished).Build()))
-	_, err := service.SyncForSubscription(ctx, sub, c)
-	require.NoError(t, err)
+	// One POB per line item's Product: seats earn their 90 allocated over April straight line, usage what it bills.
+	for _, li := range sub.LineItems {
+		productID := "prod_" + li.ID
+		usage := li.PriceType == types.PRICE_TYPE_USAGE
+		require.NoError(t, prices.Create(ctx, &price.Price{ID: li.PriceID, ProductID: productID, Type: li.PriceType,
+			BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)}))
+		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID("pob_"+li.ID).WithContractID(c.ID()).WithProductID(productID).WithName(li.ID).
+			WithRecognitionMethod(lo.Ternary(usage, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
+			WithAllocatedAmount(lo.Ternary(usage, decimal.Zero, decimal.NewFromInt(90))).WithServiceStart(at(4, 1)).WithServiceEnd(lo.ToPtr(at(5, 1))).
+			WithAmortizationMethod(types.AmortizationPeriodEvenProrated).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build()))
+	}
 
 	newInvoice := func(id string, status types.InvoiceStatus, lines ...*invoice.InvoiceLineItem) *invoice.Invoice {
 		return &invoice.Invoice{ID: id, SubscriptionID: lo.ToPtr(sub.ID), InvoiceType: types.InvoiceTypeSubscription, InvoiceStatus: status,
 			Currency: "usd", FinalizedAt: lo.ToPtr(at(4, 1)), LineItems: lines, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
 	}
 	newLine := func(id, sli, amount string) *invoice.InvoiceLineItem {
-		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), Amount: decimal.RequireFromString(amount),
+		return &invoice.InvoiceLineItem{ID: id, SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: decimal.RequireFromString(amount),
 			PeriodStart: lo.ToPtr(at(4, 1)), PeriodEnd: lo.ToPtr(at(5, 1)), EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
 	}
 	require.NoError(t, invoices.CreateWithLineItems(ctx, newInvoice("inv_apr", types.InvoiceStatusFinalized, newLine("l_seats", "sli_seats", "90"), newLine("l_usage", "sli_usage", "50"))))
@@ -376,14 +277,14 @@ func TestEarnedToDate(t *testing.T) {
 	require.Len(t, byDate, 2, "one map per asOf")
 	midApril, earned := byDate[0], byDate[1]
 
-	seats, err := pobs.GetByLineItemID(ctx, "sli_seats")
+	seats, err := pobs.GetByID(ctx, "pob_sli_seats")
 	require.NoError(t, err)
-	usage, err := pobs.GetByLineItemID(ctx, "sli_usage")
+	usage, err := pobs.GetByID(ctx, "pob_sli_usage")
 	require.NoError(t, err)
 	require.Len(t, earned, 2, "every POB of the contract is present")
-	require.Equal(t, "95", earned[seats.ID()].String(), "April invoice plus the May 2 accrual; the voided invoice never earns")
+	require.Equal(t, "90", earned[seats.ID()].String(), "seats earn their allocation over April, whatever is billed or accrued")
 	require.Equal(t, "57", earned[usage.ID()].String(), "usage: April's invoiced 50 plus the May 2 accrual of 7")
-	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days; the May fact is not yet earned")
+	require.Equal(t, "45", midApril[seats.ID()].String(), "15 of April's 30 days of the allocation")
 	require.Equal(t, "25", midApril[usage.ID()].String(), "usage earns daily: 15 of April's 30 days")
 }
 
@@ -391,38 +292,27 @@ func TestReconcileAndRead(t *testing.T) {
 	ctx := testutil.SetupContext()
 	contracts := testutil.NewInMemoryContractStore()
 	pobs := testutil.NewInMemoryPOBStore(contracts)
-	subs := testutil.NewInMemorySubscriptionStore()
-	lineItems := testutil.NewInMemorySubscriptionLineItemStore()
-	subs.SetLineItemStore(lineItems)
-	service := NewPerformanceObligationService(pobs, contracts, subs, nil, nil, nil)
+	service := NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil, nil)
 
-	sub := &subscription.Subscription{ID: "subs_1", CustomerID: "cust_1", BaseModel: types.GetDefaultBaseModel(ctx)}
-	require.NoError(t, subs.Create(ctx, sub))
-	for _, li := range []*subscription.SubscriptionLineItem{
-		{ID: "sli_seats", SubscriptionID: sub.ID, PriceID: "price_1", PriceType: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)},
-		{ID: "sli_usage", SubscriptionID: sub.ID, PriceID: "price_2", PriceType: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY, BaseModel: types.GetDefaultBaseModel(ctx)},
-	} {
-		require.NoError(t, lineItems.Create(ctx, li))
-	}
 	c := domainContract.NewBuilder(nil).WithID("contract_1").WithCustomerID("cust_1").WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
-	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
-		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID(sub.ID).WithStatus(types.StatusPublished).Build()))
+	require.NoError(t, contracts.Create(ctx, c))
+	for id, method := range map[string]types.RecognitionMethod{"prod_platform": types.RecognitionMethodStraightLine, "prod_api": types.RecognitionMethodAsConsumed} {
+		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID("pob_"+id).WithContractID(c.ID()).WithProductID(id).WithName(id).
+			WithRecognitionMethod(method).WithPOBStatus(types.PerformanceObligationStatusDraft).WithStatus(types.StatusPublished).Build()))
+	}
 
-	// Reconcile builds the POBs a missed hook would have, and a second run changes nothing.
+	// Reconcile activates the POBs of the active contract a missed hook left as drafts, and a second run changes nothing.
 	require.NoError(t, service.Reconcile(ctx, c.ID()))
 	require.NoError(t, service.Reconcile(ctx, c.ID()))
 	all, err := service.GetPerformanceObligations(ctx, nil)
 	require.NoError(t, err)
 	require.Len(t, all.Items, 2)
 
-	seats, err := pobs.GetByLineItemID(ctx, "sli_seats")
-	require.NoError(t, err)
-	got, err := service.GetPerformanceObligation(ctx, seats.ID())
+	got, err := service.GetPerformanceObligation(ctx, "pob_prod_platform")
 	require.NoError(t, err)
 	require.Equal(t, c.ID(), got.ContractID)
+	require.Equal(t, "prod_platform", got.ProductID)
 	require.Equal(t, types.PerformanceObligationStatusActive, got.POBStatus)
-	require.Len(t, got.Associations, 1)
-	require.Equal(t, "sli_seats", got.Associations[0].EntityID)
 
 	filter := pobRepo.NewFilter()
 	filter.CustomerIDs = []string{"cust_1"}
@@ -436,4 +326,57 @@ func TestReconcileAndRead(t *testing.T) {
 	none, err := service.GetPerformanceObligations(ctx, filter)
 	require.NoError(t, err)
 	require.Empty(t, none.Items)
+}
+
+func TestPOBIDForInvoiceLine(t *testing.T) {
+	ctx := testutil.SetupContext()
+	contracts := testutil.NewInMemoryContractStore()
+	pobs := testutil.NewInMemoryPOBStore(contracts)
+	prices := testutil.NewInMemoryPriceStore()
+	service := NewPerformanceObligationService(pobs, contracts, nil, nil, nil, nil, prices)
+
+	for id, pr := range map[string]*price.Price{
+		"price_monthly": {ProductID: "prod_platform", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+		"price_setup":   {ProductID: "prod_platform", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_ONETIME},
+		"price_api":     {ProductID: "prod_api", Type: types.PRICE_TYPE_USAGE, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+		"price_other":   {ProductID: "prod_other", Type: types.PRICE_TYPE_FIXED, BillingPeriod: types.BILLING_PERIOD_MONTHLY},
+	} {
+		pr.ID, pr.BaseModel = id, types.GetDefaultBaseModel(ctx)
+		require.NoError(t, prices.Create(ctx, pr))
+	}
+	for id, key := range map[string]struct {
+		productID string
+		method    types.RecognitionMethod
+	}{
+		"pob_access": {"prod_platform", types.RecognitionMethodStraightLine},
+		"pob_setup":  {"prod_platform", types.RecognitionMethodPointInTime},
+		"pob_api":    {"prod_api", types.RecognitionMethodAsConsumed},
+	} {
+		require.NoError(t, pobs.Create(ctx, domainPOB.NewBuilder(nil).WithID(id).WithContractID("contract_1").WithProductID(key.productID).
+			WithRecognitionMethod(key.method).WithStatus(types.StatusPublished).Build()))
+	}
+
+	tests := []struct {
+		name    string
+		line    *invoice.InvoiceLineItem
+		want    string
+		wantErr bool
+	}{
+		{name: "recurring fee of a product → its straight-line POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_1"), PriceID: lo.ToPtr("price_monthly")}, want: "pob_access"},
+		{name: "one-time fee of the same product → its point-in-time POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_2"), PriceID: lo.ToPtr("price_setup")}, want: "pob_setup"},
+		{name: "usage → its as-consumed POB", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_3"), PriceID: lo.ToPtr("price_api")}, want: "pob_api"},
+		{name: "no subscription line item has no POB", line: &invoice.InvoiceLineItem{PriceID: lo.ToPtr("price_monthly")}, want: ""},
+		{name: "a product with no POB in the contract is not found", line: &invoice.InvoiceLineItem{SubscriptionLineItemID: lo.ToPtr("sli_4"), PriceID: lo.ToPtr("price_other")}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := service.POBIDForInvoiceLine(ctx, "contract_1", tt.line)
+			if tt.wantErr {
+				require.True(t, ierr.IsNotFound(err), "got %v", err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
 }

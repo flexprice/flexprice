@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/contract"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -15,6 +17,7 @@ type InMemoryContractStore struct {
 	*InMemoryStore[*contract.Contract]
 	// associations are keyed by entity type and id, mirroring the published-unique index.
 	associations *InMemoryStore[*contract.Association]
+	mu           sync.Mutex
 }
 
 func NewInMemoryContractStore() *InMemoryContractStore {
@@ -28,12 +31,23 @@ func associationKey(entityType types.RevRecEntityType, entityID string) string {
 	return string(entityType) + ":" + entityID
 }
 
+func (s *InMemoryContractStore) Create(ctx context.Context, c *contract.Contract) error {
+	return s.InMemoryStore.Create(ctx, c.ID(), contract.NewBuilder(c).Build())
+}
+
+func (s *InMemoryContractStore) CreateAssociation(ctx context.Context, a *contract.Association) error {
+	if err := s.associations.Create(ctx, associationKey(a.EntityType(), a.EntityID()), contract.NewAssociationBuilder(a).Build()); err != nil {
+		return ierr.WithError(err).WithHint("Entity already belongs to a contract").Mark(ierr.ErrAlreadyExists)
+	}
+	return nil
+}
+
+// CreateWithAssociation seeds a contract linked to an entity, for tests.
 func (s *InMemoryContractStore) CreateWithAssociation(ctx context.Context, c *contract.Contract, a *contract.Association) error {
-	a = contract.NewAssociationBuilder(a).WithContractID(c.ID()).Build()
-	if err := s.associations.Create(ctx, associationKey(a.EntityType(), a.EntityID()), a); err != nil {
+	if err := s.CreateAssociation(ctx, contract.NewAssociationBuilder(a).WithContractID(c.ID()).Build()); err != nil {
 		return err
 	}
-	return s.InMemoryStore.Create(ctx, c.ID(), contract.NewBuilder(c).Build())
+	return s.Create(ctx, c)
 }
 
 func (s *InMemoryContractStore) GetByID(ctx context.Context, id string) (*contract.Contract, error) {
@@ -62,8 +76,37 @@ func (s *InMemoryContractStore) ListAssociations(ctx context.Context, contractID
 	}, nil)
 }
 
+// Update keeps the stored review, as the ent repository does.
 func (s *InMemoryContractStore) Update(ctx context.Context, c *contract.Contract) error {
-	return s.InMemoryStore.Update(ctx, c.ID(), contract.NewBuilder(c).Build())
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, err := s.InMemoryStore.Get(ctx, c.ID())
+	if err != nil {
+		return err
+	}
+	return s.InMemoryStore.Update(ctx, c.ID(), contract.NewBuilder(c).
+		WithReview(stored.Review()).
+		WithReviewVersion(stored.ReviewVersion()).
+		Build())
+}
+
+func (s *InMemoryContractStore) UpdateReview(ctx context.Context, id string, review json.RawMessage, version int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stored, err := s.GetByID(ctx, id)
+	if err != nil {
+		return 0, err
+	}
+	if stored.ReviewVersion() != version {
+		return 0, ierr.NewError("review version conflict").
+			WithHint("The review was changed by someone else. Reload it and try again").
+			Mark(ierr.ErrVersionConflict)
+	}
+	next := contract.NewBuilder(stored).WithReview(review).WithReviewVersion(version + 1).Build()
+	if err := s.InMemoryStore.Update(ctx, id, next); err != nil {
+		return 0, err
+	}
+	return version + 1, nil
 }
 
 func (s *InMemoryContractStore) List(ctx context.Context, filter *contractRepo.Filter) ([]*contract.Contract, error) {

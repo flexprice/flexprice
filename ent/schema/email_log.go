@@ -145,7 +145,7 @@ func (EmailLog) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "entity_id", "template_key").
 			Unique().
 			StorageKey(Idx_email_log_auto_once).
-			Annotations(entsql.IndexWhere("\"trigger\" = 'auto'")),
+			Annotations(entsql.IndexWhere("((trigger)::text = 'auto'::text)")),
 		index.Fields("tenant_id", "environment_id", "delivery_status", "created_at"),
 		// A repeated manual send with the same key returns the first email.
 		index.Fields("tenant_id", "environment_id", "idempotency_key").
@@ -155,6 +155,6 @@ func (EmailLog) Indexes() []ent.Index {
 		// The email dispatcher finds environments with queued emails without scanning every email sent.
 		index.Fields("tenant_id", "environment_id", "created_at").
 			StorageKey("idx_email_log_queued").
-			Annotations(entsql.IndexWhere("delivery_status = 'queued'")),
+			Annotations(entsql.IndexWhere("((delivery_status)::text = 'queued'::text)")),
 	}
 }

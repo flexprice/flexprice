@@ -52,7 +52,6 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
-	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -750,18 +749,16 @@ func init() {
 	contractDescEnvironmentID := contractMixinFields1[0].Descriptor()
 	// contract.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	contract.DefaultEnvironmentID = contractDescEnvironmentID.Default.(string)
-	// contractDescCustomerID is the schema descriptor for customer_id field.
-	contractDescCustomerID := contractFields[1].Descriptor()
-	// contract.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
-	contract.CustomerIDValidator = contractDescCustomerID.Validators[0].(func(string) error)
-	// contractDescCurrency is the schema descriptor for currency field.
-	contractDescCurrency := contractFields[2].Descriptor()
-	// contract.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
-	contract.CurrencyValidator = contractDescCurrency.Validators[0].(func(string) error)
 	// contractDescContractStatus is the schema descriptor for contract_status field.
-	contractDescContractStatus := contractFields[6].Descriptor()
+	contractDescContractStatus := contractFields[7].Descriptor()
 	// contract.ContractStatusValidator is a validator for the "contract_status" field. It is called by the builders before save.
 	contract.ContractStatusValidator = contractDescContractStatus.Validators[0].(func(string) error)
+	// contractDescReviewVersion is the schema descriptor for review_version field.
+	contractDescReviewVersion := contractFields[13].Descriptor()
+	// contract.DefaultReviewVersion holds the default value on creation for the review_version field.
+	contract.DefaultReviewVersion = contractDescReviewVersion.Default.(int)
+	// contract.ReviewVersionValidator is a validator for the "review_version" field. It is called by the builders before save.
+	contract.ReviewVersionValidator = contractDescReviewVersion.Validators[0].(func(int) error)
 	contractassociationMixin := schema.ContractAssociation{}.Mixin()
 	contractassociationMixinFields0 := contractassociationMixin[0].Fields()
 	_ = contractassociationMixinFields0
@@ -2337,47 +2334,10 @@ func init() {
 	performanceobligationDescPobStatus := performanceobligationFields[7].Descriptor()
 	// performanceobligation.PobStatusValidator is a validator for the "pob_status" field. It is called by the builders before save.
 	performanceobligation.PobStatusValidator = performanceobligationDescPobStatus.Validators[0].(func(string) error)
-	performanceobligationassociationMixin := schema.PerformanceObligationAssociation{}.Mixin()
-	performanceobligationassociationMixinFields0 := performanceobligationassociationMixin[0].Fields()
-	_ = performanceobligationassociationMixinFields0
-	performanceobligationassociationMixinFields1 := performanceobligationassociationMixin[1].Fields()
-	_ = performanceobligationassociationMixinFields1
-	performanceobligationassociationFields := schema.PerformanceObligationAssociation{}.Fields()
-	_ = performanceobligationassociationFields
-	// performanceobligationassociationDescTenantID is the schema descriptor for tenant_id field.
-	performanceobligationassociationDescTenantID := performanceobligationassociationMixinFields0[0].Descriptor()
-	// performanceobligationassociation.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	performanceobligationassociation.TenantIDValidator = performanceobligationassociationDescTenantID.Validators[0].(func(string) error)
-	// performanceobligationassociationDescStatus is the schema descriptor for status field.
-	performanceobligationassociationDescStatus := performanceobligationassociationMixinFields0[1].Descriptor()
-	// performanceobligationassociation.DefaultStatus holds the default value on creation for the status field.
-	performanceobligationassociation.DefaultStatus = performanceobligationassociationDescStatus.Default.(string)
-	// performanceobligationassociationDescCreatedAt is the schema descriptor for created_at field.
-	performanceobligationassociationDescCreatedAt := performanceobligationassociationMixinFields0[2].Descriptor()
-	// performanceobligationassociation.DefaultCreatedAt holds the default value on creation for the created_at field.
-	performanceobligationassociation.DefaultCreatedAt = performanceobligationassociationDescCreatedAt.Default.(func() time.Time)
-	// performanceobligationassociationDescUpdatedAt is the schema descriptor for updated_at field.
-	performanceobligationassociationDescUpdatedAt := performanceobligationassociationMixinFields0[3].Descriptor()
-	// performanceobligationassociation.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	performanceobligationassociation.DefaultUpdatedAt = performanceobligationassociationDescUpdatedAt.Default.(func() time.Time)
-	// performanceobligationassociation.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	performanceobligationassociation.UpdateDefaultUpdatedAt = performanceobligationassociationDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// performanceobligationassociationDescEnvironmentID is the schema descriptor for environment_id field.
-	performanceobligationassociationDescEnvironmentID := performanceobligationassociationMixinFields1[0].Descriptor()
-	// performanceobligationassociation.DefaultEnvironmentID holds the default value on creation for the environment_id field.
-	performanceobligationassociation.DefaultEnvironmentID = performanceobligationassociationDescEnvironmentID.Default.(string)
-	// performanceobligationassociationDescPobID is the schema descriptor for pob_id field.
-	performanceobligationassociationDescPobID := performanceobligationassociationFields[1].Descriptor()
-	// performanceobligationassociation.PobIDValidator is a validator for the "pob_id" field. It is called by the builders before save.
-	performanceobligationassociation.PobIDValidator = performanceobligationassociationDescPobID.Validators[0].(func(string) error)
-	// performanceobligationassociationDescEntityType is the schema descriptor for entity_type field.
-	performanceobligationassociationDescEntityType := performanceobligationassociationFields[2].Descriptor()
-	// performanceobligationassociation.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
-	performanceobligationassociation.EntityTypeValidator = performanceobligationassociationDescEntityType.Validators[0].(func(string) error)
-	// performanceobligationassociationDescEntityID is the schema descriptor for entity_id field.
-	performanceobligationassociationDescEntityID := performanceobligationassociationFields[3].Descriptor()
-	// performanceobligationassociation.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
-	performanceobligationassociation.EntityIDValidator = performanceobligationassociationDescEntityID.Validators[0].(func(string) error)
+	// performanceobligationDescAllocatedAmount is the schema descriptor for allocated_amount field.
+	performanceobligationDescAllocatedAmount := performanceobligationFields[9].Descriptor()
+	// performanceobligation.DefaultAllocatedAmount holds the default value on creation for the allocated_amount field.
+	performanceobligation.DefaultAllocatedAmount = performanceobligationDescAllocatedAmount.Default.(decimal.Decimal)
 	planMixin := schema.Plan{}.Mixin()
 	planMixinFields0 := planMixin[0].Fields()
 	_ = planMixinFields0

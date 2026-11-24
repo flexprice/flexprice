@@ -14,12 +14,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	domainJournal "github.com/flexprice/flexprice/internal/domain/journal"
 	domainPOB "github.com/flexprice/flexprice/internal/domain/pob"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	accountingperiodsvc "github.com/flexprice/flexprice/internal/ee/service/accountingperiod"
 	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
 	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	recognitionsvc "github.com/flexprice/flexprice/internal/ee/service/recognition"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	journalRepo "github.com/flexprice/flexprice/internal/repository/journal"
 	"github.com/flexprice/flexprice/internal/testutil"
@@ -568,7 +570,7 @@ func TestGetWaterfallScheduled(t *testing.T) {
 }
 
 // e2eStack is the reports over a real journal service and in-memory stores: cust_1 (UTC) with subs_1 under contract_1
-// (usd), one POB per subscription line item.
+// (usd), one POB per subscription line item, each with its own Product and price.
 type e2eStack struct {
 	t        *testing.T
 	ctx      context.Context
@@ -579,11 +581,14 @@ type e2eStack struct {
 	taxes    *testutil.InMemoryTaxAppliedStore
 }
 
-// e2ePOB is a POB on subscription line item sli, amortized by method from start.
+// e2ePOB is a POB on subscription line item sli, amortized by method over [start, end): straight line earning its
+// allocated amount, or as consumed earning what it bills.
 type e2ePOB struct {
-	id, sli string
-	method  types.AmortizationMethod
-	start   time.Time
+	id, sli    string
+	method     types.AmortizationMethod
+	start, end time.Time
+	allocated  int64
+	asConsumed bool
 }
 
 func newE2EStack(t *testing.T, pobs ...e2ePOB) *e2eStack {
@@ -603,17 +608,23 @@ func newE2EStack(t *testing.T, pobs ...e2ePOB) *e2eStack {
 		WithContractStatus(types.ContractStatusActive).WithStatus(types.StatusPublished).Build()
 	require.NoError(t, contracts.CreateWithAssociation(ctx, c, domainContract.NewAssociationBuilder(nil).
 		WithID("contract_assoc_1").WithEntityType(types.RevRecEntityTypeSubscription).WithEntityID("subs_1").WithStatus(types.StatusPublished).Build()))
+	// Each POB has its own Product, billed by price_<sli>.
+	prices := testutil.NewInMemoryPriceStore()
 	for _, p := range pobs {
-		require.NoError(t, pobStore.CreateWithAssociation(ctx, domainPOB.NewBuilder(nil).WithID(p.id).WithContractID(c.ID()).
-			WithRecognitionMethod(types.RecognitionMethodStraightLine).WithAmortizationMethod(p.method).
-			WithServiceStart(p.start).WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build(),
-			domainPOB.NewAssociationBuilder(nil).WithID("assoc_"+p.id).WithEntityType(types.RevRecEntityTypeSubscriptionLineItem).
-				WithEntityID(p.sli).WithStatus(types.StatusPublished).Build()))
+		require.NoError(t, prices.Create(ctx, &price.Price{ID: "price_" + p.sli, ProductID: "prod_" + p.sli,
+			Type: lo.Ternary(p.asConsumed, types.PRICE_TYPE_USAGE, types.PRICE_TYPE_FIXED), BillingPeriod: types.BILLING_PERIOD_MONTHLY,
+			BaseModel: types.GetDefaultBaseModel(ctx)}))
+		require.NoError(t, pobStore.Create(ctx, domainPOB.NewBuilder(nil).WithID(p.id).WithContractID(c.ID()).WithProductID("prod_"+p.sli).
+			WithRecognitionMethod(lo.Ternary(p.asConsumed, types.RecognitionMethodAsConsumed, types.RecognitionMethodStraightLine)).
+			WithAmortizationMethod(p.method).WithAllocatedAmount(decimal.NewFromInt(p.allocated)).WithServiceStart(p.start).WithServiceEnd(lo.ToPtr(p.end)).
+			WithPOBStatus(types.PerformanceObligationStatusActive).WithStatus(types.StatusPublished).Build()))
 	}
 
-	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore())
+	pobService := pobsvc.NewPerformanceObligationService(pobStore, contracts, subs, invoices, taxes, testutil.NewInMemoryRevenueFactStore(), prices)
 	journal := journalsvc.NewJournalService(testutil.NewMockPostgresClient(nil), store, accountingperiodsvc.NewAccountingPeriodService(periodStore),
-		pobService, pobStore, contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
+		pobService, recognitionsvc.NewContractRecognizer(contracts, pobStore, pobService, store, invoices, subs, customers),
+		recognitionsvc.NewInvoiceRecognizer(invoices, taxes, contracts, store, subs, customers),
+		contractsvc.NewContractService(contracts), contracts, subs, customers, invoices, testutil.NewInMemoryCreditNoteStore(),
 		testutil.NewInMemoryPaymentStore(), testutil.NewInMemoryRefundStore(), taxes, testutil.NewInMemorySettingsStore())
 	return &e2eStack{t: t, ctx: ctx, journal: journal, reports: NewRevenueReportService(store, journal, contracts),
 		store: store, invoices: invoices, taxes: taxes}
@@ -624,7 +635,7 @@ func (e *e2eStack) invoice(id, sli string, amount int64, finalized, start, end t
 	inv := &invoice.Invoice{ID: id, CustomerID: "cust_1", SubscriptionID: lo.ToPtr("subs_1"), InvoiceType: types.InvoiceTypeSubscription,
 		InvoiceStatus: types.InvoiceStatusFinalized, Currency: "usd", Subtotal: decimal.NewFromInt(amount), Total: decimal.NewFromInt(amount),
 		FinalizedAt: lo.ToPtr(finalized), EnvironmentID: types.GetEnvironmentID(e.ctx), BaseModel: types.GetDefaultBaseModel(e.ctx),
-		LineItems: []*invoice.InvoiceLineItem{{ID: id + "_line", SubscriptionLineItemID: lo.ToPtr(sli), Amount: decimal.NewFromInt(amount),
+		LineItems: []*invoice.InvoiceLineItem{{ID: id + "_line", SubscriptionLineItemID: lo.ToPtr(sli), PriceID: lo.ToPtr("price_" + sli), Amount: decimal.NewFromInt(amount),
 			PeriodStart: lo.ToPtr(start), PeriodEnd: lo.ToPtr(end), EnvironmentID: types.GetEnvironmentID(e.ctx), BaseModel: types.GetDefaultBaseModel(e.ctx)}}}
 	if edit != nil {
 		edit(inv)
@@ -656,12 +667,12 @@ func (e *e2eStack) waterfall(req *dto.WaterfallRequest) ([]string, string, *dto.
 
 func utc(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
 
-// TestReportsERDExample is the ERD's Mar 15 example: $1,200 annual prepaid and $100/month recurring in advance, both
-// period even from Jan 1.
+// TestReportsERDExample is the ERD's Mar 15 example: $1,200 annual prepaid for the year and $100/month recurring in
+// advance for January–March, both period even from Jan 1.
 func TestReportsERDExample(t *testing.T) {
 	e := newE2EStack(t,
-		e2ePOB{id: "pob_annual", sli: "sli_annual", method: types.AmortizationPeriodEven, start: utc(time.January, 1)},
-		e2ePOB{id: "pob_monthly", sli: "sli_monthly", method: types.AmortizationPeriodEven, start: utc(time.January, 1)})
+		e2ePOB{id: "pob_annual", sli: "sli_annual", method: types.AmortizationPeriodEven, start: utc(time.January, 1), end: utc(time.January, 1).AddDate(1, 0, 0), allocated: 1200},
+		e2ePOB{id: "pob_monthly", sli: "sli_monthly", method: types.AmortizationPeriodEven, start: utc(time.January, 1), end: utc(time.April, 1), allocated: 300})
 	e.invoice("inv_annual", "sli_annual", 1200, utc(time.January, 1), utc(time.January, 1), utc(time.January, 1).AddDate(1, 0, 0), nil)
 	for m := time.January; m <= time.March; m++ {
 		e.invoice("inv_monthly_"+m.String(), "sli_monthly", 100, utc(m, 1), utc(m, 1), utc(m+1, 1), nil)
@@ -716,12 +727,12 @@ func TestReportsERDExample(t *testing.T) {
 	t.Run("once March is recognized, its pending + scheduled is its actual", func(t *testing.T) {
 		e.recognize(utc(time.April, 1).Add(2 * time.Hour))
 		_, totals, _ := e.waterfall(&dto.WaterfallRequest{PeriodStart: "2026-03", PeriodEnd: "2026-04", AsOf: lo.ToPtr(utc(time.April, 1))})
-		require.Equal(t, "2026-03:200/0/0,2026-04:0/0/100", totals, "April: the annual is scheduled, the monthly has no April invoice")
+		require.Equal(t, "2026-03:200/0/0,2026-04:0/0/100", totals, "April: the annual is scheduled, the monthly's service has ended")
 	})
 }
 
 // TestReportsStripeWaterfallExamples runs Stripe's revenue waterfall examples: a 31 USD line for Jul 21 – Aug 20,
-// finalized Jul 14, recognized daily.
+// finalized Jul 14, recognized daily as billed (an as-consumed POB).
 func TestReportsStripeWaterfallExamples(t *testing.T) {
 	jul21, aug21, jul14 := utc(time.July, 21), utc(time.August, 21), utc(time.July, 14)
 	report := func(e *e2eStack) []string {
@@ -729,7 +740,7 @@ func TestReportsStripeWaterfallExamples(t *testing.T) {
 		return items
 	}
 	stack := func() *e2eStack {
-		return newE2EStack(t, e2ePOB{id: "pob_1", sli: "sli_1", method: types.AmortizationDaily, start: jul21})
+		return newE2EStack(t, e2ePOB{id: "pob_1", sli: "sli_1", method: types.AmortizationDaily, start: jul21, end: aug21, asConsumed: true})
 	}
 	stripe := []string{"cust_1|2026-06:0/0/0,2026-07:11/0/0,2026-08:20/0/0,2026-09:0/0/0"}
 
