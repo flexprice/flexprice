@@ -1271,6 +1271,10 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 	if !ok {
 		return nil
 	}
+	// Entries cached before payment_terms_type and payment_terms_days existed carry only payment_terms.
+	if s.PaymentTermsType == nil {
+		s.PaymentTermsType, s.PaymentTermsDays = lo.FromPtr(s.PaymentTerms).Parts()
+	}
 	return s
 }
 
