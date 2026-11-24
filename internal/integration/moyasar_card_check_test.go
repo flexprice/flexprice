@@ -5,11 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
 	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
@@ -88,26 +90,47 @@ func (s *MoyasarCardCheckSuite) SetupTest() {
 	}))
 }
 
-// Each card-setup attempt needs its own payment: a shared one, once declined,
-// can't record a later approved card.
-func (s *MoyasarCardCheckSuite) TestEachAttemptGetsItsOwnPayment() {
+// Reopening the card page reuses the open card check; once it is closed, the next attempt gets a new one.
+func (s *MoyasarCardCheckSuite) TestInitiateTokenization() {
 	ctx := s.GetContext()
 
 	first, publishableKey, err := s.moyasar.InitiateTokenization(ctx, s.customerID)
 	s.Require().NoError(err)
 	s.Equal("pk_test_1", publishableKey)
 
-	second, _, err := s.moyasar.InitiateTokenization(ctx, s.customerID)
+	reopened, _, err := s.moyasar.InitiateTokenization(ctx, s.customerID)
 	s.Require().NoError(err)
-	s.NotEqual(first, second)
+	s.Equal(first, reopened)
 
-	for _, id := range []string{first, second} {
-		p, err := s.GetStores().PaymentRepo.Get(ctx, id)
-		s.Require().NoError(err)
-		s.Equal(types.PaymentDestinationTypeCustomer, p.DestinationType)
-		s.Equal(s.customerID, p.DestinationID)
-		s.Equal(types.PaymentStatusInitiated, p.PaymentStatus)
-	}
+	s.Require().NoError(s.moyasar.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
+		FlexpricePaymentID: first,
+		GatewayPaymentID:   "moy_declined",
+		ErrorMessage:       "DECLINED",
+	}))
+
+	retry, _, err := s.moyasar.InitiateTokenization(ctx, s.customerID)
+	s.Require().NoError(err)
+	s.NotEqual(first, retry)
+
+	p, err := s.GetStores().PaymentRepo.Get(ctx, retry)
+	s.Require().NoError(err)
+	s.Equal(types.PaymentDestinationTypeCustomer, p.DestinationType)
+	s.Equal(s.customerID, p.DestinationID)
+	s.Equal(types.PaymentStatusInitiated, p.PaymentStatus)
+}
+
+type unavailablePaymentService struct {
+	interfaces.PaymentService
+}
+
+func (unavailablePaymentService) ListPayments(_ context.Context, _ *types.PaymentFilter) (*dto.ListPaymentsResponse, error) {
+	return nil, errors.New("database unavailable")
+}
+
+func (s *MoyasarCardCheckSuite) TestInitiateTokenizationLookupFails() {
+	s.moyasar.Lifecycle = payments.NewPaymentLifecycle(unavailablePaymentService{}, nil, s.GetLogger())
+	_, _, err := s.moyasar.InitiateTokenization(s.GetContext(), s.customerID)
+	s.Error(err)
 }
 
 // A retried release must settle what Moyasar already did instead of releasing twice.

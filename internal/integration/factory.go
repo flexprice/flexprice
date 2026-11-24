@@ -1028,18 +1028,24 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
-	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
-		DestinationType:   types.PaymentDestinationTypeCustomer,
-		DestinationID:     customerID,
-		PaymentMethodType: types.PaymentMethodTypeCard,
-		Gateway:           string(types.SecretProviderMoyasar),
-		Amount:            decimal.NewFromInt(1),
-		Currency:          moyasar.DefaultCurrency,
-		// One payment per attempt: a shared one, once failed, can't record a later successful card.
-		IdempotencyKey: types.GenerateUUIDWithPrefix("moyasar_card_setup"),
-	})
+	// Reuse the customer's open card check; a closed one can't record a later successful card.
+	flexpricePaymentID, err = m.Lifecycle.LatestInitiatedPayment(ctx, types.PaymentDestinationTypeCustomer, customerID, types.PaymentGatewayTypeMoyasar)
 	if err != nil {
 		return "", "", err
+	}
+	if flexpricePaymentID == "" {
+		flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+			DestinationType:   types.PaymentDestinationTypeCustomer,
+			DestinationID:     customerID,
+			PaymentMethodType: types.PaymentMethodTypeCard,
+			Gateway:           string(types.SecretProviderMoyasar),
+			Amount:            decimal.NewFromInt(1),
+			Currency:          moyasar.DefaultCurrency,
+			IdempotencyKey:    types.GenerateUUID(),
+		})
+		if err != nil {
+			return "", "", err
+		}
 	}
 
 	config, err := m.Client.GetMoyasarConfig(ctx)
