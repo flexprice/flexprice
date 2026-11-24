@@ -1046,7 +1046,13 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		}
 
 		// Retrieve wallet inside the tx (under the lock when auto-complete).
-		w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+		var w *wallet.Wallet
+		var err error
+		if autoCompleteEnabled {
+			w, err = s.WalletRepo.GetWalletForUpdate(ctx, walletID)
+		} else {
+			w, err = s.WalletRepo.GetWalletByID(ctx, walletID)
+		}
 		if err != nil {
 			return err
 		}
@@ -1508,7 +1514,7 @@ func (s *walletService) completePurchasedCreditTransaction(ctx context.Context, 
 		}
 
 		// Re-read wallet under the lock — authoritative balance.
-		w, err = s.WalletRepo.GetWalletByID(ctx, tx.WalletID)
+		w, err = s.WalletRepo.GetWalletForUpdate(ctx, tx.WalletID)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to get wallet").
@@ -2490,10 +2496,9 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 				Mark(ierr.ErrInternal)
 		}
 
-		// Step 2: Get wallet inside transaction (after acquiring lock)
-		// This ensures we read the latest committed state
+		// Step 2: Read locked row, bypassing cache
 		var err error
-		w, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+		w, err = s.WalletRepo.GetWalletForUpdate(ctx, req.WalletID)
 		if err != nil {
 			return err
 		}

@@ -191,6 +191,10 @@ func (s *InMemoryWalletStore) GetWalletByID(ctx context.Context, id string) (*wa
 	return wallet, nil
 }
 
+func (s *InMemoryWalletStore) GetWalletForUpdate(ctx context.Context, id string) (*wallet.Wallet, error) {
+	return s.GetWalletByID(ctx, id)
+}
+
 func (s *InMemoryWalletStore) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*wallet.Wallet, error) {
 	// Create a filter function that checks customer ID
 	filterFn := func(ctx context.Context, w *wallet.Wallet, filter interface{}) bool {

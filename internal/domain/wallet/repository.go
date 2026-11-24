@@ -13,6 +13,8 @@ type Repository interface {
 	// Wallet operations
 	CreateWallet(ctx context.Context, w *Wallet) error
 	GetWalletByID(ctx context.Context, id string) (*Wallet, error)
+	// GetWalletForUpdate locks the row, bypassing cache.
+	GetWalletForUpdate(ctx context.Context, id string) (*Wallet, error)
 	GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*Wallet, error)
 	GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*Wallet, error)
 	UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error

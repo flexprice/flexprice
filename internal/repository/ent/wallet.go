@@ -114,9 +114,12 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 	})
 	defer FinishSpan(span)
 
-	// Try to get from cache first
-	if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
-		return cachedWallet, nil
+	// Skip cache inside transactions.
+	inTx := r.client.TxFromContext(ctx) != nil
+	if !inTx {
+		if cachedWallet := r.GetCache(ctx, id); cachedWallet != nil {
+			return cachedWallet, nil
+		}
 	}
 
 	client := r.client.Reader(ctx)
@@ -149,8 +152,55 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 	}
 
 	walletData := walletdomain.FromEnt(w)
-	r.SetCache(ctx, walletData)
+	if !inTx {
+		r.SetCache(ctx, walletData)
+	}
 	return walletData, nil
+}
+
+// GetWalletForUpdate locks the row, bypassing cache.
+func (r *walletRepository) GetWalletForUpdate(ctx context.Context, id string) (*walletdomain.Wallet, error) {
+	client := r.client.Writer(ctx)
+
+	rows, err := client.QueryContext(ctx,
+		`SELECT id FROM wallets WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 AND status = $4 FOR UPDATE`,
+		id, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), string(types.StatusPublished))
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to lock wallet").
+			WithReportableDetails(map[string]interface{}{"wallet_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	for rows.Next() {
+	}
+	if err := rows.Close(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to lock wallet").
+			WithReportableDetails(map[string]interface{}{"wallet_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	w, err := client.Wallet.Query().
+		Where(
+			wallet.ID(id),
+			wallet.TenantID(types.GetTenantID(ctx)),
+			wallet.StatusEQ(string(types.StatusPublished)),
+			wallet.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHint("Wallet not found").
+				WithReportableDetails(map[string]interface{}{"wallet_id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve wallet").
+			WithReportableDetails(map[string]interface{}{"wallet_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+	return walletdomain.FromEnt(w), nil
 }
 
 func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*walletdomain.Wallet, error) {
@@ -482,7 +532,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	r.DeleteCache(ctx, walletID)
+	afterCommit(ctx, func() { r.DeleteCache(ctx, walletID) })
 	return nil
 }
 
