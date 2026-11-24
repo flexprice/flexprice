@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -334,7 +335,7 @@ func (s *Service) initMeter(ctx context.Context) error {
 	opts = append(opts, s.httpMetricViews()...)
 	opts = append(opts, s.appMetricViews()...)
 	opts = append(opts, dbDurationView())
-	opts = append(opts, temporalMetricViews()...)
+	opts = append(opts, temporalMetricViews(exporter.Aggregation)...)
 
 	mp := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(mp)
@@ -409,53 +410,63 @@ func dbDurationView() sdkmetric.Option {
 
 const temporalMeterName = "temporal-sdk-go"
 
-var temporalDroppedMetrics = []string{
-	"temporal_activity_poll_no_task",
-	"temporal_local_activity_execution_latency",
-	"temporal_local_activity_succeed_endtoend_latency",
-	"temporal_local_activity_total",
-	"temporal_long_request_attempt",
-	"temporal_long_request_failure",
-	"temporal_long_request_failure_attempt",
-	"temporal_long_request_latency_attempt",
-	"temporal_poller_start",
-	"temporal_request_attempt",
-	"temporal_request_failure_attempt",
-	"temporal_request_latency_attempt",
-	"temporal_sticky_cache_total_forced_eviction",
-	"temporal_worker_start",
-	"temporal_worker_task_slots_used",
-	"temporal_workflow_task_queue_poll_empty",
-}
+// temporalMetricViews drops unused Temporal instruments and strips min/max
+// from kept histograms. histAgg is the exporter's histogram aggregation.
+func temporalMetricViews(histAgg sdkmetric.AggregationSelector) []sdkmetric.Option {
+	dropped := []string{
+		"temporal_activity_poll_no_task",
+		"temporal_activity_succeed_endtoend_latency",
+		"temporal_local_activity_execution_latency",
+		"temporal_local_activity_succeed_endtoend_latency",
+		"temporal_local_activity_total",
+		"temporal_long_request",
+		"temporal_long_request_attempt",
+		"temporal_long_request_failure",
+		"temporal_long_request_failure_attempt",
+		"temporal_long_request_latency_attempt",
+		"temporal_poller_start",
+		"temporal_request_attempt",
+		"temporal_request_failure_attempt",
+		"temporal_request_latency_attempt",
+		"temporal_sticky_cache_hit",
+		"temporal_sticky_cache_total_forced_eviction",
+		"temporal_worker_start",
+		"temporal_worker_task_slots_used",
+		"temporal_workflow_task_queue_poll_empty",
+	}
+	noMinMax := []string{
+		"temporal_request_latency",
+		"temporal_long_request_latency",
+		"temporal_activity_execution_latency",
+		"temporal_activity_schedule_to_start_latency",
+		"temporal_workflow_endtoend_latency",
+		"temporal_workflow_task_execution_latency",
+		"temporal_workflow_task_replay_latency",
+		"temporal_workflow_task_schedule_to_start_latency",
+	}
 
-var temporalNoMinMaxHistograms = []string{
-	"temporal_request_latency",
-	"temporal_long_request_latency",
-	"temporal_activity_execution_latency",
-	"temporal_activity_succeed_endtoend_latency",
-	"temporal_activity_schedule_to_start_latency",
-	"temporal_workflow_endtoend_latency",
-	"temporal_workflow_task_execution_latency",
-	"temporal_workflow_task_replay_latency",
-	"temporal_workflow_task_schedule_to_start_latency",
-}
-
-// SDK default boundaries; views replace them, so repeat verbatim.
-var defaultHistogramBoundaries = []float64{0, 5, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 2500, 5000, 7500, 10000}
-
-func temporalMetricViews() []sdkmetric.Option {
 	scope := instrumentation.Scope{Name: temporalMeterName}
-	views := make([]sdkmetric.Option, 0, len(temporalDroppedMetrics)+len(temporalNoMinMaxHistograms))
-	for _, name := range temporalDroppedMetrics {
+	views := make([]sdkmetric.Option, 0, len(dropped)+len(noMinMax))
+	for _, name := range dropped {
 		views = append(views, dropView(sdkmetric.Instrument{Name: name, Scope: scope}))
 	}
-	for _, name := range temporalNoMinMaxHistograms {
+
+	var agg sdkmetric.Aggregation
+	switch a := histAgg(sdkmetric.InstrumentKindHistogram).(type) {
+	case sdkmetric.AggregationExplicitBucketHistogram:
+		a.Boundaries = slices.Clone(a.Boundaries)
+		a.NoMinMax = true
+		agg = a
+	case sdkmetric.AggregationBase2ExponentialHistogram:
+		a.NoMinMax = true
+		agg = a
+	default:
+		return views
+	}
+	for _, name := range noMinMax {
 		views = append(views, sdkmetric.WithView(sdkmetric.NewView(
 			sdkmetric.Instrument{Name: name, Scope: scope},
-			sdkmetric.Stream{Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
-				Boundaries: defaultHistogramBoundaries,
-				NoMinMax:   true,
-			}},
+			sdkmetric.Stream{Aggregation: agg},
 		)))
 	}
 	return views

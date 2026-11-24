@@ -5,6 +5,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/metrics"
@@ -15,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
+	temporalotel "go.temporal.io/sdk/contrib/opentelemetry"
 )
 
 // ctxWithTraceID returns a context carrying a span with the given low-8-byte
@@ -462,21 +464,18 @@ func TestDBDurationViewTrimsBucketsAndMinMax(t *testing.T) {
 	}
 }
 
-func TestTemporalMetricViews(t *testing.T) {
+func collectTemporal(t *testing.T, views []sdkmetric.Option) map[string]metricdata.Metrics {
+	t.Helper()
 	reader := sdkmetric.NewManualReader()
-	mp := sdkmetric.NewMeterProvider(append([]sdkmetric.Option{sdkmetric.WithReader(reader)}, temporalMetricViews()...)...)
-	m := mp.Meter(temporalMeterName)
-	ctx := context.Background()
-
-	dropped, _ := m.Int64Counter("temporal_worker_start")
-	kept, _ := m.Int64Counter("temporal_request")
-	hist, _ := m.Float64Histogram("temporal_request_latency")
-	dropped.Add(ctx, 1)
-	kept.Add(ctx, 1)
-	hist.Record(ctx, 0.5)
+	mp := sdkmetric.NewMeterProvider(append([]sdkmetric.Option{sdkmetric.WithReader(reader)}, views...)...)
+	h := temporalotel.NewMetricsHandler(temporalotel.MetricsHandlerOptions{Meter: mp.Meter(temporalMeterName)})
+	h.Counter("temporal_worker_start").Inc(1)
+	h.Counter("temporal_request").Inc(1)
+	h.Timer("temporal_request_latency").Record(500 * time.Millisecond)
+	h.Timer("temporal_request_latency").Record(2 * time.Second)
 
 	var rm metricdata.ResourceMetrics
-	if err := reader.Collect(ctx, &rm); err != nil {
+	if err := reader.Collect(context.Background(), &rm); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]metricdata.Metrics{}
@@ -485,24 +484,52 @@ func TestTemporalMetricViews(t *testing.T) {
 			got[mt.Name] = mt
 		}
 	}
+	return got
+}
+
+func TestTemporalMetricViews(t *testing.T) {
+	base := collectTemporal(t, nil)
+	got := collectTemporal(t, temporalMetricViews(sdkmetric.DefaultAggregationSelector))
+
 	if _, ok := got["temporal_worker_start"]; ok {
 		t.Error("dropped metric exported")
 	}
 	if _, ok := got["temporal_request"]; !ok {
 		t.Error("kept counter missing")
 	}
-	h, ok := got["temporal_request_latency"].Data.(metricdata.Histogram[float64])
-	if !ok || len(h.DataPoints) != 1 {
+	want := base["temporal_request_latency"].Data.(metricdata.Histogram[float64]).DataPoints[0]
+	hist, ok := got["temporal_request_latency"].Data.(metricdata.Histogram[float64])
+	if !ok || len(hist.DataPoints) != 1 {
 		t.Fatal("kept histogram missing")
 	}
-	dp := h.DataPoints[0]
+	dp := hist.DataPoints[0]
 	if _, ok := dp.Min.Value(); ok {
 		t.Error("min should not be recorded")
 	}
 	if _, ok := dp.Max.Value(); ok {
 		t.Error("max should not be recorded")
 	}
-	if !slices.Equal(dp.Bounds, defaultHistogramBoundaries) {
-		t.Errorf("bounds changed: %v", dp.Bounds)
+	if _, ok := want.Min.Value(); !ok {
+		t.Error("baseline should record min")
+	}
+	if !slices.Equal(dp.Bounds, want.Bounds) || !slices.Equal(dp.BucketCounts, want.BucketCounts) {
+		t.Errorf("buckets changed: %v %v vs %v %v", dp.Bounds, dp.BucketCounts, want.Bounds, want.BucketCounts)
+	}
+	if dp.Count != want.Count || dp.Sum != want.Sum {
+		t.Errorf("count/sum changed: %d %v vs %d %v", dp.Count, dp.Sum, want.Count, want.Sum)
+	}
+}
+
+func TestTemporalMetricViewsExponential(t *testing.T) {
+	sel := func(sdkmetric.InstrumentKind) sdkmetric.Aggregation {
+		return sdkmetric.AggregationBase2ExponentialHistogram{MaxSize: 160, MaxScale: 20}
+	}
+	got := collectTemporal(t, temporalMetricViews(sel))
+	hist, ok := got["temporal_request_latency"].Data.(metricdata.ExponentialHistogram[float64])
+	if !ok || len(hist.DataPoints) != 1 {
+		t.Fatal("expected exponential histogram")
+	}
+	if _, ok := hist.DataPoints[0].Min.Value(); ok {
+		t.Error("min should not be recorded")
 	}
 }
