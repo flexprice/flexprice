@@ -5,8 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/samber/lo"
 )
 
 // SettingResponse represents a setting in API responses
@@ -70,40 +68,4 @@ func (r *UpdateSettingRequest) Validate(key types.SettingKey) error {
 	}
 
 	return nil
-}
-
-// ResolveInvoiceConfigPaymentTerms rewrites payment_terms_type and payment_terms_days in an invoice_config value
-// into the stored payment_terms; they override payment_terms when sent.
-func ResolveInvoiceConfigPaymentTerms(value map[string]interface{}) error {
-	sent, err := utils.ToStruct[struct {
-		PaymentTerms     *types.PaymentTerms     `json:"payment_terms"`
-		PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type"`
-		PaymentTermsDays *int                    `json:"payment_terms_days"`
-	}](value)
-	if err != nil {
-		return err
-	}
-	if sent.PaymentTermsType == nil && sent.PaymentTermsDays == nil {
-		return nil
-	}
-	terms, err := types.ResolvePaymentTerms(sent.PaymentTerms, sent.PaymentTermsType, sent.PaymentTermsDays)
-	if err != nil {
-		return err
-	}
-	delete(value, "payment_terms_type")
-	delete(value, "payment_terms_days")
-	value["payment_terms"] = lo.Ternary[any](*terms == "", nil, string(*terms))
-	return nil
-}
-
-// AddInvoiceConfigPaymentTermsParts adds payment_terms_type and payment_terms_days, derived from payment_terms.
-func AddInvoiceConfigPaymentTermsParts(value map[string]interface{}) {
-	terms, _ := value["payment_terms"].(string)
-	termsType, days := types.PaymentTerms(terms).Parts()
-	if termsType != nil {
-		value["payment_terms_type"] = *termsType
-	}
-	if days != nil {
-		value["payment_terms_days"] = *days
-	}
 }
