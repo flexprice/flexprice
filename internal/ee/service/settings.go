@@ -412,6 +412,8 @@ func (s *settingsService) GetSettingByKeyUnchecked(ctx context.Context, key type
 		return getSettingByKey[types.BillingEntityConfig](s, ctx, key)
 	case types.SettingKeyEmailNotificationConfig:
 		return getSettingByKey[types.EmailNotificationConfig](s, ctx, key)
+	case types.SettingKeyCollectionsConfig:
+		return getSettingByKey[types.CollectionsConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -487,7 +489,15 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		if err := s.requireReplyToForEmails(ctx, req); err != nil {
 			return nil, err
 		}
+		if err := s.refuseEmailsOffWhileCollectionsOn(ctx, req); err != nil {
+			return nil, err
+		}
 		return updateSettingByKey[types.EmailNotificationConfig](s, ctx, key, req)
+	case types.SettingKeyCollectionsConfig:
+		if err := s.requireEmailsForCollections(ctx, req); err != nil {
+			return nil, err
+		}
+		return updateSettingByKey[types.CollectionsConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -520,6 +530,13 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 	}
 	if err != nil {
 		return err
+	}
+
+	// Deleting email_notification_config turns emails off.
+	if key == types.SettingKeyEmailNotificationConfig {
+		if err := s.refuseEmailsOffWhileCollectionsOn(ctx, &dto.UpdateSettingRequest{Value: map[string]interface{}{"enabled": false}}); err != nil {
+			return err
+		}
 	}
 
 	// Deleting invoice_config resets the prefix, which billing entities own once enabling.
@@ -632,6 +649,63 @@ func (s *settingsService) updateBillingEntityGuardedSetting(ctx context.Context,
 		return err
 	})
 	return resp, err
+}
+
+func errCollectionsNeedEmails() error {
+	return ierr.NewError("collections needs emails to be enabled").
+		WithHint("Turn on emails before Collections, and turn off Collections before emails.").
+		Mark(ierr.ErrValidation)
+}
+
+// requireEmailsForCollections refuses to turn Collections on while this environment's emails are off.
+func (s *settingsService) requireEmailsForCollections(ctx context.Context, req *dto.UpdateSettingRequest) error {
+	cfg, err := utils.ToStruct[types.CollectionsConfig](req.Value)
+	if err != nil {
+		return err
+	}
+
+	if !cfg.Enabled {
+		return nil
+	}
+
+	emails, err := GetSetting[types.EmailNotificationConfig](s, ctx, types.SettingKeyEmailNotificationConfig)
+	if err != nil {
+		return err
+	}
+
+	if !emails.Enabled {
+		return errCollectionsNeedEmails()
+	}
+
+	return nil
+}
+
+// refuseEmailsOffWhileCollectionsOn refuses an email setting change that leaves emails off while Collections is on.
+func (s *settingsService) refuseEmailsOffWhileCollectionsOn(ctx context.Context, req *dto.UpdateSettingRequest) error {
+	emails, err := GetSetting[types.EmailNotificationConfig](s, ctx, types.SettingKeyEmailNotificationConfig)
+	if err != nil {
+		return err
+	}
+
+	enabled := emails.Enabled
+	if requested, ok := req.Value["enabled"].(bool); ok {
+		enabled = requested
+	}
+
+	if enabled {
+		return nil
+	}
+
+	collections, err := GetSetting[types.CollectionsConfig](s, ctx, types.SettingKeyCollectionsConfig)
+	if err != nil {
+		return err
+	}
+
+	if collections.Enabled {
+		return errCollectionsNeedEmails()
+	}
+
+	return nil
 }
 
 // requireReplyToForEmails refuses to turn on emails while the tenant has no email customers can reply to.

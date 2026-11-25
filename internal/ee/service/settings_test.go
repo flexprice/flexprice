@@ -239,6 +239,7 @@ func (s *SettingsServiceSuite) TestUpdateSettingByKey_PartialUpdateCoversEveryKe
 	covered := map[types.SettingKey]bool{
 		types.SettingKeySAMLConfig:          true, // TestUpdateSettingByKey_SAMLPartialUpdate
 		types.SettingKeyBillingEntityConfig: true, // TestUpdateSettingByKey_BillingEntityConfigRejected
+		types.SettingKeyCollectionsConfig:   true, // TestCollectionsConfig_IsKeptInStepWithEmails
 	}
 	for _, tc := range partialUpdateCases() {
 		covered[tc.key] = true

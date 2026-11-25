@@ -66,30 +66,38 @@ func (s *emailNotificationService) composeInvoiceEmail(ctx context.Context, e *e
 	view := invoiceEmailView(inv, merchant, paidWith, clock.Now())
 	composed := &composedEmail{metadata: map[string]string{}}
 
-	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
-	if err != nil {
+	if err := s.attachInvoiceFile(ctx, e, invoiceSvc, inv, &view, composed, allowMissingAttachments); err != nil {
 		return nil, err
-	}
-	switch {
-	case !cfg.AttachInvoicePDF:
-		composed.metadata[emailMetaPDF] = emailPDFDisabled
-	default:
-		if err := attachInvoicePDF(ctx, invoiceSvc.(*invoiceService), &inv.Invoice, &view, composed); err != nil {
-			if !allowMissingAttachments {
-				return nil, ierr.WithError(errAttachmentUnavailable).
-					WithMessagef("invoice pdf: %v", err).
-					WithHint("The invoice PDF could not be produced").
-					Mark(ierr.ErrServiceUnavailable)
-			}
-			s.Logger.Info(ctx, "sending invoice email without its pdf", "email_log_id", e.ID, "invoice_id", inv.ID, "reason", err.Error())
-			composed.metadata[emailMetaPDF] = emailPDFUnavailable
-		}
 	}
 
 	if composed.content, err = render.InvoiceFinalized(view); err != nil {
 		return nil, err
 	}
 	return composed, nil
+}
+
+// attachInvoiceFile adds the invoice PDF to an email as the environment's settings say. A PDF that cannot be produced
+// is a retryable error, until the email has waited long enough (allowMissing) and goes out without it.
+func (s *emailNotificationService) attachInvoiceFile(ctx context.Context, e *emaillog.EmailLog, invoiceSvc InvoiceService, inv *dto.InvoiceResponse, view *render.Invoice, composed *composedEmail, allowMissing bool) error {
+	cfg, err := GetSetting[types.EmailNotificationConfig](NewSettingsService(s.ServiceParams).(*settingsService), ctx, types.SettingKeyEmailNotificationConfig)
+	if err != nil {
+		return err
+	}
+	if !cfg.AttachInvoicePDF {
+		composed.metadata[emailMetaPDF] = emailPDFDisabled
+		return nil
+	}
+	if err := attachInvoicePDF(ctx, invoiceSvc.(*invoiceService), &inv.Invoice, view, composed); err != nil {
+		if !allowMissing {
+			return ierr.WithError(errAttachmentUnavailable).
+				WithMessagef("invoice pdf: %v", err).
+				WithHint("The invoice PDF could not be produced").
+				Mark(ierr.ErrServiceUnavailable)
+		}
+		s.Logger.Info(ctx, "sending invoice email without its pdf", "email_log_id", e.ID, "invoice_id", inv.ID, "reason", err.Error())
+		composed.metadata[emailMetaPDF] = emailPDFUnavailable
+	}
+	return nil
 }
 
 // attachInvoicePDF attaches Flexprice's stored PDF, or links the invoice's own PDF; a billing
