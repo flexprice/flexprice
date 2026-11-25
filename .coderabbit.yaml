@@ -18,9 +18,11 @@ reviews:
     base_branches:
       - ^main$
       - ^develop$
-  # Generated SDKs and specs. ent/ is not listed: its generated files carry the
-  # "Code generated" header and ent/schema is hand-written and must stay in scope.
+  # Generated SDKs, specs and the generated ent root files. ent/schema is
+  # hand-written and stays in scope; an include pattern would turn this list
+  # into an allowlist, so the generated ent/<entity>/ directories stay reviewable.
   path_filters:
+    - "!ent/*.go"
     - "!api/go/**"
     - "!api/python/**"
     - "!api/typescript/**"
