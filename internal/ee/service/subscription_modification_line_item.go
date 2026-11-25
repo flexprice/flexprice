@@ -256,8 +256,6 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 	var newEndDate time.Time
 	if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 		newEndDate = lineItem.EndDate
-	} else if effectiveDate.Before(sub.CurrentPeriodEnd) {
-		newEndDate = sub.CurrentPeriodEnd
 	}
 
 	return newLineItemChangeMod(

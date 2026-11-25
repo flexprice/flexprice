@@ -265,13 +265,6 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			continue
 		}
 
-		// A quantity or price change scheduled at current_period_end takes effect on the next
-		// billing period; no current-period proration applies.
-		if (entry.Action == types.ProrationActionQuantityChange || entry.Action == types.ProrationActionPriceChange) &&
-			req.EffectiveDate.Equal(sub.CurrentPeriodEnd) {
-			continue
-		}
-
 		// A line item is priced against its own cadence, so a monthly addon on a quarterly
 		// subscription is quoted as one partial month plus the whole months that follow —
 		// the same lines the opening invoice would have raised. Same-cadence items yield a
