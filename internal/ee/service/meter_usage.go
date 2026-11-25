@@ -505,22 +505,17 @@ func (s *meterUsageService) usageRollupMeterUsage(ctx context.Context, sub *subs
 		return nil, false
 	}
 	prices, meters, err := usageRollup.UsagePrices(ctx, sub)
-	if err != nil {
-		return s.usageRollupReadFailed(ctx, sub, err)
+	var quantities map[string]decimal.Decimal
+	if err == nil {
+		quantities, err = usageRollup.PeriodQuantities(ctx, sub, meters)
 	}
-	quantities, err := usageRollup.PeriodQuantities(ctx, sub, meters)
 	if err != nil {
-		return s.usageRollupReadFailed(ctx, sub, err)
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadError))
+		s.logger.Error(ctx, "usage rollup read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
+		return nil, false
 	}
 	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadServed))
 	return usageRollupSubscriptionMeterUsage(sub, prices, meters, quantities), true
-}
-
-// usageRollupReadFailed records a failed usage rollup read so the caller falls back to Postgres and ClickHouse.
-func (s *meterUsageService) usageRollupReadFailed(ctx context.Context, sub *subscription.Subscription, err error) (*SubscriptionMeterUsage, bool) {
-	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadError))
-	s.logger.Error(ctx, "usage rollup read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
-	return nil, false
 }
 
 // usageRollupSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or

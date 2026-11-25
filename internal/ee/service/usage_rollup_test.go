@@ -179,14 +179,14 @@ func (s *UsageRollupSuite) TestCachedEntriesJSONRoundTrip() {
 	var decodedPrices []*usageRollupPrice
 	s.Require().NoError(json.Unmarshal(raw, &decodedPrices))
 	s.Require().Len(decodedPrices, 1)
-	got, want := decodedPrices[0].price(), compact[0].price()
+	got, want := decodedPrices[0], compact[0]
 	s.Equal(want.ID, got.ID)
 	s.Equal(want.Amount.String(), got.Amount.String())
 	s.Equal(want.BillingModel, got.BillingModel)
 	s.Equal(want.MeterID, got.MeterID)
 	s.Equal(want.Currency, got.Currency)
 	s.Equal(want.Tiers[0].UnitAmount.String(), got.Tiers[0].UnitAmount.String())
-	s.Equal(types.AggregationSum, decodedPrices[0].meter().Aggregation.Type)
+	s.Equal(types.AggregationSum, got.AggregationType)
 
 	snapshot := &usageSnapshot{AggregatedUntil: s.periodStart, Totals: map[string]decimal.Decimal{"mtr_rt": decimal.RequireFromString("12.5")}}
 	raw, err = json.Marshal(snapshot)
@@ -290,6 +290,55 @@ func (s *UsageRollupSuite) TestPlanEntitlementChangeClearsEligibility() {
 	s.Require().NoError(st.EntitlementRepo.Delete(ctx, ent.ID))
 	s.clearEligibility(UsageRollupPlan, "plan_rt")
 	s.True(s.eligible(sub), "with the entitlement gone the customer is eligible again")
+}
+
+// Entitlements on the plan, addons or subscription decide eligibility without reading grants: a grant
+// opens only from a grant-config entitlement, which this check already rejects.
+func (s *UsageRollupSuite) TestEntitlementsDecideEligibility() {
+	tests := []struct {
+		name        string
+		entitlement func(sub *subscription.Subscription) *entitlement.Entitlement
+		want        usageRollupIneligibleReason
+	}{
+		{
+			name: "subscription grant on the subscription",
+			entitlement: func(sub *subscription.Subscription) *entitlement.Entitlement {
+				return &entitlement.Entitlement{EntityType: types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION, EntityID: sub.ID,
+					IsEnabled: true, GrantScope: types.EntitlementGrantScopeSubscription}
+			},
+			want: usageRollupIneligibleEntitlement,
+		},
+		{
+			name: "metered feature on a meter the plan doesn't charge",
+			entitlement: func(*subscription.Subscription) *entitlement.Entitlement {
+				return &entitlement.Entitlement{EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN, EntityID: "plan_rt",
+					FeatureID: "feat_other", FeatureType: types.FeatureTypeMetered, IsEnabled: true}
+			},
+		},
+		{
+			name: "disabled metered feature on the charged meter",
+			entitlement: func(*subscription.Subscription) *entitlement.Entitlement {
+				return &entitlement.Entitlement{EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN, EntityID: "plan_rt",
+					FeatureID: "feat_rt", FeatureType: types.FeatureTypeMetered}
+			},
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx, st := s.GetContext(), s.GetStores()
+			sub := s.seed(nil)
+			for id, meterID := range map[string]string{"feat_rt": "mtr_rt", "feat_other": "mtr_other"} {
+				s.Require().NoError(st.FeatureRepo.Create(ctx, &feature.Feature{ID: id, Name: id, LookupKey: id, MeterID: meterID,
+					Type: types.FeatureTypeMetered, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}))
+			}
+			e := tt.entitlement(sub)
+			e.ID, e.EnvironmentID, e.BaseModel = "ent_case", types.GetEnvironmentID(ctx), types.GetDefaultBaseModel(ctx)
+			_, err := st.EntitlementRepo.Create(ctx, e)
+			s.Require().NoError(err)
+			s.Equal(tt.want, s.reason(sub))
+		})
+	}
 }
 
 // A read takes the flag from the cache, then Postgres, and evaluates it once a write has cleared it.

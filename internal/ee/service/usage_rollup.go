@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"maps"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -204,55 +203,58 @@ func (s *usageRollupService) ineligibleReason(ctx context.Context, customerID st
 		CustomerID:         customerID,
 		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
 	})
-	if err != nil || len(subs) == 0 {
+	if err != nil {
 		return "", err
 	}
-	if reason, err := s.customerLevelReason(ctx, customerID, subs); err != nil || reason != "" {
-		return reason, err
-	}
-
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	for _, sub := range subs {
-		if sub.SubscriptionType != types.SubscriptionTypeStandalone || lo.FromPtr(sub.ParentSubscriptionID) != "" {
-			return usageRollupIneligibleNotStandalone, nil
-		}
-		if sub.HasCommitment() {
-			return usageRollupIneligibleCommitment, nil
-		}
-		usageItems, err := s.usageLineItems(ctx, sub)
-		if err != nil {
-			return "", err
-		}
-		if reason := lineItemReason(sub, usageItems); reason != "" {
-			return reason, nil
-		}
-		addonIDs, err := s.activeAddonIDs(ctx, sub)
-		if err != nil {
-			return "", err
-		}
-		pricesByMeter, meters, reason, err := s.priceSourceReason(ctx, sub, addonIDs)
-		if err != nil || reason != "" {
-			return reason, err
-		}
-		if reason := lineItemPriceReason(usageItems, pricesByMeter); reason != "" {
-			return reason, nil
-		}
-		if reason, err := entitlementReason(ctx, subscriptionService, sub, meters); err != nil || reason != "" {
+		if reason, err := s.subscriptionIneligibleReason(ctx, sub); err != nil || reason != "" {
 			return reason, err
 		}
 	}
 	return "", nil
 }
 
-// usageLineItems returns sub's metered usage line items active in its current period.
-func (s *usageRollupService) usageLineItems(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
-	lineItems, err := NewMeterUsageService(s.ServiceParams).ListUsageLineItems(ctx, sub, sub.CurrentPeriodStart, false)
-	if err != nil {
-		return nil, err
+// subscriptionIneligibleReason checks one subscription: its shape, then its plan and active addons' prices,
+// then its line items against those prices, then the entitlements on all of them.
+func (s *usageRollupService) subscriptionIneligibleReason(ctx context.Context, sub *subscription.Subscription) (usageRollupIneligibleReason, error) {
+	if sub.SubscriptionType != types.SubscriptionTypeStandalone || lo.FromPtr(sub.ParentSubscriptionID) != "" {
+		return usageRollupIneligibleNotStandalone, nil
 	}
-	return lo.Filter(lineItems, func(li *subscription.SubscriptionLineItem, _ int) bool {
-		return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != ""
-	}), nil
+	if reason, err := s.commitmentReason(ctx, sub); err != nil || reason != "" {
+		return reason, err
+	}
+	addonIDs, err := s.activeAddonIDs(ctx, sub)
+	if err != nil {
+		return "", err
+	}
+	sources := append([]string{sub.PlanID}, addonIDs...)
+	pricesByMeter, meters, reason, err := s.priceReason(ctx, sub, sources)
+	if err != nil || reason != "" {
+		return reason, err
+	}
+	if reason, err := s.lineItemReason(ctx, sub, pricesByMeter); err != nil || reason != "" {
+		return reason, err
+	}
+	return s.entitlementReason(ctx, append(sources, sub.ID), meters)
+}
+
+// commitmentReason rejects a subscription with a commitment: billing nets usage against it.
+func (s *usageRollupService) commitmentReason(ctx context.Context, sub *subscription.Subscription) (usageRollupIneligibleReason, error) {
+	if sub.HasCommitment() {
+		return usageRollupIneligibleCommitment, nil
+	}
+	commitments, err := s.CommitmentRepo.Count(ctx, &commitment.Filter{
+		QueryFilter:     types.NewNoLimitQueryFilter(),
+		SubscriptionIDs: []string{sub.ID},
+		Statuses:        []types.CommitmentStatus{types.CommitmentStatusActive},
+	})
+	if err != nil {
+		return "", err
+	}
+	if commitments > 0 {
+		return usageRollupIneligibleCommitment, nil
+	}
+	return "", nil
 }
 
 // activeAddonIDs returns the addons associated with sub in its current period.
@@ -269,108 +271,48 @@ func (s *usageRollupService) activeAddonIDs(ctx context.Context, sub *subscripti
 	return lo.Uniq(lo.Map(associations.Items, func(a *dto.AddonAssociationResponse, _ int) string { return a.AddonID })), nil
 }
 
-// customerLevelReason checks what spans the customer's subscriptions: entitlement grants and commitments.
-func (s *usageRollupService) customerLevelReason(ctx context.Context, customerID string, subs []*subscription.Subscription) (usageRollupIneligibleReason, error) {
-	grants, err := s.EntitlementGrantRepo.Count(ctx, &types.EntitlementGrantFilter{
-		QueryFilter:  types.NewNoLimitQueryFilter(),
-		CustomerIDs:  []string{customerID},
-		ValidToAfter: lo.ToPtr(clock.Now()),
-	})
-	if err != nil {
-		return "", err
-	}
-	if grants > 0 {
-		return usageRollupIneligibleGrant, nil
-	}
-	commitments, err := s.CommitmentRepo.Count(ctx, &commitment.Filter{
-		QueryFilter:     types.NewNoLimitQueryFilter(),
-		SubscriptionIDs: lo.Map(subs, func(sub *subscription.Subscription, _ int) string { return sub.ID }),
-		Statuses:        []types.CommitmentStatus{types.CommitmentStatusActive},
-	})
-	if err != nil {
-		return "", err
-	}
-	if commitments > 0 {
-		return usageRollupIneligibleCommitment, nil
-	}
-	return "", nil
-}
-
-// lineItemReason rejects line items that change pricing within the period or price outside the plan and addons.
-func lineItemReason(sub *subscription.Subscription, items []*subscription.SubscriptionLineItem) usageRollupIneligibleReason {
-	for _, item := range items {
-		switch {
-		case item.EntityType == types.SubscriptionLineItemEntityTypeSubscription:
-			return usageRollupIneligibleOverride
-		case item.HasAnyCommitment():
-			return usageRollupIneligibleCommitment
-		case item.PriceUnit != nil:
-			return usageRollupIneligiblePriceUnit
-		case item.StartDate.After(sub.CurrentPeriodStart),
-			!item.EndDate.IsZero() && item.EndDate.Before(sub.CurrentPeriodEnd):
-			return usageRollupIneligiblePriceChanged
-		}
-	}
-	return ""
-}
-
-// priceSourceReason checks the plan's and addons' prices and returns the usage prices the usage rollup path
-// charges and their meters, both by meter ID. Any plan or addon price added, edited or ended since the subscription
-// started keeps it ineligible, as does a usage price whose meter the usage rollup can't hold.
-func (s *usageRollupService) priceSourceReason(
+// priceReason reads the plan's and addons' prices, ended ones included, and returns the usage prices the
+// usage rollup path charges and their meters, both by meter ID. Any price added, edited or ended since the
+// subscription started, or a usage price whose meter the usage rollup can't hold, makes it ineligible.
+func (s *usageRollupService) priceReason(
 	ctx context.Context,
 	sub *subscription.Subscription,
-	addonIDs []string,
+	sources []string,
 ) (map[string]*price.Price, map[string]*meter.Meter, usageRollupIneligibleReason, error) {
-	sourceFilter := types.NewNoLimitPriceFilter()
-	sourceFilter.EntityIDs = append([]string{sub.PlanID}, addonIDs...)
-	sourceFilter.AllowExpiredPrices = true
-	sourcePrices, err := NewPriceService(s.ServiceParams).GetPrices(ctx, sourceFilter)
+	filter := types.NewNoLimitPriceFilter()
+	filter.EntityIDs = sources
+	filter.AllowExpiredPrices = true
+	filter.Expand = lo.ToPtr(string(types.ExpandMeters))
+	list, err := NewPriceService(s.ServiceParams).GetPrices(ctx, filter)
 	if err != nil {
 		return nil, nil, "", err
 	}
-	for _, p := range sourcePrices.Items {
+	for _, p := range list.Items {
 		if priceChangedSince(p.Price, sub.StartDate) {
 			return nil, nil, usageRollupIneligiblePriceChanged, nil
 		}
 	}
 
-	prices, meters, err := s.subscriptionUsagePrices(ctx, sub, addonIDs)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	pricesByMeter := make(map[string]*price.Price, len(prices))
-	chargedMeters := make(map[string]*meter.Meter, len(prices))
-	for _, p := range prices {
-		m := meters[p.MeterID]
+	pricesByMeter := make(map[string]*price.Price)
+	meters := make(map[string]*meter.Meter)
+	for _, p := range list.Items {
+		// A price with an end date left here ended before the subscription started.
+		if p.Type != types.PRICE_TYPE_USAGE || p.EndDate != nil ||
+			!p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
+			continue
+		}
 		_, duplicate := pricesByMeter[p.MeterID]
-		if m == nil || duplicate || !usagerollup.SupportsAggregation(m.Aggregation.Type) || price.IsBucketed(p, m) || keepsRunningAggregate(m) {
+		if p.Meter == nil || duplicate {
 			return nil, nil, usageRollupIneligibleMeter, nil
 		}
-		pricesByMeter[p.MeterID] = p
-		chargedMeters[p.MeterID] = m
-	}
-	return pricesByMeter, chargedMeters, "", nil
-}
-
-// lineItemPriceReason requires the plan and addon prices the usage rollup path charges to be exactly the
-// prices on the subscription's usage line items: an override, or a price the subscription doesn't
-// carry, would be charged wrongly.
-func lineItemPriceReason(items []*subscription.SubscriptionLineItem, pricesByMeter map[string]*price.Price) usageRollupIneligibleReason {
-	carried := make(map[string]bool, len(items))
-	for _, item := range items {
-		p, charged := pricesByMeter[item.MeterID]
-		if !charged || p.ID != item.PriceID {
-			return usageRollupIneligibleOverride
+		m := p.Meter.ToMeter()
+		if !usagerollup.SupportsAggregation(m.Aggregation.Type) || price.IsBucketed(p.Price, m) || keepsRunningAggregate(m) {
+			return nil, nil, usageRollupIneligibleMeter, nil
 		}
-		carried[item.PriceID] = true
+		pricesByMeter[p.MeterID] = p.Price
+		meters[p.MeterID] = m
 	}
-	for _, p := range pricesByMeter {
-		if !carried[p.ID] {
-			return usageRollupIneligiblePriceChanged
-		}
-	}
-	return ""
+	return pricesByMeter, meters, "", nil
 }
 
 // priceChangedSince reports whether a plan or addon price was added, edited or ended after start.
@@ -378,26 +320,88 @@ func priceChangedSince(p *price.Price, start time.Time) bool {
 	return p.CreatedAt.After(start) || p.UpdatedAt.After(start) || (p.EndDate != nil && p.EndDate.After(start))
 }
 
-// entitlementReason rejects a subscription whose enabled metered entitlements cover a charged meter:
-// billing nets their allowance off the usage.
-func entitlementReason(
+// lineItemReason requires the subscription's usage line items to carry exactly the charged plan and addon
+// prices for the whole current period, with no commitment or price unit.
+func (s *usageRollupService) lineItemReason(
 	ctx context.Context,
-	subscriptionService SubscriptionService,
 	sub *subscription.Subscription,
-	meters map[string]*meter.Meter,
+	pricesByMeter map[string]*price.Price,
 ) (usageRollupIneligibleReason, error) {
-	if len(meters) == 0 {
-		return "", nil
-	}
-	entitlements, err := subscriptionService.GetAggregatedSubscriptionEntitlementsForSubscription(ctx, sub, nil)
+	filter := types.NewNoLimitSubscriptionLineItemFilter()
+	filter.SubscriptionIDs = []string{sub.ID}
+	filter.ActiveFilter = true
+	filter.CurrentPeriodStart = lo.ToPtr(sub.CurrentPeriodStart)
+	items, err := s.SubscriptionLineItemRepo.List(ctx, filter)
 	if err != nil {
 		return "", err
 	}
-	for _, f := range entitlements.Features {
-		if f.Feature == nil || f.Entitlement == nil || !f.Entitlement.IsEnabled {
+	carried := make(map[string]bool, len(items))
+	for _, item := range items {
+		if item.PriceType != types.PRICE_TYPE_USAGE || item.MeterID == "" {
 			continue
 		}
-		if _, charged := meters[f.Feature.MeterID]; charged && types.FeatureType(f.Feature.Type) == types.FeatureTypeMetered {
+		p, charged := pricesByMeter[item.MeterID]
+		switch {
+		case item.EntityType == types.SubscriptionLineItemEntityTypeSubscription:
+			return usageRollupIneligibleOverride, nil
+		case item.HasAnyCommitment():
+			return usageRollupIneligibleCommitment, nil
+		case item.PriceUnit != nil:
+			return usageRollupIneligiblePriceUnit, nil
+		case item.StartDate.After(sub.CurrentPeriodStart),
+			!item.EndDate.IsZero() && item.EndDate.Before(sub.CurrentPeriodEnd):
+			return usageRollupIneligiblePriceChanged, nil
+		case !charged || p.ID != item.PriceID:
+			return usageRollupIneligibleOverride, nil
+		}
+		carried[item.PriceID] = true
+	}
+	for _, p := range pricesByMeter {
+		if !carried[p.ID] {
+			return usageRollupIneligiblePriceChanged, nil
+		}
+	}
+	return "", nil
+}
+
+// entitlementReason rejects entities with an enabled entitlement that changes what usage bills: a
+// subscription or group grant, or a metered feature on a charged meter. Grants open only from these
+// entitlements, so this also covers active grants.
+func (s *usageRollupService) entitlementReason(
+	ctx context.Context,
+	entityIDs []string,
+	meters map[string]*meter.Meter,
+) (usageRollupIneligibleReason, error) {
+	filter := types.NewNoLimitEntitlementFilter()
+	filter.EntityIDs = entityIDs
+	filter.IsEnabled = lo.ToPtr(true)
+	filter.GrantScopes = []types.EntitlementGrantScopeEntityType{
+		types.EntitlementGrantScopeFeature, types.EntitlementGrantScopeSubscription, types.EntitlementGrantScopeGroup,
+	}
+	entitlements, err := s.EntitlementRepo.List(ctx, filter)
+	if err != nil {
+		return "", err
+	}
+	var meteredFeatureIDs []string
+	for _, e := range entitlements {
+		if scope := e.EffectiveGrantScope(); scope == types.EntitlementGrantScopeSubscription || scope == types.EntitlementGrantScopeGroup {
+			return usageRollupIneligibleEntitlement, nil
+		}
+		if e.FeatureType == types.FeatureTypeMetered && e.FeatureID != "" {
+			meteredFeatureIDs = append(meteredFeatureIDs, e.FeatureID)
+		}
+	}
+	if len(meteredFeatureIDs) == 0 {
+		return "", nil
+	}
+	featureFilter := types.NewNoLimitFeatureFilter()
+	featureFilter.FeatureIDs = lo.Uniq(meteredFeatureIDs)
+	features, err := s.FeatureRepo.List(ctx, featureFilter)
+	if err != nil {
+		return "", err
+	}
+	for _, f := range features {
+		if _, charged := meters[f.MeterID]; charged {
 			return usageRollupIneligibleEntitlement, nil
 		}
 	}
@@ -455,36 +459,27 @@ func (s *usageRollupService) UsagePrices(ctx context.Context, sub *subscription.
 			return nil, nil, err
 		}
 		for _, cp := range entityPrices {
-			p := cp.price()
-			if p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
-				pricesByMeter[p.MeterID] = p
-				meters[p.MeterID] = cp.meter()
+			p := &price.Price{
+				ID:                 cp.ID,
+				MeterID:            cp.MeterID,
+				Type:               types.PRICE_TYPE_USAGE,
+				Amount:             cp.Amount,
+				Currency:           cp.Currency,
+				BillingPeriod:      cp.BillingPeriod,
+				BillingPeriodCount: cp.BillingPeriodCount,
+				BillingModel:       cp.BillingModel,
+				TierMode:           cp.TierMode,
+				Tiers:              cp.Tiers,
+				TransformQuantity:  cp.TransformQuantity,
 			}
+			if !p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
+				continue
+			}
+			pricesByMeter[p.MeterID] = p
+			meters[p.MeterID] = &meter.Meter{ID: cp.MeterID, Name: cp.MeterName, Aggregation: meter.Aggregation{Type: cp.AggregationType}}
 		}
 	}
 	return pricesByMeter, meters, nil
-}
-
-// price rebuilds the fields of the usage price that pricing and the eligibility filter read.
-func (cp *usageRollupPrice) price() *price.Price {
-	return &price.Price{
-		ID:                 cp.ID,
-		MeterID:            cp.MeterID,
-		Type:               types.PRICE_TYPE_USAGE,
-		Amount:             cp.Amount,
-		Currency:           cp.Currency,
-		BillingPeriod:      cp.BillingPeriod,
-		BillingPeriodCount: cp.BillingPeriodCount,
-		BillingModel:       cp.BillingModel,
-		TierMode:           cp.TierMode,
-		Tiers:              cp.Tiers,
-		TransformQuantity:  cp.TransformQuantity,
-	}
-}
-
-// meter rebuilds the fields of the price's meter that the quantity read and the charge read.
-func (cp *usageRollupPrice) meter() *meter.Meter {
-	return &meter.Meter{ID: cp.MeterID, Name: cp.MeterName, Aggregation: meter.Aggregation{Type: cp.AggregationType}}
 }
 
 // usageRollupSubscription reads the subscription's external customer ID and active addons through the cache.
@@ -508,26 +503,6 @@ func (s *usageRollupService) usageRollupSubscription(ctx context.Context, sub *s
 	value := &usageRollupSubscription{ExternalCustomerID: cust.ExternalID, AddonIDs: addonIDs}
 	s.RedisCache.ForceCacheSet(ctx, key, value, usageRollupCacheTTL)
 	return value, nil
-}
-
-// subscriptionUsagePrices returns the active usage prices of sub's plan and addons that match its
-// currency and billing period, and the meters of all their usage prices by ID.
-func (s *usageRollupService) subscriptionUsagePrices(ctx context.Context, sub *subscription.Subscription, addonIDs []string) ([]*price.Price, map[string]*meter.Meter, error) {
-	var prices []*price.Price
-	meters := make(map[string]*meter.Meter)
-	for _, entityID := range append([]string{sub.PlanID}, addonIDs...) {
-		entityPrices, err := s.entityUsagePrices(ctx, entityID)
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, p := range entityPrices.Prices {
-			if p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
-				prices = append(prices, p)
-			}
-		}
-		maps.Copy(meters, entityPrices.Meters)
-	}
-	return prices, meters, nil
 }
 
 // cachedEntityUsagePrices reads the compact form of a plan's or addon's active usage prices through the cache.
