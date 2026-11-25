@@ -911,7 +911,7 @@ fmt-changed:
 ## test-changed: go test for the packages whose files changed since LINT_BASE
 test-changed:
 	@dirs=$$( { git diff --name-only $$(git merge-base $(LINT_BASE) HEAD) -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | xargs -n1 dirname 2>/dev/null | sort -u | grep -v '^tools/' | sed 's|^|./|'); \
-	dirs=$$(for d in $$dirs; do [ -d "$$d" ] && echo "$$d"; done); \
+	dirs=$$(for d in $$dirs; do ls $$d/*.go >/dev/null 2>&1 && echo "$$d"; done); \
 	if [ -z "$$dirs" ]; then echo "no Go packages changed"; else go test -race $$dirs; fi
 
 ## check-agent-docs: every path an AGENTS.md names must exist
