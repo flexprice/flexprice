@@ -265,6 +265,13 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			continue
 		}
 
+		// A quantity or price change scheduled at current_period_end takes effect on the next
+		// billing period; no current-period proration applies.
+		if (entry.Action == types.ProrationActionQuantityChange || entry.Action == types.ProrationActionPriceChange) &&
+			req.EffectiveDate.Equal(sub.CurrentPeriodEnd) {
+			continue
+		}
+
 		// A line item is priced against its own cadence, so a monthly addon on a quarterly
 		// subscription is quoted as one partial month plus the whole months that follow —
 		// the same lines the opening invoice would have raised. Same-cadence items yield a
@@ -274,12 +281,9 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 		gridSub := sub
 		var windows []periodWindow
 		if types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
-			// A removal or period-end change on an item boundary closes the period ending there, not the next unbilled one.
+			// A removal on an item boundary closes the period ending there, not the next unbilled one.
 			at := req.EffectiveDate
-			if entry.Action == types.ProrationActionRemoveItem ||
-				entry.Action == types.ProrationActionCancellation ||
-				((entry.Action == types.ProrationActionQuantityChange || entry.Action == types.ProrationActionPriceChange) &&
-					req.EffectiveDate.Equal(sub.CurrentPeriodEnd)) {
+			if entry.Action == types.ProrationActionRemoveItem || entry.Action == types.ProrationActionCancellation {
 				at = at.Add(-time.Nanosecond)
 			}
 			itemPeriod, err := longerItemPeriod(sub, item, at)
