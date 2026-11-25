@@ -655,19 +655,34 @@ func (s *SubscriptionPauseSuite) TestPause_GracePeriodSetsTheCancel() {
 	}
 }
 
-// A parent's pause is mirrored on its inherited children.
+// A parent's pause and its auto-cancel are mirrored on its inherited children. Grouped-invoicing
+// children are not paused and keep billing.
 func (s *SubscriptionPauseSuite) TestPause_ParentCascadesToInheritedChildren() {
+	ctx := s.GetContext()
 	periodStart, periodEnd := s.openPeriod()
 	parent := s.billedSubscription("subs_pause_parent", periodStart, periodEnd)
 	parent.SubscriptionType = types.SubscriptionTypeParent
-	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), parent))
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
 	child := s.inheritedChild("subs_pause_child", parent)
+	grouped := s.inheritedChild("subs_pause_grouped_child", parent)
+	grouped.SubscriptionType = types.SubscriptionTypeGroupedInvoicing
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, grouped))
 
-	s.pause(parent.ID, types.ProrationBehaviorNone)
+	resp, err := s.service.PauseSubscription(ctx, parent.ID, &dto.PauseSubscriptionRequest{PauseGracePeriodDays: lo.ToPtr(5)})
+	s.Require().NoError(err)
+	cancelAt := resp.Pause.PauseStart.AddDate(0, 0, 5)
 
 	pausedChild := s.subscription(child.ID)
 	s.Equal(types.SubscriptionStatusPaused, pausedChild.SubscriptionStatus)
 	s.Equal(types.PauseStatusActive, pausedChild.PauseStatus)
+	s.Require().NotNil(pausedChild.CancelAt)
+	s.True(pausedChild.CancelAt.Equal(cancelAt), "the child cancels with the parent")
+	s.True(pausedChild.EndDate.Equal(cancelAt))
+
+	activeGrouped := s.subscription(grouped.ID)
+	s.Equal(types.SubscriptionStatusActive, activeGrouped.SubscriptionStatus, "a grouped-invoicing child is not paused")
+	s.Equal(types.PauseStatusNone, activeGrouped.PauseStatus)
+	s.Nil(activeGrouped.CancelAt)
 }
 
 func (s *SubscriptionPauseSuite) inheritedChild(id string, parent *subscription.Subscription) *subscription.Subscription {
@@ -1399,6 +1414,53 @@ func (s *SubscriptionPauseSuite) TestClosedPeriod_QuarterlyAdvanceOnMonthlyCredi
 			s.InDelta(want, credits[0].CreditAmount.InexactFloat64(), 0.01, "credit %s", credits[0].CreditAmount)
 		})
 	}
+}
+
+// An inherited child's usage is billed on its parent's invoice for the parent's active time only:
+// events the child's customer sends while the parent is paused are not billed.
+func (s *SubscriptionPauseSuite) TestClosedPeriod_InheritedChildUsageSkipsParentPauses() {
+	ctx := s.GetContext()
+	periodStart, periodEnd := s.closedPeriod()
+	parent := s.billedSubscription("subs_closed_inherited_parent", periodStart, periodEnd)
+	parent.SubscriptionType = types.SubscriptionTypeParent
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, parent))
+	childCustomer := &customer.Customer{
+		ID:         "cust_pause_inherited_child",
+		ExternalID: "ext_cust_pause_inherited_child",
+		Name:       "Inherited child",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, childCustomer))
+	child := s.inheritedChild("subs_closed_inherited_child", parent)
+	child.CustomerID = childCustomer.ID
+	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, child))
+	s.completedPause(parent, "pause_closed_inherited_parent", periodStart.AddDate(0, 0, 5), periodStart.AddDate(0, 0, 15), types.ProrationBehaviorNone)
+
+	for n, qty := range map[int]int64{2: 1, 10: 100, 20: 10} {
+		at := periodStart.AddDate(0, 0, n)
+		id := types.GenerateUUID()
+		s.NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+			Event: events.Event{
+				ID:                 id,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				EventName:          "api_calls_" + parent.ID,
+				ExternalCustomerID: childCustomer.ExternalID,
+				CustomerID:         childCustomer.ID,
+				Timestamp:          at,
+				IngestedAt:         at,
+			},
+			MeterID:    "meter_" + parent.ID,
+			QtyTotal:   decimal.NewFromInt(qty),
+			UniqueHash: id,
+		}}))
+	}
+
+	inv := s.billPeriod(parent.ID, periodStart, periodEnd)
+
+	usage, ok := s.lineAmount(inv.ID, "price_usage_"+parent.ID)
+	s.Require().True(ok, "the child's usage is billed on the parent's invoice")
+	s.True(decimal.NewFromInt(11).Equal(usage), "only the child's usage while the parent was active, got %s", usage)
 }
 
 // A converted invoice is issued in the billing currency, so the paused advance credit is converted

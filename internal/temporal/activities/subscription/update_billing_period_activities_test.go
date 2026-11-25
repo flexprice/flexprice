@@ -483,14 +483,17 @@ func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_PausedPeriodGet
 }
 
 // A paused subscription that reaches its cancel time is cancelled and its pause completed: at its end
-// date, or at the pause's auto-cancel, whose schedule is then executed.
+// date, or at the pause's auto-cancel, whose schedule is then executed. A paused parent's inherited
+// children are cancelled with it.
 func (s *BillingActivitiesSuite) TestCheckCancellationActivity_WhilePausedCompletesThePause() {
 	tests := []struct {
 		name       string
 		autoCancel bool
+		parent     bool
 	}{
 		{name: "end date"},
 		{name: "pause auto-cancel", autoCancel: true},
+		{name: "parent pause auto-cancel", autoCancel: true, parent: true},
 	}
 
 	for i, tt := range tests {
@@ -514,6 +517,32 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_WhilePausedComple
 					EnvironmentID:  types.GetEnvironmentID(ctx),
 				}
 				s.NoError(s.GetStores().SubscriptionScheduleRepo.Create(ctx, schedule))
+			}
+			var child *subscription.Subscription
+			if tt.parent {
+				sub.SubscriptionType = types.SubscriptionTypeParent
+				child = &subscription.Subscription{
+					ID:                   sub.ID + "_child",
+					CustomerID:           s.testData.customer.ID,
+					PlanID:               s.testData.plan.ID,
+					ParentSubscriptionID: lo.ToPtr(sub.ID),
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					SubscriptionStatus:   types.SubscriptionStatusPaused,
+					PauseStatus:          types.PauseStatusActive,
+					CancelAt:             sub.CancelAt,
+					CancelAtPeriodEnd:    true,
+					EndDate:              sub.EndDate,
+					StartDate:            periodStart,
+					BillingAnchor:        periodStart,
+					CurrentPeriodStart:   periodStart,
+					CurrentPeriodEnd:     periodEnd,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					Currency:             "usd",
+					Timezone:             "UTC",
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, child))
 			}
 			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
@@ -541,6 +570,12 @@ func (s *BillingActivitiesSuite) TestCheckCancellationActivity_WhilePausedComple
 				executed, err := s.GetStores().SubscriptionScheduleRepo.Get(ctx, schedule.ID)
 				s.Require().NoError(err)
 				s.Equal(types.ScheduleStatusExecuted, executed.Status)
+			}
+			if child != nil {
+				cancelledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+				s.Require().NoError(err)
+				s.Equal(types.SubscriptionStatusCancelled, cancelledChild.SubscriptionStatus, "the inherited child is cancelled with its parent")
+				s.Equal(types.PauseStatusNone, cancelledChild.PauseStatus)
 			}
 		})
 	}
