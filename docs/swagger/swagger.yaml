@@ -7246,7 +7246,7 @@ definitions:
         - $ref: '#/definitions/types.ProrationBehavior'
         description: |-
           ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.
-          @Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet when the period's invoice is finalized.
+          @Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet once the period closes, when its invoice is finalized or, with nothing to bill, skipped.
       reason:
         description: |-
           Reason for pausing the subscription
@@ -27353,12 +27353,7 @@ paths:
       consumes:
       - application/json
       description: Use when a customer stops temporarily. Pauses an active subscription
-        now without raising an invoice. Invoices already finalized, such as the advance
-        charges billed at the period start, are not changed. If the subscription is
-        not resumed within its pause grace period, it is cancelled and the period's
-        invoice is billed at the cancellation, otherwise at the period end. With create_prorations,
-        the paused share of advance charges is credited to the wallet when that invoice
-        is finalized.
+        now without raising an invoice.
       operationId: pauseSubscription
       parameters:
       - description: Subscription ID

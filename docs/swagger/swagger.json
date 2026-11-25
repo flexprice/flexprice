@@ -13470,7 +13470,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice. Invoices already finalized, such as the advance charges billed at the period start, are not changed. If the subscription is not resumed within its pause grace period, it is cancelled and the period's invoice is billed at the cancellation, otherwise at the period end. With create_prorations, the paused share of advance charges is credited to the wallet when that invoice is finalized.",
+                "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -27873,7 +27873,7 @@
                     "minimum": 1
                 },
                 "proration_behavior": {
-                    "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.\n@Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet when the period's invoice is finalized.",
+                    "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges. Defaults to none.\n@Description none bills fixed charges for the paused days. create_prorations takes the paused days off arrear fixed charges and credits them from advance fixed charges to the wallet once the period closes, when its invoice is finalized or, with nothing to bill, skipped.",
                     "$ref": "#/definitions/types.ProrationBehavior"
                 },
                 "reason": {
