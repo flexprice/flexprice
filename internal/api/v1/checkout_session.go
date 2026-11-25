@@ -84,21 +84,28 @@ func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body dto.SearchCheckoutSessionsRequest true "Filter"
+// @Param filter body types.CheckoutSessionFilter true "Filter"
 // @Success 200 {object} dto.ListCheckoutSessionsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /checkout/sessions/search [post]
 func (h *CheckoutSessionHandler) Query(c *gin.Context) {
-	var req dto.SearchCheckoutSessionsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var filter types.CheckoutSessionFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
 		return
 	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+	if err := filter.GetExpand().Validate(types.ExpandConfig{}); err != nil {
+		c.Error(err)
+		return
+	}
 
-	resp, err := h.service.List(c.Request.Context(), req.ToFilter())
+	resp, err := h.service.List(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
 		return

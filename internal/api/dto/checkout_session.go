@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
-	"github.com/samber/lo"
 
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -371,44 +370,6 @@ type CheckoutSessionResponse struct {
 	CheckoutPayment *PaymentResponse `json:"checkout_payment,omitempty"`
 	// Describes the call that returned this session, not the session itself; never persisted.
 	EntityCreationResult *EntityCreationResult `json:"entity_creation_result,omitempty"`
-}
-
-// SearchCheckoutSessionsRequest is the body of POST /checkout/sessions/search. Expand is only on GET /checkout/sessions/{id}.
-type SearchCheckoutSessionsRequest struct {
-	CustomerIDs        []string                           `json:"customer_ids,omitempty"`
-	Actions            []types.CheckoutAction             `json:"actions,omitempty"`
-	PaymentProviders   []types.CheckoutPaymentProvider    `json:"payment_providers,omitempty"`
-	CheckoutStatuses   []types.CheckoutStatus             `json:"checkout_statuses,omitempty"`
-	ExpiresAtLT        *time.Time                         `json:"expires_at_lt,omitempty"`
-	ExpiresAtGT        *time.Time                         `json:"expires_at_gt,omitempty"`
-	CheckoutInvoiceIDs []string                           `json:"checkout_invoice_ids,omitempty"`
-	CheckoutPaymentIDs []string                           `json:"checkout_payment_ids,omitempty"`
-	Configuration      *types.CheckoutConfigurationFilter `json:"configuration,omitempty"`
-	Limit              *int                               `json:"limit,omitempty"`
-	Offset             *int                               `json:"offset,omitempty"`
-	Sort               *string                            `json:"sort,omitempty"`
-	Order              *string                            `json:"order,omitempty"`
-}
-
-// ToFilter maps the search body onto the checkout session filter, with defaults for unset paging.
-func (r *SearchCheckoutSessionsRequest) ToFilter() *types.CheckoutSessionFilter {
-	query := types.NewDefaultQueryFilter()
-	query.Limit = lo.CoalesceOrEmpty(r.Limit, query.Limit)
-	query.Offset = lo.CoalesceOrEmpty(r.Offset, query.Offset)
-	query.Sort = r.Sort
-	query.Order = r.Order
-	return &types.CheckoutSessionFilter{
-		QueryFilter:        query,
-		CustomerIDs:        r.CustomerIDs,
-		Actions:            r.Actions,
-		PaymentProviders:   r.PaymentProviders,
-		CheckoutStatuses:   r.CheckoutStatuses,
-		ExpiresAtLT:        r.ExpiresAtLT,
-		ExpiresAtGT:        r.ExpiresAtGT,
-		CheckoutInvoiceIDs: r.CheckoutInvoiceIDs,
-		CheckoutPaymentIDs: r.CheckoutPaymentIDs,
-		Configuration:      r.Configuration,
-	}
 }
 
 // ListCheckoutSessionsResponse is the paginated list response.

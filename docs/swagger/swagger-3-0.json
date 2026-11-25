@@ -2233,7 +2233,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SearchCheckoutSessionsRequest"
+                "$ref": "#/components/schemas/types.CheckoutSessionFilter"
               }
             }
           },
@@ -30382,68 +30382,6 @@
           }
         }
       },
-      "SearchCheckoutSessionsRequest": {
-        "type": "object",
-        "properties": {
-          "actions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutAction"
-            }
-          },
-          "checkout_invoice_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "checkout_payment_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "checkout_statuses": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutStatus"
-            }
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/types.CheckoutConfigurationFilter"
-          },
-          "customer_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "expires_at_gt": {
-            "type": "string"
-          },
-          "expires_at_lt": {
-            "type": "string"
-          },
-          "limit": {
-            "type": "integer"
-          },
-          "offset": {
-            "type": "integer"
-          },
-          "order": {
-            "type": "string"
-          },
-          "payment_providers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
-            }
-          },
-          "sort": {
-            "type": "string"
-          }
-        }
-      },
       "SecretResponse": {
         "type": "object",
         "properties": {
@@ -42354,6 +42292,82 @@
           }
         },
         "x-speakeasy-name-override": "CheckoutConfigurationFilter"
+      },
+      "types.CheckoutSessionFilter": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutAction"
+            }
+          },
+          "checkout_invoice_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_payment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutStatus"
+            }
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/types.CheckoutConfigurationFilter"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expand": {
+            "type": "string"
+          },
+          "expires_at_gt": {
+            "type": "string"
+          },
+          "expires_at_lt": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "payment_providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
+            }
+          },
+          "sort": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutSessionFilter"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
