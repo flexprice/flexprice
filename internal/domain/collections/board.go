@@ -177,8 +177,9 @@ func (b *reminderSummaryBuilder) Build() *ReminderSummary {
 type CollectionsRepository interface {
 	Board(ctx context.Context, q Query, limit int) (*Board, error)
 	ListInvoicesWithReminders(ctx context.Context, q Query, f InvoiceFilter, offset, limit int) (rows []InvoiceWithReminder, hasMore bool, err error)
-	// SummarizeReminders totals the open overdue invoices per reminder status inside the date range (nil: all).
-	SummarizeReminders(ctx context.Context, asOf time.Time, rng *DateRange) (ReminderSummary, error)
+	// SummarizeReminders totals the open overdue invoices per reminder status, narrowed by the query's date range,
+	// currency and search text like the board's totals.
+	SummarizeReminders(ctx context.Context, q Query) (ReminderSummary, error)
 	// AvailableCurrencies lists the currencies of the open and recently paid invoices, whatever the filters.
 	AvailableCurrencies(ctx context.Context, asOf time.Time) ([]string, error)
 }

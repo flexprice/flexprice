@@ -28,7 +28,7 @@ type fakeBoard struct {
 	hasMore bool
 	summary collections.ReminderSummary
 
-	summaryRange *collections.DateRange
+	summaryQuery collections.Query
 
 	query         collections.Query
 	filter        collections.InvoiceFilter
@@ -45,8 +45,8 @@ func (f *fakeBoard) ListInvoicesWithReminders(_ context.Context, q collections.Q
 	return f.rows, f.hasMore, nil
 }
 
-func (f *fakeBoard) SummarizeReminders(_ context.Context, _ time.Time, rng *collections.DateRange) (collections.ReminderSummary, error) {
-	f.summaryRange = rng
+func (f *fakeBoard) SummarizeReminders(_ context.Context, q collections.Query) (collections.ReminderSummary, error) {
+	f.summaryQuery = q
 	return f.summary, nil
 }
 

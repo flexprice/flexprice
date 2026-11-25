@@ -166,7 +166,8 @@ ORDER BY CASE WHEN $13::boolean THEN r.approved_at END DESC NULLS LAST,
 LIMIT $9 OFFSET $10`
 
 // reminderSummarySQL counts the open overdue invoices per reminder status and currency, and their distinct customers.
-// $4 as of, $5 date range start (NULL: none), $6 date range end, exclusive (NULL: none).
+// $4 as of, $5 date range start (NULL: none), $6 date range end, exclusive (NULL: none), $7 currency, $8 search
+// pattern: filtered exactly like the board's totals.
 const reminderSummarySQL = `
 SELECT grouping(coalesce(r.reminder_status, 'pending'), lower(i.currency)),
        coalesce(r.reminder_status, 'pending'), lower(i.currency),
@@ -179,6 +180,11 @@ WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.due_date < $4
   AND ($5::timestamptz IS NULL OR i.due_date >= $5)
   AND ($6::timestamptz IS NULL OR i.due_date < $6)
+  AND ($7 = '' OR lower(i.currency) = $7)
+  AND ($8 = '' OR i.invoice_number ILIKE $8 ESCAPE '\' OR i.customer_id IN (
+        SELECT c.id FROM customers c
+        WHERE c.tenant_id = $1 AND c.environment_id = $2 AND c.status = $3
+          AND (c.name ILIKE $8 ESCAPE '\' OR c.email ILIKE $8 ESCAPE '\')))
 GROUP BY GROUPING SETS ((coalesce(r.reminder_status, 'pending'), lower(i.currency)), ())`
 
 // invoicesWithRemindersSQL reads the given invoices that are still open and overdue, with their reminders.
@@ -624,12 +630,13 @@ func listOverdue(ctx context.Context, db queryer, q collections.Query, f collect
 	return scanInvoicesWithReminders(ctx, rows)
 }
 
-func (r *collectionsRepository) SummarizeReminders(ctx context.Context, asOf time.Time, rng *collections.DateRange) (collections.ReminderSummary, error) {
+func (r *collectionsRepository) SummarizeReminders(ctx context.Context, q collections.Query) (collections.ReminderSummary, error) {
 	span := StartRepositorySpan(ctx, "board", "summarize_reminders", nil)
 	defer FinishSpan(span)
 
-	from, to := rangeBounds(collections.Query{Range: rng})
-	rows, err := r.client.Reader(ctx).QueryContext(ctx, reminderSummarySQL, append(scopeArgs(ctx), asOf, from, to)...)
+	from, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, from, to, q.Currency, searchPattern(q.Text))
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, reminderSummarySQL, args...)
 	if err != nil {
 		SetSpanError(span, err)
 		return collections.ReminderSummary{}, dbError(err, "Failed to total overdue invoices")

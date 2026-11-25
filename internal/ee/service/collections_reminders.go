@@ -83,7 +83,7 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 		return nil, err
 	}
 
-	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, asOf, query.Range)
+	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, query)
 	if err != nil {
 		return nil, err
 	}

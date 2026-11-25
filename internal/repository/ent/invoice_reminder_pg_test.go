@@ -490,34 +490,64 @@ func TestCollectionsRepository_RowsCarryTheirReminder(t *testing.T) {
 func TestCollectionsRepository_SummarizeRemindersMatchesTheGoExpectation(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	for _, rng := range append([]*collections.DateRange{nil}, f.ranges()...) {
-		got, err := f.board.SummarizeReminders(f.ctx, f.asOf, rng)
+	for _, q := range f.queries() {
+		got, err := f.board.SummarizeReminders(f.ctx, q)
 		require.NoError(t, err)
-		overdue := f.expected(collections.Query{AsOf: f.asOf, Range: rng}, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
-		require.Equal(t, len(overdue), got.InvoiceCount, "range %+v", rng)
-		require.Equal(t, totalsOf(overdue, false), totalsMap(got.Totals), "range %+v", rng)
-		require.Equal(t, len(lo.Uniq(lo.Map(overdue, func(s invSpec, _ int) string { return s.customer }))), got.CustomerCount, "range %+v", rng)
+		overdue := f.expected(q, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
+		require.Equal(t, len(overdue), got.InvoiceCount, "query %+v", q)
+		require.Equal(t, totalsOf(overdue, false), totalsMap(got.Totals), "query %+v", q)
+		require.Equal(t, len(lo.Uniq(lo.Map(overdue, func(s invSpec, _ int) string { return s.customer }))), got.CustomerCount, "query %+v", q)
 		want := map[types.ReminderStatus]int{}
 		for _, s := range overdue {
 			want[f.status(s)]++
 		}
-		require.Equal(t, want, got.Statuses, "range %+v", rng)
+		require.Equal(t, want, got.Statuses, "query %+v", q)
 	}
 }
 
-// The reminder page and the board must show the same numbers for the same range: board columns are the reminder statuses.
-func TestCollectionsRepository_ReminderSummaryAgreesWithTheBoardForTheSameRange(t *testing.T) {
+// The reminder page and the board must show the same numbers for the same range, currency and search: board columns
+// are the reminder statuses.
+func TestCollectionsRepository_ReminderSummaryAgreesWithTheBoardForTheSameFilters(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	for _, rng := range append([]*collections.DateRange{nil}, f.ranges()...) {
-		summary, err := f.board.SummarizeReminders(f.ctx, f.asOf, rng)
+	queries := append(f.queries(),
+		collections.Query{AsOf: f.asOf, Currency: "eur", Range: f.ranges()[0]},
+		collections.Query{AsOf: f.asOf, Currency: "usd", Range: f.ranges()[1]},
+	)
+	for _, q := range queries {
+		summary, err := f.board.SummarizeReminders(f.ctx, q)
 		require.NoError(t, err)
-		board, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf, Range: rng}, 0)
+		board, err := f.board.Board(f.ctx, q, 0)
 		require.NoError(t, err)
 
-		require.Equal(t, board.Columns[types.CollectionsColumnOverdue].Summary.Count, summary.Statuses[types.ReminderStatusPending], "to review, range %+v", rng)
-		require.Equal(t, board.Columns[types.CollectionsColumnChasing].Summary.Count, summary.Statuses[types.ReminderStatusApproved], "approved, range %+v", rng)
-		require.Equal(t, board.Columns[types.CollectionsColumnHeld].Summary.Count, summary.Statuses[types.ReminderStatusHeld]+summary.Statuses[types.ReminderStatusSkipped], "held and skipped, range %+v", rng)
+		require.Equal(t, board.Columns[types.CollectionsColumnOverdue].Summary.Count, summary.Statuses[types.ReminderStatusPending], "to review, query %+v", q)
+		require.Equal(t, board.Columns[types.CollectionsColumnChasing].Summary.Count, summary.Statuses[types.ReminderStatusApproved], "approved, query %+v", q)
+		require.Equal(t, board.Columns[types.CollectionsColumnHeld].Summary.Count, summary.Statuses[types.ReminderStatusHeld]+summary.Statuses[types.ReminderStatusSkipped], "held and skipped, query %+v", q)
+
+		boardTotals := map[string]string{}
+		for _, key := range []types.CollectionsColumnKey{types.CollectionsColumnOverdue, types.CollectionsColumnChasing, types.CollectionsColumnHeld} {
+			for _, total := range board.Columns[key].Summary.Totals {
+				previous, _ := decimal.NewFromString(boardTotals[total.Currency])
+				boardTotals[total.Currency] = previous.Add(total.Amount).String()
+			}
+		}
+		summaryTotals := map[string]string{}
+		for currency, amount := range totalsMap(summary.Totals) {
+			summaryTotals[currency] = amount
+		}
+		require.Equal(t, boardTotals, summaryTotals, "overdue covered per currency, query %+v", q)
+	}
+}
+
+func TestCollectionsRepository_ReminderSummaryOfOneCurrencyHasNoOthers(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	for _, currency := range []string{"usd", "eur", "xyz"} {
+		got, err := f.board.SummarizeReminders(f.ctx, collections.Query{AsOf: f.asOf, Currency: currency})
+		require.NoError(t, err)
+		for _, total := range got.Totals {
+			require.Equal(t, currency, total.Currency)
+		}
 	}
 }
 
@@ -587,7 +617,7 @@ func TestCollectionsRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
 	otherEnv, err := f.board.Board(f.otherEnv, collections.Query{AsOf: f.asOf}, 500)
 	require.NoError(t, err)
 	require.Equal(t, 1, otherEnv.Columns[types.CollectionsColumnOverdue].Summary.Count)
-	summary, err := f.board.SummarizeReminders(f.other, f.asOf, nil)
+	summary, err := f.board.SummarizeReminders(f.other, collections.Query{AsOf: f.asOf})
 	require.NoError(t, err)
 	require.Equal(t, 1, summary.InvoiceCount)
 }

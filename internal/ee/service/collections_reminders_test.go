@@ -964,7 +964,7 @@ func TestReminder_ListHonorsTheBoardDateRange(t *testing.T) {
 		require.NotNil(t, f.board.query.Range, "the list rows use the range")
 		require.True(t, f.board.query.Range.From.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "from is the start of its day")
 		require.True(t, f.board.query.Range.To.Equal(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)), "to is inclusive")
-		require.Equal(t, f.board.query.Range, f.board.summaryRange, "so does the summary, page %d", page)
+		require.Equal(t, f.board.query.Range, f.board.summaryQuery.Range, "so does the summary, page %d", page)
 		require.True(t, f.board.query.AsOf.Equal(asOf), "as_of stays pinned")
 		require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
 		require.Equal(t, []string{"eur", "usd"}, resp.AvailableCurrencies)
@@ -973,7 +973,7 @@ func TestReminder_ListHonorsTheBoardDateRange(t *testing.T) {
 	none, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
 	require.NoError(t, err)
 	require.Nil(t, f.board.query.Range)
-	require.Nil(t, f.board.summaryRange)
+	require.Nil(t, f.board.summaryQuery.Range)
 	require.Nil(t, none.Range, "no range: every overdue invoice, as before")
 
 	for name, bad := range map[string]dto.CollectionsDateFilter{
@@ -999,4 +999,23 @@ func TestReminder_ApprovedListAsksForTheApprovedStatusOnly(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, want, f.board.filter.Statuses, "status %q", status)
 	}
+}
+
+func TestReminder_SummaryFollowsCurrencyAndSearchButNotStatusOrCustomer(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+
+	_, err := f.svc.List(ctx, &dto.ListRemindersRequest{Currency: " EUR ", Q: "acme", Status: "held", CustomerID: "cust_1"})
+	require.NoError(t, err)
+
+	require.Equal(t, "eur", f.board.summaryQuery.Currency, "currency is normalized like the board's")
+	require.Equal(t, "acme", f.board.summaryQuery.Text)
+	require.Equal(t, f.board.query.Currency, f.board.summaryQuery.Currency, "rows and summary share the filters")
+	require.Equal(t, f.board.query.Text, f.board.summaryQuery.Text)
+	require.Equal(t, f.board.query.AsOf, f.board.summaryQuery.AsOf)
+
+	_, err = f.svc.List(ctx, &dto.ListRemindersRequest{})
+	require.NoError(t, err)
+	require.Empty(t, f.board.summaryQuery.Currency)
+	require.Empty(t, f.board.summaryQuery.Text)
 }

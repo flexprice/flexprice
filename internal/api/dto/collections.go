@@ -249,8 +249,8 @@ type ReminderEmailStatus struct {
 	StatusReason string                    `json:"status_reason,omitempty"`
 }
 
-// ReminderSummary totals the overdue invoices and counts reminders by status. It follows the date range and ignores q,
-// currency, customer and status.
+// ReminderSummary totals the overdue invoices and counts reminders by status. It follows the date range, currency and q
+// exactly like the board's totals, and ignores customer and status so the status tabs always count every status.
 type ReminderSummary struct {
 	OverdueTotals []CollectionsCurrencyTotal `json:"overdue_totals"`
 	InvoiceCount  int                        `json:"invoice_count"`

@@ -2277,7 +2277,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (only approvals made by as_of, ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); available_currencies lists every currency regardless of filters.",
+                "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (only approvals made by as_of, ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); The summary (counts per status, totals per currency) follows from, to, currency and q like the board, and ignores status and customer_id so the status tabs count every status; available_currencies lists every currency regardless of filters.",
                 "produces": [
                     "application/json"
                 ],
