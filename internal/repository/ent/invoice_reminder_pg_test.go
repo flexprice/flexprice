@@ -949,6 +949,16 @@ func TestCollectionsRepository_ApprovalsAfterAsOfStayOutOfAPagedSession(t *testi
 	require.NoError(t, err)
 	require.Equal(t, len(before), summary.Statuses[types.ReminderStatusApproved], "nor the reminder summary's")
 
+	f.insertInvoice(t, f.ctx, invSpec{id: f.run + "_od_jpy", customer: "cust_a", currency: "JPY", invoiceStatus: "FINALIZED", paymentStatus: "PENDING",
+		number: "INV-JPY", remaining: 10, total: 10, due: f.at(-48 * time.Hour)})
+	jpy := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: "irem_" + f.run + "_jpy", InvoiceID: f.run + "_od_jpy", BaseModel: types.GetDefaultBaseModel(f.ctx),
+	}).WithText(types.ReminderToneFriendly, "s", "b").WithStatus(types.ReminderStatusApproved, "", &late).Build()
+	require.NoError(t, f.reminders.Create(f.ctx, jpy))
+	board, err = f.board.Board(f.ctx, q, 0)
+	require.NoError(t, err)
+	require.Contains(t, board.AvailableCurrencies, "jpy", "an open invoice stays a currency choice while its late approval keeps it off the columns")
+
 	fresh, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: late.Add(time.Minute)}, approved, 0, 200)
 	require.NoError(t, err)
 	require.Equal(t, pending, rowIDs(fresh)[0], "a fresh read starts with the newest approval")

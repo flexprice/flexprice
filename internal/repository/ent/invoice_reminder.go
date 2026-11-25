@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
@@ -466,7 +465,8 @@ func (r *collectionsRepository) board(ctx context.Context, db queryer, q collect
 		board = board.WithColumn(column, *col.Build())
 	}
 
-	currencies, err := boardCurrencies(ctx, db, q, summaries)
+	// Currencies come from the invoices, not the totals: an invoice approved after as of is in no column but is still open.
+	currencies, err := queryCurrencies(ctx, db, q.AsOf, paidFrom(q))
 	if err != nil {
 		return nil, err
 	}
@@ -512,24 +512,6 @@ func summarizeBoard(ctx context.Context, db queryer, q collections.Query) (map[t
 		summaries[column] = *collections.NewColumnSummaryBuilder(nil).WithCount(counts[column]).WithTotals(totalsOf(totals[column])).Build()
 	}
 	return summaries, nil
-}
-
-// boardCurrencies lists every currency the board can be filtered by: those of the open invoices and of the invoices
-// its paid column can show. An unfiltered board already has them in its totals.
-func boardCurrencies(ctx context.Context, db queryer, q collections.Query, summaries map[types.CollectionsColumnKey]collections.ColumnSummary) ([]string, error) {
-	if q.Text == "" && q.Currency == "" && q.Range == nil {
-		currencies := []string{}
-		for _, summary := range summaries {
-			for _, total := range summary.Totals {
-				currencies = append(currencies, total.Currency)
-			}
-		}
-		currencies = lo.Uniq(currencies)
-		sort.Strings(currencies)
-		return currencies, nil
-	}
-
-	return queryCurrencies(ctx, db, q.AsOf, paidFrom(q))
 }
 
 // queryCurrencies lists the currencies of the open invoices and of those paid from paidFrom to asOf.
