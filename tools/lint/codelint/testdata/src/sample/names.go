@@ -24,6 +24,12 @@ func truncatesThroughPointer(at *time.Time) time.Time {
 	return at.Truncate(time.Microsecond) // want `CL005: business code never truncates instants`
 }
 
+type stamp struct{ time.Time }
+
+func truncatesPromoted(s stamp) time.Time {
+	return s.Truncate(time.Microsecond) // want `CL005: business code never truncates instants`
+}
+
 func roundsDuration(elapsed time.Duration) time.Duration {
 	return elapsed.Truncate(time.Microsecond)
 }

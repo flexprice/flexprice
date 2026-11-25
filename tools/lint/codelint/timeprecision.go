@@ -25,19 +25,26 @@ func (c *checker) checkTimePrecision() {
 			return
 		}
 		// Duration.Truncate rounds an elapsed span; only Time.Truncate touches an instant.
-		if !isTimeValue(c.pass.TypesInfo.TypeOf(sel.X)) {
+		if !c.isTimeTruncate(sel) {
 			return
 		}
 		c.report(call.Pos(), codeTimePrecision, "business code never truncates instants; clock.Now(), the bindings, the activity interceptor and the ent hook already hold the precision contract")
 	})
 }
 
-// isTimeValue is true for time.Time and *time.Time receivers.
-func isTimeValue(typ types.Type) bool {
-	if ptr, ok := typ.(*types.Pointer); ok {
-		typ = ptr.Elem()
+// isTimeTruncate resolves the selected method, so a value, pointer or
+// embedded time.Time all count and time.Duration does not.
+func (c *checker) isTimeTruncate(sel *ast.SelectorExpr) bool {
+	method, ok := c.pass.TypesInfo.ObjectOf(sel.Sel).(*types.Func)
+	if !ok || method.Pkg() == nil || method.Pkg().Path() != "time" {
+		return false
 	}
-	return typ != nil && typ.String() == "time.Time"
+	recv := method.Signature().Recv()
+	if recv == nil {
+		return false
+	}
+	named, ok := types.Unalias(recv.Type()).(*types.Named)
+	return ok && named.Obj().Name() == "Time"
 }
 
 // isPackage reports whether expr names the package with the given path.

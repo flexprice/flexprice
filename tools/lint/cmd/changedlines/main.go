@@ -92,6 +92,8 @@ func changesSince(base string) (changes, error) {
 	}
 	// Explicit prefixes and unquoted paths keep the output parseable whatever
 	// diff.noprefix, diff.mnemonicPrefix or core.quotePath the developer set.
+	// Paths with spaces or quotes are out of scope: Go files here are snake_case
+	// and go vet's own file:line:col output could not carry them either.
 	diff, err := git("-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-ext-diff",
 		"--src-prefix=a/", "--dst-prefix=b/", strings.TrimSpace(mergeBase))
 	if err != nil {
