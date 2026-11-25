@@ -253,10 +253,7 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 		return nil, nil
 	}
 
-	var newEndDate time.Time
-	if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
-		newEndDate = lineItem.EndDate
-	}
+	newEndDate := successorEndDate(lineItem, effectiveDate)
 
 	return newLineItemChangeMod(
 		lineItemID, updatedQuantity, newPriceReq, change, effectiveDate, lineItem, oldPrice, newEndDate,
@@ -406,11 +403,6 @@ func changedLineItemPair(
 	oldStart := ended.StartDate
 	oldEnd := effectiveDate
 	newStart := effectiveDate
-	var createdEnd *time.Time
-	if !createdEndDate.IsZero() {
-		end := createdEndDate
-		createdEnd = &end
-	}
 
 	return []dto.ChangedLineItem{
 		{
@@ -426,7 +418,7 @@ func changedLineItemPair(
 			PriceID:      created.PriceID,
 			Quantity:     created.Quantity,
 			StartDate:    &newStart,
-			EndDate:      createdEnd,
+			EndDate:      optionalTimePtr(createdEndDate),
 			ChangeAction: dto.ChangedLineItemActionCreated,
 		},
 	}

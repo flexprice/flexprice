@@ -134,10 +134,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			}
 		}
 
-		var newEndDate time.Time
-		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
-			newEndDate = lineItem.EndDate
-		}
+		newEndDate := successorEndDate(lineItem, effectiveDate)
 
 		quantity := lineItem.Quantity
 		if m.Quantity != nil {
@@ -203,11 +200,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 		oldStart := old.StartDate
 		endDate := effectiveDate
 		startDate := effectiveDate
-		newEndDate := m.getNewEndDate()
-		var createdEnd *time.Time
-		if !newEndDate.IsZero() {
-			createdEnd = &newEndDate
-		}
+		createdEnd := optionalTimePtr(m.getNewEndDate())
 		out = append(out,
 			dto.ChangedLineItem{
 				ID:           previewEndedLineItemID,
@@ -379,10 +372,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			continue
 		}
 
-		var newEndDate time.Time
-		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
-			newEndDate = lineItem.EndDate
-		}
+		newEndDate := successorEndDate(lineItem, effectiveDate)
 
 		// we will create a new line item following change.ID but different line item id to change.Quantity at effectiveDate till newEndDate
 		mods = append(mods, newQuantityChangeLineItemMod(
@@ -673,11 +663,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 			oldStart := endedItem.StartDate
 			endDate := effectiveDate
 			startDate := effectiveDate
-			newEndDate := mod.getNewEndDate()
-			var createdEnd *time.Time
-			if !newEndDate.IsZero() {
-				createdEnd = &newEndDate
-			}
+			createdEnd := optionalTimePtr(mod.getNewEndDate())
 			changedLineItems = append(changedLineItems,
 				dto.ChangedLineItem{
 					ID:           endedItem.ID,
@@ -1144,11 +1130,25 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 	})
 }
 
+// successorEndDate preserves a finite line item's end date and keeps open-ended items open-ended.
+func successorEndDate(lineItem *subscription.SubscriptionLineItem, effectiveDate time.Time) time.Time {
+	if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
+		return lineItem.EndDate
+	}
+	return time.Time{}
+}
+
+// optionalTimePtr returns nil for a zero time so open-ended line items omit end_date in responses.
+func optionalTimePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
 // [lineItem.StartDate, lineItem.EndDate) for finite line items, or
 // [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
-// At sub.CurrentPeriodEnd, one-time items, longer-cadence items, and advance
-// items starting at period end are rejected.
 // Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
@@ -1166,7 +1166,9 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
 	if !lineItem.EndDate.IsZero() {
+		// Finite line items use an exclusive end bound so edits cannot land at or after expiry.
 		if !effectiveDate.Before(lineItem.EndDate) {
 			return ierr.NewError("effective_date must be before the line item end date").
 				WithHint("Set effective_date to a time before the line item's active window ends").
@@ -1178,6 +1180,7 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 				Mark(ierr.ErrValidation)
 		}
 	} else if effectiveDate.After(sub.CurrentPeriodEnd) {
+		// Open-ended line items allow scheduling up to and including current_period_end.
 		return ierr.NewError("effective_date cannot be after the current period end").
 			WithHint("Set effective_date to a time within the current billing period or at the current period end").
 			WithReportableDetails(map[string]interface{}{
@@ -1187,34 +1190,53 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
 	if effectiveDate.Equal(sub.CurrentPeriodEnd) {
-		if lineItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
-			return ierr.NewError("effective_date at current_period_end is not supported for one-time line items").
-				WithHint("Choose an effective_date before current_period_end").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date": effectiveDate,
-					"line_item_id":   lineItemID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
-			return ierr.NewError("effective_date at current_period_end is not supported for longer-cadence line items").
-				WithHint("Choose an effective_date before current_period_end").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date": effectiveDate,
-					"line_item_id":   lineItemID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if !lineItem.StartDate.Before(effectiveDate) && lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
-			return ierr.NewError("effective_date at current_period_end is not supported for advance line items starting at period end").
-				WithHint("Remove and re-add the line item, or modify it after the next billing period begins").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date": effectiveDate,
-					"line_item_id":   lineItemID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+		return validatePeriodEndEffectiveDate(effectiveDate, sub, lineItem, lineItemID)
 	}
+	return nil
+}
+
+// validatePeriodEndEffectiveDate rejects line items that cannot safely be versioned
+// at current_period_end without double-billing or leaving an upfront charge unadjusted.
+func validatePeriodEndEffectiveDate(
+	effectiveDate time.Time,
+	sub *subscription.Subscription,
+	lineItem *subscription.SubscriptionLineItem,
+	lineItemID string,
+) error {
+	// One-time charges don't recur; a successor starting at period end would be billed again on renewal.
+	if lineItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		return ierr.NewError("effective_date at current_period_end is not supported for one-time line items").
+			WithHint("Choose an effective_date before current_period_end").
+			WithReportableDetails(map[string]interface{}{
+				"effective_date": effectiveDate,
+				"line_item_id":   lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Longer-cadence items (e.g. annual on a monthly sub) bill on their own grid, not sub.CurrentPeriodEnd.
+	if types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+		return ierr.NewError("effective_date at current_period_end is not supported for longer-cadence line items").
+			WithHint("Choose an effective_date before current_period_end").
+			WithReportableDetails(map[string]interface{}{
+				"effective_date": effectiveDate,
+				"line_item_id":   lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Advance items starting at period end may already have been pre-billed on add, and period-end edits skip proration.
+	if !lineItem.StartDate.Before(effectiveDate) && lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
+		return ierr.NewError("effective_date at current_period_end is not supported for advance line items starting at period end").
+			WithHint("Remove and re-add the line item, or modify it after the next billing period begins").
+			WithReportableDetails(map[string]interface{}{
+				"effective_date": effectiveDate,
+				"line_item_id":   lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
