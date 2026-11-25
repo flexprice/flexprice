@@ -62,7 +62,7 @@ type Configuration struct {
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
-	UsageRollup        UsageRollupConfig        `mapstructure:"usage_rollup" validate:"omitempty"`
+	UsageRollup            UsageRollupConfig            `mapstructure:"usage_rollup" validate:"omitempty"`
 	EntitlementGrants      EntitlementGrantsConfig      `mapstructure:"entitlement_grants" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
