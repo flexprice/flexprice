@@ -37,7 +37,7 @@ const (
 	ScheduleIDRevenueRecognition ScheduleID = "revenue-recognition"
 	// ScheduleIDSelfBillingHourly drives SelfBillingHourlyWorkflow; a no-op unless self-billing is enabled.
 	ScheduleIDSelfBillingHourly ScheduleID = "self-billing-hourly"
-	// ScheduleIDUsageCheckpoint drives UsageCheckpointWorkflow; a no-op unless aggregated_usage is enabled.
+	// ScheduleIDUsageCheckpoint drives UsageCheckpointWorkflow; a no-op unless usage_rollup is enabled.
 	ScheduleIDUsageCheckpoint ScheduleID = "usage-checkpoint"
 	// ScheduleIDBillingInstalmentsDue drives BillingInstalmentsDueWorkflow, billing due separate-invoice instalments.
 	ScheduleIDBillingInstalmentsDue ScheduleID = "billing-instalments-due"

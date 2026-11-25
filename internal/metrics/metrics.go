@@ -31,7 +31,7 @@ const (
 	RawEvents           Name = "raw_events.processed"
 	EmailDeliveries     Name = "email.deliveries"
 	EventsScopeDropped  Name = "events.scope_dropped"
-	AggregatedUsageRows Name = "aggregated_usage.rows"
+	UsageRollupRows Name = "usage_rollup.rows"
 
 	UsageCheckpointCustomers Name = "usage_checkpoint.customers"
 
@@ -59,7 +59,7 @@ var catalog = map[Name]definition{
 	RawEvents:           {"Raw events handled per attempt by outcome (success, skipped, error); retried batches are counted again", "{event}"},
 	EmailDeliveries:     {"Customer email send attempts by the dispatcher, by outcome; a deferred email is counted again on each retry", "{email}"},
 	EventsScopeDropped:  {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
-	AggregatedUsageRows: {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
+	UsageRollupRows: {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
 
 	UsageCheckpointCustomers: {"Customer billing periods handled by the usage checkpoint job, by outcome", "{period}"},
 

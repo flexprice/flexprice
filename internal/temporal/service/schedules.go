@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -176,11 +176,11 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
-			// Always declared; a no-op unless aggregated_usage is enabled. Fires at :10 so usage stamped
+			// Always declared; a no-op unless usage_rollup is enabled. Fires at :10 so usage stamped
 			// just before the cutoff has landed in ClickHouse.
 			ID:        types.ScheduleIDUsageCheckpoint,
 			Interval:  1 * time.Hour,
-			Offset:    aggregatedusage.CutoffGrace,
+			Offset:    usagerollup.CutoffGrace,
 			Workflow:  cronWorkflows.UsageCheckpointWorkflow,
 			Input:     models.UsageCheckpointWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
