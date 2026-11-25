@@ -50,3 +50,14 @@ func TestFileStore_EmptyPathKeepsStateInMemory(t *testing.T) {
 		t.Fatalf("memory store must hand back what it was given: %+v %v", got, err)
 	}
 }
+
+func TestState_CloneIsolatesPendingResolutions(t *testing.T) {
+	s := newState()
+	s.PendingResolved = []Resolution{{Binding: BindingState{Last: e2eprobe.Result{Attrs: map[string]string{"k": "v"}, Mismatches: []string{"m"}}}}}
+	cp := s.clone()
+	cp.PendingResolved[0].Binding.Last.Attrs["k"] = "changed"
+	cp.PendingResolved[0].Binding.Last.Mismatches[0] = "changed"
+	if got := s.PendingResolved[0].Binding.Last; got.Attrs["k"] != "v" || got.Mismatches[0] != "m" {
+		t.Errorf("a snapshot must not share a pending resolution's attrs or mismatches with the tracker, got %+v", got)
+	}
+}

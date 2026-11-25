@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/inbox"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/probetest"
+	"github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
@@ -23,6 +24,8 @@ func fastLowBalanceAlert(d *testDeps) *lowBalanceAlert {
 func TestLowBalanceAlert_PassesWhenWebhookArrives(t *testing.T) {
 	d := newTestDeps(t)
 	canary, _ := d.World.Persona("alert-canary")
+	// The drive's usage has already been charged against the $30 balance.
+	d.fc.Wallet.Debit(canary.WalletID(), "35.00")
 	d.Inbox.Record(inbox.Event{ReceivedAt: d.now.Add(time.Second), EventType: "wallet.ongoing_balance.dropped", WalletID: canary.WalletID()})
 	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
 	if r.Status != e2eprobe.StatusPass {
@@ -48,8 +51,36 @@ func TestLowBalanceAlert_PassesWhenWebhookArrives(t *testing.T) {
 	if len(d.fc.Alert.Queries) != 0 {
 		t.Errorf("a delivered webhook needs no alert log lookup, got %d queries", len(d.fc.Alert.Queries))
 	}
-	if n := len(d.fc.Wallet.TopUps); n == 0 || d.fc.Wallet.TopUps[n-1] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "30.00"}) {
-		t.Errorf("the canary must be refilled after the drop: %+v", d.fc.Wallet.TopUps)
+	if n := len(d.fc.Wallet.TopUps); n == 0 || d.fc.Wallet.TopUps[n-1] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "35.00"}) {
+		t.Errorf("the canary must be refilled by its deficit after the drop: %+v", d.fc.Wallet.TopUps)
+	}
+}
+
+func TestLowBalanceAlert_DoesNotOverfundAFullCanary(t *testing.T) {
+	d := newTestDeps(t)
+	canary, _ := d.World.Persona("alert-canary")
+	d.Inbox.Record(inbox.Event{ReceivedAt: d.now.Add(time.Second), EventType: "wallet.ongoing_balance.dropped", WalletID: canary.WalletID()})
+	topUps := len(d.fc.Wallet.TopUps)
+	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
+	if r.Status != e2eprobe.StatusPass || r.Attrs["refilled_to"] != "30.00" {
+		t.Fatalf("result = %+v", r)
+	}
+	if len(d.fc.Wallet.TopUps) != topUps {
+		t.Errorf("a canary still at its declared balance must not be credited again: %+v", d.fc.Wallet.TopUps)
+	}
+}
+
+func TestLowBalanceAlert_CachedBalanceIsInfra(t *testing.T) {
+	d := newTestDeps(t)
+	d.fc.Wallet.Balance = func(string) (*dtos.GetWalletBalanceResponse, error) {
+		return &dtos.GetWalletBalanceResponse{WalletBalanceResponse: &types.WalletBalanceResponse{RealTimeBalance: probetest.Ptr("30.00"), IsCachedFallback: probetest.Ptr(true)}}, nil
+	}
+	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
+	if r.Status != e2eprobe.StatusFail || r.Step != "balance" || !r.Infra {
+		t.Fatalf("result = %+v", r)
+	}
+	if len(d.fc.Event.Ingested) != 0 {
+		t.Error("a cached balance must not size a drive")
 	}
 }
 
@@ -88,14 +119,15 @@ func TestLowBalanceAlert_RefillsFirstWhenLeftInAlarm(t *testing.T) {
 	d := newTestDeps(t)
 	canary, _ := d.World.Persona("alert-canary")
 	d.fc.Wallet.AlertStates[canary.WalletID()] = types.AlertStateInAlarm
+	d.fc.Wallet.Debit(canary.WalletID(), "40.00")
 	d.Inbox.Record(inbox.Event{ReceivedAt: d.now.Add(time.Second), EventType: "wallet.ongoing_balance.dropped", WalletID: canary.WalletID()})
 	topUps := len(d.fc.Wallet.TopUps)
 	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
-	if r.Status != e2eprobe.StatusPass || r.Attrs["refilled_first"] != "yes" || r.Attrs["alert_state"] != "in_alarm" {
+	if r.Status != e2eprobe.StatusPass || r.Attrs["refilled_first"] != "yes" || r.Attrs["alert_state"] != "in_alarm" || r.Attrs["refilled_to"] != "30.00" {
 		t.Fatalf("result = %+v", r)
 	}
-	if len(d.fc.Wallet.TopUps) != topUps+2 || d.fc.Wallet.TopUps[topUps] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "30.00"}) {
-		t.Errorf("a canary left in alarm is refilled before the drive and again after it: %+v", d.fc.Wallet.TopUps)
+	if len(d.fc.Wallet.TopUps) != topUps+1 || d.fc.Wallet.TopUps[topUps] != (probetest.TopUp{WalletID: canary.WalletID(), Amount: "40.00"}) {
+		t.Errorf("a canary left in alarm is restored to its declared balance before the drive, and nothing is added after it: %+v", d.fc.Wallet.TopUps)
 	}
 	if len(d.fc.Event.Ingested) != 1 {
 		t.Error("the drive still happens after the first refill")
@@ -105,6 +137,7 @@ func TestLowBalanceAlert_RefillsFirstWhenLeftInAlarm(t *testing.T) {
 func TestLowBalanceAlert_RefillsEvenWhenTheWebhookNeverComes(t *testing.T) {
 	d := newTestDeps(t)
 	canary, _ := d.World.Persona("alert-canary")
+	d.fc.Wallet.Debit(canary.WalletID(), "35.00")
 	topUps := len(d.fc.Wallet.TopUps)
 	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
 	if r.Status != e2eprobe.StatusFail || r.Step != "alert_not_fired" {

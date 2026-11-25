@@ -127,20 +127,31 @@ func (s *walletDebit) pollBalance(ctx context.Context, sc *scenario.Context, wal
 	}
 }
 
-func walletRealTimeBalance(ctx context.Context, sc *scenario.Context, walletID string) (decimal.Decimal, error) {
+// walletBalance reads a wallet's live balance. A cached fallback means the
+// server could not compute it: a degraded platform, not a balance to act on.
+func walletBalance(ctx context.Context, sc *scenario.Context, walletID string) (*types.WalletBalanceResponse, error) {
 	resp, err := sc.Client().Wallets().GetBalance(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+	if resp == nil || resp.WalletBalanceResponse == nil {
+		return nil, errors.New("empty balance response")
+	}
+	if fallback := resp.WalletBalanceResponse.IsCachedFallback; fallback != nil && *fallback {
+		return nil, sdkerrors.NewAPIError("wallet balance served from cache fallback", 503, "", nil)
+	}
+	return resp.WalletBalanceResponse, nil
+}
+
+func walletRealTimeBalance(ctx context.Context, sc *scenario.Context, walletID string) (decimal.Decimal, error) {
+	bal, err := walletBalance(ctx, sc, walletID)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	if resp == nil || resp.WalletBalanceResponse == nil || resp.WalletBalanceResponse.RealTimeBalance == nil {
+	if bal.RealTimeBalance == nil {
 		return decimal.Zero, errors.New("no real_time_balance")
 	}
-	if fallback := resp.WalletBalanceResponse.IsCachedFallback; fallback != nil && *fallback {
-		// The server could not compute the balance and served a cached one: that
-		// is a degraded platform, not a wrong debit.
-		return decimal.Zero, sdkerrors.NewAPIError("wallet balance served from cache fallback", 503, "", nil)
-	}
-	return decimal.NewFromString(*resp.WalletBalanceResponse.RealTimeBalance)
+	return decimal.NewFromString(*bal.RealTimeBalance)
 }
 
 func walletTopUp(ctx context.Context, sc *scenario.Context, walletID, amount, description string) error {

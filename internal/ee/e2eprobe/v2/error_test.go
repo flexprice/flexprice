@@ -120,6 +120,8 @@ func TestIsInfra(t *testing.T) {
 		{"wrapped deadline", fmt.Errorf("get: %w", context.DeadlineExceeded), true},
 		{"url error", &url.Error{Op: "Post", URL: "http://x", Err: &net.OpError{Op: "dial", Err: errors.New("connection refused")}}, true},
 		{"api 400", sdkerrors.NewAPIError("x", 400, "", nil), false},
+		{"undecodable 500", sdkerrors.NewResponseValidationError("x", 500, "<html>", nil, errors.New("decode")), true},
+		{"undecodable 400", sdkerrors.NewResponseValidationError("x", 400, "{}", nil, errors.New("decode")), false},
 		{"plain", errors.New("assertion"), false},
 		{"nil", nil, false},
 	}

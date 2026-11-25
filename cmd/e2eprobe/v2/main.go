@@ -220,6 +220,9 @@ func parseCommandLine(usage io.Writer, args []string) (string, cliOptions, error
 	if err := fs.Parse(args); err != nil {
 		return command, opts, err
 	}
+	if fs.NArg() != 0 {
+		return command, opts, fmt.Errorf("unexpected argument %q: the command goes before its flags", fs.Arg(0))
+	}
 	opts.only = splitList(only)
 	return command, opts, nil
 }

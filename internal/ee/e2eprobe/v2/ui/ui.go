@@ -4,8 +4,10 @@
 package ui
 
 import (
+	"bytes"
 	_ "embed"
 	"net/http"
+	"time"
 )
 
 //go:embed index.html
@@ -14,10 +16,9 @@ var index []byte
 // Handler serves the dashboard at / and /ui; every other path is not found.
 func Handler() http.Handler {
 	mux := http.NewServeMux()
-	serve := func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	serve := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write(index)
+		http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(index))
 	}
 	mux.HandleFunc("GET /{$}", serve)
 	mux.HandleFunc("GET /ui", serve)

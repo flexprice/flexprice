@@ -296,6 +296,9 @@ func TestParseCommandLine_RejectsFlagsOfOtherCommands(t *testing.T) {
 	if err != nil || cmd != "run" || opts.suitePath != "x.yaml" {
 		t.Fatalf("flags without a command mean run: %q %+v %v", cmd, opts, err)
 	}
+	if _, _, err := parseCommandLine(io.Discard, []string{"--suite", "x.yaml", "validate"}); err == nil {
+		t.Fatal("a command written after the flags must be rejected, not silently run")
+	}
 	cmd, opts, err = parseCommandLine(io.Discard, []string{"once", "--scenario", "usage", "--persona", "taxed", "--json"})
 	if err != nil || cmd != "once" || opts.scenario != "usage" || opts.persona != "taxed" || !opts.asJSON {
 		t.Fatalf("once flags: %q %+v %v", cmd, opts, err)

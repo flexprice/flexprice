@@ -83,6 +83,7 @@ func awaitCloneUsage(ctx context.Context, sc *scenario.Context, p pollWindow, ep
 		}
 		return nil
 	})
+	sc.Attr("usage_units", seen.String())
 	return seen, err
 }
 

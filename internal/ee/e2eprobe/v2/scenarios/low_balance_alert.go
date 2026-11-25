@@ -54,22 +54,25 @@ func (s *lowBalanceAlert) Run(ctx context.Context, sc *scenario.Context) e2eprob
 	if spec == nil || spec.Balance == "" {
 		return sc.Skip("wallet", "persona declares no wallet balance to refill to")
 	}
+	target, err := decimal.NewFromString(spec.Balance)
+	if err != nil {
+		return sc.Fail("wallet", fmt.Errorf("declared wallet balance %q: %w", spec.Balance, err))
+	}
 	sc.Attr("wallet_id", walletID)
-	balance, state, err := s.balance(ctx, sc, walletID)
+	current, state, err := s.balance(ctx, sc, walletID)
 	if err != nil {
 		return sc.Fail("balance", err)
 	}
 	sc.Attr("alert_state", string(state))
-	sc.Attr("real_time_balance", balance)
+	sc.Attr("real_time_balance", current.String())
 	if state != types.AlertStateOk {
-		// A previous run left the canary in alarm; restore it before driving it down again.
-		if err := walletTopUp(ctx, sc, walletID, spec.Balance, "e2eprobe alert canary recovery"); err != nil {
+		// A previous run left the canary low; restore it before driving it down again.
+		if current, err = refill(ctx, sc, walletID, target, current); err != nil {
 			return sc.Fail("top_up", err)
 		}
 		sc.Attr("refilled_first", "yes")
-		balance = spec.Balance
 	}
-	units := computeDriveUnits(balance)
+	units := computeDriveUnits(current.String())
 	sc.Attr("drive_units", strconv.Itoa(units))
 	t0 := sc.Now()
 	if err := s.drive(ctx, sc, units, t0); err != nil {
@@ -80,10 +83,15 @@ func (s *lowBalanceAlert) Run(ctx context.Context, sc *scenario.Context) e2eprob
 		sc.Attr("webhook_at", ev.ReceivedAt.UTC().Format(time.RFC3339))
 	}
 	// Refill whatever happened, so the next run starts from the declared balance.
-	if err := walletTopUp(ctx, sc, walletID, spec.Balance, "e2eprobe alert canary recovery"); err != nil {
+	settled, _, err := s.balance(ctx, sc, walletID)
+	if err != nil {
+		return sc.Fail("balance", err)
+	}
+	left, err := refill(ctx, sc, walletID, target, settled)
+	if err != nil {
 		return sc.Fail("top_up", err)
 	}
-	sc.Attr("refilled_to", spec.Balance)
+	sc.Attr("refilled_to", left.StringFixed(2))
 	switch {
 	case errors.Is(waitErr, inbox.ErrTimeout):
 		return s.explainMissingWebhook(ctx, sc, walletID, t0)
@@ -93,24 +101,35 @@ func (s *lowBalanceAlert) Run(ctx context.Context, sc *scenario.Context) e2eprob
 	return sc.Result("alert")
 }
 
-func (*lowBalanceAlert) balance(ctx context.Context, sc *scenario.Context, walletID string) (string, types.AlertState, error) {
-	resp, err := sc.Client().Wallets().GetBalance(ctx, walletID)
+func (*lowBalanceAlert) balance(ctx context.Context, sc *scenario.Context, walletID string) (decimal.Decimal, types.AlertState, error) {
+	bal, err := walletBalance(ctx, sc, walletID)
 	if err != nil {
-		return "", "", err
+		return decimal.Zero, "", err
 	}
-	if resp == nil || resp.WalletBalanceResponse == nil {
-		return "", "", errors.New("empty balance response")
-	}
-	bal := resp.WalletBalanceResponse
 	state := types.AlertStateOk
 	if bal.AlertState != nil {
 		state = *bal.AlertState
 	}
-	realTime := ""
-	if bal.RealTimeBalance != nil {
-		realTime = *bal.RealTimeBalance
+	if bal.RealTimeBalance == nil {
+		return decimal.Zero, state, errors.New("no real_time_balance")
 	}
-	return realTime, state, nil
+	current, err := decimal.NewFromString(strings.TrimSpace(*bal.RealTimeBalance))
+	if err != nil {
+		return decimal.Zero, state, fmt.Errorf("real_time_balance %q: %w", *bal.RealTimeBalance, err)
+	}
+	return current, state, nil
+}
+
+// refill credits the wallet up to target and returns the balance it leaves; a
+// wallet already at or above target is left alone.
+func refill(ctx context.Context, sc *scenario.Context, walletID string, target, current decimal.Decimal) (decimal.Decimal, error) {
+	if !current.LessThan(target) {
+		return current, nil
+	}
+	if err := walletTopUp(ctx, sc, walletID, target.Sub(current).StringFixed(2), "e2eprobe alert canary recovery"); err != nil {
+		return current, err
+	}
+	return target, nil
 }
 
 // drive ingests one event large enough to cross the critical threshold.

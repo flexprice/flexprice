@@ -77,9 +77,7 @@ func (s *commitmentPreview) Run(ctx context.Context, sc *scenario.Context) e2epr
 	}
 	// Usage must have landed before the preview; a preview computed early would bill too little.
 	raw := perUnit.Mul(batch.units())
-	seen, err := awaitCloneUsage(ctx, sc, s.poll, eph, batch.meter, batch.units())
-	if err != nil {
-		sc.Attr("usage_units", seen.String())
+	if _, err := awaitCloneUsage(ctx, sc, s.poll, eph, batch.meter, batch.units()); err != nil {
 		return sc.Fail("poll_usage", err)
 	}
 	inv, err := previewOf(ctx, sc, eph.SubscriptionID())

@@ -2,7 +2,6 @@ package world
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,9 +10,10 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// OrphanSweeper removes resources a scenario owns that outlived their run.
+// OrphanSweeper removes resources a scenario owns that outlived their run and
+// returns each failure with its error, so an outage keeps its type.
 type OrphanSweeper interface {
-	SweepOrphans(ctx context.Context, cutoff time.Time) (int, []string)
+	Sweep(ctx context.Context, cutoff time.Time) (int, []error)
 }
 
 // SweepReport is what one janitor pass did and could not do.
@@ -63,11 +63,9 @@ func (w *World) Sweep(ctx context.Context, cutoff time.Time) SweepReport {
 	}
 	w.mu.RUnlock()
 	for _, s := range sweepers {
-		removed, failed := s.SweepOrphans(ctx, cutoff)
+		removed, failed := s.Sweep(ctx, cutoff)
 		report.Swept += removed
-		for _, f := range failed {
-			report.Failures = append(report.Failures, errors.New(f))
-		}
+		report.Failures = append(report.Failures, failed...)
 	}
 	return report
 }

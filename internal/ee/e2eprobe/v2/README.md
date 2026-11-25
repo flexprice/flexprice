@@ -70,8 +70,11 @@ restart recreates nothing that exists. What a restart does lose is in memory
 on purpose: the ledger of sent ticks, so `usage` skips with "partial hour"
 until a full hour of batches has been sent again, and the registry of clones,
 which the janitor finds anyway by their external-id prefix or cohort tag.
-Event ids are derived from the tick, so a batch resent after a restart is
-idempotent on the server.
+A restart never resends a tick: with an empty ledger the next `ingest` run
+sends only the current one. Within a process a batch whose request failed is
+retried with the same tick-derived ids; the usage store keys rows by event id
+and collapses a repeat when its parts merge, so a retry is counted once after
+the merge, and a read in between can still see both copies.
 
 ## Configuration
 

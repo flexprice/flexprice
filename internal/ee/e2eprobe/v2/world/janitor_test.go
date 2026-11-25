@@ -2,10 +2,12 @@ package world
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/probetest"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/suite"
 	"github.com/flexprice/go-sdk/v2/models/types"
@@ -134,21 +136,22 @@ func TestSweep_RemovesOrphanTaxAssociations(t *testing.T) {
 
 func TestSweep_RunsRegisteredSweepers(t *testing.T) {
 	w, _ := newWorld(t, suite.Default())
-	s := &stubSweeper{removed: 2, failed: []string{"plan_x: 409"}}
+	outage := probetest.ServerError(503)
+	s := &stubSweeper{removed: 2, failed: []error{outage}}
 	w.AddSweeper("stub", s)
 	report := w.Sweep(context.Background(), testStart)
-	if !s.called || len(report.Failures) != 1 || report.Failures[0].Error() != "plan_x: 409" {
-		t.Errorf("report = %+v called=%v", report, s.called)
+	if !s.called || len(report.Failures) != 1 || !errors.Is(report.Failures[0], outage) || !e2eprobe.IsInfra(report.Failures[0]) {
+		t.Errorf("a sweeper's failure must keep its type so the janitor can tell an outage from a mismatch: report = %+v called=%v", report, s.called)
 	}
 }
 
 type stubSweeper struct {
 	called  bool
 	removed int
-	failed  []string
+	failed  []error
 }
 
-func (s *stubSweeper) SweepOrphans(_ context.Context, _ time.Time) (int, []string) {
+func (s *stubSweeper) Sweep(_ context.Context, _ time.Time) (int, []error) {
 	s.called = true
 	return s.removed, s.failed
 }
@@ -171,7 +174,7 @@ func TestSweep_TaxCleanupSparesCustomerAssociations(t *testing.T) {
 
 type countingSweeper struct{ runs int }
 
-func (c *countingSweeper) SweepOrphans(context.Context, time.Time) (int, []string) {
+func (c *countingSweeper) Sweep(context.Context, time.Time) (int, []error) {
 	c.runs++
 	return 0, nil
 }

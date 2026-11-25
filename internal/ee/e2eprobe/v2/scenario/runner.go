@@ -153,10 +153,10 @@ func (r *Runner) loop(ctx context.Context, it *item) {
 	if every <= 0 {
 		every = time.Minute
 	}
-	r.scheduleNext(it, every)
-	r.execute(ctx, it)
 	t := time.NewTicker(every)
 	defer t.Stop()
+	r.scheduleNext(it, every)
+	r.execute(ctx, it)
 	for {
 		select {
 		case <-ctx.Done():
@@ -168,7 +168,8 @@ func (r *Runner) loop(ctx context.Context, it *item) {
 	}
 }
 
-// scheduleNext records when the ticker fires again, independent of how long the run takes.
+// scheduleNext records when the ticker fires next; the ticker starts before
+// the first run, so this holds from the first interval on.
 func (r *Runner) scheduleNext(it *item, every time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

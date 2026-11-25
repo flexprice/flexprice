@@ -110,6 +110,9 @@ func LoadConfig() (*Config, error) {
 	if c.APIKey == "" && !c.NeedsBootstrap() {
 		return nil, errors.New("no credentials: set E2EPROBE_API_KEY, or set E2EPROBE_EMAIL and E2EPROBE_PASSWORD to bootstrap one (requires the flexprice-native auth provider)")
 	}
+	if c.DryRun && c.NeedsBootstrap() {
+		return nil, errors.New("E2EPROBE_DRY_RUN needs E2EPROBE_API_KEY: bootstrapping would mint a credential")
+	}
 	if c.Slack.BotToken != "" && c.Slack.Channel == "" {
 		return nil, errors.New("E2EPROBE_SLACK_CHANNEL is required when E2EPROBE_SLACK_BOT_TOKEN is set")
 	}

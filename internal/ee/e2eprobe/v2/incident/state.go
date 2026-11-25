@@ -98,27 +98,37 @@ func (s *State) clone() State {
 		out.InfraSeen[k] = v
 	}
 	for k, st := range s.Bindings {
-		cp := *st
-		cp.Last.Mismatches = append([]string(nil), st.Last.Mismatches...)
-		if st.Last.Attrs != nil {
-			cp.Last.Attrs = make(map[string]string, len(st.Last.Attrs))
-			for ak, av := range st.Last.Attrs {
-				cp.Last.Attrs[ak] = av
-			}
-		}
-		if st.Incident != nil {
-			inc := *st.Incident
-			cp.Incident = &inc
-		}
-		cp.Recent = append([]Run(nil), st.Recent...)
+		cp := st.clone()
 		out.Bindings[k] = &cp
 	}
 	if s.Infra != nil {
 		inc := *s.Infra
 		out.Infra = &inc
 	}
-	out.PendingResolved = append([]Resolution(nil), s.PendingResolved...)
+	out.PendingResolved = make([]Resolution, len(s.PendingResolved))
+	for i, r := range s.PendingResolved {
+		r.Binding = r.Binding.clone()
+		out.PendingResolved[i] = r
+	}
 	return out
+}
+
+// clone copies the binding so a snapshot shares no map or slice with the tracker.
+func (st *BindingState) clone() BindingState {
+	cp := *st
+	cp.Last.Mismatches = append([]string(nil), st.Last.Mismatches...)
+	if st.Last.Attrs != nil {
+		cp.Last.Attrs = make(map[string]string, len(st.Last.Attrs))
+		for k, v := range st.Last.Attrs {
+			cp.Last.Attrs[k] = v
+		}
+	}
+	if st.Incident != nil {
+		inc := *st.Incident
+		cp.Incident = &inc
+	}
+	cp.Recent = append([]Run(nil), st.Recent...)
+	return cp
 }
 
 // Store persists tracker state so a restart keeps open incidents.

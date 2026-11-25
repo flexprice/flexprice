@@ -95,8 +95,8 @@ func setIfAbsent(m map[string]string, k, v string) {
 	}
 }
 
-// IsInfra reports whether err means the API could not answer at all: a 5xx,
-// a timeout or a transport failure. Such failures feed one region-level
+// IsInfra reports whether err means the API could not answer at all: a 5xx
+// (decodable or not), a timeout or a transport failure. Such failures feed one region-level
 // incident instead of paging per scenario.
 func IsInfra(err error) bool {
 	if err == nil {
@@ -116,6 +116,10 @@ func IsInfra(err error) bool {
 	var api *sdkerrors.APIError
 	if errors.As(err, &api) && api != nil {
 		return api.StatusCode >= 500
+	}
+	var rve *sdkerrors.ResponseValidationError
+	if errors.As(err, &rve) && rve != nil {
+		return rve.StatusCode >= 500
 	}
 	var eer *sdkerrors.ErrorResponse
 	if errors.As(err, &eer) && eer != nil {

@@ -148,3 +148,14 @@ func TestLoadConfig_SlackBotNeedsChannel(t *testing.T) {
 		t.Fatalf("slack config = %+v %v", c.Slack, err)
 	}
 }
+
+func TestLoadConfig_DryRunCannotBootstrap(t *testing.T) {
+	t.Setenv("E2EPROBE_API_HOST", "https://api.example/v1")
+	t.Setenv("E2EPROBE_API_KEY", "")
+	t.Setenv("E2EPROBE_EMAIL", "probe@example.com")
+	t.Setenv("E2EPROBE_PASSWORD", "pw12345678")
+	t.Setenv("E2EPROBE_DRY_RUN", "true")
+	if _, err := LoadConfig(); err == nil || !strings.Contains(err.Error(), "E2EPROBE_DRY_RUN") {
+		t.Fatalf("a dry run without an API key would mint a credential; err = %v", err)
+	}
+}
