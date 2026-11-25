@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -13,90 +14,72 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/collections"
-	"github.com/flexprice/flexprice/internal/domain/customer"
-	"github.com/flexprice/flexprice/internal/domain/settings"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// fakeBoard is a canned CollectionsRepository that records how it was called; the real queries are tested against Postgres.
-type fakeBoard struct {
-	board   *collections.Board
-	rows    []collections.InvoiceWithReminder
-	hasMore bool
-	summary collections.ReminderSummary
-
-	summaryQuery collections.Query
-
-	query         collections.Query
-	filter        collections.InvoiceFilter
-	offset, limit int
-}
-
-func (f *fakeBoard) Board(_ context.Context, q collections.Query, limit int) (*collections.Board, error) {
-	f.query, f.limit = q, limit
-	return f.board, nil
-}
-
-func (f *fakeBoard) ListInvoicesWithReminders(_ context.Context, q collections.Query, filter collections.InvoiceFilter, offset, limit int) ([]collections.InvoiceWithReminder, bool, error) {
-	f.query, f.filter, f.offset, f.limit = q, filter, offset, limit
-	return f.rows, f.hasMore, nil
-}
-
-func (f *fakeBoard) SummarizeReminders(_ context.Context, q collections.Query) (collections.ReminderSummary, error) {
-	f.summaryQuery = q
-	return f.summary, nil
-}
-
-func (f *fakeBoard) AvailableCurrencies(context.Context, time.Time) ([]string, error) {
-	return []string{"eur", "usd"}, nil
-}
-
-func boardFixture(t *testing.T) (CollectionsService, *fakeBoard, context.Context) {
+// boardFixture is the reminder fixture with a board service reading the same in-memory stores.
+func boardFixture(t *testing.T) (CollectionsService, *reminderFixture, context.Context) {
 	t.Helper()
 	ctx := reminderCtxFor("tenant_a", "env_a")
-	customers := testutil.NewInMemoryCustomerStore()
-	require.NoError(t, customers.Create(ctx, &customer.Customer{ID: "cust_1", Name: "Acme", BaseModel: types.GetDefaultBaseModel(ctx)}))
-	fake := &fakeBoard{}
-	store := testutil.NewInMemorySettingsStore()
-	require.NoError(t, store.Create(ctx, &settings.Setting{
-		ID: types.GenerateUUIDWithPrefix("setting"), Key: types.SettingKeyCollectionsConfig, Value: map[string]interface{}{"enabled": true},
-		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx),
-	}))
-	return NewCollectionsService(ServiceParams{CustomerRepo: customers, CollectionsRepo: fake, SettingsRepo: store, Logger: logger.NewNoopLogger()}), fake, ctx
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.example")
+	return NewCollectionsService(f.params(f.reminders)), f, ctx
 }
 
-func rowDue(id string, remaining int64, due *time.Time, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
-	return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: id}).
-		WithInvoice("INV-"+id, "cust_1", "usd").
-		WithAmounts(decimal.NewFromInt(remaining+10), decimal.NewFromInt(remaining)).
-		WithDates(due, nil).
-		WithReminder(rem).
-		Build()
+// notDue adds an open invoice due at noon UTC daysAhead days from today.
+func (f *reminderFixture) notDue(t *testing.T, ctx context.Context, id string, amount int64, daysAhead int) {
+	t.Helper()
+	due := types.UTCDay(clock.Now()).Add(time.Duration(daysAhead)*day + 12*time.Hour)
+	f.invoice(t, ctx, id, func(i *invoice.Invoice) {
+		i.DueDate, i.AmountDue, i.AmountRemaining = &due, decimal.NewFromInt(amount), decimal.NewFromInt(amount)
+	})
 }
 
-func fullBoard(counts map[types.CollectionsColumnKey]int) *collections.Board {
-	board := collections.NewBoardBuilder(nil).WithAvailableCurrencies([]string{"eur", "usd"})
-	for _, key := range []types.CollectionsColumnKey{types.CollectionsColumnNotDue, types.CollectionsColumnOverdue, types.CollectionsColumnChasing, types.CollectionsColumnHeld, types.CollectionsColumnPaidThisWeek} {
-		summary := collections.NewColumnSummaryBuilder(nil).
-			WithCount(counts[key]).
-			WithTotals([]collections.CurrencyTotal{{Currency: "usd", Amount: decimal.NewFromInt(int64(counts[key]) * 10)}}).
-			Build()
-		board = board.WithColumn(key, *collections.NewBoardColumnBuilder(nil).WithSummary(*summary).Build())
-	}
-	return board.Build()
+// paidAt adds an invoice of total in currency that was paid at the given time.
+func (f *reminderFixture) paidAt(t *testing.T, ctx context.Context, id, currency string, total int64, at time.Time) {
+	t.Helper()
+	f.invoice(t, ctx, id, func(i *invoice.Invoice) {
+		i.Currency, i.PaymentStatus, i.PaidAt = currency, types.PaymentStatusSucceeded, &at
+		i.AmountDue, i.AmountRemaining = decimal.NewFromInt(total), decimal.Zero
+	})
+}
+
+// dueAt adds an open overdue invoice due at the given time.
+func (f *reminderFixture) dueAt(t *testing.T, ctx context.Context, id string, amount int64, due time.Time) {
+	t.Helper()
+	f.invoice(t, ctx, id, func(i *invoice.Invoice) {
+		i.DueDate, i.AmountDue, i.AmountRemaining = &due, decimal.NewFromInt(amount), decimal.NewFromInt(amount)
+	})
+}
+
+// approvedAt stores an approved reminder for the invoice, approved at the given time.
+func (f *reminderFixture) approvedAt(t *testing.T, ctx context.Context, invoiceID string, at time.Time) {
+	t.Helper()
+	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: types.GenerateUUIDWithPrefix("irem"), InvoiceID: invoiceID, BaseModel: types.GetDefaultBaseModel(ctx),
+	}).WithText(types.ReminderToneFriendly, "subject", "body").WithStatus(types.ReminderStatusApproved, "", &at).Build()
+	require.NoError(t, f.reminders.Create(ctx, r))
+}
+
+func cardIDs(cards []dto.CollectionsItem) []string {
+	return lo.Map(cards, func(c dto.CollectionsItem, _ int) string { return c.InvoiceID })
 }
 
 func TestBoard_LimitZeroReturnsCountsAndTotalsOnly(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	fake.board = fullBoard(map[types.CollectionsColumnKey]int{types.CollectionsColumnNotDue: 3, types.CollectionsColumnOverdue: 7})
+	svc, f, ctx := boardFixture(t)
+	for i := 0; i < 3; i++ {
+		f.notDue(t, ctx, fmt.Sprintf("n%d", i), 10, 2)
+	}
+	for i := 0; i < 7; i++ {
+		f.overdue(t, ctx, fmt.Sprintf("o%d", i), "cust_1", 10, 5)
+	}
+	f.paidAt(t, ctx, "p1", "EUR", 40, clock.Now().Add(-time.Hour))
 
 	for _, req := range []dto.CollectionsBoardRequest{{}, {Limit: 0}} {
 		resp, err := svc.GetBoard(ctx, &req)
 		require.NoError(t, err)
-		require.Zero(t, fake.limit, "the repository is asked for no rows")
 		require.Equal(t, []string{"eur", "usd"}, resp.AvailableCurrencies)
 		require.Equal(t, []types.CollectionsColumnKey{
 			types.CollectionsColumnNotDue, types.CollectionsColumnOverdue, types.CollectionsColumnChasing,
@@ -108,66 +91,64 @@ func TestBoard_LimitZeroReturnsCountsAndTotalsOnly(t *testing.T) {
 			require.NotEmpty(t, col.Hint)
 			require.Equal(t, col.Count > 0, col.HasMore, "has_more says the first page still has to be fetched: %s", col.Key)
 		}
+		require.Equal(t, 3, resp.Columns[0].Count)
 		require.Equal(t, 7, resp.Columns[1].Count)
 		require.True(t, decimal.NewFromInt(70).Equal(resp.Columns[1].Totals[0].Amount))
+		require.Equal(t, []dto.CollectionsCurrencyTotal{{Currency: "eur", Amount: decimal.NewFromInt(40)}}, resp.Columns[4].Totals, "paid shows the invoice total")
 	}
 	require.Equal(t, "Overdue, waiting on you", boardColumns[1].title)
 	require.Equal(t, "Reminder approved", boardColumns[2].title)
 }
 
 func TestBoard_PositiveLimitReturnsTheFirstPage(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	due := clock.Now().Add(-5 * day)
-	board := fullBoard(map[types.CollectionsColumnKey]int{types.CollectionsColumnOverdue: 3})
-	col := board.Columns[types.CollectionsColumnOverdue]
-	held := collections.NewInvoiceReminderBuilder(nil).
-		WithStatus(types.ReminderStatusHeld, "Promised Friday", nil).
-		WithOriginal(types.ReminderToneFriendly, "", "").
-		WithText(types.ReminderToneFinal, "", "").
-		Build()
-	rows := []collections.InvoiceWithReminder{rowDue("a1", 100, &due, nil), rowDue("a2", 50, &due, held)}
-	board.Columns[types.CollectionsColumnOverdue] = *collections.NewBoardColumnBuilder(&col).WithRows(rows, true).Build()
-	fake.board = board
+	svc, f, ctx := boardFixture(t)
+	f.customer(t, ctx, "cust_2", "Beta", "ap@beta.example")
+	f.overdue(t, ctx, "a1", "cust_1", 100, 5)
+	f.overdue(t, ctx, "a3", "cust_1", 30, 5)
+	f.overdue(t, ctx, "a4", "cust_1", 20, 5)
+	f.overdue(t, ctx, "b1", "cust_2", 500, 5)
+	f.invoice(t, ctx, "e1", func(i *invoice.Invoice) {
+		i.Currency, i.DueDate = "eur", lo.ToPtr(types.UTCDay(clock.Now()).Add(-5*day))
+	})
+	f.overdue(t, ctx, "a2", "cust_1", 50, 5)
+	_, err := f.svc.UpdateReminder(ctx, "a2", &dto.UpdateReminderRequest{Status: types.ReminderStatusHeld, StatusReason: "Promised Friday", Tone: lo.ToPtr("final")})
+	require.NoError(t, err)
 
 	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 2, Q: " acme ", Currency: " USD "})
 	require.NoError(t, err)
-	require.Equal(t, 2, fake.limit)
-	require.Equal(t, "acme", fake.query.Text)
-	require.Equal(t, "usd", fake.query.Currency)
 	overdue := resp.Columns[1]
-	require.Len(t, overdue.Cards, 2)
+	require.Equal(t, 3, overdue.Count, "q and currency leave out Beta and the EUR invoice")
+	require.Equal(t, []string{"a1", "a3"}, cardIDs(overdue.Cards), "the largest balance first, cut at the limit")
 	require.True(t, overdue.HasMore)
-	first, second := overdue.Cards[0], overdue.Cards[1]
-	require.Equal(t, "a1", first.InvoiceID)
+	first := overdue.Cards[0]
 	require.Equal(t, "INV-a1", first.InvoiceNumber)
 	require.Equal(t, "Acme", first.CustomerName)
 	require.Equal(t, 5, *first.DaysOverdue)
 	require.Equal(t, types.ReminderStatusPending, first.ReminderStatus, "no reminder row means pending")
 	require.Equal(t, types.ReminderToneFriendly, first.ReminderTone, "the tone is derived from the age")
 	require.Empty(t, first.ReminderStatusReason)
-	require.Equal(t, types.ReminderStatusHeld, second.ReminderStatus)
-	require.Equal(t, types.ReminderToneFinal, second.ReminderTone, "an edited or approved reminder shows its own tone")
-	require.Equal(t, "Promised Friday", second.ReminderStatusReason)
 	require.True(t, decimal.NewFromInt(100).Equal(first.Amount), "the amount is the remaining balance")
+
+	held := resp.Columns[3]
+	require.False(t, held.HasMore)
+	require.Len(t, held.Cards, 1)
+	require.Equal(t, types.ReminderStatusHeld, held.Cards[0].ReminderStatus)
+	require.Equal(t, types.ReminderToneFinal, held.Cards[0].ReminderTone, "an edited or approved reminder shows its own tone")
+	require.Equal(t, "Promised Friday", held.Cards[0].ReminderStatusReason)
 }
 
 func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	soon, paidAt := types.UTCDay(clock.Now()).Add(2*day+12*time.Hour), clock.Now().Add(-time.Hour)
-	board := fullBoard(nil)
-	nd := board.Columns[types.CollectionsColumnNotDue]
-	nd.Rows = []collections.InvoiceWithReminder{rowDue("n1", 10, &soon, nil), rowDue("n2", 10, nil, nil)}
-	board.Columns[types.CollectionsColumnNotDue] = nd
-	pd := board.Columns[types.CollectionsColumnPaidThisWeek]
-	paidRow := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: "p1"}).WithInvoice("INV-p1", "cust_1", "usd").
-		WithAmounts(decimal.NewFromInt(10), decimal.Zero).WithDates(nil, &paidAt).Build()
-	pd.Rows = []collections.InvoiceWithReminder{*paidRow}
-	board.Columns[types.CollectionsColumnPaidThisWeek] = pd
-	fake.board = board
+	svc, f, ctx := boardFixture(t)
+	f.notDue(t, ctx, "n1", 10, 2)
+	f.invoice(t, ctx, "n2", func(i *invoice.Invoice) {
+		i.AmountDue, i.AmountRemaining = decimal.NewFromInt(10), decimal.NewFromInt(10)
+	})
+	f.paidAt(t, ctx, "p1", "usd", 10, clock.Now().Add(-time.Hour))
 
 	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 5})
 	require.NoError(t, err)
 	notDue := resp.Columns[0].Cards
+	require.Equal(t, []string{"n1", "n2"}, cardIDs(notDue), "by due date, an invoice without one last")
 	require.NotNil(t, notDue[0].DueDate)
 	require.Equal(t, types.CalendarDaysBetween(resp.AsOf, *notDue[0].DueDate), *notDue[0].DueInDays, "days are counted from the board clock")
 	require.Nil(t, notDue[1].DueInDays)
@@ -183,37 +164,58 @@ func TestBoard_NotDueAndPaidCardsHaveNoReminderFields(t *testing.T) {
 }
 
 func TestBoard_ColumnPages(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	due := clock.Now().Add(-5 * day)
-	fake.rows = []collections.InvoiceWithReminder{rowDue("a1", 100, &due, nil)}
-	fake.hasMore = true
+	svc, f, ctx := boardFixture(t)
+	for i := 0; i < 13; i++ {
+		id := fmt.Sprintf("x%02d", i)
+		f.invoice(t, ctx, id, func(inv *invoice.Invoice) {
+			inv.Currency, inv.DueDate = "eur", lo.ToPtr(types.UTCDay(clock.Now()).Add(-5*day))
+			inv.AmountDue, inv.AmountRemaining = decimal.NewFromInt(int64(100+i)), decimal.NewFromInt(int64(100+i))
+		})
+		status := types.ReminderStatusHeld
+		reason := "wait"
+		if i%2 == 1 {
+			status, reason = types.ReminderStatusSkipped, ""
+		}
+		_, err := f.svc.UpdateReminder(ctx, id, setStatus(status, reason))
+		require.NoError(t, err)
+	}
+	f.overdue(t, ctx, "y1", "cust_1", 999, 5)
+	_, err := f.svc.UpdateReminder(ctx, "y1", setStatus(types.ReminderStatusHeld, "usd"))
+	require.NoError(t, err)
+	for i := 0; i < 16; i++ {
+		f.overdue(t, ctx, fmt.Sprintf("p%02d", i), "cust_1", 10, 5)
+	}
+	f.overdue(t, ctx, "c1", "cust_1", 10, 5)
+	_, err = f.svc.UpdateReminder(ctx, "c1", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+	f.notDue(t, ctx, "n1", 10, 3)
 
 	resp, err := svc.GetColumn(ctx, "held", &dto.CollectionsBoardRequest{Page: 3, Limit: 4, Q: "x", Currency: "EUR"})
 	require.NoError(t, err)
-	require.Equal(t, 8, fake.offset)
-	require.Equal(t, 4, fake.limit)
-	require.Equal(t, types.CollectionsColumnHeld, fake.filter.Column)
-	require.Equal(t, []types.ReminderStatus{types.ReminderStatusHeld, types.ReminderStatusSkipped}, fake.filter.Statuses)
-	require.Equal(t, "eur", fake.query.Currency)
 	require.Equal(t, 3, resp.Page)
+	require.Equal(t, []string{"x04", "x03", "x02", "x01"}, cardIDs(resp.Cards), "held and skipped, largest balance first, rows 9 to 12")
 	require.True(t, resp.HasMore)
-	require.Len(t, resp.Cards, 1)
 
-	_, err = svc.GetColumn(ctx, "overdue", &dto.CollectionsBoardRequest{})
+	overdue, err := svc.GetColumn(ctx, "overdue", &dto.CollectionsBoardRequest{})
 	require.NoError(t, err)
-	require.Equal(t, 15, fake.limit, "a column page defaults to 15 cards")
-	require.Equal(t, 0, fake.offset)
-	require.Equal(t, []types.ReminderStatus{types.ReminderStatusPending}, fake.filter.Statuses)
-	_, err = svc.GetColumn(ctx, "chasing", &dto.CollectionsBoardRequest{})
+	require.Len(t, overdue.Cards, 15, "a column page defaults to 15 cards")
+	require.True(t, overdue.HasMore)
+	for _, c := range overdue.Cards {
+		require.Equal(t, types.ReminderStatusPending, c.ReminderStatus)
+	}
+
+	chasing, err := svc.GetColumn(ctx, "chasing", &dto.CollectionsBoardRequest{})
 	require.NoError(t, err)
-	require.Equal(t, []types.ReminderStatus{types.ReminderStatusApproved}, fake.filter.Statuses)
-	_, err = svc.GetColumn(ctx, "not_due", &dto.CollectionsBoardRequest{})
+	require.Equal(t, []string{"c1"}, cardIDs(chasing.Cards))
+	require.Equal(t, types.ReminderStatusApproved, chasing.Cards[0].ReminderStatus)
+
+	notDue, err := svc.GetColumn(ctx, "not_due", &dto.CollectionsBoardRequest{})
 	require.NoError(t, err)
-	require.Equal(t, types.CollectionsColumnNotDue, fake.filter.Column)
+	require.Equal(t, []string{"n1"}, cardIDs(notDue.Cards))
 }
 
 func TestBoard_ColumnPageRules(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
+	svc, _, ctx := boardFixture(t)
 	for name, req := range map[string]dto.CollectionsBoardRequest{
 		"negative page": {Page: -1}, "limit above the maximum": {Limit: 201}, "negative limit": {Limit: -1},
 		"too deep with default": {Page: 334}, "too deep with limit 10": {Page: 501, Limit: 10}, "too deep with limit 200": {Page: 26, Limit: 200},
@@ -241,7 +243,6 @@ func TestBoard_ColumnPageRules(t *testing.T) {
 		resp, err := svc.GetColumn(ctx, "not_due", &dto.CollectionsBoardRequest{Page: page, AsOf: &asOf})
 		require.NoError(t, err)
 		require.True(t, resp.AsOf.Equal(asOf), "page %d is read at the board clock", page)
-		require.True(t, fake.query.AsOf.Equal(asOf))
 	}
 	_, err = svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 201})
 	requireKind(t, err, ierr.ErrValidation)
@@ -294,6 +295,12 @@ func TestCollectionsBoardRequest_DateRangeRules(t *testing.T) {
 		"a single day":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-24"), To: day("2026-11-24")}},
 		"exactly five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-24"), To: day("2026-11-24")}},
 		"no range":           {},
+		"to earlier in the same day": {CollectionsDateFilter: dto.CollectionsDateFilter{
+			From: lo.ToPtr(time.Date(2026, 11, 24, 15, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)),
+		}},
+		"five years counted in days": {CollectionsDateFilter: dto.CollectionsDateFilter{
+			From: lo.ToPtr(time.Date(2021, 11, 24, 23, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 1, 0, 0, 0, time.UTC)),
+		}},
 	}
 	for name, req := range valid {
 		require.NoError(t, req.Validate(), name)
@@ -303,51 +310,81 @@ func TestCollectionsBoardRequest_DateRangeRules(t *testing.T) {
 		"from after to":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-25"), To: day("2026-11-24")}},
 		"over five years":     {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-23"), To: day("2026-11-24")}},
 		"far over five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2000-01-01"), To: day("2026-11-24")}},
+		"to on the day before from": {CollectionsDateFilter: dto.CollectionsDateFilter{
+			From: lo.ToPtr(time.Date(2026, 11, 25, 1, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 23, 0, 0, 0, time.UTC)),
+		}},
 	}
 	for name, req := range invalid {
 		requireKind(t, req.Validate(), ierr.ErrValidation)
 		_ = name
 	}
+
+	empty := dto.CollectionsBoardRequest{CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-01"), To: &time.Time{}}}
+	require.NoError(t, empty.Validate(), "?to= with no value")
+	require.Nil(t, empty.To, "an empty date is no bound")
+	require.True(t, empty.From.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
 }
 
 func TestBoard_DateRangeBecomesHalfOpenUTCDays(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	fake.board = fullBoard(nil)
-	from, to := time.Date(2026, 11, 1, 15, 30, 0, 0, time.UTC), time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+	svc, f, ctx := boardFixture(t)
+	today := types.UTCDay(clock.Now())
+	from, to := today.Add(-20*day+15*time.Hour), today.Add(-3*day+9*time.Hour)
+	f.dueAt(t, ctx, "before", 10, today.Add(-20*day-time.Microsecond))
+	f.dueAt(t, ctx, "first", 10, today.Add(-20*day))
+	f.dueAt(t, ctx, "last", 10, today.Add(-3*day+23*time.Hour))
+	f.dueAt(t, ctx, "after", 10, today.Add(-2*day))
+	echo := func(t *time.Time) *string { return lo.ToPtr(t.Format("2006-01-02")) }
 
-	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
+	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 10, CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
 	require.NoError(t, err)
+	require.Equal(t, []string{"first", "last"}, cardIDs(resp.Columns[1].Cards), "from is the start of its day and to covers its whole day")
+	require.Equal(t, &dto.CollectionsRange{From: echo(&from), To: echo(&to)}, resp.Range)
 
-	require.NotNil(t, fake.query.Range)
-	require.True(t, fake.query.Range.From.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "from is the start of its day")
-	require.True(t, fake.query.Range.To.Equal(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)), "to is inclusive: the board reads up to the start of the next day")
-	require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
-
-	open, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{CollectionsDateFilter: dto.CollectionsDateFilter{From: &from}})
+	open, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 10, CollectionsDateFilter: dto.CollectionsDateFilter{From: &from}})
 	require.NoError(t, err)
-	require.Nil(t, fake.query.Range.To, "an open end stays open")
-	require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01")}, open.Range)
+	require.ElementsMatch(t, []string{"first", "last", "after"}, cardIDs(open.Columns[1].Cards), "an open end stays open")
+	require.Equal(t, &dto.CollectionsRange{From: echo(&from)}, open.Range)
 
-	none, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{})
+	none, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{Limit: 10})
 	require.NoError(t, err)
-	require.Nil(t, fake.query.Range, "no range: open columns unbounded, paid keeps its week")
+	require.Len(t, none.Columns[1].Cards, 4, "no range: open columns unbounded")
 	require.Nil(t, none.Range)
 }
 
 func TestBoard_ColumnPagesCarryTheSameRangeAndClock(t *testing.T) {
-	svc, fake, ctx := boardFixture(t)
-	from, to := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 24, 0, 0, 0, 0, time.UTC)
-	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	svc, f, ctx := boardFixture(t)
+	today := types.UTCDay(clock.Now())
+	from, to := today.Add(-20*day), today.Add(20*day)
+	asOf := clock.Now().Add(-time.Hour)
+
+	f.notDue(t, ctx, "not_due_in", 10, 3)
+	f.notDue(t, ctx, "not_due_out", 10, 25)
+	f.overdue(t, ctx, "overdue_in", "cust_1", 10, 3)
+	f.overdue(t, ctx, "overdue_out", "cust_1", 10, 25)
+	f.overdue(t, ctx, "chasing_in", "cust_1", 10, 4)
+	f.approvedAt(t, ctx, "chasing_in", asOf.Add(-time.Minute))
+	f.overdue(t, ctx, "chasing_out", "cust_1", 10, 26)
+	f.approvedAt(t, ctx, "chasing_out", asOf.Add(-time.Minute))
+	f.overdue(t, ctx, "chasing_late", "cust_1", 10, 4)
+	f.approvedAt(t, ctx, "chasing_late", asOf.Add(time.Minute))
+	f.overdue(t, ctx, "held_in", "cust_1", 10, 5)
+	_, err := f.svc.UpdateReminder(ctx, "held_in", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+	f.overdue(t, ctx, "held_out", "cust_1", 10, 27)
+	_, err = f.svc.UpdateReminder(ctx, "held_out", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+	f.paidAt(t, ctx, "paid_this_week_in", "usd", 10, asOf.Add(-time.Hour))
+	f.paidAt(t, ctx, "paid_this_week_out", "usd", 10, today.Add(-25*day))
+	f.paidAt(t, ctx, "paid_this_week_late", "usd", 10, asOf.Add(time.Minute))
 
 	for _, column := range []string{"not_due", "overdue", "chasing", "held", "paid_this_week"} {
-		for _, page := range []int{1, 2} {
-			resp, err := svc.GetColumn(ctx, column, &dto.CollectionsBoardRequest{Page: page, AsOf: &asOf, CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
+		for page, want := range map[int][]string{1: {column + "_in"}, 2: {}} {
+			resp, err := svc.GetColumn(ctx, column, &dto.CollectionsBoardRequest{Page: page, Limit: 1, AsOf: &asOf, CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
 			require.NoError(t, err, column)
-			require.NotNil(t, fake.query.Range, column)
-			require.True(t, fake.query.Range.From.Equal(from), column)
-			require.True(t, fake.query.Range.To.Equal(to.AddDate(0, 0, 1)), column)
-			require.True(t, fake.query.AsOf.Equal(asOf), "as_of stays pinned on page %d of %s", page, column)
-			require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
+			require.Equal(t, want, cardIDs(resp.Cards), "page %d of %s keeps the range and as_of", page, column)
+			require.False(t, resp.HasMore, column)
+			require.True(t, resp.AsOf.Equal(asOf), "as_of stays pinned on page %d of %s", page, column)
+			require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr(from.Format("2006-01-02")), To: lo.ToPtr(to.Format("2006-01-02"))}, resp.Range)
 		}
 	}
 }

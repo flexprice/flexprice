@@ -2097,6 +2097,7 @@ definitions:
         description: |-
           Range is the date range the board was read with (open columns by due date, paid by paid date); null when none
           was given, then open columns are unbounded and paid is the last 7 days.
+        x-nullable: true
     type: object
   CollectionsColumnPageResponse:
     properties:
@@ -2113,7 +2114,9 @@ definitions:
       page:
         type: integer
       range:
-        $ref: '#/definitions/CollectionsRange'
+        allOf:
+        - $ref: '#/definitions/CollectionsRange'
+        x-nullable: true
     type: object
   CollectionsCurrencyTotal:
     properties:
@@ -6969,6 +6972,7 @@ definitions:
         - $ref: '#/definitions/CollectionsRange'
         description: Range is the due date range the list and summary were read with;
           null when none was given.
+        x-nullable: true
       summary:
         $ref: '#/definitions/ReminderSummary'
     type: object
@@ -19890,7 +19894,8 @@ paths:
         0): each column carries count and totals, and has_more is true when the column
         has cards to fetch with GET /collections/board/columns/{key}. With limit above
         0 the first page of cards is returned too, and has_more says more cards follow.
-        available_currencies lists the currencies present before filtering.'
+        available_currencies lists the currencies of open invoices and of the invoices
+        the Paid column can show, before q and currency apply.'
       operationId: getCollectionsBoard
       parameters:
       - description: Cards per column in this response (0-200, default 0 = counts
@@ -19949,10 +19954,10 @@ paths:
         time, after the board call. Pages are numbered from 1 and ordered stably (not
         due by due date, overdue and held by remaining balance, chasing by newest
         approval first, paid by newest payment first); send the as_of of the board
-        response with every page so the overdue boundary and the 7-day window do not
-        move while you scroll. A row that changes between page requests can repeat
-        or be skipped, so reset pages when the board changes. Page times limit may
-        not exceed 5000.
+        response, and the same from and to, with every page so the overdue boundary,
+        the date range and the 7-day window do not move while you scroll. A row that
+        changes between page requests can repeat or be skipped, so reset pages when
+        the board changes. Page times limit may not exceed 5000.
       operationId: getCollectionsBoardColumn
       parameters:
       - description: 'Column key: not_due, overdue, chasing, held or paid_this_week'
@@ -20028,13 +20033,15 @@ paths:
         with its tone, text and status. A reminder nobody acted on is rendered when
         read and stored nowhere; only edits and decisions are stored. The id of a
         reminder is its invoice id. The list is paged and nothing is sent. Order:
-        status=approved lists the newest approval first (only approvals made by as_of,
-        ties by invoice id); every other list puts the largest remaining balance first
-        (ties by invoice id). from and to narrow the list and the summary by due date
-        (invoices without a due date are left out when either is given); The summary
-        (counts per status, totals per currency) follows from, to, currency and q
-        like the board, and ignores status and customer_id so the status tabs count
-        every status; available_currencies lists every currency regardless of filters.'
+        status=approved lists the newest approval first (ties by invoice id); every
+        other list puts the largest remaining balance first (ties by invoice id).
+        Approvals made after as_of are left out of the list and the summary. from
+        and to narrow the list and the summary by due date (invoices without a due
+        date are left out when either is given); The summary (counts per status, totals
+        per currency) follows from, to, currency and q like the board, and ignores
+        status and customer_id so the status tabs count every status; available_currencies
+        lists the currencies of open invoices and of invoices paid in the last 7 days,
+        regardless of filters.'
       operationId: listReminderDrafts
       parameters:
       - description: pending, approved, held or skipped

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/collections"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -72,7 +73,34 @@ func (f CollectionsDateFilter) DateRange() *CollectionsRange {
 	return rng
 }
 
-func (f CollectionsDateFilter) validateRange() error {
+// ToDomain turns the inclusive UTC days into the half-open range the repository reads; nil when there is none.
+func (f CollectionsDateFilter) ToDomain() *collections.DateRange {
+	if f.From == nil && f.To == nil {
+		return nil
+	}
+
+	rng := &collections.DateRange{From: f.From}
+	if f.To != nil {
+		to := f.To.AddDate(0, 0, 1)
+		rng.To = &to
+	}
+
+	return rng
+}
+
+// startOfDay moves a bound to the start of its UTC day; an empty value (as in ?to=) is no bound.
+func (CollectionsDateFilter) startOfDay(t *time.Time) *time.Time {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+
+	day := types.UTCDay(*t)
+	return &day
+}
+
+// validateRange moves both bounds to UTC days, then rejects a reversed range or one longer than the maximum.
+func (f *CollectionsDateFilter) validateRange() error {
+	f.From, f.To = f.startOfDay(f.From), f.startOfDay(f.To)
 	if f.From == nil || f.To == nil {
 		return nil
 	}
@@ -193,7 +221,7 @@ type CollectionsBoardResponse struct {
 	AsOf time.Time `json:"as_of"`
 	// Range is the date range the board was read with (open columns by due date, paid by paid date); null when none
 	// was given, then open columns are unbounded and paid is the last 7 days.
-	Range   *CollectionsRange        `json:"range"`
+	Range   *CollectionsRange        `json:"range" extensions:"x-nullable"`
 	Columns []CollectionsBoardColumn `json:"columns"`
 	// AvailableCurrencies lists the currencies of all open and recently paid receivables, before q and currency apply.
 	AvailableCurrencies []string `json:"available_currencies"`
@@ -203,7 +231,7 @@ type CollectionsBoardResponse struct {
 type CollectionsColumnPageResponse struct {
 	Key     types.CollectionsColumnKey `json:"key"`
 	AsOf    time.Time                  `json:"as_of"`
-	Range   *CollectionsRange          `json:"range"`
+	Range   *CollectionsRange          `json:"range" extensions:"x-nullable"`
 	Page    int                        `json:"page"`
 	Cards   []CollectionsItem          `json:"cards"`
 	HasMore bool                       `json:"has_more"`
@@ -329,7 +357,7 @@ func (r *ListRemindersRequest) Validate() error {
 type ListRemindersResponse struct {
 	AsOf time.Time `json:"as_of"`
 	// Range is the due date range the list and summary were read with; null when none was given.
-	Range   *CollectionsRange         `json:"range"`
+	Range   *CollectionsRange         `json:"range" extensions:"x-nullable"`
 	Summary ReminderSummary           `json:"summary"`
 	Drafts  []InvoiceReminderResponse `json:"drafts"`
 	Page    int                       `json:"page"`

@@ -53,27 +53,8 @@ func boardQuery(asOf time.Time, req *dto.CollectionsBoardRequest) collections.Qu
 		AsOf:     asOf,
 		Text:     req.Q,
 		Currency: normalizedCurrency(req.Currency),
-		Range:    queryRange(req.CollectionsDateFilter),
+		Range:    req.ToDomain(),
 	}
-}
-
-// queryRange turns inclusive UTC days into a half-open range of instants; nil when there is none.
-func queryRange(filter dto.CollectionsDateFilter) *collections.DateRange {
-	if filter.From == nil && filter.To == nil {
-		return nil
-	}
-
-	rng := &collections.DateRange{}
-	if filter.From != nil {
-		from := types.UTCDay(*filter.From)
-		rng.From = &from
-	}
-	if filter.To != nil {
-		to := types.UTCDay(*filter.To).AddDate(0, 0, 1)
-		rng.To = &to
-	}
-
-	return rng
 }
 
 // requireCollectionsEnabled refuses Collections requests in an environment where it is not turned on.

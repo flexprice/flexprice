@@ -261,7 +261,7 @@ func (f *reminderFixture) expected(q collections.Query, filter collections.Invoi
 			}
 		default:
 			if f.open(s) && s.due != nil && s.due.Before(q.AsOf) && inRange(s.due, q.Range) && (len(filter.Statuses) == 0 || lo.Contains(filter.Statuses, f.status(s))) {
-				if byApproval && f.approvedAt[s.id].After(q.AsOf) {
+				if f.status(s) == types.ReminderStatusApproved && f.approvedAt[s.id].After(q.AsOf) {
 					continue
 				}
 				rows = append(rows, s)
@@ -576,6 +576,27 @@ func TestCollectionsRepository_ReminderListPagesWithTheRange(t *testing.T) {
 			require.Equal(t, want, got, "range %+v statuses %v", rng, statuses)
 		}
 	}
+}
+
+// A currency seen only on an older paid invoice is offered once the range reaches back to it.
+func TestCollectionsRepository_BoardCurrenciesFollowThePaidColumn(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	f.insertInvoice(t, f.ctx, invSpec{id: f.run + "_pd_chf", customer: "cust_a", currency: "CHF", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED",
+		number: "INV-CHF", total: 40, paidAt: f.at(-30 * 24 * time.Hour)})
+
+	reaching, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf, Range: &collections.DateRange{From: f.dayAt(-40)}}, 0)
+	require.NoError(t, err)
+	require.Equal(t, "40", totalsMap(reaching.Columns[types.CollectionsColumnPaidThisWeek].Summary.Totals)["chf"], "the paid column shows the CHF invoice")
+	require.Equal(t, []string{"chf", "eur", "gbp", "usd"}, reaching.AvailableCurrencies)
+
+	week, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf, Currency: "usd"}, 0)
+	require.NoError(t, err)
+	require.Equal(t, []string{"eur", "gbp", "usd"}, week.AvailableCurrencies, "without a range the paid column is the last week")
+
+	reminders, err := f.board.AvailableCurrencies(f.ctx, f.asOf)
+	require.NoError(t, err)
+	require.Equal(t, []string{"eur", "gbp", "usd"}, reminders, "the reminder list keeps open and recently paid invoices")
 }
 
 func TestCollectionsRepository_AvailableCurrenciesMatchTheBoard(t *testing.T) {
@@ -920,6 +941,13 @@ func TestCollectionsRepository_ApprovalsAfterAsOfStayOutOfAPagedSession(t *testi
 	after, _, err := f.board.ListInvoicesWithReminders(f.ctx, q, approved, 0, 200)
 	require.NoError(t, err)
 	require.Equal(t, rowIDs(before), rowIDs(after), "an approval made after as_of does not enter the session")
+
+	board, err := f.board.Board(f.ctx, q, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(before), board.Columns[types.CollectionsColumnChasing].Summary.Count, "nor the board's approved count")
+	summary, err := f.board.SummarizeReminders(f.ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, len(before), summary.Statuses[types.ReminderStatusApproved], "nor the reminder summary's")
 
 	fresh, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: late.Add(time.Minute)}, approved, 0, 200)
 	require.NoError(t, err)

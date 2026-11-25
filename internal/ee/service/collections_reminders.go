@@ -76,7 +76,7 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 	if req.Status != "" {
 		filter.Statuses = []types.ReminderStatus{types.ReminderStatus(req.Status)}
 	}
-	query := collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency), Range: queryRange(req.CollectionsDateFilter)}
+	query := collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency), Range: req.ToDomain()}
 
 	invoices, hasMore, err := s.CollectionsRepo.ListInvoicesWithReminders(ctx, query, filter, req.PageOffset(), req.PageLimit())
 	if err != nil {
