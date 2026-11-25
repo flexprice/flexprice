@@ -23941,7 +23941,26 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentBehavior"
                 },
                 "payment_terms": {
-                    "$ref": "#/definitions/types.PaymentTerms"
+                    "description": "Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer",
+                    "maximum": 365,
+                    "minimum": 1
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due. Omit to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
+                        }
+                    ]
                 },
                 "phases": {
                     "type": "array",
@@ -31769,10 +31788,22 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer"
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
                         }
                     ]
                 },
@@ -32030,10 +32061,22 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer"
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
                         }
                     ]
                 },
@@ -33709,6 +33752,20 @@ const docTemplate = `{
                 "parent_subscription_id": {
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer",
+                    "maximum": 365,
+                    "minimum": 1
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due. Omit to leave unchanged; send \"\" to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
+                        }
+                    ]
                 },
                 "proration_behavior": {
                     "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
@@ -36827,8 +36884,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                604800000000000,
-                3600000000000
+                3600000000000,
+                604800000000000
             ],
             "properties": {
                 "unit": {
@@ -36839,8 +36896,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "CollectionsPaidWindow",
-                "EntitlementGrantMinDuration"
+                "EntitlementGrantMinDuration",
+                "CollectionsPaidWindow"
             ]
         },
         "types.DurationUnit": {
@@ -38327,8 +38384,6 @@ const docTemplate = `{
                 "credit_consumption",
                 "credit_topups",
                 "net_billing",
-                "invoice_total_issued",
-                "net_billing_issued",
                 "active_customers"
             ],
             "x-enum-varnames": [
@@ -38344,8 +38399,6 @@ const docTemplate = `{
                 "MetricCreditConsumption",
                 "MetricCreditTopups",
                 "MetricNetBilling",
-                "MetricInvoiceTotalIssued",
-                "MetricNetBillingIssued",
                 "MetricActiveCustomers"
             ]
         },
@@ -38612,6 +38665,7 @@ const docTemplate = `{
             ]
         },
         "types.PaymentTerms": {
+            "description": "Deprecated: use payment_terms_type and payment_terms_days. \"\u003cdays\u003e NET\" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
             "type": "string",
             "enum": [
                 "15 NET",
@@ -38620,6 +38674,7 @@ const docTemplate = `{
                 "60 NET",
                 "75 NET",
                 "90 NET",
+                "DUE_ON_RECEIPT",
                 "END_OF_MONTH",
                 "END_OF_NEXT_MONTH"
             ],
@@ -38630,6 +38685,7 @@ const docTemplate = `{
                 "PaymentTerms60Net",
                 "PaymentTerms75Net",
                 "PaymentTerms90Net",
+                "PaymentTermsDueOnReceipt",
                 "PaymentTermsEndOfMonth",
                 "PaymentTermsEndOfNextMonth"
             ]
@@ -42067,6 +42123,22 @@ const docTemplate = `{
             "additionalProperties": {
                 "type": "string"
             }
+        },
+        "types.PaymentTermsType": {
+            "description": "DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
+            "type": "string",
+            "enum": [
+                "DAYS",
+                "DUE_ON_RECEIPT",
+                "END_OF_MONTH",
+                "END_OF_NEXT_MONTH"
+            ],
+            "x-enum-varnames": [
+                "PaymentTermsTypeDays",
+                "PaymentTermsTypeDueOnReceipt",
+                "PaymentTermsTypeEndOfMonth",
+                "PaymentTermsTypeEndOfNextMonth"
+            ]
         },
         "types.ReminderStatus": {
             "type": "string",

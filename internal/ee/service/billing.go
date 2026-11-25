@@ -2491,9 +2491,10 @@ func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig ty
 	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
 		issueDate = issueDate.In(loc)
 	}
-	dueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
+	dueDate, ok := lo.FromPtr(sub.PaymentTermsType).DueDate(lo.FromPtr(sub.PaymentTermsDays), issueDate)
 	if !ok {
-		dueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
+		tenantType, tenantDays := lo.FromPtr(invoiceConfig.PaymentTerms).Parts()
+		dueDate, ok = lo.FromPtr(tenantType).DueDate(lo.FromPtr(tenantDays), issueDate)
 	}
 	if !ok {
 		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))
@@ -2528,12 +2529,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
-	// from when it is issued.
+	// Provisional due date, counted from the invoice's billing boundary, else period end or now if later.
 	issueDate := clock.Now()
 	if periodEnd.After(issueDate) {
 		issueDate = periodEnd
 	}
+	reason := lo.CoalesceOrEmpty(params.BillingReason, types.InvoiceBillingReasonSubscriptionCycle)
+	issueDate = lo.FromPtrOr(invoice.IssueDateFor(reason, &periodStart, &periodEnd), issueDate)
 	invoiceDueDate := subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate)
 
 	if result == nil {
@@ -2637,7 +2639,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
 		PeriodStart:      &periodStart,
 		PeriodEnd:        &periodEnd,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
+		BillingReason:    reason,
 		Metadata:         metadata,
 		LineItems:        append(result.FixedCharges, result.UsageCharges...),
 		InvoiceCoupons:   validCoupons,
@@ -2647,9 +2649,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 
 	if params.InvoiceType != "" {
 		req.InvoiceType = params.InvoiceType
-	}
-	if params.BillingReason != "" {
-		req.BillingReason = params.BillingReason
 	}
 
 	// The revenue-facts rollup needs discount amounts, which normal previews

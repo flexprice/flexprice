@@ -690,7 +690,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	return nil
 }
 
-func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error {
+func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd, issueDate time.Time, billingReason string, idempotencyKey string) error {
 	span := StartRepositorySpan(ctx, "invoice", "update_draft_invoice_period", map[string]interface{}{
 		"invoice_id": id,
 	})
@@ -705,6 +705,7 @@ func (r *invoiceRepository) UpdateDraftInvoicePeriod(ctx context.Context, id str
 			invoice.InvoiceStatus(types.InvoiceStatusDraft),
 		).
 		SetPeriodEnd(periodEnd).
+		SetIssueDate(issueDate).
 		SetBillingReason(billingReason).
 		SetIdempotencyKey(idempotencyKey).
 		SetUpdatedAt(clock.Now()).
@@ -1540,8 +1541,8 @@ func (r *invoiceRepository) GetRevenueTrend(ctx context.Context, windowCount int
 		FROM windows w
 		CROSS JOIN currencies c
 		LEFT JOIN invoices i
-			ON i.created_at >= w.window_start
-		 AND i.created_at <  w.window_end
+			ON i.issue_date >= w.window_start
+		 AND i.issue_date <  w.window_end
 		 AND i.tenant_id = $2
 		 AND i.environment_id = $3
 		 AND i.invoice_status = 'FINALIZED'

@@ -4086,7 +4086,21 @@ definitions:
       payment_behavior:
         $ref: '#/definitions/types.PaymentBehavior'
       payment_terms:
-        $ref: '#/definitions/types.PaymentTerms'
+        allOf:
+        - $ref: '#/definitions/types.PaymentTerms'
+        description: 'Deprecated: use payment_terms_type and payment_terms_days, which
+          override it when sent.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        maximum: 365
+        minimum: 1
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due. Omit to use the
+          tenant's.
       phases:
         items:
           $ref: '#/definitions/SubscriptionPhaseCreateRequest'
@@ -9734,8 +9748,16 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'Deprecated: use PaymentTermsType and PaymentTermsDays; it is
+          derived from them.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due; nil uses the tenant's.
       phases:
         description: Phases are the subscription phases for this subscription
         items:
@@ -9949,8 +9971,16 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'Deprecated: use PaymentTermsType and PaymentTermsDays; it is
+          derived from them.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due; nil uses the tenant's.
       phases:
         description: Phases are included when "phases" is in expand parameter
         items:
@@ -11153,6 +11183,17 @@ definitions:
         description: ParentSubscriptionID sets or clears the parent subscription.
           Omit to leave unchanged; send "" to clear.
         type: string
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        maximum: 365
+        minimum: 1
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due. Omit to leave unchanged;
+          send "" to use the tenant's.
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -13390,8 +13431,8 @@ definitions:
     - DebugTrackerStatusAttributed
   types.Duration:
     enum:
-    - 604800000000000
     - 3600000000000
+    - 604800000000000
     properties:
       unit:
         $ref: '#/definitions/types.DurationUnit'
@@ -13399,8 +13440,8 @@ definitions:
         type: integer
     type: object
     x-enum-varnames:
-    - CollectionsPaidWindow
     - EntitlementGrantMinDuration
+    - CollectionsPaidWindow
   types.DurationUnit:
     enum:
     - second
@@ -14550,8 +14591,6 @@ definitions:
     - credit_consumption
     - credit_topups
     - net_billing
-    - invoice_total_issued
-    - net_billing_issued
     - active_customers
     type: string
     x-enum-varnames:
@@ -14567,8 +14606,6 @@ definitions:
     - MetricCreditConsumption
     - MetricCreditTopups
     - MetricNetBilling
-    - MetricInvoiceTotalIssued
-    - MetricNetBillingIssued
     - MetricActiveCustomers
   types.ModifySubscriptionLineItem:
     properties:
@@ -14770,6 +14807,8 @@ definitions:
     - PaymentStatusPartiallyRefunded
     - PaymentStatusVoided
   types.PaymentTerms:
+    description: 'Deprecated: use payment_terms_type and payment_terms_days. "<days>
+      NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.'
     enum:
     - 15 NET
     - 30 NET
@@ -14777,6 +14816,7 @@ definitions:
     - 60 NET
     - 75 NET
     - 90 NET
+    - DUE_ON_RECEIPT
     - END_OF_MONTH
     - END_OF_NEXT_MONTH
     type: string
@@ -14787,6 +14827,7 @@ definitions:
     - PaymentTerms60Net
     - PaymentTerms75Net
     - PaymentTerms90Net
+    - PaymentTermsDueOnReceipt
     - PaymentTermsEndOfMonth
     - PaymentTermsEndOfNextMonth
   types.PerformanceObligationStatus:
@@ -17393,6 +17434,20 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.PaymentTermsType:
+    description: DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT,
+      END_OF_MONTH or END_OF_NEXT_MONTH.
+    enum:
+    - DAYS
+    - DUE_ON_RECEIPT
+    - END_OF_MONTH
+    - END_OF_NEXT_MONTH
+    type: string
+    x-enum-varnames:
+    - PaymentTermsTypeDays
+    - PaymentTermsTypeDueOnReceipt
+    - PaymentTermsTypeEndOfMonth
+    - PaymentTermsTypeEndOfNextMonth
   types.ReminderStatus:
     enum:
     - pending

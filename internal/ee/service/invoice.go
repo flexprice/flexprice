@@ -580,13 +580,14 @@ func (s *invoiceService) MoveCycleDraft(ctx context.Context, sub *subscription.S
 		return nil, err
 	}
 	key := s.subscriptionInvoiceKey(ctx, draft.CustomerID, sub.ID, reason, draft.PeriodStart, &periodEnd)
+	issueDate := lo.FromPtrOr(invoice.IssueDateFor(reason, draft.PeriodStart, &periodEnd), lo.FromPtr(draft.IssueDate))
 
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Same row lock as ComputeInvoice, so the expiry job can't apply credits mid-move.
 		if _, err := s.InvoiceRepo.GetForUpdate(txCtx, draft.ID); err != nil {
 			return err
 		}
-		if err := s.InvoiceRepo.UpdateDraftInvoicePeriod(txCtx, draft.ID, periodEnd, string(reason), key); err != nil {
+		if err := s.InvoiceRepo.UpdateDraftInvoicePeriod(txCtx, draft.ID, periodEnd, issueDate, string(reason), key); err != nil {
 			return err
 		}
 		s.Logger.Info(ctx, "moved the open draft to the period's new end",
@@ -601,6 +602,7 @@ func (s *invoiceService) MoveCycleDraft(ctx context.Context, sub *subscription.S
 		return nil, err
 	}
 	draft.PeriodEnd = &periodEnd
+	draft.IssueDate = &issueDate
 	draft.BillingReason = string(reason)
 	draft.IdempotencyKey = &key
 	return draft, nil
@@ -1465,16 +1467,18 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	return nil
 }
 
-// issueSubscriptionInvoice dates a subscription invoice as it is finalized: the issue date is the finalization
-// time unless the caller set one, and the due date counts from it. Manually edited copies keep their dates.
+// issueSubscriptionInvoice caps the issue date at finalization; a subscription invoice is dated on its billing
+// boundary and its due date counts from it. Manually edited copies keep their dates.
 func issueSubscriptionInvoice(ctx context.Context, params ServiceParams, inv *invoice.Invoice, finalizedAt time.Time) error {
+	if inv.IssueDate != nil && inv.IssueDate.After(finalizedAt) {
+		inv.IssueDate = &finalizedAt
+	}
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil || inv.IsManuallyEdited {
 		return nil
 	}
-	// A defaulted issue date equals created_at; anything else was set by the caller.
-	issueDate := finalizedAt
-	if inv.IssueDate != nil && !inv.IssueDate.Equal(inv.CreatedAt) {
-		issueDate = *inv.IssueDate
+	issueDate := lo.FromPtrOr(lo.CoalesceOrEmpty(invoice.IssueDateFor(types.InvoiceBillingReason(inv.BillingReason), inv.PeriodStart, inv.PeriodEnd), inv.IssueDate), finalizedAt)
+	if issueDate.After(finalizedAt) {
+		issueDate = finalizedAt
 	}
 
 	sub, err := params.SubRepo.Get(ctx, *inv.SubscriptionID)

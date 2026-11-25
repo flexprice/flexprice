@@ -134,8 +134,14 @@ type Subscription struct {
 	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
 	ParentSubscriptionID *string `db:"parent_subscription_id" json:"parent_subscription_id,omitempty"`
 
-	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
+	// Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.
 	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
+
+	// PaymentTermsType sets when invoices fall due; nil uses the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty"`
 
 	// Settings overrides the customer's and environment's settings for this subscription.
 	Settings *types.SettingsOverride `db:"settings" json:"settings,omitempty"`
@@ -238,6 +244,8 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		couponAssociations = coupon_association.FromEntList(sub.Edges.CouponAssociations)
 	}
 
+	paymentTermsType, paymentTermsDays := lo.FromPtr(sub.PaymentTerms).Parts()
+
 	return &Subscription{
 		ID:                     sub.ID,
 		LookupKey:              sub.LookupKey,
@@ -282,6 +290,8 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
 		PaymentTerms:         sub.PaymentTerms,
+		PaymentTermsType:     paymentTermsType,
+		PaymentTermsDays:     paymentTermsDays,
 		Settings:             sub.Settings,
 		SubscriptionType:     types.SubscriptionType(sub.SubscriptionType),
 		AutoInvoiceThreshold: sub.AutoInvoiceThreshold,

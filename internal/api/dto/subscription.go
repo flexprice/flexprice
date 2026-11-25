@@ -653,7 +653,13 @@ type CreateSubscriptionRequest struct {
 
 	// SubscriptionStatus: set to "draft" to skip invoice creation and payment on create.
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
-	PaymentTerms       *types.PaymentTerms      `json:"payment_terms,omitempty"`
+
+	// Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.
+	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
+	// PaymentTermsType sets when invoices fall due. Omit to use the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty" minimum:"1" maximum:"365"`
 
 	// Settings overrides the customer and environment settings for this subscription.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
@@ -778,6 +784,11 @@ type UpdateSubscriptionRequest struct {
 
 	// Settings merges into the subscription's setting overrides when provided; send {} to inherit.
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
+	// PaymentTermsType sets when invoices fall due. Omit to leave unchanged; send "" to use the tenant's.
+	PaymentTermsType *types.PaymentTermsType `json:"payment_terms_type,omitempty"`
+	// PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.
+	PaymentTermsDays *int `json:"payment_terms_days,omitempty" minimum:"1" maximum:"365"`
 }
 
 // Validate checks UpdateSubscriptionRequest fields for basic structural validity.
@@ -791,6 +802,10 @@ func (r *UpdateSubscriptionRequest) Validate() error {
 		if err := r.ProrationBehavior.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if _, err := types.ResolvePaymentTerms(nil, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
+		return err
 	}
 
 	return nil
@@ -1244,10 +1259,8 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	if r.PaymentTerms != nil {
-		if err := (*r.PaymentTerms).Validate(); err != nil {
-			return err
-		}
+	if _, err := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays); err != nil {
+		return err
 	}
 
 	// Set default value to Billing Period Count if not provided
@@ -1537,6 +1550,10 @@ func (r *CreateSubscriptionRequest) validateShouldAllowProrationOnStartDate(requ
 }
 
 func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscription.Subscription {
+	// Validate has checked the payment terms.
+	paymentTerms, _ := types.ResolvePaymentTerms(r.PaymentTerms, r.PaymentTermsType, r.PaymentTermsDays)
+	paymentTermsType, paymentTermsDays := lo.FromPtr(paymentTerms).Parts()
+
 	// Handle legacy collection method and set defaults
 	paymentBehavior := types.PaymentBehaviorDefaultActive
 	collectionMethod := types.CollectionMethodChargeAutomatically
@@ -1655,7 +1672,8 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		ParentSubscriptionID:   parentSubscriptionID,
-		PaymentTerms:           r.PaymentTerms,
+		PaymentTermsType:       paymentTermsType,
+		PaymentTermsDays:       paymentTermsDays,
 		Settings:               NormalizeSettingsOverride(r.Settings),
 		SubscriptionType:       subscriptionType,
 	}

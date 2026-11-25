@@ -3557,7 +3557,7 @@ func (s *meterUsageService) periodCommitments(
 		return nil, nil, err
 	}
 
-	placer := newWindowPlacer(loader, billing, params.WindowSize, billingAnchor, period)
+	placer := newWindowPlacer(ctx, loader, billing, params.WindowSize, billingAnchor, period)
 
 	breakdownByLine := map[string]*types.CommitmentInfo{}
 	for _, sc := range loader.commitments {

@@ -70,7 +70,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ImmediateCancelBillsTheDraf
 	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the cancel")
 	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
 	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
-	s.True(inv.IssueDate.Equal(*inv.FinalizedAt), "issued at the cancel's finalization")
+	s.True(inv.IssueDate.Equal(*inv.PeriodEnd), "issued at the cancel")
 	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
 }
 
@@ -101,7 +101,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_PauseBillsTheDraft() {
 // moment it is finalized once billed.
 func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ExpiryDraftIsIssuedAtFinalization() {
 	_, draft := s.settledSubscription("subs_expiry_issue")
-	s.True(draft.IssueDate.Equal(draft.CreatedAt), "draft issue date defaults to its creation")
+	s.True(draft.IssueDate.Equal(*draft.PeriodEnd), "draft is dated on its period end")
 	s.WithinDuration(draft.PeriodEnd.AddDate(0, 0, 1), *draft.DueDate, time.Second, "open draft is due from period end")
 
 	s.Require().NoError(s.invoiceService.FinalizeInvoice(s.GetContext(), draft.ID, dto.FinalizeInvoiceRequest{}))
