@@ -8287,6 +8287,47 @@ definitions:
       updated_at:
         type: string
     type: object
+  SearchCheckoutSessionsRequest:
+    properties:
+      actions:
+        items:
+          $ref: '#/definitions/types.CheckoutAction'
+        type: array
+      checkout_invoice_ids:
+        items:
+          type: string
+        type: array
+      checkout_payment_ids:
+        items:
+          type: string
+        type: array
+      checkout_statuses:
+        items:
+          $ref: '#/definitions/types.CheckoutStatus'
+        type: array
+      configuration:
+        $ref: '#/definitions/types.CheckoutConfigurationFilter'
+      customer_ids:
+        items:
+          type: string
+        type: array
+      expires_at_gt:
+        type: string
+      expires_at_lt:
+        type: string
+      limit:
+        type: integer
+      offset:
+        type: integer
+      order:
+        type: string
+      payment_providers:
+        items:
+          $ref: '#/definitions/types.CheckoutPaymentProvider'
+        type: array
+      sort:
+        type: string
+    type: object
   SecretResponse:
     properties:
       created_at:
@@ -17174,57 +17215,6 @@ definitions:
       wallet_id:
         type: string
     type: object
-  types.CheckoutSessionFilter:
-    properties:
-      actions:
-        items:
-          $ref: '#/definitions/types.CheckoutAction'
-        type: array
-      checkout_invoice_ids:
-        items:
-          type: string
-        type: array
-      checkout_payment_ids:
-        items:
-          type: string
-        type: array
-      checkout_statuses:
-        items:
-          $ref: '#/definitions/types.CheckoutStatus'
-        type: array
-      configuration:
-        $ref: '#/definitions/types.CheckoutConfigurationFilter'
-      customer_ids:
-        items:
-          type: string
-        type: array
-      expand:
-        type: string
-      expires_at_gt:
-        type: string
-      expires_at_lt:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      payment_providers:
-        items:
-          $ref: '#/definitions/types.CheckoutPaymentProvider'
-        type: array
-      sort:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -19706,7 +19696,7 @@ paths:
         name: filter
         required: true
         schema:
-          $ref: '#/definitions/types.CheckoutSessionFilter'
+          $ref: '#/definitions/SearchCheckoutSessionsRequest'
       produces:
       - application/json
       responses:

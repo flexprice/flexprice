@@ -1982,7 +1982,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/types.CheckoutSessionFilter"
+                            "$ref": "#/definitions/SearchCheckoutSessionsRequest"
                         }
                     }
                 ],
@@ -29396,6 +29396,68 @@ const docTemplate = `{
                 }
             }
         },
+        "SearchCheckoutSessionsRequest": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutAction"
+                    }
+                },
+                "checkout_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_payment_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutStatus"
+                    }
+                },
+                "configuration": {
+                    "$ref": "#/definitions/types.CheckoutConfigurationFilter"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expires_at_gt": {
+                    "type": "string"
+                },
+                "expires_at_lt": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "order": {
+                    "type": "string"
+                },
+                "payment_providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                    }
+                },
+                "sort": {
+                    "type": "string"
+                }
+            }
+        },
         "SecretResponse": {
             "type": "object",
             "properties": {
@@ -41413,81 +41475,6 @@ const docTemplate = `{
                 },
                 "wallet_id": {
                     "type": "string"
-                }
-            }
-        },
-        "types.CheckoutSessionFilter": {
-            "type": "object",
-            "properties": {
-                "actions": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutAction"
-                    }
-                },
-                "checkout_invoice_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "checkout_payment_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "checkout_statuses": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutStatus"
-                    }
-                },
-                "configuration": {
-                    "$ref": "#/definitions/types.CheckoutConfigurationFilter"
-                },
-                "customer_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "expires_at_gt": {
-                    "type": "string"
-                },
-                "expires_at_lt": {
-                    "type": "string"
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "payment_providers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.CheckoutPaymentProvider"
-                    }
-                },
-                "sort": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
                 }
             }
         },
