@@ -1,8 +1,0 @@
-{{define "body"}}{{.Body}}
-{{if .ViewURL}}
-View invoice: {{.ViewURL}}
-{{else if .PDFAttached}}
-The invoice PDF is attached.
-{{else if .PDFURL}}
-Invoice PDF: {{.PDFURL}}
-{{end}}{{end}}

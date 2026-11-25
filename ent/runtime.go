@@ -43,7 +43,6 @@ import (
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
-	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/journalentry"
 	"github.com/flexprice/flexprice/ent/journalline"
@@ -1928,43 +1927,6 @@ func init() {
 	invoicelineitemDescInvoiceLevelDiscount := invoicelineitemFields[24].Descriptor()
 	// invoicelineitem.DefaultInvoiceLevelDiscount holds the default value on creation for the invoice_level_discount field.
 	invoicelineitem.DefaultInvoiceLevelDiscount = invoicelineitemDescInvoiceLevelDiscount.Default.(decimal.Decimal)
-	invoicereminderMixin := schema.InvoiceReminder{}.Mixin()
-	invoicereminderMixinFields0 := invoicereminderMixin[0].Fields()
-	_ = invoicereminderMixinFields0
-	invoicereminderMixinFields1 := invoicereminderMixin[1].Fields()
-	_ = invoicereminderMixinFields1
-	invoicereminderFields := schema.InvoiceReminder{}.Fields()
-	_ = invoicereminderFields
-	// invoicereminderDescTenantID is the schema descriptor for tenant_id field.
-	invoicereminderDescTenantID := invoicereminderMixinFields0[0].Descriptor()
-	// invoicereminder.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	invoicereminder.TenantIDValidator = invoicereminderDescTenantID.Validators[0].(func(string) error)
-	// invoicereminderDescStatus is the schema descriptor for status field.
-	invoicereminderDescStatus := invoicereminderMixinFields0[1].Descriptor()
-	// invoicereminder.DefaultStatus holds the default value on creation for the status field.
-	invoicereminder.DefaultStatus = invoicereminderDescStatus.Default.(string)
-	// invoicereminderDescCreatedAt is the schema descriptor for created_at field.
-	invoicereminderDescCreatedAt := invoicereminderMixinFields0[2].Descriptor()
-	// invoicereminder.DefaultCreatedAt holds the default value on creation for the created_at field.
-	invoicereminder.DefaultCreatedAt = invoicereminderDescCreatedAt.Default.(func() time.Time)
-	// invoicereminderDescUpdatedAt is the schema descriptor for updated_at field.
-	invoicereminderDescUpdatedAt := invoicereminderMixinFields0[3].Descriptor()
-	// invoicereminder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	invoicereminder.DefaultUpdatedAt = invoicereminderDescUpdatedAt.Default.(func() time.Time)
-	// invoicereminder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	invoicereminder.UpdateDefaultUpdatedAt = invoicereminderDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// invoicereminderDescEnvironmentID is the schema descriptor for environment_id field.
-	invoicereminderDescEnvironmentID := invoicereminderMixinFields1[0].Descriptor()
-	// invoicereminder.DefaultEnvironmentID holds the default value on creation for the environment_id field.
-	invoicereminder.DefaultEnvironmentID = invoicereminderDescEnvironmentID.Default.(string)
-	// invoicereminderDescInvoiceID is the schema descriptor for invoice_id field.
-	invoicereminderDescInvoiceID := invoicereminderFields[1].Descriptor()
-	// invoicereminder.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
-	invoicereminder.InvoiceIDValidator = invoicereminderDescInvoiceID.Validators[0].(func(string) error)
-	// invoicereminderDescReminderStatus is the schema descriptor for reminder_status field.
-	invoicereminderDescReminderStatus := invoicereminderFields[2].Descriptor()
-	// invoicereminder.DefaultReminderStatus holds the default value on creation for the reminder_status field.
-	invoicereminder.DefaultReminderStatus = types.ReminderStatus(invoicereminderDescReminderStatus.Default.(string))
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
 	_ = invoicesequenceFields
 	// invoicesequenceDescTenantID is the schema descriptor for tenant_id field.

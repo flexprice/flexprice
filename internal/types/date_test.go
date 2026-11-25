@@ -3168,13 +3168,3 @@ func TestBillingPeriodsIn(t *testing.T) {
 		})
 	}
 }
-
-func TestCalendarDaysBetween(t *testing.T) {
-	late := time.Date(2026, 11, 20, 23, 59, 0, 0, time.UTC)
-	early := time.Date(2026, 11, 21, 0, 1, 0, 0, time.UTC)
-	require.Equal(t, 1, CalendarDaysBetween(late, early), "two minutes apart across midnight is one calendar day")
-	require.Equal(t, -1, CalendarDaysBetween(early, late))
-	require.Equal(t, 0, CalendarDaysBetween(early, early.Add(20*time.Hour)))
-	ist := time.FixedZone("IST", 5*3600+1800)
-	require.Equal(t, 0, CalendarDaysBetween(time.Date(2026, 11, 20, 10, 0, 0, 0, ist), late), "days are counted in UTC")
-}

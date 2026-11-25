@@ -43,7 +43,6 @@ const (
 	SettingKeyRevenueRecognitionConfig    SettingKey = "revenue_recognition_config"
 	SettingKeyBillingEntityConfig         SettingKey = "billing_entity_config"
 	SettingKeyEmailNotificationConfig     SettingKey = "email_notification_config"
-	SettingKeyCollectionsConfig           SettingKey = "collections_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -73,7 +72,6 @@ func (s *SettingKey) Validate() error {
 		SettingKeyRevenueRecognitionConfig,
 		SettingKeyBillingEntityConfig,
 		SettingKeyEmailNotificationConfig,
-		SettingKeyCollectionsConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -997,11 +995,6 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			},
 			Description: "How Flexprice emails customers in this environment",
 		},
-		SettingKeyCollectionsConfig: {
-			Key:          SettingKeyCollectionsConfig,
-			DefaultValue: map[string]interface{}{"enabled": false},
-			Description:  "Enable Collections (the board and payment reminders); needs emails to be enabled",
-		},
 	}, nil
 }
 
@@ -1192,13 +1185,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		// Lenient here: a partial update fragment may omit fields the merged result already has.
 		return nil
 
-	case SettingKeyCollectionsConfig:
-		cfg, err := utils.ToStruct[CollectionsConfig](value)
-		if err != nil {
-			return err
-		}
-		return cfg.Validate()
-
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -1345,16 +1331,6 @@ type RevenueRecognitionConfig struct {
 }
 
 func (c RevenueRecognitionConfig) Validate() error {
-	return nil
-}
-
-// CollectionsConfig turns Collections on for an environment. Turning it on needs emails to be enabled there,
-// which the settings service checks because it needs the email setting.
-type CollectionsConfig struct {
-	Enabled bool `json:"enabled"`
-}
-
-func (c CollectionsConfig) Validate() error {
 	return nil
 }
 

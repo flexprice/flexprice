@@ -3386,7 +3386,7 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 		summary.UnpaidInvoiceCount++
 
 		// Check if invoice is overdue
-		if types.IsOverdue(inv.DueDate, now) {
+		if inv.DueDate != nil && inv.DueDate.Before(now) {
 			summary.TotalOverdueAmount = summary.TotalOverdueAmount.Add(inv.AmountRemaining)
 			summary.OverdueInvoiceCount++
 

@@ -824,15 +824,3 @@ func FindPeriodForDate(p *FindPeriodForDateParams) (Period, error) {
 		}).
 		Mark(ierr.ErrValidation)
 }
-
-// UTCDay is the start of t's UTC calendar day.
-func UTCDay(t time.Time) time.Time {
-	year, month, day := t.UTC().Date()
-
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-}
-
-// CalendarDaysBetween counts UTC calendar days from one instant to another; negative when to is earlier.
-func CalendarDaysBetween(from, to time.Time) int {
-	return int(UTCDay(to).Sub(UTCDay(from)).Hours() / 24)
-}

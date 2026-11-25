@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
 	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
-	"github.com/flexprice/flexprice/internal/domain/collections"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -168,8 +167,6 @@ type ServiceParams struct {
 	JournalRepo                  journalRepo.Repository
 	JournalService               journalsvc.JournalService
 	BillingEntityRepo            billingentity.Repository
-	InvoiceReminderRepo          collections.InvoiceReminderRepository
-	CollectionsRepo              collections.CollectionsRepository
 	EventDeletionRequestRepo     events.DeletionRequestRepository
 	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
@@ -302,8 +299,6 @@ func NewServiceParams(
 	journalRepo journalRepo.Repository,
 	journalService journalsvc.JournalService,
 	billingEntityRepo billingentity.Repository,
-	invoiceReminderRepo collections.InvoiceReminderRepository,
-	collectionsRepo collections.CollectionsRepository,
 	eventDeletionRequestRepo events.DeletionRequestRepository,
 	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
@@ -399,8 +394,6 @@ func NewServiceParams(
 		JournalRepo:                  journalRepo,
 		JournalService:               journalService,
 		BillingEntityRepo:            billingEntityRepo,
-		InvoiceReminderRepo:          invoiceReminderRepo,
-		CollectionsRepo:              collectionsRepo,
 		EventDeletionRequestRepo:     eventDeletionRequestRepo,
 		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}

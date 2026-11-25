@@ -77,12 +77,11 @@ func (t EmailTrigger) Validate() error {
 type EmailTemplateKey string
 
 const (
-	EmailTemplateInvoiceFinalized       EmailTemplateKey = "invoice_finalized"
-	EmailTemplateInvoicePaymentReminder EmailTemplateKey = "invoice_payment_reminder"
+	EmailTemplateInvoiceFinalized EmailTemplateKey = "invoice_finalized"
 )
 
 func (k EmailTemplateKey) Validate() error {
-	return validateEnum("template_key", k, []EmailTemplateKey{EmailTemplateInvoiceFinalized, EmailTemplateInvoicePaymentReminder})
+	return validateEnum("template_key", k, []EmailTemplateKey{EmailTemplateInvoiceFinalized})
 }
 
 // EmailProvider names the service that delivers an email.
