@@ -144,9 +144,9 @@ func (s *countingMeterUsageStore) GetMeterTotals(ctx context.Context, params *ev
 }
 
 type checkpointHarness struct {
-	svc             *usageCheckpointService
-	usage           *countingMeterUsageStore
-	checkpoints     *testutil.InMemoryMeterUsageCheckpointStore
+	svc         *usageCheckpointService
+	usage       *countingMeterUsageStore
+	checkpoints *testutil.InMemoryMeterUsageCheckpointStore
 	usageRollup *fakeHourlyUsageRepository
 }
 
@@ -187,8 +187,8 @@ func newCheckpointHarness(t *testing.T, periodEnd time.Time) *checkpointHarness 
 	}))
 
 	h := &checkpointHarness{
-		usage:           &countingMeterUsageStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()},
-		checkpoints:     testutil.NewInMemoryMeterUsageCheckpointStore(),
+		usage:       &countingMeterUsageStore{InMemoryMeterUsageStore: testutil.NewInMemoryMeterUsageStore()},
+		checkpoints: testutil.NewInMemoryMeterUsageCheckpointStore(),
 		usageRollup: &fakeHourlyUsageRepository{active: map[time.Time][]string{}},
 	}
 	h.svc = &usageCheckpointService{ServiceParams: ServiceParams{
