@@ -20,7 +20,7 @@
   th, td { text-align:left; padding:8px 10px; border-top:1px solid var(--line); vertical-align:top; }
   th { background:transparent; color:var(--muted); font-weight:500; font-size:12px; border-top:0; }
   .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; color:#fff; }
-  .pass { background:var(--pass); } .fail { background:var(--fail); } .skip { background:var(--skip); } .infra { background:var(--infra); }
+  .pass { background:var(--pass); } .fail { background:var(--fail); } .skip { background:var(--skip); } .infra { background:var(--infra); } .pending { background:var(--none); color:var(--ink); }
   .spark { display:inline-flex; gap:1px; }
   .spark i { display:inline-block; width:4px; height:14px; background:var(--none); border-radius:1px; }
   .spark i.pass { background:var(--pass); } .spark i.fail { background:var(--fail); } .spark i.skip { background:var(--skip); } .spark i.infra { background:var(--infra); }
@@ -44,14 +44,14 @@
 const $ = id => document.getElementById(id);
 const fmtAgo = iso => { if (!iso || iso.startsWith('0001')) return '—'; const d = (Date.now() - new Date(iso)) / 1000; const a = Math.abs(d); const u = a < 90 ? [a, 's'] : a < 5400 ? [a/60, 'm'] : a < 172800 ? [a/3600, 'h'] : [a/86400, 'd']; const t = Math.round(u[0]) + u[1]; return d >= 0 ? t + ' ago' : 'in ' + t; };
 const fmtDur = ns => ns ? (ns >= 6e10 ? Math.round(ns/6e10) + 'm' : ns >= 1e9 ? (ns/1e9).toFixed(1) + 's' : Math.round(ns/1e6) + 'ms') : '';
-const cls = r => r.status === 'pass' ? 'pass' : r.status === 'skip' ? 'skip' : r.infra ? 'infra' : 'fail';
+const cls = r => !r || !r.status ? 'pending' : r.status === 'pass' ? 'pass' : r.status === 'skip' ? 'skip' : r.infra ? 'infra' : 'fail';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function card(n, l) { return `<div class="card"><div class="n">${n}</div><div class="l">${l}</div></div>`; }
 function render(st, hist) {
   const b = st.bindings || [], open = st.open_incidents || [];
-  const by = s => b.filter(x => cls(x.last) === s).length;
+  const by = s => b.filter(x => cls((x.last && x.last.status) ? x.last : ((hist.bindings || {})[x.scenario + (x.persona ? ' · ' + x.persona : '')] || []).slice(-1)[0]) === s).length;
   $('meta').textContent = `run ${st.run_id} · started ${fmtAgo(st.started_at)} · webhooks ${st.inbox?.total ?? 0}`;
-  $('cards').innerHTML = card(b.length, 'bindings') + card(by('pass'), 'passing') + card(by('fail') + by('infra'), 'failing') + card(by('skip'), 'skipping') + card(open.length, 'open incidents') + card(Object.values(st.ledger?.personas || {}).reduce((n, p) => n + (p.batches || 0), 0), 'event batches');
+  $('cards').innerHTML = card(b.length, 'bindings') + card(by('pass'), 'passing') + card(by('fail') + by('infra'), 'failing') + card(by('skip'), 'skipping') + card(by('pending'), 'not run yet') + card(open.length, 'open incidents') + card(Object.values(st.ledger?.personas || {}).reduce((n, p) => n + (p.batches || 0), 0), 'event batches');
   $('incidents').innerHTML = open.length ? open.map(i => `<div><span class="pill ${i.kind === 'infra' ? 'infra' : i.kind === 'coverage' ? 'skip' : 'fail'}">${esc(i.kind)}</span> <b>${esc(i.key.scenario + (i.key.persona ? ' · ' + i.key.persona : ''))}</b> <span class="muted">opened ${fmtAgo(i.opened_at)}, ${i.runs} runs</span><div class="muted">${esc(i.summary)}</div></div>`).join('') : 'none';
   $('incidents').className = open.length ? 'card' : 'card muted';
   const dayAgo = Date.now() - 86400000;
@@ -59,11 +59,15 @@ function render(st, hist) {
     const key = x.scenario + (x.persona ? ' · ' + x.persona : '');
     const runs = (hist.bindings || {})[key] || [];
     const day = runs.filter(r => new Date(r.at) > dayAgo);
-    const rate = day.length ? Math.round(100 * day.filter(r => r.status === 'pass').length / day.length) + '%' : '—';
+    const passed = day.filter(r => r.status === 'pass').length;
+    const rate = day.length ? Math.round(100 * passed / day.length) + '%' : '—';
     const spark = runs.slice(-48).map(r => `<i class="${cls(r)}" title="${esc(r.at)} ${esc(r.status)} ${esc(r.step || '')} ${esc(r.reason || '')}"></i>`).join('');
-    const last = x.last || {};
-    const reason = last.reason || (last.mismatches ? last.mismatches.join('; ') : '') || last.step || '';
-    return `<tr><td>${esc(key)}</td><td><span class="pill ${cls(last)}">${esc(last.status || 'pending')}</span> <span class="muted">${fmtDur(last.duration)}</span></td><td class="hide-narrow reason" title="${esc(reason)}">${esc(reason)}</td><td>${fmtAgo(x.last_run)}</td><td class="hide-narrow">${fmtAgo(x.next_run)}</td><td>${rate} <span class="muted">(${x.passes}/${x.runs})</span></td><td><span class="spark">${spark}</span></td></tr>`;
+    // Before this process has run a binding, its last recorded run (restored from the state file) is the latest word.
+    const prior = runs.length ? runs[runs.length - 1] : null;
+    const last = (x.last && x.last.status) ? x.last : (prior || {});
+    const lastRun = (x.last && x.last.status) ? x.last_run : (prior ? prior.at : '');
+    const reason = last.reason || (last.mismatches && last.mismatches.join ? last.mismatches.join('; ') : '') || last.step || '';
+    return `<tr><td>${esc(key)}</td><td><span class="pill ${cls(last)}">${esc(last.status || 'pending')}</span> <span class="muted">${fmtDur(last.duration)}</span></td><td class="hide-narrow reason" title="${esc(reason)}">${esc(reason)}</td><td>${fmtAgo(lastRun)}</td><td class="hide-narrow">${fmtAgo(x.next_run)}</td><td>${rate} <span class="muted">(${passed}/${day.length} in 24h)</span></td><td><span class="spark">${spark}</span></td></tr>`;
   }).join('');
   $('refreshed').textContent = 'refreshed ' + new Date().toLocaleTimeString();
 }
