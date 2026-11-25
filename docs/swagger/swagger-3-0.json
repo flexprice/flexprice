@@ -37865,12 +37865,12 @@
           }
         },
         "enum": [
-          "604800000000000",
-          "3600000000000"
+          "3600000000000",
+          "604800000000000"
         ],
         "x-enum-varnames": [
-          "CollectionsPaidWindow",
-          "EntitlementGrantMinDuration"
+          "EntitlementGrantMinDuration",
+          "CollectionsPaidWindow"
         ],
         "x-speakeasy-name-override": "Duration"
       },
