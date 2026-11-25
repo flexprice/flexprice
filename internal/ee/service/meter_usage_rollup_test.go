@@ -206,7 +206,7 @@ func TestBulkConsumerUsageRollup(t *testing.T) {
 		wantTotal    string
 	}{
 		{
-			name:         "locked events are rolled up once and a redelivery is skipped",
+			name:         "a redelivery the dedup lock catches is not counted again",
 			dedupEnabled: true,
 			batches: [][]*events.Event{
 				{usageRollupEvent("e1", 2, false), usageRollupEvent("e2", 3, false)},
@@ -221,10 +221,10 @@ func TestBulkConsumerUsageRollup(t *testing.T) {
 			wantTotal:    "7",
 		},
 		{
-			name:         "dedup off rolls up nothing",
+			name:         "dedup off still rolls up",
 			dedupEnabled: false,
 			batches:      [][]*events.Event{{usageRollupEvent("e1", 2, false)}},
-			wantTotal:    "0",
+			wantTotal:    "2",
 		},
 	}
 	for _, tt := range tests {
@@ -247,22 +247,22 @@ func TestSingleConsumerUsageRollup(t *testing.T) {
 		wantTotal    string
 	}{
 		{
-			name:         "locked event is rolled up once and a redelivery is skipped",
+			name:         "a redelivery the dedup lock catches is not counted again",
 			dedupEnabled: true,
 			events:       []*events.Event{usageRollupEvent("e1", 2, false), usageRollupEvent("e1", 2, false)},
 			wantTotal:    "2",
 		},
 		{
-			name:         "force reprocess takes no lock and is not rolled up",
+			name:         "force reprocess takes no lock and is still rolled up",
 			dedupEnabled: true,
 			events:       []*events.Event{usageRollupEvent("e1", 2, true)},
-			wantTotal:    "0",
+			wantTotal:    "2",
 		},
 		{
-			name:         "dedup off rolls up nothing",
+			name:         "dedup off still rolls up",
 			dedupEnabled: false,
 			events:       []*events.Event{usageRollupEvent("e1", 2, false)},
-			wantTotal:    "0",
+			wantTotal:    "2",
 		},
 	}
 	for _, tt := range tests {

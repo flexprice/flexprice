@@ -300,8 +300,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 	records := make([]*events.MeterUsage, 0, len(batch.Events))
 	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
-	// Only usage whose dedup lock this delivery took is rolled up, so a redelivery can't count twice.
-	lockedRecords := make([]*events.MeterUsage, 0, len(batch.Events))
 	metersByID := make(map[string]*meter.Meter)
 	for _, evt := range batch.Events {
 		if evt == nil {
@@ -336,7 +334,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			return types.ErrEventDeletionInProgress
 		}
 
-		eventLocked := false
 		if dedupEnabled && evt.ID != "" && !evt.ForceReprocess {
 			cacheKey := cache.GenerateKey(ctx, cache.PrefixEvent, evt.ID)
 			lock, lockErr := s.ServiceParams.Locker.AcquireLock(ctx, cacheKey, eventDeduplicationLockTTL)
@@ -349,7 +346,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 				continue
 			} else {
 				dedupLocks = append(dedupLocks, lock)
-				eventLocked = true
 			}
 		}
 
@@ -388,9 +384,6 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			}
 			records = append(records, record)
 			metersByID[m.ID] = m
-			if eventLocked {
-				lockedRecords = append(lockedRecords, record)
-			}
 			eventProducedRecord = true
 		}
 		if eventProducedRecord {
@@ -420,7 +413,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
-	s.recordUsageRollup(ctx, lockedRecords, metersByID)
+	s.recordUsageRollup(ctx, records, metersByID)
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
@@ -509,9 +502,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		return types.ErrEventDeletionInProgress
 	}
 
-	// Only usage whose dedup lock this delivery took is rolled up, so a redelivery can't count twice.
-	lockAcquired := false
-
 	// Step 0: Check if the event is already processed
 	if event.ID != "" &&
 		!event.ForceReprocess &&
@@ -527,8 +517,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 				s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
 				return nil
 			}
-			lockAcquired = true
-
 			// Release the dedup lock on any processing failure below so retries
 			// aren't dedup-skipped until TTL. `err` here is the named return —
 			// it captures failures from further processing, not just the AcquireLock result.
@@ -612,9 +600,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
-	if lockAcquired {
-		s.recordUsageRollup(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
-	}
+	s.recordUsageRollup(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
 
 	s.Logger.Debug(ctx, "meter usage records inserted",
 		"event_id", event.ID,
@@ -631,20 +617,21 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	return nil
 }
 
-// recordUsageRollup adds inserted usage whose dedup lock this delivery took to the Redis hourly
-// usage for enabled tenants. Failures are logged and counted and never fail the message.
+// recordUsageRollup adds inserted usage to the Redis hourly usage for enabled tenants. A redelivery the
+// dedup lock misses counts twice until the checkpoint job passes that hour. Failures are logged and counted
+// and never fail the message.
 func (s *meterUsageTrackingService) recordUsageRollup(
 	ctx context.Context,
-	lockedRecords []*events.MeterUsage,
+	records []*events.MeterUsage,
 	metersByID map[string]*meter.Meter,
 ) {
 	if s.HourlyUsageRepo == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return
 	}
 	cutoff := usagerollup.Cutoff(clock.Now())
-	usage := make([]usagerollup.HourlyUsage, 0, len(lockedRecords))
+	usage := make([]usagerollup.HourlyUsage, 0, len(records))
 	tooOld := 0
-	for _, r := range lockedRecords {
+	for _, r := range records {
 		m, ok := metersByID[r.MeterID]
 		if !ok || r.ExternalCustomerID == "" || !usagerollup.SupportsAggregation(m.Aggregation.Type) {
 			continue
