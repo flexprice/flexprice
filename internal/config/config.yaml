@@ -158,6 +158,9 @@ clickhouse:
   password: flexprice123
   database: flexprice
   max_memory_usage: 50
+  meter_usage_optimize:
+    enabled: false # FLEXPRICE_CLICKHOUSE_METER_USAGE_OPTIMIZE_ENABLED
+    lookback_days: 7 # FLEXPRICE_CLICKHOUSE_METER_USAGE_OPTIMIZE_LOOKBACK_DAYS
   # Per-process connection pool (0 would fall back to clickhouse-go's defaults: idle 5,
   # open idle+5 = 10 — a hidden 10-query cap per pod/task that bottlenecks event ingest,
   # since consumers doing one INSERT per event are bounded by max_open_conns / insert latency).

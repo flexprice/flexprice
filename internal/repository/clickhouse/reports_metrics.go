@@ -36,7 +36,7 @@ const agingBucketExpr = "multiIf(nullIf(due_date, toDateTime64(0, 6)) IS NULL, '
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 60, '31-60', " +
 	"dateDiff('day', due_date, now64(6, 'UTC'), 'UTC') <= 90, '61-90', '90+')"
 
-func invoiceFinalizedTime(prefix string) string { return prefix + "finalized_at" }
+func invoiceIssueTime(prefix string) string { return prefix + "issue_date" }
 
 func invoiceTotalSQL(timeCol string) *billingSQL {
 	return &billingSQL{
@@ -126,7 +126,7 @@ var billingSQLs = map[types.Metric]*billingSQL{
 	},
 	types.MetricARPU: {
 		Table:   "invoices",
-		TimeCol: "finalized_at",
+		TimeCol: "issue_date",
 		Measure: "sum(total) / uniqExact(customer_id)",
 		CompareMeasure: func(c string) string {
 			return ratioIf("total", c)
@@ -148,10 +148,8 @@ var billingSQLs = map[types.Metric]*billingSQL{
 			"transaction_reason IN (" + quotedList(creditTopupReasons) + ")",
 		},
 	},
-	types.MetricInvoiceTotal:       invoiceTotalSQL("finalized_at"),
-	types.MetricInvoiceTotalIssued: invoiceTotalSQL("finalized_at"),
-	types.MetricNetBilling:         netBillingSQL(types.MetricNetBilling, invoiceFinalizedTime),
-	types.MetricNetBillingIssued:   netBillingSQL(types.MetricNetBillingIssued, invoiceFinalizedTime),
-	types.MetricActiveCustomers:    {Build: buildActiveCustomers},
-	types.MetricEventsVolume:       {Build: buildEventsVolume},
+	types.MetricInvoiceTotal:    invoiceTotalSQL("issue_date"),
+	types.MetricNetBilling:      netBillingSQL(types.MetricNetBilling, invoiceIssueTime),
+	types.MetricActiveCustomers: {Build: buildActiveCustomers},
+	types.MetricEventsVolume:    {Build: buildEventsVolume},
 }

@@ -2127,6 +2127,11 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
+	// req.Validate has checked the payment terms.
+	if paymentTerms, _ := types.ResolvePaymentTerms(nil, req.PaymentTermsType, req.PaymentTermsDays); paymentTerms != nil {
+		subscription.PaymentTermsType, subscription.PaymentTermsDays = paymentTerms.Parts()
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing
@@ -8494,7 +8499,8 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,
-		PaymentTerms:           parent.PaymentTerms,
+		PaymentTermsType:       parent.PaymentTermsType,
+		PaymentTermsDays:       parent.PaymentTermsDays,
 		EnableTrueUp:           parent.EnableTrueUp,
 		SyncedPriceSequence:    parent.SyncedPriceSequence,
 		BaseModel:              types.GetDefaultBaseModel(ctx),

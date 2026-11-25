@@ -320,10 +320,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 
 	baseModel := types.GetDefaultBaseModel(ctx)
 
-	issueDate := r.IssueDate
-	if issueDate == nil {
-		issueDate = &baseModel.CreatedAt
-	}
+	issueDate := lo.CoalesceOrEmpty(r.IssueDate, invoice.IssueDateFor(r.BillingReason, r.PeriodStart, r.PeriodEnd), &baseModel.CreatedAt)
 
 	return &invoice.Invoice{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
@@ -545,6 +542,16 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return r.validateIssueDate()
+}
+
+func (r *CreateInvoiceRequest) validateIssueDate() error {
+	if r.IssueDate != nil && r.IssueDate.After(clock.Now()) {
+		return ierr.NewError("issue_date cannot be in the future").
+			WithHint("Issue date cannot be in the future").
+			WithReportableDetails(map[string]any{"issue_date": r.IssueDate}).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
@@ -554,6 +561,10 @@ func (r *CreateInvoiceRequest) Validate() error {
 	}
 
 	if err := r.InvoiceType.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.validateIssueDate(); err != nil {
 		return err
 	}
 

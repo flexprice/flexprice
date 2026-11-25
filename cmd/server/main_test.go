@@ -57,7 +57,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	temporalSvc := &startupRollbackTemporalService{}
 	temporalClient := failingScheduleTemporalClient{}
 	lc := fxtest.NewLifecycle(t)
-	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil)
+	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil)
 
 	err := lc.Start(context.Background())
 	if !errors.Is(err, errEnsureSchedules) {

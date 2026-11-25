@@ -2062,7 +2062,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(6)"}},
+		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(8)"}},
 		{Name: "prefix", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_value", Type: field.TypeInt64, Default: 0, SchemaType: map[string]string{"postgres": "bigint"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},

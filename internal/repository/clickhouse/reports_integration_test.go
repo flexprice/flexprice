@@ -37,7 +37,7 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		id String, tenant_id String, environment_id String, status String,
 		invoice_status String, invoice_type String, customer_id String, currency String,
 		total Decimal(20, 9), finalized_at DateTime64(6),
-		period_start DateTime64(6) DEFAULT finalized_at, issue_date DateTime64(6) DEFAULT toDateTime64(0, 6),
+		period_start DateTime64(6) DEFAULT finalized_at, issue_date DateTime64(6) DEFAULT finalized_at,
 		_peerdb_is_deleted UInt8, _peerdb_version Int64
 	) ENGINE = ReplacingMergeTree(_peerdb_version) ORDER BY id`))
 	baseCols := `(id, tenant_id, environment_id, status, invoice_status, invoice_type, customer_id, currency, total, finalized_at, _peerdb_is_deleted, _peerdb_version)`
@@ -89,19 +89,20 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		return res.Rows
 	}
 
-	// Dedup, status, tenant, and epoch filters; finalized_at attribution.
-	assert.Equal(t, [][]string{{"inr", "5"}, {"usd", "66"}}, run(types.ShapeScalar, ""))
+	// Dedup, status, tenant, and epoch filters; issue_date attribution.
+	assert.Equal(t, [][]string{{"inr", "5"}, {"usd", "123"}}, run(types.ShapeScalar, ""))
 
-	// Finalized invoices outside the selected window are excluded.
+	// Invoices issued outside the selected window are excluded.
 	assert.Equal(t, [][]string{
-		{"2026-08-01T00:00:00Z", "usd", "6"},
+		{"2026-08-01T00:00:00Z", "usd", "13"},
 		{"2026-09-01T00:00:00Z", "inr", "5"},
-		{"2026-09-01T00:00:00Z", "usd", "60"},
+		{"2026-09-01T00:00:00Z", "usd", "110"},
 	}, run(types.ShapeTimeseries, types.GrainMonth))
 
 	assert.Equal(t, [][]string{
-		{"c7", "usd", "50"},
+		{"c5", "usd", "100"},
 		{"c1", "usd", "12"},
+		{"c6", "usd", "7"},
 		{"c2", "inr", "5"},
 		{"c4", "usd", "4"},
 	}, run(types.ShapeBreakdown, "", "customer_id"))
@@ -130,10 +131,10 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		return res.Rows
 	}
 
-	assert.Equal(t, [][]string{{"inr", "5", "0"}, {"usd", "60", "6"}}, runCmp(types.ShapeScalar, "", "previous_period"))
+	assert.Equal(t, [][]string{{"inr", "5", "0"}, {"usd", "110", "13"}}, runCmp(types.ShapeScalar, "", "previous_period"))
 	assert.Equal(t, [][]string{
 		{"2026-09-01T00:00:00Z", "inr", "5", "0"},
-		{"2026-09-01T00:00:00Z", "usd", "60", "6"},
+		{"2026-09-01T00:00:00Z", "usd", "110", "13"},
 	}, runCmp(types.ShapeTimeseries, types.GrainMonth, "previous_period"))
 	assert.Contains(t, runCmp(types.ShapeTimeseries, types.GrainDay, "previous_period"), []string{"2026-09-20T00:00:00Z", "usd", "0", "2"})
 	byCustomer := runCmp(types.ShapeBreakdown, "", "previous_period", "customer_id")
@@ -150,13 +151,13 @@ func TestReportsRepository_RunsBillingQuery(t *testing.T) {
 		require.NoError(t, err)
 		return res.Rows
 	}
-	// Sep 60/2, Aug 6/2; inr no prior.
+	// Sep 110/2, Aug 13/3; inr no prior.
 	rows := arpuCmp(types.ShapeScalar)
 	require.Len(t, rows, 2)
 	assert.Equal(t, []string{"inr", "5", ""}, rows[0])
 	assert.Equal(t, "usd", rows[1][0])
-	assert.Equal(t, "30", rows[1][1])
-	assert.Equal(t, "3", rows[1][2])
+	assert.Equal(t, "55", rows[1][1])
+	assert.Equal(t, "4.333333333", rows[1][2])
 }
 
 func TestReportsRepository_GenericReports(t *testing.T) {
@@ -268,8 +269,8 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 
 	assert.Equal(t, [][]string{{"usd", "90"}}, run(types.MetricARPUPaid, types.ShapeScalar))
 
-	// 669 finalized over 4 customers.
-	assert.Equal(t, [][]string{{"usd", "167.25"}}, run(types.MetricARPU, types.ShapeScalar))
+	// Only p1 and p2 are issued in Sep: 150 over 1 customer.
+	assert.Equal(t, [][]string{{"usd", "150"}}, run(types.MetricARPU, types.ShapeScalar))
 	monthly := &analytics.ResolvedView{
 		Family: types.FamilyBilling, Shape: types.ShapeTimeseries, Metrics: []types.Metric{types.MetricARPU},
 		Time: analytics.TimeSpec{
@@ -280,7 +281,7 @@ func TestReportsRepository_GenericReports(t *testing.T) {
 	}
 	mres, err := repo.RunReport(ctx, monthly, "t1", "e1")
 	require.NoError(t, err)
-	assert.Equal(t, [][]string{{"2026-09-01T00:00:00Z", "usd", "167.25"}}, mres.Rows)
+	assert.Equal(t, [][]string{{"2026-09-01T00:00:00Z", "usd", "150"}}, mres.Rows)
 }
 
 func TestReportsRepository_CustomReports(t *testing.T) {
@@ -362,26 +363,17 @@ func TestReportsRepository_CustomReports(t *testing.T) {
 	sep := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	oct := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 
+	// Invoices by issue date (i3 issued Sep, finalized Oct; i4 issued Oct, finalized Sep), credit notes by finalization.
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "88"},
-		{"2026-10-01T00:00:00Z", "usd", "55"},
+		{"2026-09-01T00:00:00Z", "usd", "110"},
+		{"2026-10-01T00:00:00Z", "usd", "33"},
 	}, run(types.MetricNetBilling, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
-
-	// i5: period in Sep, issued in Oct.
 	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "88"},
-		{"2026-10-01T00:00:00Z", "usd", "55"},
-	}, run(types.MetricNetBillingIssued, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
-	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "108"},
-		{"2026-10-01T00:00:00Z", "usd", "70"},
+		{"2026-09-01T00:00:00Z", "usd", "130"},
+		{"2026-10-01T00:00:00Z", "usd", "48"},
 	}, run(types.MetricInvoiceTotal, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
-	assert.Equal(t, [][]string{
-		{"2026-09-01T00:00:00Z", "usd", "108"},
-		{"2026-10-01T00:00:00Z", "usd", "70"},
-	}, run(types.MetricInvoiceTotalIssued, types.ShapeTimeseries, sep, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)))
-	assert.Equal(t, [][]string{{"usd", "70", "108"}},
-		run(types.MetricInvoiceTotalIssued, types.ShapeScalar, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), "previous_period"))
+	assert.Equal(t, [][]string{{"usd", "48", "130"}},
+		run(types.MetricInvoiceTotal, types.ShapeScalar, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), "previous_period"))
 
 	nov := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 9, 21, 0, 0, 0, 0, time.UTC)

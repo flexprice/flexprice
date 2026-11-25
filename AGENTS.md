@@ -78,6 +78,8 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 ### Testing
 - Unit tests for all service-layer business logic.
 - Table-driven tests preferred.
+- Cover a new scenario by extending the existing table or fixture of the code under test. Add a test function or helper only when no test exercises that code yet.
+- Assert every output the change affects (amounts and quantities, not only that it runs), from inputs the real code path produces.
 - Integration tests use real DB (testcontainers / docker compose); do not mock Ent client.
 - Test files alongside implementation (`internal/service/foo_test.go`).
 
@@ -698,4 +700,5 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
    - **Comments**: a comment explains one of *what*, *how*, or *why* — in one or two lines, self-sufficient with no references to design docs, tickets, or section numbers. Document every exported symbol; skip comments on interface-implementing methods (the interface doc stands). Don't comment bad code — rewrite it; extract a commented block into a well-named function instead.
    - **Shape**: guard clauses and early returns; keep the happy path unindented and flowing down the screen. Make zero values useful. No package-level mutable state.
    - **APIs**: easy to use, hard to misuse — avoid several same-typed parameters in a row, avoid nil-tolerant parameters that fork behavior, design for the default case.
-6. Write readable code, not fewer lines. No crammed one-liners and no nested or multi-line `lo` chains written to save lines: one step per line, a blank line between logical steps, and a plain loop in place of `lo` when the call spans lines or nests.
+6. Fix a bug in the function that produces the wrong value. Don't wrap an existing method, add a helper or type that only forwards to one, or correct its output further downstream. Handle the inputs that occur; don't add branches for states the invariants already rule out.
+7. Write readable code, not fewer lines. No crammed one-liners and no nested or multi-line `lo` chains written to save lines: one step per line, a blank line between logical steps, and a plain loop in place of `lo` when the call spans lines or nests.
