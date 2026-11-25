@@ -1151,8 +1151,9 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
 // [lineItem.StartDate, lineItem.EndDate) for finite line items, or
 // [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
-// For longer-cadence advance items, effectiveDate == sub.CurrentPeriodEnd is only
-// allowed when sub.CurrentPeriodEnd coincides with the item's own billing period end.
+// At sub.CurrentPeriodEnd, one-time items are rejected, and longer-cadence items
+// are only allowed when sub.CurrentPeriodEnd coincides with the item's own billing
+// period end without shifting a multi-count calendar billing grid.
 // Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
@@ -1191,19 +1192,42 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	if effectiveDate.Equal(sub.CurrentPeriodEnd) &&
-		lineItem.InvoiceCadence == types.InvoiceCadenceAdvance &&
-		types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
-		itemPeriod, err := longerItemPeriod(sub, lineItem, effectiveDate.Add(-time.Nanosecond))
-		if err == nil && itemPeriod.End.After(effectiveDate) {
-			return ierr.NewError("effective_date at current_period_end is not supported mid-term for longer-cadence advance line items").
-				WithHint("Choose an effective_date before current_period_end, or wait until the line item's own billing period ends").
+	if effectiveDate.Equal(sub.CurrentPeriodEnd) {
+		if lineItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+			return ierr.NewError("effective_date at current_period_end is not supported for one-time line items").
+				WithHint("Choose an effective_date before current_period_end").
 				WithReportableDetails(map[string]interface{}{
-					"effective_date":     effectiveDate,
-					"line_item_id":       lineItemID,
-					"line_item_end_term": itemPeriod.End,
+					"effective_date": effectiveDate,
+					"line_item_id":   lineItemID,
 				}).
 				Mark(ierr.ErrValidation)
+		}
+		if types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+			itemPeriod, err := longerItemPeriod(sub, lineItem, effectiveDate.Add(-time.Nanosecond))
+			if err == nil && itemPeriod.End.After(effectiveDate) {
+				return ierr.NewError("effective_date at current_period_end is not supported mid-term for longer-cadence line items").
+					WithHint("Choose an effective_date before current_period_end, or wait until the line item's own billing period ends").
+					WithReportableDetails(map[string]interface{}{
+						"effective_date":     effectiveDate,
+						"line_item_id":       lineItemID,
+						"line_item_end_term": itemPeriod.End,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			// Guard against multi-count calendar items whose successor anchor would shift the billing grid.
+			successor := *lineItem
+			successor.StartDate = effectiveDate
+			oldNext, errOld := longerItemPeriod(sub, lineItem, effectiveDate)
+			newNext, errNew := longerItemPeriod(sub, &successor, effectiveDate)
+			if errOld == nil && errNew == nil && !newNext.End.Equal(oldNext.End) {
+				return ierr.NewError("effective_date at current_period_end is not supported when it shifts a longer-cadence calendar billing grid").
+					WithHint("Choose an effective_date before current_period_end").
+					WithReportableDetails(map[string]interface{}{
+						"effective_date": effectiveDate,
+						"line_item_id":   lineItemID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
 		}
 	}
 	return nil
