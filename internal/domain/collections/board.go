@@ -9,10 +9,18 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// DateRange bounds the board by due date (open columns) and paid date (paid column). From is inclusive and To is
+// exclusive; a nil side is unbounded.
+type DateRange struct {
+	From *time.Time
+	To   *time.Time
+}
+
 type Query struct {
 	AsOf     time.Time
 	Text     string
 	Currency string
+	Range    *DateRange
 }
 
 type InvoiceFilter struct {
@@ -169,5 +177,9 @@ func (b *reminderSummaryBuilder) Build() *ReminderSummary {
 type CollectionsRepository interface {
 	Board(ctx context.Context, q Query, limit int) (*Board, error)
 	ListInvoicesWithReminders(ctx context.Context, q Query, f InvoiceFilter, offset, limit int) (rows []InvoiceWithReminder, hasMore bool, err error)
-	SummarizeReminders(ctx context.Context, asOf time.Time) (ReminderSummary, error)
+	// SummarizeReminders totals the open overdue invoices per reminder status, narrowed by the query's date range,
+	// currency and search text like the board's totals.
+	SummarizeReminders(ctx context.Context, q Query) (ReminderSummary, error)
+	// AvailableCurrencies lists the currencies of the open and recently paid invoices, whatever the filters.
+	AvailableCurrencies(ctx context.Context, asOf time.Time) ([]string, error)
 }

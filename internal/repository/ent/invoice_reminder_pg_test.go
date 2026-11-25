@@ -51,6 +51,9 @@ type reminderFixture struct {
 	run                  string
 	customers            []customerSpec
 	invoices             []invSpec
+	// approvedAt is when each approved reminder was approved, by invoice id; every second approval ties with the one before.
+	approvedAt map[string]time.Time
+	approvals  int
 }
 
 func newReminderFixture(t *testing.T) *reminderFixture {
@@ -114,10 +117,21 @@ func (f *reminderFixture) insertInvoice(t *testing.T, ctx context.Context, s inv
 
 func (f *reminderFixture) remind(t *testing.T, ctx context.Context, invoiceID string, status types.ReminderStatus, reason string) *collections.InvoiceReminder {
 	t.Helper()
+	var approvedAt *time.Time
+	if status == types.ReminderStatusApproved {
+		f.approvals++
+		at := f.asOf.Add(-time.Duration(f.approvals/2) * time.Minute)
+		approvedAt = &at
+		if f.approvedAt == nil {
+			f.approvedAt = map[string]time.Time{}
+		}
+		f.approvedAt[invoiceID] = at
+	}
+
 	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
 		ID: "irem_" + f.run + "_" + invoiceID, InvoiceID: invoiceID, BaseModel: types.GetDefaultBaseModel(ctx),
 	}).WithOriginal(types.ReminderToneFriendly, "subject", "body").WithText(types.ReminderToneFriendly, "subject", "body").
-		WithStatus(status, reason, nil).Build()
+		WithStatus(status, reason, approvedAt).Build()
 	require.NoError(t, f.reminders.Create(ctx, r))
 	return r
 }
@@ -164,6 +178,9 @@ func (f *reminderFixture) seed(t *testing.T) {
 		invSpec{id: f.run + "_pd_edge_in", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED", number: "INV-EDGEIN", total: 9, paidAt: f.at(-types.CollectionsPaidWindow)},
 		invSpec{id: f.run + "_pd_edge_out", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED", number: "INV-EDGEOUT", total: 9, paidAt: f.at(-types.CollectionsPaidWindow - time.Microsecond)},
 		invSpec{id: f.run + "_pd_over", customer: "cust_b", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "OVERPAID", number: "INV-OVER", total: 25, paidAt: f.at(-time.Hour)},
+		invSpec{id: f.run + "_od_edge_from", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "PENDING", number: "INV-EFROM", remaining: 11, total: 11, due: f.dayAt(-5)},
+		invSpec{id: f.run + "_od_edge_before", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "PENDING", number: "INV-EBEFORE", remaining: 12, total: 12, due: f.dayAtMinusMicro(-5)},
+		invSpec{id: f.run + "_od_edge_to", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "PENDING", number: "INV-ETO", remaining: 13, total: 13, due: f.dayAt(-2)},
 		invSpec{id: f.run + "_x_draft", customer: "cust_a", currency: "usd", invoiceStatus: "DRAFT", paymentStatus: "PENDING", number: "INV-X1", remaining: 10, total: 10, due: f.at(-48 * time.Hour)},
 		invSpec{id: f.run + "_x_void", customer: "cust_a", currency: "usd", invoiceStatus: "VOIDED", paymentStatus: "PENDING", number: "INV-X2", remaining: 10, total: 10, due: f.at(-48 * time.Hour)},
 		invSpec{id: f.run + "_x_zero", customer: "cust_a", currency: "usd", invoiceStatus: "FINALIZED", paymentStatus: "PENDING", number: "INV-X3", total: 10, due: f.at(-48 * time.Hour)},
@@ -225,6 +242,8 @@ func (f *reminderFixture) status(s invSpec) types.ReminderStatus {
 
 // expected returns the ids of a column's rows in order for a query.
 func (f *reminderFixture) expected(q collections.Query, filter collections.InvoiceFilter) []invSpec {
+	byApproval := filter.Column != types.CollectionsColumnNotDue && filter.Column != types.CollectionsColumnPaidThisWeek &&
+		len(filter.Statuses) == 1 && filter.Statuses[0] == types.ReminderStatusApproved
 	var rows []invSpec
 	for _, s := range f.invoices {
 		if !f.matches(s, q) || (filter.CustomerID != "" && s.customer != filter.CustomerID) {
@@ -232,16 +251,19 @@ func (f *reminderFixture) expected(q collections.Query, filter collections.Invoi
 		}
 		switch filter.Column {
 		case types.CollectionsColumnNotDue:
-			if f.open(s) && (s.due == nil || !s.due.Before(q.AsOf)) {
+			if f.open(s) && (s.due == nil || !s.due.Before(q.AsOf)) && inRange(s.due, q.Range) {
 				rows = append(rows, s)
 			}
 		case types.CollectionsColumnPaidThisWeek:
-			if !s.deleted && s.invoiceStatus == "FINALIZED" && (s.paymentStatus == "SUCCEEDED" || s.paymentStatus == "OVERPAID") && s.paidAt != nil &&
-				!s.paidAt.Before(q.AsOf.Add(-types.CollectionsPaidWindow)) && !s.paidAt.After(q.AsOf) {
+			paid := !s.deleted && s.invoiceStatus == "FINALIZED" && (s.paymentStatus == "SUCCEEDED" || s.paymentStatus == "OVERPAID") && s.paidAt != nil && !s.paidAt.After(q.AsOf)
+			if paid && ((q.Range == nil && !s.paidAt.Before(q.AsOf.Add(-types.CollectionsPaidWindow))) || (q.Range != nil && inRange(s.paidAt, q.Range))) {
 				rows = append(rows, s)
 			}
 		default:
-			if f.open(s) && s.due != nil && s.due.Before(q.AsOf) && (len(filter.Statuses) == 0 || lo.Contains(filter.Statuses, f.status(s))) {
+			if f.open(s) && s.due != nil && s.due.Before(q.AsOf) && inRange(s.due, q.Range) && (len(filter.Statuses) == 0 || lo.Contains(filter.Statuses, f.status(s))) {
+				if f.status(s) == types.ReminderStatusApproved && f.approvedAt[s.id].After(q.AsOf) {
+					continue
+				}
 				rows = append(rows, s)
 			}
 		}
@@ -263,6 +285,12 @@ func (f *reminderFixture) expected(q collections.Query, filter collections.Invoi
 		case types.CollectionsColumnPaidThisWeek:
 			if !a.paidAt.Equal(*b.paidAt) {
 				return a.paidAt.After(*b.paidAt)
+			}
+			return a.id < b.id
+		}
+		if byApproval {
+			if !f.approvedAt[a.id].Equal(f.approvedAt[b.id]) {
+				return f.approvedAt[a.id].After(f.approvedAt[b.id])
 			}
 			return a.id < b.id
 		}
@@ -309,14 +337,54 @@ func filterOfColumn(c types.CollectionsColumnKey) collections.InvoiceFilter {
 	return collections.InvoiceFilter{Column: c, Statuses: types.ColumnStatuses(c)}
 }
 
+// dayAt is the start of the UTC day n days from the as_of day.
+func (f *reminderFixture) dayAt(n int) *time.Time {
+	d := types.UTCDay(f.asOf).AddDate(0, 0, n)
+	return &d
+}
+
+// dayAtMinusMicro is the last microsecond before dayAt(n).
+func (f *reminderFixture) dayAtMinusMicro(n int) *time.Time {
+	d := f.dayAt(n).Add(-time.Microsecond)
+	return &d
+}
+
+// ranges are date ranges of whole UTC days, as the service builds them: From inclusive, To exclusive.
+func (f *reminderFixture) ranges() []*collections.DateRange {
+	return []*collections.DateRange{
+		{From: f.dayAt(-10), To: f.dayAt(1)},
+		{From: f.dayAt(-30)},
+		{To: f.dayAt(2)},
+		{From: f.dayAt(1), To: f.dayAt(3)},
+		{From: f.dayAt(-1), To: f.dayAt(1)},
+		{From: f.dayAt(-5), To: f.dayAt(-2)},
+		{From: f.dayAt(-400), To: f.dayAt(-300)},
+	}
+}
+
 func (f *reminderFixture) queries() []collections.Query {
 	asOf := f.asOf
-	return []collections.Query{
+	queries := []collections.Query{
 		{AsOf: asOf}, {AsOf: asOf, Text: "acme"}, {AsOf: asOf, Text: "ROBOTICS"}, {AsOf: asOf, Text: "ap@beta"}, {AsOf: asOf, Text: "INV-01"},
 		{AsOf: asOf, Text: "100%"}, {AsOf: asOf, Text: "%"}, {AsOf: asOf, Text: "_"}, {AsOf: asOf, Text: "gamma_"},
 		{AsOf: asOf, Currency: "usd"}, {AsOf: asOf, Currency: "eur"}, {AsOf: asOf, Currency: "xyz"},
 		{AsOf: asOf, Text: "acme", Currency: "usd"}, {AsOf: asOf, Text: "nothing matches this"},
 	}
+	for _, rng := range f.ranges() {
+		queries = append(queries, collections.Query{AsOf: asOf, Range: rng}, collections.Query{AsOf: asOf, Range: rng, Text: "acme", Currency: "usd"})
+	}
+	return queries
+}
+
+// inRange reports whether an instant is inside the range; no range means anything, and a missing instant is outside any range.
+func inRange(t *time.Time, r *collections.DateRange) bool {
+	if r == nil {
+		return true
+	}
+	if t == nil {
+		return false
+	}
+	return (r.From == nil || !t.Before(*r.From)) && (r.To == nil || t.Before(*r.To))
 }
 
 func TestCollectionsRepository_BoardMatchesThePlainGoExpectation(t *testing.T) {
@@ -422,17 +490,123 @@ func TestCollectionsRepository_RowsCarryTheirReminder(t *testing.T) {
 func TestCollectionsRepository_SummarizeRemindersMatchesTheGoExpectation(t *testing.T) {
 	f := newReminderFixture(t)
 	f.seed(t)
-	got, err := f.board.SummarizeReminders(f.ctx, f.asOf)
-	require.NoError(t, err)
-	overdue := f.expected(collections.Query{AsOf: f.asOf}, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
-	require.Equal(t, len(overdue), got.InvoiceCount)
-	require.Equal(t, totalsOf(overdue, false), totalsMap(got.Totals))
-	require.Equal(t, len(lo.Uniq(lo.Map(overdue, func(s invSpec, _ int) string { return s.customer }))), got.CustomerCount)
-	want := map[types.ReminderStatus]int{}
-	for _, s := range overdue {
-		want[f.status(s)]++
+	for _, q := range f.queries() {
+		got, err := f.board.SummarizeReminders(f.ctx, q)
+		require.NoError(t, err)
+		overdue := f.expected(q, collections.InvoiceFilter{Column: types.CollectionsColumnOverdue})
+		require.Equal(t, len(overdue), got.InvoiceCount, "query %+v", q)
+		require.Equal(t, totalsOf(overdue, false), totalsMap(got.Totals), "query %+v", q)
+		require.Equal(t, len(lo.Uniq(lo.Map(overdue, func(s invSpec, _ int) string { return s.customer }))), got.CustomerCount, "query %+v", q)
+		want := map[types.ReminderStatus]int{}
+		for _, s := range overdue {
+			want[f.status(s)]++
+		}
+		require.Equal(t, want, got.Statuses, "query %+v", q)
 	}
-	require.Equal(t, want, got.Statuses)
+}
+
+// The reminder page and the board must show the same numbers for the same range, currency and search: board columns
+// are the reminder statuses.
+func TestCollectionsRepository_ReminderSummaryAgreesWithTheBoardForTheSameFilters(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	queries := append(f.queries(),
+		collections.Query{AsOf: f.asOf, Currency: "eur", Range: f.ranges()[0]},
+		collections.Query{AsOf: f.asOf, Currency: "usd", Range: f.ranges()[1]},
+	)
+	for _, q := range queries {
+		summary, err := f.board.SummarizeReminders(f.ctx, q)
+		require.NoError(t, err)
+		board, err := f.board.Board(f.ctx, q, 0)
+		require.NoError(t, err)
+
+		require.Equal(t, board.Columns[types.CollectionsColumnOverdue].Summary.Count, summary.Statuses[types.ReminderStatusPending], "to review, query %+v", q)
+		require.Equal(t, board.Columns[types.CollectionsColumnChasing].Summary.Count, summary.Statuses[types.ReminderStatusApproved], "approved, query %+v", q)
+		require.Equal(t, board.Columns[types.CollectionsColumnHeld].Summary.Count, summary.Statuses[types.ReminderStatusHeld]+summary.Statuses[types.ReminderStatusSkipped], "held and skipped, query %+v", q)
+
+		boardTotals := map[string]string{}
+		for _, key := range []types.CollectionsColumnKey{types.CollectionsColumnOverdue, types.CollectionsColumnChasing, types.CollectionsColumnHeld} {
+			for _, total := range board.Columns[key].Summary.Totals {
+				previous, _ := decimal.NewFromString(boardTotals[total.Currency])
+				boardTotals[total.Currency] = previous.Add(total.Amount).String()
+			}
+		}
+		summaryTotals := map[string]string{}
+		for currency, amount := range totalsMap(summary.Totals) {
+			summaryTotals[currency] = amount
+		}
+		require.Equal(t, boardTotals, summaryTotals, "overdue covered per currency, query %+v", q)
+	}
+}
+
+func TestCollectionsRepository_ReminderSummaryOfOneCurrencyHasNoOthers(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	for _, currency := range []string{"usd", "eur", "xyz"} {
+		got, err := f.board.SummarizeReminders(f.ctx, collections.Query{AsOf: f.asOf, Currency: currency})
+		require.NoError(t, err)
+		for _, total := range got.Totals {
+			require.Equal(t, currency, total.Currency)
+		}
+	}
+}
+
+func TestCollectionsRepository_ReminderListPagesWithTheRange(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	for _, rng := range f.ranges() {
+		q := collections.Query{AsOf: f.asOf, Range: rng}
+		for _, statuses := range [][]types.ReminderStatus{nil, {types.ReminderStatusPending}, {types.ReminderStatusHeld, types.ReminderStatusSkipped}} {
+			filter := collections.InvoiceFilter{Column: types.CollectionsColumnOverdue, Statuses: statuses}
+			want := ids(f.expected(q, filter))
+
+			var got []string
+			for offset := 0; ; offset += 4 {
+				page, hasMore, err := f.board.ListInvoicesWithReminders(f.ctx, q, filter, offset, 4)
+				require.NoError(t, err)
+				got = append(got, rowIDs(page)...)
+				if !hasMore {
+					break
+				}
+			}
+			if len(want) == 0 {
+				require.Empty(t, got, "range %+v statuses %v", rng, statuses)
+				continue
+			}
+			require.Equal(t, want, got, "range %+v statuses %v", rng, statuses)
+		}
+	}
+}
+
+// A currency seen only on an older paid invoice is offered once the range reaches back to it.
+func TestCollectionsRepository_BoardCurrenciesFollowThePaidColumn(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	f.insertInvoice(t, f.ctx, invSpec{id: f.run + "_pd_chf", customer: "cust_a", currency: "CHF", invoiceStatus: "FINALIZED", paymentStatus: "SUCCEEDED",
+		number: "INV-CHF", total: 40, paidAt: f.at(-30 * 24 * time.Hour)})
+
+	reaching, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf, Range: &collections.DateRange{From: f.dayAt(-40)}}, 0)
+	require.NoError(t, err)
+	require.Equal(t, "40", totalsMap(reaching.Columns[types.CollectionsColumnPaidThisWeek].Summary.Totals)["chf"], "the paid column shows the CHF invoice")
+	require.Equal(t, []string{"chf", "eur", "gbp", "usd"}, reaching.AvailableCurrencies)
+
+	week, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf, Currency: "usd"}, 0)
+	require.NoError(t, err)
+	require.Equal(t, []string{"eur", "gbp", "usd"}, week.AvailableCurrencies, "without a range the paid column is the last week")
+
+	reminders, err := f.board.AvailableCurrencies(f.ctx, f.asOf)
+	require.NoError(t, err)
+	require.Equal(t, []string{"eur", "gbp", "usd"}, reminders, "the reminder list keeps open and recently paid invoices")
+}
+
+func TestCollectionsRepository_AvailableCurrenciesMatchTheBoard(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	board, err := f.board.Board(f.ctx, collections.Query{AsOf: f.asOf}, 0)
+	require.NoError(t, err)
+	got, err := f.board.AvailableCurrencies(f.ctx, f.asOf)
+	require.NoError(t, err)
+	require.Equal(t, board.AvailableCurrencies, got)
 }
 
 func TestCollectionsRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
@@ -464,7 +638,7 @@ func TestCollectionsRepository_EmptyEnvironmentAndIsolation(t *testing.T) {
 	otherEnv, err := f.board.Board(f.otherEnv, collections.Query{AsOf: f.asOf}, 500)
 	require.NoError(t, err)
 	require.Equal(t, 1, otherEnv.Columns[types.CollectionsColumnOverdue].Summary.Count)
-	summary, err := f.board.SummarizeReminders(f.other, f.asOf)
+	summary, err := f.board.SummarizeReminders(f.other, collections.Query{AsOf: f.asOf})
 	require.NoError(t, err)
 	require.Equal(t, 1, summary.InvoiceCount)
 }
@@ -706,4 +880,86 @@ func TestInvoiceReminderRepository_CreateManyRollsBackWithItsTransaction(t *test
 	rows, err := f.reminders.GetInvoicesWithReminders(f.ctx, f.asOf, pending[:1])
 	require.NoError(t, err)
 	require.Nil(t, rows[0].Reminder, "the write before the duplicate is rolled back with it")
+}
+
+func TestCollectionsRepository_ApprovedRemindersComeNewestApprovalFirst(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	approved := collections.InvoiceFilter{Column: types.CollectionsColumnOverdue, Statuses: []types.ReminderStatus{types.ReminderStatusApproved}}
+	chasing := collections.InvoiceFilter{Column: types.CollectionsColumnChasing, Statuses: types.ColumnStatuses(types.CollectionsColumnChasing)}
+
+	for _, q := range append(f.queries(), collections.Query{AsOf: f.asOf, Range: f.ranges()[1], Currency: "usd"}) {
+		want := ids(f.expected(q, approved))
+		for _, filter := range []collections.InvoiceFilter{approved, chasing} {
+			var got []string
+			for offset := 0; ; offset += 3 {
+				page, hasMore, err := f.board.ListInvoicesWithReminders(f.ctx, q, filter, offset, 3)
+				require.NoError(t, err)
+				got = append(got, rowIDs(page)...)
+				if !hasMore {
+					break
+				}
+			}
+			if len(want) == 0 {
+				require.Empty(t, got)
+				continue
+			}
+			require.Equal(t, want, got, "column %s, query %+v", filter.Column, q)
+		}
+	}
+
+	all, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: f.asOf}, approved, 0, 200)
+	require.NoError(t, err)
+	for i := 1; i < len(all); i++ {
+		prev, cur := f.approvedAt[all[i-1].InvoiceID], f.approvedAt[all[i].InvoiceID]
+		require.False(t, cur.After(prev), "newest approval first")
+		if cur.Equal(prev) {
+			require.Less(t, all[i-1].InvoiceID, all[i].InvoiceID, "equal approval times fall back to the invoice id")
+		}
+	}
+	require.NotEmpty(t, all)
+	var first, last time.Time
+	first, last = f.approvedAt[all[0].InvoiceID], f.approvedAt[all[len(all)-1].InvoiceID]
+	require.True(t, first.After(last), "the seed holds distinct approval times")
+}
+
+func TestCollectionsRepository_ApprovalsAfterAsOfStayOutOfAPagedSession(t *testing.T) {
+	f := newReminderFixture(t)
+	f.seed(t)
+	approved := collections.InvoiceFilter{Column: types.CollectionsColumnOverdue, Statuses: []types.ReminderStatus{types.ReminderStatusApproved}}
+	q := collections.Query{AsOf: f.asOf}
+	before, _, err := f.board.ListInvoicesWithReminders(f.ctx, q, approved, 0, 200)
+	require.NoError(t, err)
+
+	pending := f.untouched()[0]
+	late := f.asOf.Add(time.Hour)
+	r := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: "irem_" + f.run + "_late", InvoiceID: pending, BaseModel: types.GetDefaultBaseModel(f.ctx),
+	}).WithText(types.ReminderToneFriendly, "s", "b").WithStatus(types.ReminderStatusApproved, "", &late).Build()
+	require.NoError(t, f.reminders.Create(f.ctx, r))
+
+	after, _, err := f.board.ListInvoicesWithReminders(f.ctx, q, approved, 0, 200)
+	require.NoError(t, err)
+	require.Equal(t, rowIDs(before), rowIDs(after), "an approval made after as_of does not enter the session")
+
+	board, err := f.board.Board(f.ctx, q, 0)
+	require.NoError(t, err)
+	require.Equal(t, len(before), board.Columns[types.CollectionsColumnChasing].Summary.Count, "nor the board's approved count")
+	summary, err := f.board.SummarizeReminders(f.ctx, q)
+	require.NoError(t, err)
+	require.Equal(t, len(before), summary.Statuses[types.ReminderStatusApproved], "nor the reminder summary's")
+
+	f.insertInvoice(t, f.ctx, invSpec{id: f.run + "_od_jpy", customer: "cust_a", currency: "JPY", invoiceStatus: "FINALIZED", paymentStatus: "PENDING",
+		number: "INV-JPY", remaining: 10, total: 10, due: f.at(-48 * time.Hour)})
+	jpy := collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{
+		ID: "irem_" + f.run + "_jpy", InvoiceID: f.run + "_od_jpy", BaseModel: types.GetDefaultBaseModel(f.ctx),
+	}).WithText(types.ReminderToneFriendly, "s", "b").WithStatus(types.ReminderStatusApproved, "", &late).Build()
+	require.NoError(t, f.reminders.Create(f.ctx, jpy))
+	board, err = f.board.Board(f.ctx, q, 0)
+	require.NoError(t, err)
+	require.Contains(t, board.AvailableCurrencies, "jpy", "an open invoice stays a currency choice while its late approval keeps it off the columns")
+
+	fresh, _, err := f.board.ListInvoicesWithReminders(f.ctx, collections.Query{AsOf: late.Add(time.Minute)}, approved, 0, 200)
+	require.NoError(t, err)
+	require.Equal(t, pending, rowIDs(fresh)[0], "a fresh read starts with the newest approval")
 }

@@ -297,9 +297,6 @@ func TestReminderEmail_ListCarriesTheEmailOfApprovedRemindersInOneQuery(t *testi
 	_, err = f.svc.UpdateReminder(ctx, "a3", setStatus(types.ReminderStatusHeld, "wait"))
 	require.NoError(t, err)
 
-	rows, err := f.reminders.GetInvoicesWithReminders(ctx, clock.Now(), []string{"a1", "a2", "a3", "a4"})
-	require.NoError(t, err)
-	f.board.rows = rows
 	f.lists = 0
 	resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
 	require.NoError(t, err)
