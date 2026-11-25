@@ -38,6 +38,7 @@ type SubscriptionPriceCreateRequest struct {
 	EndDate           *time.Time               `json:"end_date,omitempty"`
 	DisplayName       string                   `json:"display_name,omitempty"`
 	MinQuantity       *int64                   `json:"min_quantity,omitempty"`
+	ProductID         string                   `json:"product_id,omitempty"`
 }
 
 // ToCreatePriceRequest builds a CreatePriceRequest for subscription-scoped price creation.
@@ -71,6 +72,7 @@ func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.
 		EndDate:              p.EndDate,
 		DisplayName:          p.DisplayName,
 		MinQuantity:          p.MinQuantity,
+		ProductID:            p.ProductID,
 		Currency:             sub.Currency,
 		EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
 		EntityID:             sub.ID,

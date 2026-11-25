@@ -7,11 +7,21 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/openrouter"
+	"github.com/flexprice/flexprice/internal/ee/agents/providers/reducto"
+	"github.com/flexprice/flexprice/internal/ee/agents/services/customermatch"
 	"github.com/flexprice/flexprice/internal/ee/service"
+	contractsvc "github.com/flexprice/flexprice/internal/ee/service/contract"
+	pobsvc "github.com/flexprice/flexprice/internal/ee/service/pob"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/postgres"
+	contractRepo "github.com/flexprice/flexprice/internal/repository/contract"
+	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"go.temporal.io/api/serviceerror"
 	sdkclient "go.temporal.io/sdk/client"
@@ -57,7 +67,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	temporalSvc := &startupRollbackTemporalService{}
 	temporalClient := failingScheduleTemporalClient{}
 	lc := fxtest.NewLifecycle(t)
-	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil)
+	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil, nil)
 
 	err := lc.Start(context.Background())
 	if !errors.Is(err, errEnsureSchedules) {
@@ -85,13 +95,13 @@ func TestServiceParamsProviders(t *testing.T) {
 	}{
 		{"billing_not_configured", config.BillingConfig{}},
 		{"billing_configured", config.BillingConfig{
-			Enabled:      true,
-			Region:       "us",
-			APIHost:      "https://billing.example.com/v1",
-			APIKey:       "sk_test",
+			Enabled:       true,
+			Region:        "us",
+			APIHost:       "https://billing.example.com/v1",
+			APIKey:        "sk_test",
 			DefaultPlanID: "plan_free",
 			PlanIDs:       []string{"plan_free"},
-			DashboardURL: "https://app.example.com",
+			DashboardURL:  "https://app.example.com",
 		}},
 	}
 	for _, tt := range tests {
@@ -113,4 +123,30 @@ func TestServiceParamsProviders(t *testing.T) {
 			assert.NotNil(t, params.SelfBilling, "self-billing is always wired; it is a no-op unless configured")
 		})
 	}
+}
+
+func TestContractIngestServiceProviders(t *testing.T) {
+	var ingest contractsvc.ContractIngestService
+	app := fxtest.New(t,
+		fx.Supply(&config.Configuration{}, logger.NewNoopLogger()),
+		fx.Provide(
+			func() contractRepo.Repository { return testutil.NewInMemoryContractStore() },
+			func() storage.Resolver { return nil },
+			func() interfaces.CustomerService { return nil },
+			func() interfaces.ProductService { return nil },
+			func() interfaces.SubscriptionService { return nil },
+			func() postgres.IClient { return nil },
+			func() pobsvc.PerformanceObligationService { return nil },
+			contractsvc.NewContractService,
+			reducto.NewClient,
+			openrouter.NewClient,
+			provideContractExtractionService,
+			customermatch.NewCustomerMatchService,
+			contractsvc.NewContractIngestService,
+		),
+		fx.Populate(&ingest),
+	)
+	app.RequireStart().RequireStop()
+
+	assert.NotNil(t, ingest)
 }

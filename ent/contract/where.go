@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -114,6 +115,11 @@ func TermStart(v time.Time) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldTermStart, v))
 }
 
+// ContractValue applies equality check predicate on the "contract_value" field. It's identical to ContractValueEQ.
+func ContractValue(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldContractValue, v))
+}
+
 // TermEnd applies equality check predicate on the "term_end" field. It's identical to TermEndEQ.
 func TermEnd(v time.Time) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldTermEnd, v))
@@ -127,6 +133,21 @@ func EndedAt(v time.Time) predicate.Contract {
 // ContractStatus applies equality check predicate on the "contract_status" field. It's identical to ContractStatusEQ.
 func ContractStatus(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldEQ(FieldContractStatus, v))
+}
+
+// ExtractionStatus applies equality check predicate on the "extraction_status" field. It's identical to ExtractionStatusEQ.
+func ExtractionStatus(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldExtractionStatus, v))
+}
+
+// ExtractionError applies equality check predicate on the "extraction_error" field. It's identical to ExtractionErrorEQ.
+func ExtractionError(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldExtractionError, v))
+}
+
+// ReviewVersion applies equality check predicate on the "review_version" field. It's identical to ReviewVersionEQ.
+func ReviewVersion(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldReviewVersion, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -619,6 +640,16 @@ func CustomerIDHasSuffix(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldHasSuffix(FieldCustomerID, v))
 }
 
+// CustomerIDIsNil applies the IsNil predicate on the "customer_id" field.
+func CustomerIDIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldCustomerID))
+}
+
+// CustomerIDNotNil applies the NotNil predicate on the "customer_id" field.
+func CustomerIDNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldCustomerID))
+}
+
 // CustomerIDEqualFold applies the EqualFold predicate on the "customer_id" field.
 func CustomerIDEqualFold(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldEqualFold(FieldCustomerID, v))
@@ -684,6 +715,16 @@ func CurrencyHasSuffix(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldHasSuffix(FieldCurrency, v))
 }
 
+// CurrencyIsNil applies the IsNil predicate on the "currency" field.
+func CurrencyIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldCurrency))
+}
+
+// CurrencyNotNil applies the NotNil predicate on the "currency" field.
+func CurrencyNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldCurrency))
+}
+
 // CurrencyEqualFold applies the EqualFold predicate on the "currency" field.
 func CurrencyEqualFold(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldEqualFold(FieldCurrency, v))
@@ -742,6 +783,56 @@ func TermStartIsNil() predicate.Contract {
 // TermStartNotNil applies the NotNil predicate on the "term_start" field.
 func TermStartNotNil() predicate.Contract {
 	return predicate.Contract(sql.FieldNotNull(FieldTermStart))
+}
+
+// ContractValueEQ applies the EQ predicate on the "contract_value" field.
+func ContractValueEQ(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldContractValue, v))
+}
+
+// ContractValueNEQ applies the NEQ predicate on the "contract_value" field.
+func ContractValueNEQ(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldContractValue, v))
+}
+
+// ContractValueIn applies the In predicate on the "contract_value" field.
+func ContractValueIn(vs ...decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldContractValue, vs...))
+}
+
+// ContractValueNotIn applies the NotIn predicate on the "contract_value" field.
+func ContractValueNotIn(vs ...decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldContractValue, vs...))
+}
+
+// ContractValueGT applies the GT predicate on the "contract_value" field.
+func ContractValueGT(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldContractValue, v))
+}
+
+// ContractValueGTE applies the GTE predicate on the "contract_value" field.
+func ContractValueGTE(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldContractValue, v))
+}
+
+// ContractValueLT applies the LT predicate on the "contract_value" field.
+func ContractValueLT(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldContractValue, v))
+}
+
+// ContractValueLTE applies the LTE predicate on the "contract_value" field.
+func ContractValueLTE(v decimal.Decimal) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldContractValue, v))
+}
+
+// ContractValueIsNil applies the IsNil predicate on the "contract_value" field.
+func ContractValueIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldContractValue))
+}
+
+// ContractValueNotNil applies the NotNil predicate on the "contract_value" field.
+func ContractValueNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldContractValue))
 }
 
 // TermEndEQ applies the EQ predicate on the "term_end" field.
@@ -907,6 +998,226 @@ func ContractStatusEqualFold(v string) predicate.Contract {
 // ContractStatusContainsFold applies the ContainsFold predicate on the "contract_status" field.
 func ContractStatusContainsFold(v string) predicate.Contract {
 	return predicate.Contract(sql.FieldContainsFold(FieldContractStatus, v))
+}
+
+// DocumentIsNil applies the IsNil predicate on the "document" field.
+func DocumentIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldDocument))
+}
+
+// DocumentNotNil applies the NotNil predicate on the "document" field.
+func DocumentNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldDocument))
+}
+
+// ExtractionStatusEQ applies the EQ predicate on the "extraction_status" field.
+func ExtractionStatusEQ(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusNEQ applies the NEQ predicate on the "extraction_status" field.
+func ExtractionStatusNEQ(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusIn applies the In predicate on the "extraction_status" field.
+func ExtractionStatusIn(vs ...string) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldExtractionStatus, vs...))
+}
+
+// ExtractionStatusNotIn applies the NotIn predicate on the "extraction_status" field.
+func ExtractionStatusNotIn(vs ...string) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldExtractionStatus, vs...))
+}
+
+// ExtractionStatusGT applies the GT predicate on the "extraction_status" field.
+func ExtractionStatusGT(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusGTE applies the GTE predicate on the "extraction_status" field.
+func ExtractionStatusGTE(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusLT applies the LT predicate on the "extraction_status" field.
+func ExtractionStatusLT(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusLTE applies the LTE predicate on the "extraction_status" field.
+func ExtractionStatusLTE(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusContains applies the Contains predicate on the "extraction_status" field.
+func ExtractionStatusContains(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldContains(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusHasPrefix applies the HasPrefix predicate on the "extraction_status" field.
+func ExtractionStatusHasPrefix(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldHasPrefix(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusHasSuffix applies the HasSuffix predicate on the "extraction_status" field.
+func ExtractionStatusHasSuffix(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldHasSuffix(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusIsNil applies the IsNil predicate on the "extraction_status" field.
+func ExtractionStatusIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldExtractionStatus))
+}
+
+// ExtractionStatusNotNil applies the NotNil predicate on the "extraction_status" field.
+func ExtractionStatusNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldExtractionStatus))
+}
+
+// ExtractionStatusEqualFold applies the EqualFold predicate on the "extraction_status" field.
+func ExtractionStatusEqualFold(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEqualFold(FieldExtractionStatus, v))
+}
+
+// ExtractionStatusContainsFold applies the ContainsFold predicate on the "extraction_status" field.
+func ExtractionStatusContainsFold(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldContainsFold(FieldExtractionStatus, v))
+}
+
+// ExtractionIsNil applies the IsNil predicate on the "extraction" field.
+func ExtractionIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldExtraction))
+}
+
+// ExtractionNotNil applies the NotNil predicate on the "extraction" field.
+func ExtractionNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldExtraction))
+}
+
+// ExtractionErrorEQ applies the EQ predicate on the "extraction_error" field.
+func ExtractionErrorEQ(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldExtractionError, v))
+}
+
+// ExtractionErrorNEQ applies the NEQ predicate on the "extraction_error" field.
+func ExtractionErrorNEQ(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldExtractionError, v))
+}
+
+// ExtractionErrorIn applies the In predicate on the "extraction_error" field.
+func ExtractionErrorIn(vs ...string) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldExtractionError, vs...))
+}
+
+// ExtractionErrorNotIn applies the NotIn predicate on the "extraction_error" field.
+func ExtractionErrorNotIn(vs ...string) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldExtractionError, vs...))
+}
+
+// ExtractionErrorGT applies the GT predicate on the "extraction_error" field.
+func ExtractionErrorGT(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldExtractionError, v))
+}
+
+// ExtractionErrorGTE applies the GTE predicate on the "extraction_error" field.
+func ExtractionErrorGTE(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldExtractionError, v))
+}
+
+// ExtractionErrorLT applies the LT predicate on the "extraction_error" field.
+func ExtractionErrorLT(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldExtractionError, v))
+}
+
+// ExtractionErrorLTE applies the LTE predicate on the "extraction_error" field.
+func ExtractionErrorLTE(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldExtractionError, v))
+}
+
+// ExtractionErrorContains applies the Contains predicate on the "extraction_error" field.
+func ExtractionErrorContains(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldContains(FieldExtractionError, v))
+}
+
+// ExtractionErrorHasPrefix applies the HasPrefix predicate on the "extraction_error" field.
+func ExtractionErrorHasPrefix(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldHasPrefix(FieldExtractionError, v))
+}
+
+// ExtractionErrorHasSuffix applies the HasSuffix predicate on the "extraction_error" field.
+func ExtractionErrorHasSuffix(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldHasSuffix(FieldExtractionError, v))
+}
+
+// ExtractionErrorIsNil applies the IsNil predicate on the "extraction_error" field.
+func ExtractionErrorIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldExtractionError))
+}
+
+// ExtractionErrorNotNil applies the NotNil predicate on the "extraction_error" field.
+func ExtractionErrorNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldExtractionError))
+}
+
+// ExtractionErrorEqualFold applies the EqualFold predicate on the "extraction_error" field.
+func ExtractionErrorEqualFold(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldEqualFold(FieldExtractionError, v))
+}
+
+// ExtractionErrorContainsFold applies the ContainsFold predicate on the "extraction_error" field.
+func ExtractionErrorContainsFold(v string) predicate.Contract {
+	return predicate.Contract(sql.FieldContainsFold(FieldExtractionError, v))
+}
+
+// ReviewIsNil applies the IsNil predicate on the "review" field.
+func ReviewIsNil() predicate.Contract {
+	return predicate.Contract(sql.FieldIsNull(FieldReview))
+}
+
+// ReviewNotNil applies the NotNil predicate on the "review" field.
+func ReviewNotNil() predicate.Contract {
+	return predicate.Contract(sql.FieldNotNull(FieldReview))
+}
+
+// ReviewVersionEQ applies the EQ predicate on the "review_version" field.
+func ReviewVersionEQ(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldEQ(FieldReviewVersion, v))
+}
+
+// ReviewVersionNEQ applies the NEQ predicate on the "review_version" field.
+func ReviewVersionNEQ(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldNEQ(FieldReviewVersion, v))
+}
+
+// ReviewVersionIn applies the In predicate on the "review_version" field.
+func ReviewVersionIn(vs ...int) predicate.Contract {
+	return predicate.Contract(sql.FieldIn(FieldReviewVersion, vs...))
+}
+
+// ReviewVersionNotIn applies the NotIn predicate on the "review_version" field.
+func ReviewVersionNotIn(vs ...int) predicate.Contract {
+	return predicate.Contract(sql.FieldNotIn(FieldReviewVersion, vs...))
+}
+
+// ReviewVersionGT applies the GT predicate on the "review_version" field.
+func ReviewVersionGT(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldGT(FieldReviewVersion, v))
+}
+
+// ReviewVersionGTE applies the GTE predicate on the "review_version" field.
+func ReviewVersionGTE(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldGTE(FieldReviewVersion, v))
+}
+
+// ReviewVersionLT applies the LT predicate on the "review_version" field.
+func ReviewVersionLT(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldLT(FieldReviewVersion, v))
+}
+
+// ReviewVersionLTE applies the LTE predicate on the "review_version" field.
+func ReviewVersionLTE(v int) predicate.Contract {
+	return predicate.Contract(sql.FieldLTE(FieldReviewVersion, v))
 }
 
 // And groups predicates with the AND operator between them.

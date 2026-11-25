@@ -4,6 +4,7 @@ import (
 	"context"
 
 	journalsvc "github.com/flexprice/flexprice/internal/ee/service/journal"
+	"github.com/flexprice/flexprice/internal/ee/service/recognition"
 	"github.com/flexprice/flexprice/internal/logger"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
@@ -27,12 +28,13 @@ func (a *RevenueRecognitionActivities) RecognizeRevenueActivity(ctx context.Cont
 		AsOf:          in.AsOf,
 		TenantID:      in.TenantID,
 		EnvironmentID: in.EnvironmentID,
+		Scope:         recognition.Scope{ContractID: in.ContractID, CustomerID: in.CustomerID},
 		Resume:        heartbeatCursor(ctx),
 		OnProgress:    func(c journalsvc.RecognitionCursor) { activity.RecordHeartbeat(ctx, c) },
 	})
 	if err != nil {
 		a.logger.Error(ctx, "revenue recognition run failed", "error", err, "since", in.Since, "as_of", in.AsOf,
-			"tenant_id", in.TenantID, "environment_id", in.EnvironmentID)
+			"tenant_id", in.TenantID, "environment_id", in.EnvironmentID, "contract_id", in.ContractID, "customer_id", in.CustomerID)
 	}
 	return err
 }

@@ -1,23 +1,34 @@
 package contract
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Contract is the accounting agreement a subscription establishes.
 type Contract struct {
-	id             string
-	customerID     string
-	currency       string
-	termStart      *time.Time
-	termEnd        *time.Time
-	endedAt        *time.Time
-	contractStatus types.ContractStatus
-	status         types.Status
-	createdAt      time.Time
-	updatedAt      time.Time
+	id               string
+	tenantID         string
+	environmentID    string
+	customerID       string
+	currency         string
+	termStart        *time.Time
+	termEnd          *time.Time
+	contractValue    *decimal.Decimal
+	endedAt          *time.Time
+	contractStatus   types.ContractStatus
+	status           types.Status
+	createdAt        time.Time
+	updatedAt        time.Time
+	document         *types.ContractDocument
+	extractionStatus types.ContractExtractionStatus
+	extraction       json.RawMessage
+	extractionError  string
+	review           json.RawMessage
+	reviewVersion    int
 }
 
 func (c *Contract) ID() string {
@@ -25,6 +36,20 @@ func (c *Contract) ID() string {
 		return ""
 	}
 	return c.id
+}
+
+func (c *Contract) TenantID() string {
+	if c == nil {
+		return ""
+	}
+	return c.tenantID
+}
+
+func (c *Contract) EnvironmentID() string {
+	if c == nil {
+		return ""
+	}
+	return c.environmentID
 }
 
 func (c *Contract) CustomerID() string {
@@ -53,6 +78,14 @@ func (c *Contract) TermEnd() *time.Time {
 		return nil
 	}
 	return c.termEnd
+}
+
+// ContractValue is the agreed total its POBs' allocations add up to; nil until the contract is completed.
+func (c *Contract) ContractValue() *decimal.Decimal {
+	if c == nil {
+		return nil
+	}
+	return c.contractValue
 }
 
 func (c *Contract) EndedAt() *time.Time {
@@ -90,6 +123,48 @@ func (c *Contract) UpdatedAt() time.Time {
 	return c.updatedAt
 }
 
+func (c *Contract) Document() *types.ContractDocument {
+	if c == nil {
+		return nil
+	}
+	return c.document
+}
+
+func (c *Contract) ExtractionStatus() types.ContractExtractionStatus {
+	if c == nil {
+		return ""
+	}
+	return c.extractionStatus
+}
+
+func (c *Contract) Extraction() json.RawMessage {
+	if c == nil {
+		return nil
+	}
+	return c.extraction
+}
+
+func (c *Contract) ExtractionError() string {
+	if c == nil {
+		return ""
+	}
+	return c.extractionError
+}
+
+func (c *Contract) Review() json.RawMessage {
+	if c == nil {
+		return nil
+	}
+	return c.review
+}
+
+func (c *Contract) ReviewVersion() int {
+	if c == nil {
+		return 0
+	}
+	return c.reviewVersion
+}
+
 // Builder copies an existing contract and applies field updates to the copy.
 type Builder struct {
 	contract Contract
@@ -106,6 +181,16 @@ func NewBuilder(c *Contract) *Builder {
 
 func (b *Builder) WithID(id string) *Builder {
 	b.contract.id = id
+	return b
+}
+
+func (b *Builder) WithTenantID(tenantID string) *Builder {
+	b.contract.tenantID = tenantID
+	return b
+}
+
+func (b *Builder) WithEnvironmentID(environmentID string) *Builder {
+	b.contract.environmentID = environmentID
 	return b
 }
 
@@ -126,6 +211,11 @@ func (b *Builder) WithTermStart(termStart *time.Time) *Builder {
 
 func (b *Builder) WithTermEnd(termEnd *time.Time) *Builder {
 	b.contract.termEnd = termEnd
+	return b
+}
+
+func (b *Builder) WithContractValue(contractValue *decimal.Decimal) *Builder {
+	b.contract.contractValue = contractValue
 	return b
 }
 
@@ -151,6 +241,36 @@ func (b *Builder) WithCreatedAt(createdAt time.Time) *Builder {
 
 func (b *Builder) WithUpdatedAt(updatedAt time.Time) *Builder {
 	b.contract.updatedAt = updatedAt
+	return b
+}
+
+func (b *Builder) WithDocument(document *types.ContractDocument) *Builder {
+	b.contract.document = document
+	return b
+}
+
+func (b *Builder) WithExtractionStatus(status types.ContractExtractionStatus) *Builder {
+	b.contract.extractionStatus = status
+	return b
+}
+
+func (b *Builder) WithExtraction(extraction json.RawMessage) *Builder {
+	b.contract.extraction = extraction
+	return b
+}
+
+func (b *Builder) WithExtractionError(extractionError string) *Builder {
+	b.contract.extractionError = extractionError
+	return b
+}
+
+func (b *Builder) WithReview(review json.RawMessage) *Builder {
+	b.contract.review = review
+	return b
+}
+
+func (b *Builder) WithReviewVersion(version int) *Builder {
+	b.contract.reviewVersion = version
 	return b
 }
 

@@ -202,3 +202,39 @@ type RevenueBreakdown struct {
 	Pending   decimal.Decimal `json:"pending" swaggertype:"string"`
 	Scheduled decimal.Decimal `json:"scheduled" swaggertype:"string"`
 }
+
+// StartRevenueRecognitionRunRequest limits a recognition run to one contract or one customer; empty runs the whole
+// environment.
+type StartRevenueRecognitionRunRequest struct {
+	ContractID string `json:"contract_id,omitempty"`
+	CustomerID string `json:"customer_id,omitempty"`
+}
+
+func (r *StartRevenueRecognitionRunRequest) Validate() error {
+	if r.ContractID != "" && r.CustomerID != "" {
+		return ierr.NewError("set contract_id or customer_id, not both").
+			WithHint("Run recognition for one contract, one customer, or the whole environment").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// RevenueRecognitionRunStatus is queued until a worker picks the run up, then running, completed or failed.
+type RevenueRecognitionRunStatus string
+
+const (
+	RevenueRecognitionRunStatusQueued    RevenueRecognitionRunStatus = "queued"
+	RevenueRecognitionRunStatusRunning   RevenueRecognitionRunStatus = "running"
+	RevenueRecognitionRunStatusCompleted RevenueRecognitionRunStatus = "completed"
+	RevenueRecognitionRunStatusFailed    RevenueRecognitionRunStatus = "failed"
+)
+
+// RevenueRecognitionRunResponse reports a recognition run started from the tenant API.
+type RevenueRecognitionRunResponse struct {
+	WorkflowID string                      `json:"workflow_id"`
+	RunID      string                      `json:"run_id"`
+	Status     RevenueRecognitionRunStatus `json:"status"`
+	LastError  string                      `json:"last_error,omitempty"`
+	StartedAt  *time.Time                  `json:"started_at,omitempty"`
+	ClosedAt   *time.Time                  `json:"closed_at,omitempty"`
+}

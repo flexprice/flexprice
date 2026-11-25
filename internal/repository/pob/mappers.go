@@ -15,6 +15,8 @@ func FromEnt(e *ent.PerformanceObligation) *domainPOB.PerformanceObligation {
 	return domainPOB.NewBuilder(nil).
 		WithID(e.ID).
 		WithContractID(e.ContractID).
+		WithProductID(e.ProductID).
+		WithAllocatedAmount(e.AllocatedAmount).
 		WithName(e.Name).
 		WithRecognitionMethod(types.RecognitionMethod(e.RecognitionMethod)).
 		WithAmortizationMethod(types.AmortizationMethod(e.AmortizationMethod)).
@@ -30,26 +32,5 @@ func FromEnt(e *ent.PerformanceObligation) *domainPOB.PerformanceObligation {
 func FromEntList(ents []*ent.PerformanceObligation) []*domainPOB.PerformanceObligation {
 	return lo.Map(ents, func(e *ent.PerformanceObligation, _ int) *domainPOB.PerformanceObligation {
 		return FromEnt(e)
-	})
-}
-
-// AssociationFromEnt maps a performance_obligation_associations row to the domain association.
-func AssociationFromEnt(e *ent.PerformanceObligationAssociation) *domainPOB.Association {
-	if e == nil {
-		return nil
-	}
-	return domainPOB.NewAssociationBuilder(nil).
-		WithID(e.ID).
-		WithPOBID(e.PobID).
-		WithEntityType(types.RevRecEntityType(e.EntityType)).
-		WithEntityID(e.EntityID).
-		WithStatus(types.Status(e.Status)).
-		WithCreatedAt(e.CreatedAt).
-		Build()
-}
-
-func AssociationFromEntList(ents []*ent.PerformanceObligationAssociation) []*domainPOB.Association {
-	return lo.Map(ents, func(e *ent.PerformanceObligationAssociation, _ int) *domainPOB.Association {
-		return AssociationFromEnt(e)
 	})
 }

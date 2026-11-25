@@ -56,7 +56,6 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
 	"github.com/flexprice/flexprice/ent/performanceobligation"
-	"github.com/flexprice/flexprice/ent/performanceobligationassociation"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -3073,68 +3072,6 @@ func scanReturningPerformanceObligation(rows *sql.Rows) ([]*PerformanceObligatio
 	var out []*PerformanceObligation
 	for rows.Next() {
 		node := &PerformanceObligation{}
-		values, err := node.scanValues(cols)
-		if err != nil {
-			return nil, err
-		}
-		if err := rows.Scan(values...); err != nil {
-			return nil, err
-		}
-		if err := node.assignValues(cols, values); err != nil {
-			return nil, err
-		}
-		out = append(out, node)
-	}
-	return out, rows.Err()
-}
-
-// SaveReturning is like Save but returns the updated rows. Hooks receive []*PerformanceObligationAssociation.
-func (_u *PerformanceObligationAssociationUpdate) SaveReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
-	_u.defaults()
-	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
-}
-
-func (_u *PerformanceObligationAssociationUpdate) sqlSaveReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
-	var out []*PerformanceObligationAssociation
-	c := *_u
-	c.driver = newReturning(_u.driver, "UPDATE", performanceobligationassociation.Table, performanceobligationassociation.Columns, func(rows *sql.Rows) (int, error) {
-		var err error
-		out, err = scanReturningPerformanceObligationAssociation(rows)
-		return len(out), err
-	})
-	if _, err := c.sqlSave(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*PerformanceObligationAssociation.
-func (_d *PerformanceObligationAssociationDelete) ExecReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
-	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
-}
-
-func (_d *PerformanceObligationAssociationDelete) sqlExecReturning(ctx context.Context) ([]*PerformanceObligationAssociation, error) {
-	var out []*PerformanceObligationAssociation
-	c := *_d
-	c.driver = newReturning(_d.driver, "DELETE FROM", performanceobligationassociation.Table, performanceobligationassociation.Columns, func(rows *sql.Rows) (int, error) {
-		var err error
-		out, err = scanReturningPerformanceObligationAssociation(rows)
-		return len(out), err
-	})
-	if _, err := c.sqlExec(ctx); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func scanReturningPerformanceObligationAssociation(rows *sql.Rows) ([]*PerformanceObligationAssociation, error) {
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, err
-	}
-	var out []*PerformanceObligationAssociation
-	for rows.Next() {
-		node := &PerformanceObligationAssociation{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

@@ -294,3 +294,36 @@ func (b *LineBuilder) Build() *Line {
 	l := b.line
 	return &l
 }
+
+// Posting is a signed amount on an account, with its POB: positive credits, negative debits.
+type Posting struct {
+	Account types.LedgerAccountKey
+	Amount  decimal.Decimal
+	POBID   string
+}
+
+// LinesFrom turns postings into lines, dropping zeros.
+// e.g. [{revenue, 100}, {deferred, −100}, {tax, 0}] → Cr revenue 100, Dr deferred 100
+func LinesFrom(postings []Posting) []*Line {
+	var lines []*Line
+	for _, p := range postings {
+		if p.Amount.IsZero() {
+			continue
+		}
+		direction := types.JournalDirectionDebit
+		if p.Amount.IsPositive() {
+			direction = types.JournalDirectionCredit
+		}
+		lines = append(lines, NewLineBuilder(nil).WithAccount(p.Account).WithDirection(direction).WithAmount(p.Amount.Abs()).WithPOBID(p.POBID).Build())
+	}
+	return lines
+}
+
+// Reversed negates every posting.
+func Reversed(postings []Posting) []Posting {
+	out := make([]Posting, len(postings))
+	for i, p := range postings {
+		out[i] = Posting{Account: p.Account, Amount: p.Amount.Neg(), POBID: p.POBID}
+	}
+	return out
+}

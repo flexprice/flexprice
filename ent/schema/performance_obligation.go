@@ -2,9 +2,11 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/shopspring/decimal"
 )
 
 // PerformanceObligation holds the schema definition for the PerformanceObligation entity.
@@ -66,6 +68,18 @@ func (PerformanceObligation) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty(),
+
+		field.String("product_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Immutable(),
+
+		field.Other("allocated_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{"postgres": "numeric(20,8)"}).
+			Default(decimal.Zero).
+			Annotations(entsql.Default("0")),
 	}
 }
 

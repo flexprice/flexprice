@@ -51,7 +51,11 @@ func NewProviderHTTPClient(timeout time.Duration, log *logger.Logger, provider s
 
 // NewProviderClient is NewDefaultClient with provider call logging.
 func NewProviderClient(log *logger.Logger, provider string) Client {
-	return &DefaultClient{client: NewProviderHTTPClient(30*time.Second, log, provider)}
+	return NewProviderClientWithTimeout(30*time.Second, log, provider)
+}
+
+func NewProviderClientWithTimeout(timeout time.Duration, log *logger.Logger, provider string) Client {
+	return &DefaultClient{client: NewProviderHTTPClient(timeout, log, provider)}
 }
 
 func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
