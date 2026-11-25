@@ -867,14 +867,23 @@ test-suite:
 .PHONY: sdk-all test-sdk test-sdks test-suite
 
 # -----------------------------------------------------------------------
-# Loglint — ctx-first logger enforcement
+# Lint — loglint runs on the whole repo; codelint and golangci-lint judge
+# only the lines changed since LINT_BASE. See tools/lint and .golangci.yml.
 # -----------------------------------------------------------------------
 
-.PHONY: build-loglint lint lint-ci
+LINT_BASE ?= origin/develop
+GOLANGCI_LINT_VERSION ?= v2.15.0
+GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
-## build-loglint: compile the loglint vettool binary into tools/bin/
+.PHONY: build-loglint build-flexlint lint lint-ci lint-changed lint-go fmt-changed test-changed check-agent-docs check-changed
+
+## build-loglint: compile the logging-only vettool into tools/bin/
 build-loglint:
-	cd tools/loglint && go mod download && go build -o ../bin/loglint ./main.go
+	cd tools/lint && go mod download && go build -o ../bin/loglint ./cmd/loglint
+
+## build-flexlint: compile the combined vettool and the changed-lines filter into tools/bin/
+build-flexlint:
+	cd tools/lint && go mod download && go build -o ../bin/flexlint ./cmd/flexlint && go build -o ../bin/changedlines ./cmd/changedlines
 
 ## lint: run loglint on internal/ (warnings + errors, non-blocking)
 lint: build-loglint
@@ -883,3 +892,32 @@ lint: build-loglint
 ## lint-ci: run loglint on internal/ (errors only — LL008 warnings ignored)
 lint-ci: build-loglint
 	@out=$$(go vet -vettool=./tools/bin/loglint ./internal/... 2>&1 | grep -v "^#" | grep -v "warning:"); if [ -n "$$out" ]; then echo "$$out"; exit 1; fi
+
+## lint-changed: run every Flexprice analyzer, keeping findings on lines changed since LINT_BASE
+lint-changed: build-flexlint
+	@go vet -vettool=./tools/bin/flexlint ./internal/... ./cmd/... 2>&1 | ./tools/bin/changedlines -base $(LINT_BASE)
+
+## lint-go: golangci-lint on code changed since LINT_BASE (api/custom is an overlay that only compiles once merged)
+lint-go:
+	$(GOLANGCI_LINT) run --new-from-merge-base=$(LINT_BASE) ./internal/... ./cmd/...
+
+## fmt-changed: gofmt check on Go files changed since LINT_BASE
+fmt-changed:
+	@files=$$(git diff --name-only --diff-filter=AM $$(git merge-base $(LINT_BASE) HEAD) -- '*.go'; git ls-files --others --exclude-standard -- '*.go'); \
+	if [ -z "$$files" ]; then echo "no Go files changed"; exit 0; fi; \
+	unformatted=$$(gofmt -l $$files) || exit 1; \
+	if [ -n "$$unformatted" ]; then echo "gofmt -w these files:"; echo "$$unformatted"; exit 1; fi
+
+## test-changed: go test for the packages whose files changed since LINT_BASE
+test-changed:
+	@dirs=$$( { git diff --name-only $$(git merge-base $(LINT_BASE) HEAD) -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | xargs -n1 dirname 2>/dev/null | sort -u | grep -v '^tools/' | sed 's|^|./|'); \
+	dirs=$$(for d in $$dirs; do ls $$d/*.go >/dev/null 2>&1 && echo "$$d"; done); \
+	if [ -z "$$dirs" ]; then echo "no Go packages changed"; else go test -race $$dirs; fi
+
+## check-agent-docs: every path an AGENTS.md names must exist
+check-agent-docs:
+	@scripts/bash/check_agent_docs.sh
+
+## check-changed: what CI runs on a pull request, scoped to this branch's changes
+check-changed: fmt-changed lint-ci lint-changed lint-go check-agent-docs test-changed
+	@echo "check-changed passed"

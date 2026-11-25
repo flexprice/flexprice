@@ -1,29 +1,23 @@
-Fixes #<issue-number>
+<!--
+Title: conventional commit in plain language, e.g. "fix(wallet): compute balance changes from the locked row".
+One problem per PR. Read AGENTS.md "Pull requests" before opening.
+-->
 
+## Problem
 
-## 📝 Description
-Please provide a clear and concise description of what this PR does.
+<!-- One or two sentences. What is wrong or missing, and for whom. Link the FLE ticket or issue. -->
 
----
+## Change
 
-## 🔨 Changes Made
-- [ ] Feature 1
-- [ ] Bug Fix
-- [ ] Refactor
-- [ ] Documentation Update
+<!-- How this fixes it. If it touches more than one layer or surface, say why they belong to the same fix. -->
 
----
+## Verification
 
-## ✅ Checklist
-- [ ] My code follows the project's code style.
-- [ ] I have added tests where applicable.
-- [ ] All new and existing tests pass.
-- [ ] I have updated documentation (if needed).
+<!-- What you ran and what you saw for the changed behaviour: the focused tests, `make check-changed`,
+a local-stack walk-through, a staging run. "Tests pass" alone is not verification. State what you could not check. -->
 
----
+## Follow-ups
 
-## 📷 Screenshots / Demo (if applicable)
-_Add screenshots or demo links here._
+<!-- Review findings you accepted but are not fixing here, each with its ticket. Delete the section if none. -->
 
----
-
+<!-- If an agent did the work, end with the model and harness. -->

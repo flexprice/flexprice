@@ -111,7 +111,7 @@ wired as a `ServiceParams` field in main.
 Related but deliberately elsewhere: invoice hooks in
 `service/revenue_hooks.go`, the scheduled S3 exporter in
 `service/sync/export/revenue_facts_export.go`, DTOs in
-`api/dto/revenue_analytics.go`, repositories in `domain/revenuefact` +
+`internal/api/dto/revenue_analytics.go`, repositories in `domain/revenuefact` +
 `repository/ent/revenue_fact.go` + `testutil/inmemory_revenue_fact_store.go`.
 
 ## Decomposition decisions

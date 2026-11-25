@@ -59,3 +59,54 @@ jobs:
 
       - name: Run loglint
         run: make lint-ci
+
+  lint-changed:
+    name: Lint changed lines
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.27.2'
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: gofmt and Flexprice analyzers on changed lines
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: make fmt-changed lint-changed LINT_BASE="origin/$BASE_REF"
+
+      - name: Agent docs name real paths
+        run: make check-agent-docs
+
+  lint-go:
+    name: golangci-lint on changed lines
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.27.2'
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+        with:
+          version: v2.15.0
+          args: --new-from-merge-base=origin/${{ github.base_ref }} ./internal/... ./cmd/...

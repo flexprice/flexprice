@@ -150,9 +150,9 @@ func (a *Activities) DoThing(ctx context.Context, req Request) error {
 
 ---
 
-## Lint enforcement (`tools/loglint`)
+## Lint enforcement (`tools/lint/loglint`)
 
-A custom `go/analysis` analyzer (`go vet -vettool=./bin/loglint`) enforces these rules in CI:
+A custom `go/analysis` analyzer (`go vet -vettool=./tools/bin/loglint`) enforces these rules in CI:
 
 | Rule | Description |
 |---|---|
@@ -168,6 +168,8 @@ A custom `go/analysis` analyzer (`go vet -vettool=./bin/loglint`) enforces these
 
 Run locally: `make lint`  
 CI gate: `make lint-ci` (fails on any violation)
+
+The readability and placement rules (`CL001`–`CL007`) live beside it in `tools/lint/codelint` and run on changed lines through `make lint-changed`; see `tools/lint/README.md`.
 
 ---
 

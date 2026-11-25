@@ -1,6 +1,14 @@
 # yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 language: en-US
+tone_instructions: >-
+  Review like a Flexprice maintainer: comment only on lines the PR changed, one finding per comment
+  on the smallest range, with the fix you expect. No praise, no summaries. Ask for fewer, better
+  tests and comments, not more.
 reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: false
+  poem: false
   auto_review:
     enabled: true
     # Review PRs into main and develop. The develop->main promotion PR
@@ -10,3 +18,41 @@ reviews:
     base_branches:
       - ^main$
       - ^develop$
+  # Generated SDKs, specs and the generated ent root files. ent/schema is
+  # hand-written and stays in scope; an include pattern would turn this list
+  # into an allowlist, so the generated ent/<entity>/ directories stay reviewable.
+  path_filters:
+    - "!ent/*.go"
+    - "!api/go/**"
+    - "!api/python/**"
+    - "!api/typescript/**"
+    - "!docs/swagger/**"
+  path_instructions:
+    - path: "internal/**/*.go"
+      instructions: >-
+        Hold the change to AGENTS.md. Flag: a helper or flow that already exists elsewhere and should be reused
+        (name it); logic placed in the wrong package or layer (a payment concern in the customer service, data
+        access in a handler, a gateway SDK type outside internal/integration); a wrapper added around an existing
+        method instead of fixing the method; a branch for a state the code cannot reach; a domain entity mutated
+        without its builder; a struct field exposed where a getter with nil handling is the convention; a function
+        that grew past one screen; a name that says the type (`priceMap`) instead of the contents; a comment longer
+        than four lines or one that repeats the code. Multi-tenancy: every query filters tenant_id and
+        environment_id. Billing entities: provider or connection use must be inside a ScopeTo* ctx.
+    - path: "internal/**/*_test.go"
+      instructions: >-
+        Ask for fewer and smaller tests, never more coverage. Flag a new test file when an existing file already
+        covers the function; a new test when a row in an existing table would do; a test over 100 lines that is
+        not table-driven; time.Sleep or polling; an unconditional skip without a `// quarantine: FLE-` line;
+        assertions on mock call counts instead of behaviour; a test that only mirrors the implementation.
+    - path: "internal/api/**/*.go"
+      instructions: >-
+        Handlers parse, validate, delegate and respond. Flag business logic, repository or ent calls, and
+        `err.Error()` in a response body. A DTO change needs regenerated Swagger (`make swagger`) in the same PR.
+    - path: "migrations/**"
+      instructions: >-
+        A new migration must sort after the newest one on develop and have its checksum in `migrations/.hashes`.
+        Down migrations must be runnable. Flag an index created without CONCURRENTLY on a large table.
+    - path: "**/AGENTS.md"
+      instructions: >-
+        Every path named must exist. Flag command listings, feature catalogs, narrated control flow, and anything
+        the code already states; keep constraints, invariants and the reasons behind them.

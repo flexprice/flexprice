@@ -19,7 +19,7 @@ Before substantive work (new features, refactors, integrations, Temporal changes
    - `docs/HOTSPOTS.md` — avoid enlarging risky areas blindly  
    - `docs/FLOWS/*.md` — when touching authentication, metering, billing, invoices, subscriptions, webhooks, or retries  
 
-2. **Trace dependencies before editing** — follow constructor wiring from `cmd/server/main.go`, service interfaces in `internal/service`, and domain contracts in `internal/domain`. Prefer explicit injection over widening hidden globals.
+2. **Trace dependencies before editing** — follow constructor wiring from `cmd/server/main.go`, service interfaces in `internal/ee/service`, and domain contracts in `internal/domain`. Prefer explicit injection over widening hidden globals.
 
 3. **Preserve layering** — domain packages do not import repositories or HTTP layers. Handlers delegate to services. Do not bypass services for transactional rules.
 

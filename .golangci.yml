@@ -1,0 +1,88 @@
+# Readability gates for new code. `make lint-go` and CI run this with
+# --new-from-merge-base, so only lines a branch changes are judged.
+# Flexprice-specific rules (logging, layering, comments, tests) live in
+# tools/lint and run through `make lint-changed`.
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - errcheck
+    - errorlint
+    - funlen
+    - gocognit
+    - gocritic
+    - govet
+    - ineffassign
+    - intrange
+    - nestif
+    - nolintlint
+    - revive
+    - staticcheck
+    - testifylint
+    - thelper
+    - unparam
+    - unused
+    - usetesting
+  settings:
+    funlen:
+      lines: 80
+      statements: 50
+      ignore-comments: true
+    gocognit:
+      min-complexity: 30
+    nestif:
+      min-complexity: 6
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: var-naming
+        - name: receiver-naming
+        - name: error-naming
+        - name: error-strings
+        - name: context-as-argument
+        - name: early-return
+        - name: indent-error-flow
+        - name: superfluous-else
+        - name: identical-branches
+        - name: unnecessary-stmt
+        - name: use-any
+        - name: redundant-import-alias
+    gocritic:
+      disabled-checks:
+        - ifElseChain
+  exclusions:
+    generated: lax
+    # Entries are regular expressions matched anywhere in the path; anchor them.
+    paths:
+      - ^ent/
+      - ^api/
+      - ^docs/
+      - ^integration-testing-suite/
+    rules:
+      # A table-driven test is long by design; codelint CL003 covers tests.
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocognit
+          - nestif
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/flexprice/flexprice
+  exclusions:
+    paths:
+      - ^ent/
+      - ^api/

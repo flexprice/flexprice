@@ -290,8 +290,5 @@ its first heartbeat — that's normal.
 
 ## 10. Cross-references
 
-- Original design: `docs/superpowers/specs/2026-06-10-synthetic-api-probe-design.md`
-- Billing-coverage expansion (bucketed meters, commitments, entitlements, tax, coupons): `docs/superpowers/specs/2026-08-12-e2eprobe-billing-coverage-expansion-design.md`
-- Implementation plan for the expansion: `docs/superpowers/plans/2026-08-12-e2eprobe-billing-coverage-expansion.md`
 - Loglint rules (LL006 etc): `internal/logger/README.md`
 - Global rules (loglint gate, tenant-id filter, ClickHouse memory limits): repo-root `AGENTS.md` and `CLAUDE.md`

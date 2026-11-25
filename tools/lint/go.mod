@@ -1,4 +1,4 @@
-module github.com/flexprice/flexprice/tools/loglint
+module github.com/flexprice/flexprice/tools/lint
 
 go 1.27.2
 
