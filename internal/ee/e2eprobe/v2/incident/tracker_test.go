@@ -483,3 +483,30 @@ func TestTracker_RollupResolvesWhenOutageNarrows(t *testing.T) {
 		t.Fatalf("one endpoint left failing becomes its own incident, got %v", rec.events)
 	}
 }
+
+func TestTracker_KeepsRecentRunsBounded(t *testing.T) {
+	tr, _, clock := newTestTracker(t, FileStore(t.TempDir()+"/state.json"))
+	ctx := context.Background()
+	for i := 0; i < recentRuns+12; i++ {
+		clock.Advance(10 * time.Minute)
+		res := e2eprobe.Pass()
+		res.Duration = time.Duration(i) * time.Millisecond
+		tr.Observe(ctx, usageTaxed, res)
+	}
+	st := tr.Snapshot().Bindings[usageTaxed.String()]
+	if len(st.Recent) != recentRuns {
+		t.Fatalf("recent runs = %d, want the bound %d", len(st.Recent), recentRuns)
+	}
+	newest := st.Recent[len(st.Recent)-1]
+	if !newest.At.Equal(clock.Now()) || newest.Status != e2eprobe.StatusPass || newest.Duration != time.Duration(recentRuns+11)*time.Millisecond {
+		t.Fatalf("newest run = %+v", newest)
+	}
+	if st.Recent[0].Duration != 12*time.Millisecond {
+		t.Fatalf("the oldest surviving run must be the 13th observed, got %+v", st.Recent[0])
+	}
+	tr.Observe(ctx, usageTaxed, e2eprobe.Mismatch("assert", []string{"a", "b"}, nil))
+	last := tr.Snapshot().Bindings[usageTaxed.String()].Recent
+	if got := last[len(last)-1]; got.Status != e2eprobe.StatusFail || got.Step != "assert" || got.Mismatches != 2 {
+		t.Fatalf("a failure is recorded with its step and mismatch count: %+v", got)
+	}
+}

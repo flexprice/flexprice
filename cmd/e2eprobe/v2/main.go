@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenario"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/scenarios"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/suite"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/ui"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2/world"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
@@ -403,6 +404,9 @@ func run(cat *scenario.Catalog, suitePath string, only []string) error {
 	mux.Handle("/healthz", rt.inbox.Handler())
 	mux.Handle("/inbox/", rt.inbox.Handler())
 	mux.Handle("/status", rt.runner.Handler())
+	mux.Handle("/history", rt.runner.Handler())
+	mux.Handle("GET /{$}", ui.Handler())
+	mux.Handle("GET /ui", ui.Handler())
 	port, err := inbox.NewServer(cfg.ListenerPort, mux).Start(ctx)
 	if err != nil {
 		return fmt.Errorf("listener: %w", err)

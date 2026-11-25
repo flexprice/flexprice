@@ -26,14 +26,22 @@ func (r registration) ingests(events int) registration {
 	return r
 }
 
+// checks is the one-line statement of what a run verifies; describe prints it
+// next to the personas it runs on, so the suite file and the catalog together
+// are the whole picture of what is covered.
+func (r registration) checks(summary string) registration {
+	r.info.Summary = summary
+	return r
+}
+
 // Register adds every scenario in this package to cat.
 func Register(cat *scenario.Catalog) {
 	all := []registration{
-		entry("provision", e2eprobe.KindMaintenance, 6*time.Hour, func(d scenario.Deps) scenario.Scenario { return newProvision(d) }),
-		entry("preflight", e2eprobe.KindPreflight, 6*time.Hour, func(d scenario.Deps) scenario.Scenario { return newPreflight(d) }),
-		entry("janitor", e2eprobe.KindMaintenance, time.Hour, func(d scenario.Deps) scenario.Scenario { return newJanitor(d) }),
-		entry("webhook-wiring", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWebhookWiring(d) }),
-		entry("ingest", e2eprobe.KindProbe, 0, func(d scenario.Deps) scenario.Scenario { return newIngest(d) }, e2eprobe.TraitEvents),
+		entry("provision", e2eprobe.KindMaintenance, 6*time.Hour, func(d scenario.Deps) scenario.Scenario { return newProvision(d) }).checks("the tenant matches the suite: shared fixtures and every persona's traits, with gaps recorded for what cannot be retrofitted"),
+		entry("preflight", e2eprobe.KindPreflight, 6*time.Hour, func(d scenario.Deps) scenario.Scenario { return newPreflight(d) }).checks("the expected connections and settings exist and the fixtures are complete; persona gaps are reported as attributes"),
+		entry("janitor", e2eprobe.KindMaintenance, time.Hour, func(d scenario.Deps) scenario.Scenario { return newJanitor(d) }).checks("ephemerals older than janitor.max_age are removed; the previous generation's customers are listed, never deleted"),
+		entry("webhook-wiring", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWebhookWiring(d) }).checks("webhooks of some kind keep reaching the inbox while clones are created; silence for webhooks.silence_after is one incident"),
+		entry("ingest", e2eprobe.KindProbe, 0, func(d scenario.Deps) scenario.Scenario { return newIngest(d) }, e2eprobe.TraitEvents).checks("one bulk batch per persona lands every tick, with up to six missed ticks backfilled"),
 	}
 	for _, r := range all {
 		cat.Register(r.info, r.build)

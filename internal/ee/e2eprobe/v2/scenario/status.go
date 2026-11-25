@@ -57,12 +57,31 @@ func (r *Runner) Status() Status {
 	return st
 }
 
-// Handler serves GET /status as JSON.
+// History is every binding's recent runs, served at /history; the dashboard
+// draws its sparklines and pass rates from it.
+type History struct {
+	Bindings map[string][]incident.Run `json:"bindings"`
+}
+
+func (r *Runner) History() History {
+	snap := r.tracker.Snapshot()
+	out := History{Bindings: make(map[string][]incident.Run, len(snap.Bindings))}
+	for key, st := range snap.Bindings {
+		out.Bindings[key] = st.Recent
+	}
+	return out
+}
+
+// Handler serves GET /status and GET /history as JSON.
 func (r *Runner) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(r.Status())
+	})
+	mux.HandleFunc("GET /history", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(r.History())
 	})
 	return mux
 }

@@ -32,8 +32,10 @@ Design and the reasoning behind every choice: `docs/design/2026-11-19-e2eprobe-r
    tenant-level housekeeping), `Requires()` (traits the persona must carry; empty
    means tenant-level) and `Run(ctx, sc)`.
 2. Register it with `entry(...)` in the `register<Group>` function of its file
-   (or in `scenarios/register.go` for a new group) with its default `Every`. If a run
-   ingests events, declare how many with `.ingests(n)` so the suite's daily
+   (or in `scenarios/register.go` for a new group) with its default `Every`.
+   Finish the registration with `.checks("...")`, the one-line statement of
+   what a run verifies that `describe` prints (a test fails without it). If a
+   run ingests events, declare how many with `.ingests(n)` so the suite's daily
    budget counts them; prefer more units per event over more events.
 3. Add it to the default suite (`suite/default.yaml`) and to
    `cmd/e2eprobe/v2/suite.example.yaml` if every region should run it.
@@ -102,6 +104,10 @@ it. Infrastructure failures never page from `Observe`: the tick evaluates the
 region rollup first and pages a binding only when no rollup covers it.
 
 ## 6a. Developer loop
+
+- `/` on the probe's port is the dashboard; `/status` and `/history` are its
+  JSON. The history is the tracker's bounded recent-run list per binding,
+  persisted in the state file; no database behind it.
 
 - `go run ./cmd/e2eprobe/v2 once --scenario <name> [--persona <p>] [--json]`
   provisions the suite against the configured tenant, runs one binding and

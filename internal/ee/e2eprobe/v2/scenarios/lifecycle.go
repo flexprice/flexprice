@@ -18,12 +18,12 @@ import (
 // persona rather than on the persona itself.
 func registerFlows(cat *scenario.Catalog) {
 	flows := []registration{
-		entry("lifecycle", e2eprobe.KindFlow, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLifecycle(d) }, e2eprobe.TraitSubscription).ingests(lifecycleEvents),
-		entry("cancel", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCancellation(d) }, e2eprobe.TraitSubscription),
-		entry("line-item-change", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newLineItemChange(d) }, e2eprobe.TraitSubscription),
-		entry("tax-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newTaxPreview(d) }, e2eprobe.TraitTax).ingests(taxPreviewEvents),
-		entry("coupon-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCouponPreview(d) }, e2eprobe.TraitCoupon),
-		entry("commitment-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCommitmentPreview(d) }, e2eprobe.TraitCommitment).ingests(commitmentLegEvents),
+		entry("lifecycle", e2eprobe.KindFlow, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLifecycle(d) }, e2eprobe.TraitSubscription).ingests(lifecycleEvents).checks("a brand-new customer's first events are readable as usage, and its customer.created webhook is noted"),
+		entry("cancel", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCancellation(d) }, e2eprobe.TraitSubscription).checks("the oldest clone cancels immediately and its customer can then be deleted"),
+		entry("line-item-change", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newLineItemChange(d) }, e2eprobe.TraitSubscription).checks("a plan price can be added as a line item on a clone's subscription"),
+		entry("tax-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newTaxPreview(d) }, e2eprobe.TraitTax).ingests(taxPreviewEvents).checks("the preview of a clone carrying the shared tax association taxes its usage at the shared rate"),
+		entry("coupon-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCouponPreview(d) }, e2eprobe.TraitCoupon).checks("the preview of a clone created with the shared coupon applies it"),
+		entry("commitment-preview", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newCommitmentPreview(d) }, e2eprobe.TraitCommitment).ingests(commitmentLegEvents).checks("the preview bills the commitment with a true-up under it and factored overage over it"),
 	}
 	for _, r := range flows {
 		cat.Register(r.info, r.build)

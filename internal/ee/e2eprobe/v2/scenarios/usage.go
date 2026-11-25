@@ -28,7 +28,7 @@ func (*usage) Kind() e2eprobe.Kind        { return e2eprobe.KindProbe }
 func (*usage) Requires() []e2eprobe.Trait { return []e2eprobe.Trait{e2eprobe.TraitEvents} }
 
 func registerUsage(cat *scenario.Catalog) {
-	r := entry("usage", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newUsage(d) }, e2eprobe.TraitEvents)
+	r := entry("usage", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newUsage(d) }, e2eprobe.TraitEvents).checks("every meter's total over the last full hour equals what the ledger sent, read through events/analytics")
 	cat.Register(r.info, r.build)
 }
 

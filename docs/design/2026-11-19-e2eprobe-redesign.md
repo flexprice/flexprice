@@ -438,6 +438,12 @@ the old probe's incidents keep flowing meanwhile.
   event profiles and the computed daily budget split into profiles and flows, tenant expectations.
 - `e2eprobe validate [--suite file]`: exit non-zero with every validation error.
 - `GET /status`: bindings with last result and next run, open incidents, inbox stats, ledger stats.
+- `GET /history`: each binding's recent runs (two days at a 10-minute cadence, part of the persisted
+  tracker state); `GET /` is an embedded dashboard over both, so health is visible with a
+  port-forward and nothing else. No database: the JSON state file is enough for one replica, and
+  long retention is the OTEL backend's job.
+- `describe` carries a Coverage section: every scenario's one-line `checks(...)` statement next to
+  the personas and customer ids it runs on.
 - Hourly heartbeat log line and daily Slack digest.
 
 `once --scenario <name> [--persona <p>] [--json]` provisions the suite and runs one binding with

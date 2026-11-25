@@ -17,3 +17,14 @@ func TestRegister_DeclaresIngestPerRun(t *testing.T) {
 		}
 	}
 }
+
+func TestRegister_EveryScenarioSaysWhatItChecks(t *testing.T) {
+	cat := scenario.NewCatalog()
+	Register(cat)
+	for _, name := range cat.Names() {
+		info, _ := cat.Scenario(name)
+		if info.Summary == "" {
+			t.Errorf("%s has no summary; describe cannot say what it checks", name)
+		}
+	}
+}

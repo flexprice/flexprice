@@ -52,6 +52,35 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 		line(tw, "%s\t%s\t%s\t%s\n", b.Scenario, b.Kind, persona, every)
 	}
 
+	line(tw, "\nCoverage"+"\n")
+	line(tw, "SCENARIO\tCHECKS\tON"+"\n")
+	var order []string
+	personasBy := map[string][]string{}
+	for _, b := range bindings {
+		if _, seen := personasBy[b.Scenario]; !seen {
+			order = append(order, b.Scenario)
+		}
+		on := "(tenant)"
+		if p, ok := s.Persona(b.Persona); ok {
+			on = fmt.Sprintf("%s (%s)", p.Name, p.ExternalIDOrDefault())
+		}
+		personasBy[b.Scenario] = append(personasBy[b.Scenario], on)
+	}
+	for _, name := range order {
+		info, _ := cat.Scenario(name)
+		line(tw, "%s\t%s\t%s\n", name, orNone(info.Summary), strings.Join(personasBy[name], ", "))
+	}
+	for _, sc := range s.Scenarios {
+		if sc.IsEnabled() {
+			continue
+		}
+		families := ""
+		if len(sc.Families) > 0 {
+			families = " (families " + strings.Join(sc.Families, ", ") + ")"
+		}
+		line(tw, "disabled: %s%s\n", sc.Name, families)
+	}
+
 	line(tw, "\nTenant"+"\n")
 	line(tw, "connections: %s\n", orNone(strings.Join(s.Tenant.Connections, ", ")))
 	keys := make([]string, 0, len(s.Tenant.Settings))

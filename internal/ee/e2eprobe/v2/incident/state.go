@@ -29,6 +29,21 @@ type Incident struct {
 	Runs         int          `json:"runs"`
 }
 
+// recentRuns bounds the per-binding history: two days of a 10-minute cadence.
+const recentRuns = 288
+
+// Run is one recorded run, the unit of the history behind /history and the
+// dashboard; reasons are clipped so the state file stays small.
+type Run struct {
+	At         time.Time       `json:"at"`
+	Status     e2eprobe.Status `json:"status"`
+	Step       string          `json:"step,omitempty"`
+	Reason     string          `json:"reason,omitempty"`
+	Infra      bool            `json:"infra,omitempty"`
+	Duration   time.Duration   `json:"duration,omitempty"`
+	Mismatches int             `json:"mismatches,omitempty"`
+}
+
 // BindingState is everything the tracker remembers about one binding.
 type BindingState struct {
 	Key           Key             `json:"key"`
@@ -40,6 +55,19 @@ type BindingState struct {
 	Runs          int             `json:"runs"`
 	Passes        int             `json:"passes"`
 	Incident      *Incident       `json:"incident,omitempty"`
+	Recent        []Run           `json:"recent,omitempty"`
+}
+
+// remember appends a run and drops the oldest beyond the bound.
+func (st *BindingState) remember(at time.Time, r e2eprobe.Result) {
+	reason := r.Reason
+	if len(reason) > 200 {
+		reason = reason[:200]
+	}
+	st.Recent = append(st.Recent, Run{At: at, Status: r.Status, Step: r.Step, Reason: reason, Infra: r.Infra, Duration: r.Duration, Mismatches: len(r.Mismatches)})
+	if len(st.Recent) > recentRuns {
+		st.Recent = append([]Run(nil), st.Recent[len(st.Recent)-recentRuns:]...)
+	}
 }
 
 // Resolution is a recovery message that was not delivered yet.
@@ -82,6 +110,7 @@ func (s *State) clone() State {
 			inc := *st.Incident
 			cp.Incident = &inc
 		}
+		cp.Recent = append([]Run(nil), st.Recent...)
 		out.Bindings[k] = &cp
 	}
 	if s.Infra != nil {

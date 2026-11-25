@@ -137,6 +137,8 @@ type ScenarioInfo struct {
 	Every  time.Duration
 	// EventsPerRun is the ingest one run adds on top of the profile batches.
 	EventsPerRun int
+	// Summary says in one line what a run checks; describe prints it.
+	Summary string
 }
 
 // Catalog answers which scenarios and event profiles exist in the binary.

@@ -152,6 +152,10 @@ func TestRegisterEntitlements_DeclaresEveryScenario(t *testing.T) {
 	}
 	for _, w := range want {
 		info, ok := cat.Scenario(w.Name)
+		if info.Summary == "" {
+			t.Errorf("%s: no summary", w.Name)
+		}
+		info.Summary = ""
 		if !ok || !reflect.DeepEqual(info, w) {
 			t.Errorf("%s: info = %+v, registered = %v", w.Name, info, ok)
 			continue

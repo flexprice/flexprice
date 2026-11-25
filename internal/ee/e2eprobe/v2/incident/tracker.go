@@ -54,6 +54,7 @@ func (t *Tracker) Observe(ctx context.Context, k Key, r e2eprobe.Result) {
 	st.Runs++
 	st.LastRun = now
 	st.Last = r
+	st.remember(now, r)
 	var out []delivery
 	switch {
 	case r.Status == e2eprobe.StatusPass:

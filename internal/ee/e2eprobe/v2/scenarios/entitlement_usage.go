@@ -20,9 +20,9 @@ const planSoftLimit = 100
 // registerEntitlements adds the entitlement scenarios to cat.
 func registerEntitlements(cat *scenario.Catalog) {
 	for _, r := range []registration{
-		entry("entitlement-usage", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newEntitlementUsage(d) }, e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents),
-		entry("entitlement-enforcement", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newEntitlementEnforcement(d) }, e2eprobe.TraitSoftLimit).ingests(overLimitEvents),
-		entry("grant-inheritance", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newGrantInheritance(d) }, e2eprobe.TraitAdditiveGrant).ingests(grantEvents),
+		entry("entitlement-usage", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newEntitlementUsage(d) }, e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents).checks("the plan's soft limit of 100 is reported and current usage is at least what the ledger sent this period"),
+		entry("entitlement-enforcement", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newEntitlementEnforcement(d) }, e2eprobe.TraitSoftLimit).ingests(overLimitEvents).checks("a clone pushed 150 events past the soft limit shows the breach in its usage summary"),
+		entry("grant-inheritance", e2eprobe.KindFlow, time.Hour, func(d scenario.Deps) scenario.Scenario { return newGrantInheritance(d) }, e2eprobe.TraitAdditiveGrant).ingests(grantEvents).checks("a clone inherits the plan's additive grant and its usage rolls up through the meter's multiplier"),
 	} {
 		cat.Register(r.info, r.build)
 	}

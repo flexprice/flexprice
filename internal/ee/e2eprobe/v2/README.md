@@ -33,10 +33,45 @@ The probe listens on `E2EPROBE_LISTENER_PORT` (default 8765):
 
 | Path | Purpose |
 | --- | --- |
+| `GET /` | built-in dashboard: health cards, open incidents, every binding's last result, 24h pass rate and recent-run sparkline |
 | `POST /webhook` | inbox for the tenant's outbound webhooks |
-| `GET /status` | live view: every binding's last result and next run, open incidents, inbox and ledger stats |
+| `GET /status` | live view as JSON: every binding's last result and next run, open incidents, inbox and ledger stats |
+| `GET /history` | recent runs per binding as JSON (two days at a 10-minute cadence), the data behind the dashboard |
 | `GET /healthz` | liveness |
 | `GET /inbox/stats` | webhook counts by type |
+
+## Where to look
+
+- **What is configured and covered:** the suite file is the single source of
+  what runs where, and `describe` is its readable form. Its Coverage section
+  lists every scenario with the one-line statement of what it checks (declared
+  with `checks(...)` at registration) and the personas, with their customer
+  ids, it runs on. The old "commitment overage is covered via customer X" reads
+  here as `commitment-preview … committed (e2eprobe-committed)`.
+- **How it is doing:** the dashboard at `/` (port-forward the service), or
+  `/status` and `/history` for the same data as JSON. Incidents reach Slack,
+  the structured log and OTEL spans; per-run traces are exported when OTEL is
+  enabled. The incident tracker's state, including the recent-run history, is
+  a JSON file (`E2EPROBE_STATE_FILE`) that survives container restarts, so no
+  database is needed for a single-replica probe. Longer retention belongs to
+  the OTEL backend.
+
+```bash
+kubectl port-forward -n <namespace> svc/flexprice-e2eprobe-v2 8765:8765
+open http://localhost:8765/
+```
+
+## Restarts
+
+Provisioning is read-then-write everywhere: customers are looked up by
+external id, subscriptions by their cohort and persona tags, the plan, meters,
+features, coupon and tax rate by lookup key or code, wallets by customer. A
+restart recreates nothing that exists. What a restart does lose is in memory
+on purpose: the ledger of sent ticks, so `usage` skips with "partial hour"
+until a full hour of batches has been sent again, and the registry of clones,
+which the janitor finds anyway by their external-id prefix or cohort tag.
+Event ids are derived from the tick, so a batch resent after a restart is
+idempotent on the server.
 
 ## Configuration
 

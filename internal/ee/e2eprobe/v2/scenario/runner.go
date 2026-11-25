@@ -240,7 +240,9 @@ func (r *Runner) execute(ctx context.Context, it *item) e2eprobe.Result {
 	))
 	defer span.End()
 
+	start := time.Now()
 	res := r.run(ctx, it)
+	res.Duration = time.Since(start)
 	if parent.Err() != nil && res.Status != e2eprobe.StatusPass {
 		// A run cut short by shutdown is not evidence either way.
 		return res

@@ -2,7 +2,10 @@
 // scenario is for, which traits a persona carries and what one run reports.
 package e2eprobe
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Kind classifies a scenario for routing and the coverage matrix.
 type Kind string
@@ -79,6 +82,7 @@ type Result struct {
 	Mismatches []string          `json:"mismatches,omitempty"`
 	Attrs      map[string]string `json:"attrs,omitempty"`
 	Infra      bool              `json:"infra,omitempty"`
+	Duration   time.Duration     `json:"duration,omitempty"`
 	Err        error             `json:"-"`
 }
 
