@@ -75,6 +75,10 @@ func main() {
 			kept++
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintln(os.Stderr, "changedlines: reading diagnostics:", err)
+		os.Exit(2)
+	}
 	if kept > 0 {
 		fmt.Fprintf(os.Stderr, "%d finding(s) on lines changed since %s\n", kept, *base)
 		os.Exit(1)
@@ -86,11 +90,14 @@ func changesSince(base string) (changes, error) {
 	if err != nil {
 		return changes{}, fmt.Errorf("merge-base with %s: %w", base, err)
 	}
-	diff, err := git("diff", "-U0", "--no-color", "--no-ext-diff", strings.TrimSpace(mergeBase))
+	// Explicit prefixes and unquoted paths keep the output parseable whatever
+	// diff.noprefix, diff.mnemonicPrefix or core.quotePath the developer set.
+	diff, err := git("-c", "core.quotePath=false", "diff", "-U0", "--no-color", "--no-ext-diff",
+		"--src-prefix=a/", "--dst-prefix=b/", strings.TrimSpace(mergeBase))
 	if err != nil {
 		return changes{}, fmt.Errorf("diff: %w", err)
 	}
-	untracked, err := git("ls-files", "--others", "--exclude-standard")
+	untracked, err := git("-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard")
 	if err != nil {
 		return changes{}, fmt.Errorf("ls-files: %w", err)
 	}

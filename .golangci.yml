@@ -60,12 +60,12 @@ linters:
         - ifElseChain
   exclusions:
     generated: lax
+    # Entries are regular expressions matched anywhere in the path; anchor them.
     paths:
-      - ent/
-      - api/
-      - docs/
-      - internal/repository/ent/generated/
-      - integration-testing-suite/
+      - ^ent/
+      - ^api/
+      - ^docs/
+      - ^integration-testing-suite/
     rules:
       # A table-driven test is long by design; codelint CL003 covers tests.
       - path: _test\.go
@@ -84,5 +84,5 @@ formatters:
         - github.com/flexprice/flexprice
   exclusions:
     paths:
-      - ent/
-      - api/
+      - ^ent/
+      - ^api/

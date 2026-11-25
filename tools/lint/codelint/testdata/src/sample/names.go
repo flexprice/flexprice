@@ -19,3 +19,7 @@ func truncates(at time.Time) time.Time {
 func roundsToSecond(at time.Time) time.Time {
 	return at.Truncate(time.Second)
 }
+
+func roundsDuration(elapsed time.Duration) time.Duration {
+	return elapsed.Truncate(time.Microsecond)
+}

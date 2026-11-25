@@ -2,6 +2,7 @@ package sample
 
 import (
 	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -26,6 +27,13 @@ func TestSkipQuarantined(t *testing.T) {
 func TestSkipConditionally(t *testing.T) {
 	if os.Getenv("FLEXPRICE_TEST_POSTGRES_DSN") == "" {
 		t.Skip("set FLEXPRICE_TEST_POSTGRES_DSN to run PostgreSQL repository tests")
+	}
+}
+
+func TestSkipInSwitchCase(t *testing.T) {
+	switch runtime.GOOS {
+	case "windows":
+		t.Skip("requires Unix sockets")
 	}
 }
 

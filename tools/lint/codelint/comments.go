@@ -14,16 +14,17 @@ const codeComment = "CL001"
 const maxCommentLines = 4
 
 var (
-	directivePattern     = regexp.MustCompile(`^(?:go:|lint:|nolint|want |export |sys |line |extern |\+build)`)
-	dividerPattern       = regexp.MustCompile(`^[-=*#~_/+]{3,}|[-=*#~_]{3,}\s*$`)
-	taskMarkerPattern    = regexp.MustCompile(`\b(?:TODO|FIXME|XXX|HACK)\b`)
-	taskLinkPattern      = regexp.MustCompile(`FLE-\d+|#\d+|https?://`)
-	ticketPattern        = regexp.MustCompile(`\bFLE-\d+\b`)
-	quarantinePattern    = regexp.MustCompile(`^quarantine:`)
-	licensePattern       = regexp.MustCompile(`(?i)@license|\bcopyright\b|SPDX-License-Identifier`)
-	commentedCodePattern = regexp.MustCompile(`^(?:(?:if|for|switch|select|return|defer|go)\b.*|[\w.\[\]]+\(.*\)|[\w.\[\], ]+\s*:?=\s*.+|\}(?:\s*else\s*\{)?|[\w.]+\+\+|[\w.]+--)$`)
-	wordPattern          = regexp.MustCompile(`[a-z0-9]+`)
-	camelBoundaryPattern = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+	directivePattern       = regexp.MustCompile(`^(?:go:|lint:|nolint|want |export |sys |line |extern |\+build)`)
+	dividerPattern         = regexp.MustCompile(`^[-=*#~_/+]{3,}|[-=*#~_]{3,}\s*$`)
+	taskMarkerPattern      = regexp.MustCompile(`\b(?:TODO|FIXME|XXX|HACK)\b`)
+	taskLinkPattern        = regexp.MustCompile(`FLE-\d+|#\d+|https?://`)
+	ticketPattern          = regexp.MustCompile(`\bFLE-\d+\b`)
+	quarantinePattern      = regexp.MustCompile(`^quarantine:`)
+	licensePattern         = regexp.MustCompile(`(?i)@license|\bcopyright\b|SPDX-License-Identifier`)
+	commentedCodePattern   = regexp.MustCompile(`^(?:(?:if|for|switch|select)\b.*\{|(?:return|defer|go)\b.*|[\w.\[\]]+\(.*\)|[\w.\[\], ]+\s*:?=\s*.+|\}(?:\s*else\s*\{)?|[\w.]+\+\+|[\w.]+--)$`)
+	codePunctuationPattern = regexp.MustCompile(`[(){}]|:=|\+\+|--`)
+	wordPattern            = regexp.MustCompile(`[a-z0-9]+`)
+	camelBoundaryPattern   = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 )
 
 // fillerWords carry no meaning when deciding whether a comment only repeats a name.
@@ -69,7 +70,7 @@ func (c *checker) commentProblem(group *ast.CommentGroup, declaredAt map[int]str
 	if !isTask && !quarantinePattern.MatchString(lines[0]) && ticketPattern.MatchString(text) {
 		return "drop the ticket reference; a comment is self-sufficient, say why here"
 	}
-	if allMatch(lines, commentedCodePattern) {
+	if allMatch(lines, commentedCodePattern) && codePunctuationPattern.MatchString(text) {
 		return "delete commented-out code; git keeps the history"
 	}
 	if name, ok := declaredAt[c.pass.Fset.Position(group.End()).Line+1]; ok && restatesName(lines, name) {

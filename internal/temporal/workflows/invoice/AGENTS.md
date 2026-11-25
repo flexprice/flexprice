@@ -45,4 +45,4 @@ Wraps invoice operations that must be durable, retryable, and observable: comput
 ## Related layers
 - `internal/temporal/activities/` — activity implementations called by these workflows
 - `internal/temporal/registration.go` — registration of all workflows/activities
-- `internal/ee/service/invoice.go` — `StartWorkflow` calls originate here
+- `internal/api/v1/invoice.go` and `internal/temporal/activities/invoice/invoice_activities.go` — `ExecuteWorkflow` calls originate here

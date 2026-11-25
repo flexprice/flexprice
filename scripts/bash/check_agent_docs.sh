@@ -11,8 +11,8 @@ missing_paths() {
     # Backticked tokens that start with a top-level directory and contain a slash.
     grep -oE '`(cmd|internal|ent|docs|tools|scripts|api|migrations|\.github|\.agents|\.claude|integration-testing-suite)/[A-Za-z0-9_./*-]*`' "$doc" \
       | tr -d '`' | sort -u | while IFS= read -r path; do
-        # Globs and "..." name a directory; check the part before them.
-        base="${path%%/\*\*}"; base="${base%%/\*}"; base="${base%%/...}"; base="${base%/}"
+        # A glob or "..." names a directory; check the part before the first one.
+        base="${path%%\**}"; base="${base%%...*}"; base="${base%/}"
         [ -e "$base" ] || echo "$doc: \`$path\` does not exist"
       done || true
   done < <(git ls-files '*AGENTS.md' 'AGENTS.md')

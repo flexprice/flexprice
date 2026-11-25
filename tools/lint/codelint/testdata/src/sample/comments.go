@@ -35,6 +35,9 @@ func quarantineIsFine() {}
 // want `CL001: delete commented-out code`
 func commentedOut() {}
 
+// if the provider omits the currency, keep the invoice currency.
+func conditionalProse() {}
+
 // NewLedger creates a new ledger.
 // want `CL001: drop the comment; it only repeats the name below it`
 func NewLedger() {}

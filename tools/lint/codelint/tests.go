@@ -66,7 +66,8 @@ func (c *checker) checkSkip(call *ast.CallExpr, stack []ast.Node, quarantined ma
 		return
 	}
 	for _, ancestor := range stack {
-		if _, ok := ancestor.(*ast.IfStmt); ok {
+		switch ancestor.(type) {
+		case *ast.IfStmt, *ast.CaseClause, *ast.CommClause:
 			return
 		}
 	}

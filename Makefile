@@ -904,12 +904,14 @@ lint-go:
 ## fmt-changed: gofmt check on Go files changed since LINT_BASE
 fmt-changed:
 	@files=$$(git diff --name-only --diff-filter=AM $$(git merge-base $(LINT_BASE) HEAD) -- '*.go'; git ls-files --others --exclude-standard -- '*.go'); \
-	unformatted=$$( [ -n "$$files" ] && gofmt -l $$files ); \
+	if [ -z "$$files" ]; then echo "no Go files changed"; exit 0; fi; \
+	unformatted=$$(gofmt -l $$files) || exit 1; \
 	if [ -n "$$unformatted" ]; then echo "gofmt -w these files:"; echo "$$unformatted"; exit 1; fi
 
 ## test-changed: go test for the packages whose files changed since LINT_BASE
 test-changed:
 	@dirs=$$( { git diff --name-only $$(git merge-base $(LINT_BASE) HEAD) -- '*.go'; git ls-files --others --exclude-standard -- '*.go'; } | xargs -n1 dirname 2>/dev/null | sort -u | grep -v '^tools/' | sed 's|^|./|'); \
+	dirs=$$(for d in $$dirs; do [ -d "$$d" ] && echo "$$d"; done); \
 	if [ -z "$$dirs" ]; then echo "no Go packages changed"; else go test -race $$dirs; fi
 
 ## check-agent-docs: every path an AGENTS.md names must exist

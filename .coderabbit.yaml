@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=https://storage.googleapis.com/coderabbit_public_assets/schema.v2.json
 language: en-US
 tone_instructions: >-
-  Review like a Flexprice maintainer. Comment only on lines the PR changed. One finding per comment,
-  the smallest range, and the fix you expect. No praise, no summaries of what the code does.
-  Do not ask for more tests or more comments; ask for fewer, better ones. When nothing is wrong, say so in one line.
+  Review like a Flexprice maintainer: comment only on lines the PR changed, one finding per comment
+  on the smallest range, with the fix you expect. No praise, no summaries. Ask for fewer, better
+  tests and comments, not more.
 reviews:
   profile: assertive
   request_changes_workflow: false
@@ -18,9 +18,12 @@ reviews:
     base_branches:
       - ^main$
       - ^develop$
+  # Generated SDKs and specs. ent/ is not listed: its generated files carry the
+  # "Code generated" header and ent/schema is hand-written and must stay in scope.
   path_filters:
-    - "!ent/**"
-    - "!api/**"
+    - "!api/go/**"
+    - "!api/python/**"
+    - "!api/typescript/**"
     - "!docs/swagger/**"
   path_instructions:
     - path: "internal/**/*.go"
