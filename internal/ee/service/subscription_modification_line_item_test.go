@@ -963,11 +963,28 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		sub := s.createActiveSub(cust.ID)
 		p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
 		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
-		stored := s.mustGetLineItem(li.ID)
-		stored.EndDate = sub.CurrentPeriodEnd
+		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
+			WithEndDate(sub.CurrentPeriodEnd).
+			Build()
 		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
 
 		newQty := decimal.NewFromInt(5)
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+	})
+
+	s.Run("rejects_advance_item_starting_at_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-advance-starts-at-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
+			WithStartDate(sub.CurrentPeriodEnd).
+			Build()
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(1)
 		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
 		s.Require().Error(err)
 	})
@@ -1029,11 +1046,37 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		s.Require().Error(err)
 
 		// When the annual arrear item itself starts at current_period_end (May 1), editing at May 1 is allowed.
-		stored.StartDate = sub.CurrentPeriodEnd
+		stored = subscription.NewSubscriptionLineItemBuilder(stored).
+			WithStartDate(sub.CurrentPeriodEnd).
+			Build()
 		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
 		resp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
 		s.Require().NoError(err)
 		s.Empty(resp.ChangedResources.Invoices)
+
+		// At the annual arrear term close (Dec 1 -> Jan 1), billing uses only the replacement quantity (4) and omits the original item.
+		termEnd := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+		reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.Require().NoError(err)
+		reloaded.CurrentPeriodStart = time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+		reloaded.CurrentPeriodEnd = termEnd
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, reloaded))
+
+		sp := s.service.(*subscriptionModificationService).serviceParams
+		sp.BillingInstalmentRepo = s.GetStores().BillingInstalmentRepo
+		sp.CommitmentRepo = s.GetStores().CommitmentRepo
+		subSvc := NewSubscriptionService(sp).(*subscriptionService)
+		reloaded, err = s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+		s.Require().NoError(err)
+		s.Require().NoError(subSvc.processSubscriptionPeriod(ctx, reloaded, termEnd.Add(time.Second)))
+
+		invFilter := types.NewNoLimitInvoiceFilter()
+		invFilter.SubscriptionID = sub.ID
+		invs, err := s.GetStores().InvoiceRepo.List(ctx, invFilter)
+		s.Require().NoError(err)
+		s.Require().Len(invs, 1)
+		s.Require().Len(invs[0].LineItems, 1)
+		s.True(newQty.Equal(invs[0].LineItems[0].Quantity), "expected replacement quantity 4, got %s", invs[0].LineItems[0].Quantity)
 	})
 
 	s.Run("multi_count_calendar_longer_cadence_grid_shift_rejected", func() {

@@ -1202,6 +1202,15 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if !lineItem.StartDate.Before(effectiveDate) && lineItem.InvoiceCadence == types.InvoiceCadenceAdvance {
+			return ierr.NewError("effective_date at current_period_end is not supported for advance line items starting at period end").
+				WithHint("Remove and re-add the line item, or modify it after the next billing period begins").
+				WithReportableDetails(map[string]interface{}{
+					"effective_date": effectiveDate,
+					"line_item_id":   lineItemID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 		if types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
 			if lineItem.StartDate.Before(effectiveDate) {
 				itemPeriod, err := longerItemPeriod(sub, lineItem, effectiveDate.Add(-time.Nanosecond))
