@@ -38,6 +38,20 @@ func commentedOut() {}
 // if the provider omits the currency, keep the invoice currency.
 func conditionalProse() {}
 
+// return the row to the caller once the lock is held.
+func returnProse() {}
+
+// net == list_rate + tier_delta - entitlement_amount
+func formulaProse() {}
+
+// return nil
+// want `CL001: delete commented-out code`
+func commentedReturn() {}
+
+// count = 0
+// want `CL001: delete commented-out code`
+func commentedAssignment() {}
+
 // NewLedger creates a new ledger.
 // want `CL001: drop the comment; it only repeats the name below it`
 func NewLedger() {}
