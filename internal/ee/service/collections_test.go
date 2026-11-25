@@ -28,6 +28,8 @@ type fakeBoard struct {
 	hasMore bool
 	summary collections.ReminderSummary
 
+	summaryRange *collections.DateRange
+
 	query         collections.Query
 	filter        collections.InvoiceFilter
 	offset, limit int
@@ -43,8 +45,13 @@ func (f *fakeBoard) ListInvoicesWithReminders(_ context.Context, q collections.Q
 	return f.rows, f.hasMore, nil
 }
 
-func (f *fakeBoard) SummarizeReminders(context.Context, time.Time) (collections.ReminderSummary, error) {
+func (f *fakeBoard) SummarizeReminders(_ context.Context, _ time.Time, rng *collections.DateRange) (collections.ReminderSummary, error) {
+	f.summaryRange = rng
 	return f.summary, nil
+}
+
+func (f *fakeBoard) AvailableCurrencies(context.Context, time.Time) ([]string, error) {
+	return []string{"eur", "usd"}, nil
 }
 
 func boardFixture(t *testing.T) (CollectionsService, *fakeBoard, context.Context) {
@@ -272,4 +279,75 @@ func TestParsePageAsOf(t *testing.T) {
 	got, err := parsePageAsOf(&good, now)
 	require.NoError(t, err)
 	require.True(t, got.Equal(good))
+}
+
+func TestCollectionsBoardRequest_DateRangeRules(t *testing.T) {
+	day := func(s string) *time.Time {
+		d, err := time.Parse("2006-01-02", s)
+		require.NoError(t, err)
+		return &d
+	}
+
+	valid := map[string]dto.CollectionsBoardRequest{
+		"from only":          {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-08-01")}},
+		"to only":            {CollectionsDateFilter: dto.CollectionsDateFilter{To: day("2026-11-24")}},
+		"a single day":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-24"), To: day("2026-11-24")}},
+		"exactly five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-24"), To: day("2026-11-24")}},
+		"no range":           {},
+	}
+	for name, req := range valid {
+		require.NoError(t, req.Validate(), name)
+	}
+
+	invalid := map[string]dto.CollectionsBoardRequest{
+		"from after to":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-25"), To: day("2026-11-24")}},
+		"over five years":     {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-23"), To: day("2026-11-24")}},
+		"far over five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2000-01-01"), To: day("2026-11-24")}},
+	}
+	for name, req := range invalid {
+		requireKind(t, req.Validate(), ierr.ErrValidation)
+		_ = name
+	}
+}
+
+func TestBoard_DateRangeBecomesHalfOpenUTCDays(t *testing.T) {
+	svc, fake, ctx := boardFixture(t)
+	fake.board = fullBoard(nil)
+	from, to := time.Date(2026, 11, 1, 15, 30, 0, 0, time.UTC), time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+
+	resp, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
+	require.NoError(t, err)
+
+	require.NotNil(t, fake.query.Range)
+	require.True(t, fake.query.Range.From.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "from is the start of its day")
+	require.True(t, fake.query.Range.To.Equal(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)), "to is inclusive: the board reads up to the start of the next day")
+	require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
+
+	open, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{CollectionsDateFilter: dto.CollectionsDateFilter{From: &from}})
+	require.NoError(t, err)
+	require.Nil(t, fake.query.Range.To, "an open end stays open")
+	require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01")}, open.Range)
+
+	none, err := svc.GetBoard(ctx, &dto.CollectionsBoardRequest{})
+	require.NoError(t, err)
+	require.Nil(t, fake.query.Range, "no range: open columns unbounded, paid keeps its week")
+	require.Nil(t, none.Range)
+}
+
+func TestBoard_ColumnPagesCarryTheSameRangeAndClock(t *testing.T) {
+	svc, fake, ctx := boardFixture(t)
+	from, to := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 24, 0, 0, 0, 0, time.UTC)
+	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+
+	for _, column := range []string{"not_due", "overdue", "chasing", "held", "paid_this_week"} {
+		for _, page := range []int{1, 2} {
+			resp, err := svc.GetColumn(ctx, column, &dto.CollectionsBoardRequest{Page: page, AsOf: &asOf, CollectionsDateFilter: dto.CollectionsDateFilter{From: &from, To: &to}})
+			require.NoError(t, err, column)
+			require.NotNil(t, fake.query.Range, column)
+			require.True(t, fake.query.Range.From.Equal(from), column)
+			require.True(t, fake.query.Range.To.Equal(to.AddDate(0, 0, 1)), column)
+			require.True(t, fake.query.AsOf.Equal(asOf), "as_of stays pinned on page %d of %s", page, column)
+			require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
+		}
+	}
 }

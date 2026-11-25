@@ -53,7 +53,27 @@ func boardQuery(asOf time.Time, req *dto.CollectionsBoardRequest) collections.Qu
 		AsOf:     asOf,
 		Text:     req.Q,
 		Currency: normalizedCurrency(req.Currency),
+		Range:    queryRange(req.CollectionsDateFilter),
 	}
+}
+
+// queryRange turns inclusive UTC days into a half-open range of instants; nil when there is none.
+func queryRange(filter dto.CollectionsDateFilter) *collections.DateRange {
+	if filter.From == nil && filter.To == nil {
+		return nil
+	}
+
+	rng := &collections.DateRange{}
+	if filter.From != nil {
+		from := types.UTCDay(*filter.From)
+		rng.From = &from
+	}
+	if filter.To != nil {
+		to := types.UTCDay(*filter.To).AddDate(0, 0, 1)
+		rng.To = &to
+	}
+
+	return rng
 }
 
 // requireCollectionsEnabled refuses Collections requests in an environment where it is not turned on.
@@ -101,6 +121,7 @@ func (s *collectionsService) GetBoard(ctx context.Context, req *dto.CollectionsB
 
 	resp := &dto.CollectionsBoardResponse{
 		AsOf:                query.AsOf,
+		Range:               req.DateRange(),
 		AvailableCurrencies: board.AvailableCurrencies,
 		Columns:             []dto.CollectionsBoardColumn{},
 	}
@@ -171,6 +192,7 @@ func (s *collectionsService) GetColumn(ctx context.Context, key string, req *dto
 	return &dto.CollectionsColumnPageResponse{
 		Key:     column,
 		AsOf:    asOf,
+		Range:   req.DateRange(),
 		Page:    req.PageNumber(),
 		Cards:   cardsOf(column, asOf, invoices, customers),
 		HasMore: hasMore,

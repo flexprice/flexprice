@@ -949,3 +949,54 @@ func TestReminder_EditedSubjectStaysOnOneLine(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Pay now Bcc: x@example.com", got.Subject)
 }
+
+func TestReminder_ListHonorsTheBoardDateRange(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	from, to := time.Date(2026, 11, 1, 15, 0, 0, 0, time.UTC), time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	filter := dto.CollectionsDateFilter{From: &from, To: &to}
+
+	for _, page := range []int{1, 2} {
+		resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{Page: page, AsOf: &asOf, Status: "held", CollectionsDateFilter: filter})
+		require.NoError(t, err)
+
+		require.NotNil(t, f.board.query.Range, "the list rows use the range")
+		require.True(t, f.board.query.Range.From.Equal(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)), "from is the start of its day")
+		require.True(t, f.board.query.Range.To.Equal(time.Date(2026, 11, 25, 0, 0, 0, 0, time.UTC)), "to is inclusive")
+		require.Equal(t, f.board.query.Range, f.board.summaryRange, "so does the summary, page %d", page)
+		require.True(t, f.board.query.AsOf.Equal(asOf), "as_of stays pinned")
+		require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr("2026-11-01"), To: lo.ToPtr("2026-11-24")}, resp.Range)
+		require.Equal(t, []string{"eur", "usd"}, resp.AvailableCurrencies)
+	}
+
+	none, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
+	require.NoError(t, err)
+	require.Nil(t, f.board.query.Range)
+	require.Nil(t, f.board.summaryRange)
+	require.Nil(t, none.Range, "no range: every overdue invoice, as before")
+
+	for name, bad := range map[string]dto.CollectionsDateFilter{
+		"from after to": {From: &to, To: &from},
+		"over 5 years":  {From: lo.ToPtr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)), To: &to},
+	} {
+		_, err := f.svc.List(ctx, &dto.ListRemindersRequest{CollectionsDateFilter: bad})
+		requireKind(t, err, ierr.ErrValidation)
+		_ = name
+	}
+}
+
+func TestReminder_ApprovedListAsksForTheApprovedStatusOnly(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+
+	for status, want := range map[string][]types.ReminderStatus{
+		"approved": {types.ReminderStatusApproved},
+		"held":     {types.ReminderStatusHeld},
+		"":         nil,
+	} {
+		_, err := f.svc.List(ctx, &dto.ListRemindersRequest{Status: status})
+		require.NoError(t, err)
+		require.Equal(t, want, f.board.filter.Statuses, "status %q", status)
+	}
+}

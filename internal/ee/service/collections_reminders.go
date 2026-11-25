@@ -76,11 +76,19 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 	if req.Status != "" {
 		filter.Statuses = []types.ReminderStatus{types.ReminderStatus(req.Status)}
 	}
-	invoices, hasMore, err := s.CollectionsRepo.ListInvoicesWithReminders(ctx, collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency)}, filter, req.PageOffset(), req.PageLimit())
+	query := collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency), Range: queryRange(req.CollectionsDateFilter)}
+
+	invoices, hasMore, err := s.CollectionsRepo.ListInvoicesWithReminders(ctx, query, filter, req.PageOffset(), req.PageLimit())
 	if err != nil {
 		return nil, err
 	}
-	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, asOf)
+
+	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, asOf, query.Range)
+	if err != nil {
+		return nil, err
+	}
+
+	currencies, err := s.CollectionsRepo.AvailableCurrencies(ctx, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -106,11 +114,13 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 		Skipped:       summary.Statuses[types.ReminderStatusSkipped],
 	}
 	resp := &dto.ListRemindersResponse{
-		AsOf:    asOf,
-		Summary: summaryReminder,
-		Drafts:  []dto.InvoiceReminderResponse{},
-		Page:    req.PageNumber(),
-		HasMore: hasMore,
+		AsOf:                asOf,
+		Range:               req.DateRange(),
+		Summary:             summaryReminder,
+		Drafts:              []dto.InvoiceReminderResponse{},
+		Page:                req.PageNumber(),
+		HasMore:             hasMore,
+		AvailableCurrencies: currencies,
 	}
 	for _, r := range invoices {
 		v, err := s.view(r, customers[r.CustomerID], rc)

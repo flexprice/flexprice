@@ -2411,6 +2411,22 @@
             }
           },
           {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "q",
             "in": "query",
             "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
@@ -2483,7 +2499,7 @@
           "Collections"
         ],
         "summary": "Get a page of a collections board column",
-        "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably; send the as_of of the board response with every page so the overdue boundary and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
+        "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably (not due by due date, overdue and held by remaining balance, chasing by newest approval first, paid by newest payment first); send the as_of of the board response with every page so the overdue boundary and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
         "operationId": "getCollectionsBoardColumn",
         "parameters": [
           {
@@ -2517,6 +2533,22 @@
             "description": "Cards per page (1-200, default 15)",
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -2602,7 +2634,7 @@
           "Collections"
         ],
         "summary": "List reminder drafts",
-        "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent.",
+        "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (only approvals made by as_of, ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); available_currencies lists every currency regardless of filters.",
         "operationId": "listReminderDrafts",
         "parameters": [
           {
@@ -2651,6 +2683,22 @@
             "description": "Page number, from 1 (default 1); page times limit may not exceed 5000",
             "schema": {
               "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -22721,6 +22769,9 @@
             "items": {
               "$ref": "#/components/schemas/CollectionsBoardColumn"
             }
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
           }
         }
       },
@@ -22744,6 +22795,9 @@
           },
           "page": {
             "type": "integer"
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
           }
         }
       },
@@ -22802,6 +22856,17 @@
           },
           "reminder_tone": {
             "$ref": "#/components/schemas/types.ReminderTone"
+          }
+        }
+      },
+      "CollectionsRange": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
           }
         }
       },
@@ -29040,6 +29105,13 @@
           "as_of": {
             "type": "string"
           },
+          "available_currencies": {
+            "type": "array",
+            "description": "AvailableCurrencies lists the currencies of all open and recently paid invoices, before q, currency and range apply.",
+            "items": {
+              "type": "string"
+            }
+          },
           "drafts": {
             "type": "array",
             "items": {
@@ -29051,6 +29123,9 @@
           },
           "page": {
             "type": "integer"
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
           },
           "summary": {
             "$ref": "#/components/schemas/ReminderSummary"

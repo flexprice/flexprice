@@ -22,7 +22,7 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 // ListReminders godoc
 // @Summary List reminder drafts
 // @ID listReminderDrafts
-// @Description Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent.
+// @Description Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (only approvals made by as_of, ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); available_currencies lists every currency regardless of filters.
 // @Tags Collections
 // @Produce json
 // @Security ApiKeyAuth
@@ -33,6 +33,8 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 // @Param currency query string false "Currency code"
 // @Param limit query int false "Page size (1-100, default 15)"
 // @Param page query int false "Page number, from 1 (default 1); page times limit may not exceed 5000"
+// @Param from query string false "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary"
+// @Param to query string false "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from"
 // @Param as_of query string false "as_of (RFC3339) of an earlier response; within the last 24 hours and not in the future"
 // @Success 200 {object} dto.ListRemindersResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"

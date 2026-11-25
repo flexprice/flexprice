@@ -2116,6 +2116,18 @@
                     },
                     {
                         "type": "string",
+                        "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
                         "name": "q",
                         "in": "query"
@@ -2163,7 +2175,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably; send the as_of of the board response with every page so the overdue boundary and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
+                "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably (not due by due date, overdue and held by remaining balance, chasing by newest approval first, paid by newest payment first); send the as_of of the board response with every page so the overdue boundary and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
                 "produces": [
                     "application/json"
                 ],
@@ -2196,6 +2208,18 @@
                         "type": "integer",
                         "description": "Cards per page (1-200, default 15)",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
                         "in": "query"
                     },
                     {
@@ -2253,7 +2277,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent.",
+                "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (only approvals made by as_of, ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); available_currencies lists every currency regardless of filters.",
                 "produces": [
                     "application/json"
                 ],
@@ -2297,6 +2321,18 @@
                         "type": "integer",
                         "description": "Page number, from 1 (default 1); page times limit may not exceed 5000",
                         "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
                         "in": "query"
                     },
                     {
@@ -21068,6 +21104,10 @@
                     "items": {
                         "$ref": "#/definitions/CollectionsBoardColumn"
                     }
+                },
+                "range": {
+                    "description": "Range is the date range the board was read with (open columns by due date, paid by paid date); null when none\nwas given, then open columns are unbounded and paid is the last 7 days.",
+                    "$ref": "#/definitions/CollectionsRange"
                 }
             }
         },
@@ -21091,6 +21131,9 @@
                 },
                 "page": {
                     "type": "integer"
+                },
+                "range": {
+                    "$ref": "#/definitions/CollectionsRange"
                 }
             }
         },
@@ -21147,6 +21190,17 @@
                 },
                 "reminder_tone": {
                     "$ref": "#/definitions/types.ReminderTone"
+                }
+            }
+        },
+        "CollectionsRange": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
                 }
             }
         },
@@ -27339,6 +27393,13 @@
                 "as_of": {
                     "type": "string"
                 },
+                "available_currencies": {
+                    "description": "AvailableCurrencies lists the currencies of all open and recently paid invoices, before q, currency and range apply.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "drafts": {
                     "type": "array",
                     "items": {
@@ -27350,6 +27411,10 @@
                 },
                 "page": {
                     "type": "integer"
+                },
+                "range": {
+                    "description": "Range is the due date range the list and summary were read with; null when none was given.",
+                    "$ref": "#/definitions/CollectionsRange"
                 },
                 "summary": {
                     "$ref": "#/definitions/ReminderSummary"
