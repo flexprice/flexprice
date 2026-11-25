@@ -1,4 +1,4 @@
-package aggregatedusage
+package usagerollup
 
 import (
 	"testing"

@@ -1,6 +1,6 @@
-// Package aggregatedusage holds the hourly per-customer meter quantities kept in Redis
+// Package usagerollup holds the hourly per-customer meter quantities kept in Redis
 // for real-time usage reads, and the rules for which usage lands there.
-package aggregatedusage
+package usagerollup
 
 import (
 	"context"

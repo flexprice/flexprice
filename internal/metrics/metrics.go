@@ -21,17 +21,17 @@ var meter = otel.Meter(MeterName)
 type Name string
 
 const (
-	CheckoutSessions    Name = "checkout.sessions"
-	PaymentTransitions  Name = "payment.transitions"
-	PaymentAttempts     Name = "payment.attempts"
-	WebhookDeliveries   Name = "webhook.outbound.deliveries"
-	InvoiceTransitions  Name = "invoice.transitions"
-	RefundTransitions   Name = "refund.transitions"
-	GatewayWebhooks     Name = "gateway.webhooks"
-	RawEvents           Name = "raw_events.processed"
-	EmailDeliveries     Name = "email.deliveries"
-	EventsScopeDropped  Name = "events.scope_dropped"
-	AggregatedUsageRows Name = "aggregated_usage.rows"
+	CheckoutSessions   Name = "checkout.sessions"
+	PaymentTransitions Name = "payment.transitions"
+	PaymentAttempts    Name = "payment.attempts"
+	WebhookDeliveries  Name = "webhook.outbound.deliveries"
+	InvoiceTransitions Name = "invoice.transitions"
+	RefundTransitions  Name = "refund.transitions"
+	GatewayWebhooks    Name = "gateway.webhooks"
+	RawEvents          Name = "raw_events.processed"
+	EmailDeliveries    Name = "email.deliveries"
+	EventsScopeDropped Name = "events.scope_dropped"
+	UsageRollupRows    Name = "usage_rollup.rows"
 
 	ActivityDropped            Name = "activity.dropped"
 	ActivityUncaptured         Name = "activity.uncaptured"
@@ -47,17 +47,17 @@ type definition struct {
 }
 
 var catalog = map[Name]definition{
-	CheckoutSessions:    {"Checkout sessions by status reached", "{session}"},
-	PaymentTransitions:  {"Payment status changes by new status, including creation", "{transition}"},
-	PaymentAttempts:     {"Gateway charge attempts by status", "{attempt}"},
-	WebhookDeliveries:   {"Outbound deliveries of subscribed webhook events by outcome", "{delivery}"},
-	InvoiceTransitions:  {"Invoice status changes by new status, including draft creation", "{transition}"},
-	RefundTransitions:   {"Refund status changes by new status, including creation", "{transition}"},
-	GatewayWebhooks:     {"Inbound gateway webhooks by processing outcome; unhandled types are labelled other", "{webhook}"},
-	RawEvents:           {"Raw events handled per attempt by outcome (success, skipped, error); retried batches are counted again", "{event}"},
-	EmailDeliveries:     {"Customer email send attempts by the dispatcher, by outcome; a deferred email is counted again on each retry", "{email}"},
-	EventsScopeDropped:  {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
-	AggregatedUsageRows: {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
+	CheckoutSessions:   {"Checkout sessions by status reached", "{session}"},
+	PaymentTransitions: {"Payment status changes by new status, including creation", "{transition}"},
+	PaymentAttempts:    {"Gateway charge attempts by status", "{attempt}"},
+	WebhookDeliveries:  {"Outbound deliveries of subscribed webhook events by outcome", "{delivery}"},
+	InvoiceTransitions: {"Invoice status changes by new status, including draft creation", "{transition}"},
+	RefundTransitions:  {"Refund status changes by new status, including creation", "{transition}"},
+	GatewayWebhooks:    {"Inbound gateway webhooks by processing outcome; unhandled types are labelled other", "{webhook}"},
+	RawEvents:          {"Raw events handled per attempt by outcome (success, skipped, error); retried batches are counted again", "{event}"},
+	EmailDeliveries:    {"Customer email send attempts by the dispatcher, by outcome; a deferred email is counted again on each retry", "{email}"},
+	EventsScopeDropped: {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
+	UsageRollupRows:    {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
 
 	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
 	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},
