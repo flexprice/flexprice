@@ -136,6 +136,15 @@ run-local:
 	@set -a && [ -f .env ] && . ./.env; [ -f .env.local ] && . ./.env.local; set +a; \
 	FLEXPRICE_DEPLOYMENT_MODE=local go run cmd/server/main.go
 
+# All services for local behavior testing. Keep the server in the foreground.
+.PHONY: local-backend local-verify
+local-backend:
+	@env -i HOME="$$HOME" PATH="$$PATH" COMPOSE_PROJECT_NAME="$${COMPOSE_PROJECT_NAME:-}" \
+		bash scripts/local/backend.sh
+
+local-verify:
+	@python3 scripts/local/verify_backend.py
+
 # Run the admin portal API only (loads .env then .env.local)
 .PHONY: run-local-admin
 run-local-admin:

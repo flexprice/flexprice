@@ -5,9 +5,13 @@ Works for humans and AI agents alike — no manual env var configuration needed.
 
 ---
 
+## Run the full local stack
+
+Use `make local-backend` to start local dependencies, apply migrations, and run the API, Kafka consumers, and Temporal workers together. Run `make local-verify` in a second terminal for live checks with a fresh test tenant. See the [README](README.md#run-and-verify-the-local-backend) for suite selection and restart instructions.
+
 ## Pre-configured Local API Key
 
-Use this key for all local API calls — it's baked into `.env.local`:
+For manual calls with the legacy seeded database, `.env.local` includes this key:
 
 ```
 x-api-key:        sk_local_flexprice_test_key

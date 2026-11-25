@@ -108,32 +108,46 @@ To run Flexprice for local development or running from source, you will need
    2. [OSX (Darwin) based environment](https://en.wikipedia.org/wiki/MacOS)
    3. WSL under Windows
 
-#### Quick Setup with Docker Compose
+#### Run and verify the local backend
 
-The easiest way to get started is using our Docker Compose setup:
+Install the Go version in `go.mod`, Python 3, and local Docker with Compose 2.24.4 or later. Stop any other FlexPrice stack using the same ports. From the repository root, start the backend:
 
 ```bash
-# Clone the repository
-git clone https://github.com/flexprice/flexprice
-cd flexprice
-
-# Set up the complete development environment
-make dev-setup
+make local-backend
 ```
 
-This will:
+This starts PostgreSQL, Kafka, ClickHouse, Redis, and Temporal in Compose. It applies the versioned PostgreSQL migrations to `flexprice_local`, applies ClickHouse migrations, and creates the topics for the local broker. The backend runs in the foreground with the API, consumers, and Temporal workers enabled. The server and migrations use the shared app config and the checked-in `.env.local`. The startup command selects the database it bootstrapped and enables Temporal.
 
-1. Start all required infrastructure (PostgreSQL, Kafka, ClickHouse, Temporal)
-2. Build the FlexPrice application image
-3. Run database migrations and initialize Kafka
-4. Start all FlexPrice services (API, Consumer, Worker)
+Once the API is listening, use a second terminal:
 
-Once complete, you can access:
+```bash
+make local-verify
+make local-verify LOCAL_SUITE=events
+make local-verify LOCAL_SUITE=temporal
+make local-verify LOCAL_SUITE=billing BM_FAMILIES=opening,renewal,change,grants,validation
+make local-verify LOCAL_SUITE=billing BM_FAMILIES=change BM_FILTER=quarterly
+```
+
+Each verification run creates a fresh test tenant, runs the selected Go E2E probe tests with a short-lived API key, and revokes the key afterward. The fixtures remain in the local database for inspection. The default suite checks:
+
+- Signup, login, authenticated user lookup, wrong password, missing token, and API-key authentication. Use `LOCAL_SUITE=auth` to run only these checks.
+- Wallet top-up, raw event visibility, usage aggregation, and manual debit with duplicate-request rejection. These checks exercise Kafka and ClickHouse.
+- A Temporal plan price sync that attaches a newly added metered price to an existing subscription. The run must appear as `Completed` in the workflow search and summary APIs.
+- The billing matrix's opening and validation families. The matrix prints known-issue skips and supports selecting families and scenario filters.
+
+After making a change, stop the foreground backend with Ctrl-C and run `make local-backend` again to rebuild from your checkout. Compose volumes retain data between runs. If `make local-verify` reports a failure, check the backend terminal for the request ID or the Temporal run ID.
+
+Local service URLs:
 
 - FlexPrice API: http://localhost:8080
 - Temporal UI: http://localhost:8088
-- Kafka UI: http://localhost:8084 (with profile 'dev')
-- ClickHouse UI: http://localhost:8123
+- ClickHouse HTTP: http://localhost:8123
+
+The stack uses its own `flexprice-local` Compose project. To stop the dependencies and preserve their volumes, run `docker compose --env-file /dev/null -f docker-compose.yml -f docker-compose.local.yml stop`. If you started with a custom `COMPOSE_PROJECT_NAME`, use the same value when stopping.
+
+#### Run FlexPrice services in Docker
+
+Use `make dev-setup` for the containerized API, consumer, and worker setup. The Kafka UI is available at http://localhost:8084 with the `dev` profile.
 
 #### Useful Commands
 
@@ -152,18 +166,6 @@ make build-image
 
 # Start only the FlexPrice services
 make start-flexprice
-```
-
-#### Running Without Docker
-
-If you prefer to run the application directly:
-
-```bash
-# Start the required infrastructure
-docker compose up -d postgres kafka clickhouse redis temporal temporal-ui
-
-# Run the application locally
-go run cmd/server/main.go
 ```
 
 ## 👨🏻‍💻 Let's Build Together! 👩🏻‍💻

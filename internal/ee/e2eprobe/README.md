@@ -172,6 +172,19 @@ Standard OTLP env vars (`OTEL_EXPORTER_OTLP_ENDPOINT`, etc.) flow through unchan
 | scenario | billing-matrix-validation | 30m | Requests the spec rejects (anchor past one period, anchor with calendar, incompatible cadences on create/addon/line item API, backdated `create_prorations`, change dates outside the period) and boundary cases it must accept |
 | maintenance | janitor | 1h | Archive in-memory ephemerals > 1h; also scans Flexprice for orphan ephemeral customers (Phase 2) and orphan tax associations (Phase 3) and deletes them |
 
+## Local verification
+
+Run `make local-verify` from the repository root to provision a fresh local tenant and run the auth, wallet/event, Temporal plan price sync, and billing integration tests. See the [local backend setup](../../../README.md#run-and-verify-the-local-backend) for suite selection and matrix filters.
+
+With an API key for a dedicated test environment, run the wallet/event and Temporal tests directly. The combined command requires a backend with Temporal enabled, such as `make local-backend`. Use `-run '^TestE2EProbe_LocalSmoke$'` to run just the wallet and event checks.
+
+```bash
+# Set E2EPROBE_API_HOST (including /v1) and E2EPROBE_API_KEY in the environment first.
+go test -tags e2eprobe_integration -count=1 -v ./internal/ee/e2eprobe/integration -run '^TestE2EProbe_Local(Smoke|Temporal)$'
+```
+
+Use `make local-verify LOCAL_SUITE=auth` to check auth with credentials from a fresh signup.
+
 ## Billing matrix
 
 `internal/ee/e2eprobe/billingmatrix` checks billing against an independent oracle of the proration
