@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,47 +91,112 @@ func TestGetPaymentLinkStatus(t *testing.T) {
 	}
 }
 
-type fakeLinkWithOrderClient struct {
-	fakePaymentLinkClient
-	orderPayments []map[string]interface{}
-	orderErr      error
+type fakeOrderPaymentsClient struct {
+	RazorpayClient
+	payments []map[string]interface{}
+	err      error
+	hang     bool
 }
 
-func (c *fakeLinkWithOrderClient) FetchOrderPayments(context.Context, string) ([]map[string]interface{}, error) {
-	return c.orderPayments, c.orderErr
+func (c *fakeOrderPaymentsClient) FetchOrderPayments(ctx context.Context, _ string) ([]map[string]interface{}, error) {
+	if c.hang {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return c.payments, c.err
 }
 
-func TestGetPaymentLinkStatus_FailedPaymentsFromOrder(t *testing.T) {
-	link := map[string]interface{}{"status": "created", "order_id": "order_1", "payments": []interface{}{}}
+// The link status is read without the order: fakePaymentLinkClient has no FetchOrderPayments and would panic.
+func TestGetPaymentLinkStatus_ReturnsOrderWithoutReadingIt(t *testing.T) {
+	svc := &PaymentService{
+		client: &fakePaymentLinkClient{resp: map[string]interface{}{"status": "created", "order_id": "order_1"}},
+		logger: logger.NewNoopLogger(),
+	}
+	got, err := svc.GetPaymentLinkStatus(context.Background(), "plink_test")
+	require.NoError(t, err)
+	assert.Equal(t, "order_1", got.OrderID)
+}
+
+func TestFailedOrderPaymentIDs(t *testing.T) {
 	tests := []struct {
-		name       string
-		payments   []map[string]interface{}
-		orderErr   error
-		wantFailed []string
+		name   string
+		client *fakeOrderPaymentsClient
+		want   []string
 	}{
 		{
-			name: "failed order payments are reported, open and captured ones are not",
-			payments: []map[string]interface{}{
+			name: "only declined payments",
+			client: &fakeOrderPaymentsClient{payments: []map[string]interface{}{
 				{"id": "pay_open", "status": "created"},
 				{"id": "pay_declined", "status": "failed"},
 				{"id": "pay_ok", "status": "captured"},
-			},
-			wantFailed: []string{"pay_declined"},
+			}},
+			want: []string{"pay_declined"},
 		},
-		{name: "order fetch failure still returns the link status", orderErr: errors.New("razorpay unavailable")},
+		{name: "a failed read returns none", client: &fakeOrderPaymentsClient{err: errors.New("razorpay unavailable")}},
+		{name: "a hung read times out and returns none", client: &fakeOrderPaymentsClient{hang: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := &PaymentService{
-				client: &fakeLinkWithOrderClient{fakePaymentLinkClient: fakePaymentLinkClient{resp: link}, orderPayments: tt.payments, orderErr: tt.orderErr},
-				logger: logger.NewNoopLogger(),
-			}
-			got, err := svc.GetPaymentLinkStatus(context.Background(), "plink_test")
-			require.NoError(t, err)
-			assert.Equal(t, "created", got.Status)
-			assert.Equal(t, tt.wantFailed, got.FailedPaymentIDs)
+			svc := &PaymentService{client: tt.client, logger: logger.NewNoopLogger()}
+			start := time.Now()
+			assert.Equal(t, tt.want, svc.FailedOrderPaymentIDs(context.Background(), "order_1"))
+			assert.Less(t, time.Since(start), orderPaymentsTimeout+time.Second)
 		})
 	}
+}
+
+type hungOrderLinkClient struct {
+	fakeOrderPaymentsClient
+	link map[string]interface{}
+}
+
+func (c *hungOrderLinkClient) FetchPaymentLink(context.Context, string) (map[string]interface{}, error) {
+	return c.link, nil
+}
+
+// The checkout poll still gets the link's outcome when the order read hangs; only the declines are dropped.
+func TestFetchPaymentState_HungOrderReadKeepsLinkOutcome(t *testing.T) {
+	client := &hungOrderLinkClient{
+		fakeOrderPaymentsClient: fakeOrderPaymentsClient{hang: true},
+		link: map[string]interface{}{"status": "paid", "order_id": "order_1", "payments": []interface{}{
+			map[string]interface{}{"payment_id": "pay_ok", "status": "captured"},
+		}},
+	}
+	adapter := &CheckoutAdapter{Svc: &PaymentService{client: client, logger: logger.NewNoopLogger()}}
+
+	start := time.Now()
+	state, err := adapter.FetchPaymentState(context.Background(), interfaces.PaymentStateRequest{GatewayTrackingID: "plink_test"})
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), orderPaymentsTimeout+time.Second)
+	assert.Equal(t, "pay_ok", state.GatewayPaymentID)
+	assert.Equal(t, types.PaymentStatusSucceeded, state.Status)
+	assert.Empty(t, state.FailedGatewayPaymentIDs)
+}
+
+type orderInvoiceClient struct {
+	fakeOrderPaymentsClient
+	invoice map[string]interface{}
+}
+
+func (c *orderInvoiceClient) GetInvoice(context.Context, string) (map[string]interface{}, error) {
+	return c.invoice, nil
+}
+
+// A mandate authorization link (inv_) reports its declines from the invoice's order, like a payment link.
+func TestFetchPaymentState_InvoiceReportsOrderDeclines(t *testing.T) {
+	client := &orderInvoiceClient{
+		fakeOrderPaymentsClient: fakeOrderPaymentsClient{payments: []map[string]interface{}{
+			{"id": "pay_declined", "status": "failed"},
+			{"id": "pay_open", "status": "created"},
+		}},
+		invoice: map[string]interface{}{"status": "issued", "order_id": "order_1"},
+	}
+	adapter := &CheckoutAdapter{Svc: &PaymentService{client: client, logger: logger.NewNoopLogger()}}
+
+	state, err := adapter.FetchPaymentState(context.Background(), interfaces.PaymentStateRequest{GatewayTrackingID: "inv_test"})
+	require.NoError(t, err)
+	assert.Empty(t, state.Status)
+	assert.Equal(t, []string{"pay_declined"}, state.FailedGatewayPaymentIDs)
 }
 
 type expireClient struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -27,6 +28,9 @@ import (
 // PaymentService defines the interface for payment operations
 // paymentCheckoutMarker is the GatewayMetadata key set on payments created for a checkout.
 const paymentCheckoutMarker = "checkout"
+
+// attemptDetailsTimeout bounds the gateway lookup for an attempt's details; the attempt is saved without them on timeout.
+const attemptDetailsTimeout = 3 * time.Second
 
 type PaymentService = interfaces.PaymentService
 
@@ -687,7 +691,9 @@ func (s *paymentService) gatewayAttemptDetails(ctx context.Context, p *payment.P
 		}
 		return nil
 	}
-	details, err := provider.GetAttemptDetails(gatewayCtx, gatewayAttemptID)
+	detailsCtx, cancel := context.WithTimeout(gatewayCtx, attemptDetailsTimeout)
+	defer cancel()
+	details, err := provider.GetAttemptDetails(detailsCtx, gatewayAttemptID)
 	if err != nil {
 		if !ierr.IsNotImplemented(err) {
 			s.Logger.Error(ctx, "failed to fetch attempt details from gateway", "error", err, "payment_id", p.ID, "gateway_attempt_id", gatewayAttemptID)

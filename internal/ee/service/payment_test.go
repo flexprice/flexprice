@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -1205,6 +1206,44 @@ func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
 			s.Equal(lo.RangeFrom(1, len(attempts)), lo.Map(attempts, func(a *payment.PaymentAttempt, _ int) int { return a.AttemptNumber }))
 		})
 	}
+}
+
+// A gateway that hangs on the details lookup must not block or fail recording: the attempt is saved without card details.
+func (s *PaymentServiceSuite) TestRecordAttempt_HungDetailsLookupStillRecords() {
+	ctx := s.GetContext()
+	s.GetIntegrationFactory().SetPaymentMethodProvider(&stubPaymentMethodProvider{hangDetails: true})
+	p := &payment.Payment{
+		ID:                "pay_hung_details",
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		DestinationID:     s.testData.invoice.ID,
+		PaymentMethodType: types.PaymentMethodTypePaymentLink,
+		PaymentStatus:     types.PaymentStatusPending,
+		PaymentGateway:    lo.ToPtr(string(types.PaymentGatewayTypeRazorpay)),
+		TrackAttempts:     true,
+		Amount:            decimal.NewFromFloat(100),
+		Currency:          "inr",
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PaymentRepo.Create(ctx, p))
+	svc := s.service.(*paymentService)
+	svc.IntegrationFactory = s.GetIntegrationFactory()
+
+	start := time.Now()
+	s.NoError(svc.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusFailed,
+		GatewayAttemptID: "pay_rzp_hung",
+		ErrorMessage:     "card declined",
+		Details:          &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "card_declined"}},
+	}))
+	s.Less(time.Since(start), attemptDetailsTimeout+time.Second)
+
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+	s.NoError(err)
+	s.Require().Len(attempts, 1)
+	resp := dto.NewPaymentAttemptResponse(attempts[0])
+	s.Equal("card declined", lo.FromPtr(resp.ErrorMessage))
+	s.Equal(&dto.PaymentAttemptError{Reason: "card_declined"}, resp.Error)
+	s.Nil(resp.PaymentMethod)
 }
 
 func (s *PaymentServiceSuite) TestRecordAttempt_PublishesAttemptEventPerStatus() {

@@ -310,6 +310,7 @@ type stubPaymentMethodProvider struct {
 	methods        []interfaces.ProviderPaymentMethod
 	err            error
 	attemptDetails *dto.PaymentAttemptDetails
+	hangDetails    bool
 }
 
 func (p *stubPaymentMethodProvider) ListSavedMethods(_ context.Context, _ string) ([]interfaces.ProviderPaymentMethod, error) {
@@ -328,7 +329,11 @@ func (p *stubPaymentMethodProvider) CreateSetupLink(_ context.Context, _ interfa
 	return nil, nil
 }
 
-func (p *stubPaymentMethodProvider) GetAttemptDetails(_ context.Context, _ string) (*dto.PaymentAttemptDetails, error) {
+func (p *stubPaymentMethodProvider) GetAttemptDetails(ctx context.Context, _ string) (*dto.PaymentAttemptDetails, error) {
+	if p.hangDetails {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	return p.attemptDetails, nil
 }
 

@@ -668,33 +668,21 @@ func (s *CheckoutPollSuite) TestGet_ExpandsInvoiceAndPaymentWithPolledAttempts()
 	s.Require().NoError(err)
 	s.Nil(plain.CheckoutInvoice)
 	s.Nil(plain.CheckoutPayment)
-
-	listed, err := s.svc.List(ctx, &types.CheckoutSessionFilter{
-		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(10), Offset: lo.ToPtr(0), Expand: lo.ToPtr("invoice,payment")},
-		CustomerIDs: []string{session.CustomerID},
-	})
-	s.Require().NoError(err)
-	s.Require().Len(listed.Items, 1)
-	s.Equal(*session.CheckoutInvoiceID, listed.Items[0].CheckoutInvoice.ID)
-	s.Equal(p.ID, listed.Items[0].CheckoutPayment.ID)
 }
 
-func (s *CheckoutPollSuite) TestSearch_ExpandsArchivedInvoiceAndPayment() {
+func (s *CheckoutPollSuite) TestGet_ExpandsFinishedSessionInvoiceAndPayment() {
 	ctx := s.GetContext()
 	session := s.seedSession(types.CheckoutStatusExpired, "plink_001", "")
 	s.Require().NoError(s.GetStores().InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID))
 	s.Require().NoError(s.GetStores().PaymentRepo.Delete(ctx, *session.CheckoutPaymentID))
 
-	listed, err := s.svc.List(ctx, &types.CheckoutSessionFilter{
-		QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(10), Offset: lo.ToPtr(0), Expand: lo.ToPtr("invoice,payment")},
-		CustomerIDs: []string{session.CustomerID},
-	})
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand("invoice,payment"))
 	s.Require().NoError(err)
-	s.Require().Len(listed.Items, 1)
-	s.Require().NotNil(listed.Items[0].CheckoutInvoice)
-	s.Equal(*session.CheckoutInvoiceID, listed.Items[0].CheckoutInvoice.ID)
-	s.Require().NotNil(listed.Items[0].CheckoutPayment)
-	s.Equal(*session.CheckoutPaymentID, listed.Items[0].CheckoutPayment.ID)
+	s.Require().NotNil(resp.CheckoutInvoice)
+	s.Equal(*session.CheckoutInvoiceID, resp.CheckoutInvoice.ID)
+	s.Require().NotNil(resp.CheckoutPayment)
+	s.Equal(*session.CheckoutPaymentID, resp.CheckoutPayment.ID)
+	s.Zero(s.provider.callCount(), "a finished session is served from the database")
 }
 
 // The webhook and the poll share HandleDecline, so a polled auto-charge decline ends the session like the webhook does.

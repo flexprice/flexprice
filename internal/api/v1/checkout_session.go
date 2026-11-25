@@ -78,7 +78,7 @@ func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 // Query godoc
 // @Summary Query checkout sessions
 // @ID queryCheckoutSession
-// @Description Use when listing checkout sessions, e.g. a customer's sessions with their invoice, payment and attempts. Set expand to "invoice,payment".
+// @Description Use when listing checkout sessions, e.g. a customer's sessions. Expand is not supported here; read one session with GET /checkout/sessions/{id}?expand=invoice,payment for its invoice, payment and attempts.
 // @Tags Checkout
 // @x-scope "read"
 // @Accept json
@@ -100,7 +100,7 @@ func (h *CheckoutSessionHandler) Query(c *gin.Context) {
 	if filter.QueryFilter == nil {
 		filter.QueryFilter = types.NewDefaultQueryFilter()
 	}
-	if err := filter.GetExpand().Validate(types.CheckoutSessionExpandConfig); err != nil {
+	if err := filter.GetExpand().Validate(types.ExpandConfig{}); err != nil {
 		c.Error(err)
 		return
 	}

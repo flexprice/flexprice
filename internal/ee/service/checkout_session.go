@@ -207,69 +207,26 @@ func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string,
 	}
 
 	resp := s.toPollableResponse(ctx, session, reconciled.stale)
-	if err := s.expandCheckoutSessions(ctx, []*dto.CheckoutSessionResponse{resp}, expand); err != nil {
+	if err := s.expandCheckoutSession(ctx, resp, expand); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-// expandCheckoutSessions attaches the sessions' invoices and payments. A finished session's draft
-// invoice and payment are archived or deleted, so ids missing from the published query are read again in those statuses.
-func (s *checkoutSessionService) expandCheckoutSessions(ctx context.Context, sessions []*dto.CheckoutSessionResponse, expand types.Expand) error {
-	statuses := []*types.Status{nil, lo.ToPtr(types.StatusArchived), lo.ToPtr(types.StatusDeleted)}
-
-	if expand.Has(types.ExpandInvoice) {
-		invoices := map[string]*dto.InvoiceResponse{}
-		for _, status := range statuses {
-			missing := lo.Uniq(lo.FilterMap(sessions, func(r *dto.CheckoutSessionResponse, _ int) (string, bool) {
-				_, found := invoices[lo.FromPtr(r.CheckoutInvoiceID)]
-				return lo.FromPtr(r.CheckoutInvoiceID), r.CheckoutInvoiceID != nil && !found
-			}))
-			if len(missing) == 0 {
-				break
-			}
-			resp, err := NewInvoiceService(s.ServiceParams).ListInvoices(ctx, &types.InvoiceFilter{
-				QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(len(missing)), Status: status},
-				InvoiceIDs:  missing,
-			})
-			if err != nil {
-				return err
-			}
-			for _, inv := range resp.Items {
-				invoices[inv.ID] = inv
-			}
-		}
-		for _, r := range sessions {
-			r.CheckoutInvoice = invoices[lo.FromPtr(r.CheckoutInvoiceID)]
+// expandCheckoutSession attaches the session's invoice and payment when asked for. Reads by id
+// also return a finished session's archived payment and deleted draft invoice.
+func (s *checkoutSessionService) expandCheckoutSession(ctx context.Context, resp *dto.CheckoutSessionResponse, expand types.Expand) error {
+	var err error
+	if expand.Has(types.ExpandInvoice) && resp.CheckoutInvoiceID != nil {
+		if resp.CheckoutInvoice, err = NewInvoiceService(s.ServiceParams).GetInvoice(ctx, *resp.CheckoutInvoiceID); err != nil {
+			return err
 		}
 	}
-
-	if expand.Has(types.ExpandPayment) {
-		payments := map[string]*dto.PaymentResponse{}
-		for _, status := range statuses {
-			missing := lo.Uniq(lo.FilterMap(sessions, func(r *dto.CheckoutSessionResponse, _ int) (string, bool) {
-				_, found := payments[lo.FromPtr(r.CheckoutPaymentID)]
-				return lo.FromPtr(r.CheckoutPaymentID), r.CheckoutPaymentID != nil && !found
-			}))
-			if len(missing) == 0 {
-				break
-			}
-			resp, err := NewPaymentService(s.ServiceParams).ListPayments(ctx, &types.PaymentFilter{
-				QueryFilter: &types.QueryFilter{Limit: lo.ToPtr(len(missing)), Status: status},
-				PaymentIDs:  missing,
-			})
-			if err != nil {
-				return err
-			}
-			for _, p := range resp.Items {
-				payments[p.ID] = p
-			}
-		}
-		for _, r := range sessions {
-			r.CheckoutPayment = payments[lo.FromPtr(r.CheckoutPaymentID)]
+	if expand.Has(types.ExpandPayment) && resp.CheckoutPaymentID != nil {
+		if resp.CheckoutPayment, err = NewPaymentService(s.ServiceParams).GetPayment(ctx, dto.GetPaymentRequest{ID: *resp.CheckoutPaymentID, SkipGatewaySync: true}); err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
 
@@ -339,9 +296,6 @@ func (s *checkoutSessionService) List(ctx context.Context, filter *types.Checkou
 	items := make([]*dto.CheckoutSessionResponse, len(sessions))
 	for i, sess := range sessions {
 		items[i] = dto.ToCheckoutSessionResponse(sess)
-	}
-	if err := s.expandCheckoutSessions(ctx, items, filter.GetExpand()); err != nil {
-		return nil, err
 	}
 
 	result := types.NewListResponse(items, count, filter.GetLimit(), filter.GetOffset())

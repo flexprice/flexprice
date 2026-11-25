@@ -1959,7 +1959,7 @@
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when listing checkout sessions, e.g. a customer's sessions with their invoice, payment and attempts. Set expand to \"invoice,payment\".",
+                "description": "Use when listing checkout sessions, e.g. a customer's sessions. Expand is not supported here; read one session with GET /checkout/sessions/{id}?expand=invoice,payment for its invoice, payment and attempts.",
                 "consumes": [
                     "application/json"
                 ],
