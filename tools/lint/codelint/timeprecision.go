@@ -25,11 +25,19 @@ func (c *checker) checkTimePrecision() {
 			return
 		}
 		// Duration.Truncate rounds an elapsed span; only Time.Truncate touches an instant.
-		if receiver := c.pass.TypesInfo.TypeOf(sel.X); receiver == nil || receiver.String() != "time.Time" {
+		if !isTimeValue(c.pass.TypesInfo.TypeOf(sel.X)) {
 			return
 		}
 		c.report(call.Pos(), codeTimePrecision, "business code never truncates instants; clock.Now(), the bindings, the activity interceptor and the ent hook already hold the precision contract")
 	})
+}
+
+// isTimeValue is true for time.Time and *time.Time receivers.
+func isTimeValue(typ types.Type) bool {
+	if ptr, ok := typ.(*types.Pointer); ok {
+		typ = ptr.Elem()
+	}
+	return typ != nil && typ.String() == "time.Time"
 }
 
 // isPackage reports whether expr names the package with the given path.
