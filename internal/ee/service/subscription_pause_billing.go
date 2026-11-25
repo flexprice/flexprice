@@ -162,25 +162,54 @@ func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *in
 	if err != nil {
 		return err
 	}
-	advanceSub := *sub
-	advanceSub.LineItems = lo.Filter(lineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
+	advanceItems := lo.Filter(lineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
 		return item.PriceType == types.PRICE_TYPE_FIXED && item.InvoiceCadence == types.InvoiceCadenceAdvance
 	})
-
-	if len(advanceSub.LineItems) == 0 {
+	if len(advanceItems) == 0 {
 		return nil
 	}
-	advance, err := NewBillingService(s.ServiceParams).CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-		Subscription: &advanceSub,
-		PeriodStart:  billedPeriod.Start,
-		PeriodEnd:    billedPeriod.End,
+	longerCadenceItems, periodCadenceItems := lo.FilterReject(advanceItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
+		return types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount)
 	})
-	if err != nil {
-		return err
+
+	billingService := NewBillingService(s.ServiceParams)
+	var advanceLines []dto.CreateInvoiceLineItemRequest
+	if len(periodCadenceItems) > 0 {
+		periodSub := *sub
+		periodSub.LineItems = periodCadenceItems
+		advance, err := billingService.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+			Subscription: &periodSub,
+			PeriodStart:  billedPeriod.Start,
+			PeriodEnd:    billedPeriod.End,
+		})
+		if err != nil {
+			return err
+		}
+		advanceLines = append(advanceLines, advance.LineItems...)
 	}
-	// Each charge refunds the paused share of its own service period.
+	// A longer-cadence charge started before this period, so it is priced over its service period holding it.
+	for _, item := range longerCadenceItems {
+		grid, err := types.NewBillingPeriodGrid(longerItemAnchor(sub, item), item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
+		if err != nil {
+			return err
+		}
+		servicePeriod := types.FullBillingPeriod(billedPeriod.Start, grid)
+		itemSub := *sub
+		itemSub.LineItems = []*subscription.SubscriptionLineItem{item}
+		advance, err := billingService.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
+			Subscription: &itemSub,
+			PeriodStart:  servicePeriod.Start,
+			PeriodEnd:    servicePeriod.End,
+		})
+		if err != nil {
+			return err
+		}
+		advanceLines = append(advanceLines, advance.LineItems...)
+	}
+
+	// Each charge refunds the paused share of its own service period that falls in this billing period.
 	credit := decimal.Zero
-	for _, line := range advance.LineItems {
+	for _, line := range advanceLines {
 		linePeriod := types.Period{Start: lo.FromPtr(line.PeriodStart), End: lo.FromPtr(line.PeriodEnd)}
 		credit = credit.Add(line.Amount.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, prorated))))
 	}

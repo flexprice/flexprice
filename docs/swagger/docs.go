@@ -13474,7 +13474,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice: the period keeps its one invoice. If the subscription is not resumed within its pause grace period, it is cancelled and that invoice is billed at the cancellation, otherwise it is billed at the period end.",
+                "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice. Invoices already finalized, such as the advance charges billed at the period start, are not changed. If the subscription is not resumed within its pause grace period, it is cancelled and the period's invoice is billed at the cancellation, otherwise at the period end. With create_prorations, the paused share of advance charges is credited to the wallet when that invoice is finalized.",
                 "consumes": [
                     "application/json"
                 ],

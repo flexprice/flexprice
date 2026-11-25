@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1370,6 +1371,34 @@ func (s *SubscriptionPauseSuite) TestClosedPeriod_AdvanceCreditUsesEachChargePer
 	s.Require().Len(credits, 1)
 	s.InDelta(pauseAdvanceFee*fraction(pausedFrom, firstMonthEnd, quarterStart, firstMonthEnd), credits[0].CreditAmount.InexactFloat64(), 0.01,
 		"credit %s", credits[0].CreditAmount)
+}
+
+// A quarterly advance fee on a monthly subscription credits, on each month's invoice, the paused share of
+// the quarter that falls in that month, including months after the one the fee was billed in.
+func (s *SubscriptionPauseSuite) TestClosedPeriod_QuarterlyAdvanceOnMonthlyCreditsEachMonth() {
+	quarterStart := time.Now().UTC().Truncate(time.Second).AddDate(0, -3, -5)
+	quarter := quarterStart.AddDate(0, 3, 0).Sub(quarterStart)
+
+	for month := 0; month < 2; month++ {
+		s.Run(fmt.Sprintf("pause in month %d", month+1), func() {
+			ctx := s.GetContext()
+			monthStart, monthEnd := quarterStart.AddDate(0, month, 0), quarterStart.AddDate(0, month+1, 0)
+			sub := s.subscriptionWithCharges(fmt.Sprintf("subs_quarterly_advance_month_%d", month+1), quarterStart, quarterStart.AddDate(0, 1, 0), chargeAdvance)
+			s.lineItemsTo(sub, types.BILLING_PERIOD_QUARTER)
+			stored := s.subscription(sub.ID)
+			stored.CurrentPeriodStart, stored.CurrentPeriodEnd = monthStart, monthEnd
+			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, stored))
+			pausedFrom, pausedTo := monthStart.AddDate(0, 0, 5), monthStart.AddDate(0, 0, 15)
+			s.completedPause(s.subscription(sub.ID), sub.ID+"_pause", pausedFrom, pausedTo, types.ProrationBehaviorCreateProrations)
+
+			s.billPeriod(sub.ID, monthStart, monthEnd)
+
+			credits := s.pauseCredits(sub.ID, monthStart)
+			s.Require().Len(credits, 1, "the month's paused share of the quarterly fee is credited")
+			want := pauseAdvanceFee * pausedTo.Sub(pausedFrom).Seconds() / quarter.Seconds()
+			s.InDelta(want, credits[0].CreditAmount.InexactFloat64(), 0.01, "credit %s", credits[0].CreditAmount)
+		})
+	}
 }
 
 // A converted invoice is issued in the billing currency, so the paused advance credit is converted
