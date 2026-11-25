@@ -50,6 +50,7 @@ import (
 	"github.com/flexprice/flexprice/ent/incomingwebhookevent"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/ent/invoicereminder"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
 	"github.com/flexprice/flexprice/ent/journalentry"
 	"github.com/flexprice/flexprice/ent/journalline"
@@ -183,6 +184,7 @@ func checkColumn(t, c string) error {
 			incomingwebhookevent.Table:             incomingwebhookevent.ValidColumn,
 			invoice.Table:                          invoice.ValidColumn,
 			invoicelineitem.Table:                  invoicelineitem.ValidColumn,
+			invoicereminder.Table:                  invoicereminder.ValidColumn,
 			invoicesequence.Table:                  invoicesequence.ValidColumn,
 			journalentry.Table:                     journalentry.ValidColumn,
 			journalline.Table:                      journalline.ValidColumn,

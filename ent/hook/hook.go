@@ -465,6 +465,18 @@ func (f InvoiceLineItemFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InvoiceLineItemMutation", m)
 }
 
+// The InvoiceReminderFunc type is an adapter to allow the use of ordinary
+// function as InvoiceReminder mutator.
+type InvoiceReminderFunc func(context.Context, *ent.InvoiceReminderMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InvoiceReminderFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InvoiceReminderMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InvoiceReminderMutation", m)
+}
+
 // The InvoiceSequenceFunc type is an adapter to allow the use of ordinary
 // function as InvoiceSequence mutator.
 type InvoiceSequenceFunc func(context.Context, *ent.InvoiceSequenceMutation) (ent.Value, error)
