@@ -81,7 +81,9 @@ jobs:
         run: go mod download
 
       - name: gofmt and Flexprice analyzers on changed lines
-        run: make fmt-changed lint-changed LINT_BASE=origin/${{ github.base_ref }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: make fmt-changed lint-changed LINT_BASE="origin/$BASE_REF"
 
       - name: Agent docs name real paths
         run: make check-agent-docs
