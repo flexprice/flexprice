@@ -1147,9 +1147,8 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
 // [lineItem.StartDate, lineItem.EndDate) for finite line items, or
 // [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
-// At sub.CurrentPeriodEnd, one-time items are rejected, and longer-cadence items
-// are only allowed when sub.CurrentPeriodEnd coincides with the item's own billing
-// period end without shifting a multi-count calendar billing grid.
+// At sub.CurrentPeriodEnd, one-time items, longer-cadence items, and advance
+// items starting at period end are rejected.
 // Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
