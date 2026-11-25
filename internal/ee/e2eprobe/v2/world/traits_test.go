@@ -118,12 +118,22 @@ func TestProvision_TaxAssociationCreatedOnce(t *testing.T) {
 	if err := w.Provision(ctx); err != nil {
 		t.Fatal(err)
 	}
+	// The server lists associations with tax_rate_id only, never the nested rate.
+	for i := range fc.TaxAssoc.Items {
+		fc.TaxAssoc.Items[i].TaxRate = nil
+	}
+	fc.Clock = func() time.Time { return testStart.Add(time.Hour) }
+	w = New(fc, suite.Default(), "run-test-restart", nil)
+	w.SetClock(fc.Clock)
 	if err := w.Provision(ctx); err != nil {
 		t.Fatal(err)
 	}
 	taxed, _ := w.Persona("taxed")
-	if len(fc.TaxAssoc.Created) != 1 || taxed.TaxActiveFrom().IsZero() {
-		t.Errorf("tax association created %d times, active from %s", len(fc.TaxAssoc.Created), taxed.TaxActiveFrom())
+	if len(fc.TaxAssoc.Created) != 1 || !taxed.TaxActiveFrom().Equal(testStart) {
+		t.Errorf("after a restart: tax association created %d times, active from %s, want once from %s", len(fc.TaxAssoc.Created), taxed.TaxActiveFrom(), testStart)
+	}
+	if w.Fixtures().TaxRateID() != "taxrate_1" {
+		t.Errorf("a restart must adopt the shared rate by code, got id %q", w.Fixtures().TaxRateID())
 	}
 	quarterly := 0
 	for _, sub := range fc.Subscription.Items {
@@ -139,6 +149,18 @@ func TestProvision_TaxAssociationCreatedOnce(t *testing.T) {
 	}
 	if taxed.SubscriptionID() == taxed.MultiCadenceSubID() {
 		t.Error("the primary subscription must not be the quarterly one")
+	}
+}
+
+func TestProvision_TaxAssociationConflictIsAGap(t *testing.T) {
+	w, fc := newWorld(t, suite.Default())
+	fc.TaxAssoc.CreateErr = probetest.Conflict()
+	if err := w.Provision(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	taxed, _ := w.Persona("taxed")
+	if taxed.Gap(e2eprobe.TraitTax) == "" || !taxed.TaxActiveFrom().IsZero() {
+		t.Errorf("an association the server rejects as a duplicate but does not list must be a gap, got gap=%q active=%s", taxed.Gap(e2eprobe.TraitTax), taxed.TaxActiveFrom())
 	}
 }
 

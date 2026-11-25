@@ -58,7 +58,7 @@ func TestFixtures_ProvisionIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestFixtures_TaxRateAlreadyExistsSwallowed(t *testing.T) {
+func TestFixtures_TaxRateAdoptedByCode(t *testing.T) {
 	w, fc := newWorld(t, suite.Default())
 	fc.TaxRate.ByCode[e2eprobe.SharedTaxRateCode] = "taxrate_existing"
 	if err := w.Provision(context.Background()); err != nil {
@@ -69,7 +69,7 @@ func TestFixtures_TaxRateAlreadyExistsSwallowed(t *testing.T) {
 		t.Error("tax rate code must be known even when the rate pre-exists")
 	}
 	if fx.TaxRateID() != "taxrate_existing" {
-		t.Errorf("tax rate id must be backfilled from the association, got %q", fx.TaxRateID())
+		t.Errorf("tax rate id must be adopted from the listed rate, got %q", fx.TaxRateID())
 	}
 	if len(fc.TaxRate.Created) != 0 {
 		t.Error("an existing tax rate must not be re-created")

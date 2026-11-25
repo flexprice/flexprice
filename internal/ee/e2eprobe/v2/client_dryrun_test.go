@@ -136,7 +136,7 @@ func (f *fakeEventOps) IngestBulk(_ context.Context, req types.BulkIngestEventRe
 
 type fakeAlertOps struct{ calls int32 }
 
-func (f *fakeAlertOps) QueryLogs(_ context.Context, _ types.AlertLogFilter) ([]types.AlertLogResponse, error) {
+func (f *fakeAlertOps) QueryLogs(_ context.Context, _ types.AlertLogFilter) ([]AlertLog, error) {
 	atomic.AddInt32(&f.calls, 1)
 	return nil, nil
 }

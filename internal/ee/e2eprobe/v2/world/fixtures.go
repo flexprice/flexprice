@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/v2"
+	"github.com/flexprice/go-sdk/v2/models/dtos"
 	"github.com/flexprice/go-sdk/v2/models/types"
 	"github.com/shopspring/decimal"
 )
@@ -263,10 +264,21 @@ func (w *World) ensureCoupon(ctx context.Context, fx *Fixtures) error {
 	return nil
 }
 
-// ensureTaxRate creates the shared rate and treats already-exists as done. The
-// id of a pre-existing rate is backfilled from the first tax association seen.
+// ensureTaxRate adopts the shared rate by code and creates it when none is listed.
 func (w *World) ensureTaxRate(ctx context.Context, fx *Fixtures) error {
 	fx.set(func(f *Fixtures) { f.taxRateCode = e2eprobe.SharedTaxRateCode })
+	listed, err := w.client.TaxRates().List(ctx, dtos.GetTaxRatesRequest{TaxrateCodes: []string{e2eprobe.SharedTaxRateCode}})
+	if err != nil {
+		return fmt.Errorf("list tax rates: %w", err)
+	}
+	if listed != nil && listed.ListTaxRatesResponse != nil {
+		for _, tr := range listed.ListTaxRatesResponse.Items {
+			if tr.ID != nil && tr.Code != nil && *tr.Code == e2eprobe.SharedTaxRateCode {
+				fx.setTaxRateID(*tr.ID)
+				return nil
+			}
+		}
+	}
 	scope := types.TaxRateScopeExternal
 	rateType := types.TaxRateTypePercentage
 	created, err := w.client.TaxRates().Create(ctx, types.CreateTaxRateRequest{
@@ -278,14 +290,12 @@ func (w *World) ensureTaxRate(ctx context.Context, fx *Fixtures) error {
 		Metadata:        map[string]string{"e2eprobe": "true", "e2eprobe_role": "fixture"},
 	})
 	if err != nil {
-		if IsAlreadyExists(err) {
-			return nil
-		}
 		return fmt.Errorf("create tax rate %s: %w", e2eprobe.SharedTaxRateCode, err)
 	}
-	if created.TaxRateResponse != nil && created.TaxRateResponse.ID != nil {
-		fx.set(func(f *Fixtures) { f.taxRateID = *created.TaxRateResponse.ID })
+	if created.TaxRateResponse == nil || created.TaxRateResponse.ID == nil {
+		return fmt.Errorf("create tax rate %s: empty response", e2eprobe.SharedTaxRateCode)
 	}
+	fx.setTaxRateID(*created.TaxRateResponse.ID)
 	return nil
 }
 

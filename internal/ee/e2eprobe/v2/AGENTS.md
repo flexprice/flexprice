@@ -143,3 +143,4 @@ region rollup first and pages a binding only when no rollup covers it.
 | "Time to add an env var" | Optional configuration goes in the suite file; env is for secrets, endpoints and process knobs. |
 | "The janitor can match ephemerals by their display name" | A name proves nothing. Only the `e2eprobe-eph-` prefix or the ephemeral cohort tag authorizes a delete; the previous generation's customers are listed as legacy, never removed. |
 | "The over leg needs seven times the events" | Put more units on each event. The budget counts events; the oracle counts units. |
+| "The SDK cannot decode this response, so the scenario fails" | A mis-typed SDK field is not a platform failure. Decode the endpoint raw into a probe-owned type beside `Connection` and `AlertLog`, name the SDK field in its comment, and drop the type when the SDK is fixed. |

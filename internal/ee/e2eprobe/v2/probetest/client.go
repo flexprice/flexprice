@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -1122,8 +1123,17 @@ func (f *TaxRates) Get(_ context.Context, id string) (*dtos.GetTaxRateResponse, 
 	return &dtos.GetTaxRateResponse{TaxRateResponse: &types.TaxRateResponse{ID: Ptr(id)}}, nil
 }
 
-func (f *TaxRates) List(_ context.Context, _ dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
-	return &dtos.GetTaxRatesResponse{}, nil
+func (f *TaxRates) List(_ context.Context, req dtos.GetTaxRatesRequest) (*dtos.GetTaxRatesResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var items []types.TaxRateResponse
+	for code, id := range f.ByCode {
+		if len(req.TaxrateCodes) > 0 && !slices.Contains(req.TaxrateCodes, code) {
+			continue
+		}
+		items = append(items, types.TaxRateResponse{ID: Ptr(id), Code: Ptr(code)})
+	}
+	return &dtos.GetTaxRatesResponse{ListTaxRatesResponse: &types.ListTaxRatesResponse{Items: items}}, nil
 }
 
 func (f *TaxRates) Delete(_ context.Context, _ string) (*dtos.DeleteTaxRateResponse, error) {
@@ -1151,6 +1161,11 @@ func (f *TaxAssociations) Create(_ context.Context, req types.CreateTaxAssociati
 		return nil, f.CreateErr
 	}
 	rateID := f.client.TaxRate.idFor(req.TaxRateCode)
+	for _, have := range f.Items {
+		if have.EntityID != nil && req.EntityID != nil && *have.EntityID == *req.EntityID && have.TaxRateID != nil && *have.TaxRateID == rateID {
+			return nil, Conflict()
+		}
+	}
 	ta := types.TaxAssociationResponse{
 		ID:         Ptr(fmt.Sprintf("taxassoc_%d", len(f.Items)+1)),
 		EntityID:   req.EntityID,
@@ -1222,27 +1237,27 @@ func (f *TaxAssociations) Delete(_ context.Context, id string) (*dtos.DeleteTaxA
 type Alerts struct {
 	mu sync.Mutex
 
-	Logs    []types.AlertLogResponse
+	Logs    []e2eprobe.AlertLog
 	Queries []types.AlertLogFilter
 	Err     error
 }
 
-func (f *Alerts) QueryLogs(_ context.Context, filter types.AlertLogFilter) ([]types.AlertLogResponse, error) {
+func (f *Alerts) QueryLogs(_ context.Context, filter types.AlertLogFilter) ([]e2eprobe.AlertLog, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Queries = append(f.Queries, filter)
 	if f.Err != nil {
 		return nil, f.Err
 	}
-	var out []types.AlertLogResponse
+	var out []e2eprobe.AlertLog
 	for _, l := range f.Logs {
-		if filter.EntityID != nil && (l.EntityID == nil || *l.EntityID != *filter.EntityID) {
+		if filter.EntityID != nil && l.EntityID != *filter.EntityID {
 			continue
 		}
-		if filter.CustomerID != nil && (l.CustomerID == nil || *l.CustomerID != *filter.CustomerID) {
+		if filter.CustomerID != nil && l.CustomerID != *filter.CustomerID {
 			continue
 		}
-		if filter.StartTime != nil && l.CreatedAt != nil && l.CreatedAt.Before(*filter.StartTime) {
+		if filter.StartTime != nil && l.CreatedAt.Before(*filter.StartTime) {
 			continue
 		}
 		out = append(out, l)

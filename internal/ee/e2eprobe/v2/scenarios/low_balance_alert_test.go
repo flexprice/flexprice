@@ -56,8 +56,7 @@ func TestLowBalanceAlert_PassesWhenWebhookArrives(t *testing.T) {
 func TestLowBalanceAlert_AttributesMissingWebhookToDeliveryWhenAlertLogged(t *testing.T) {
 	d := newTestDeps(t)
 	canary, _ := d.World.Persona("alert-canary")
-	entity := types.AlertEntityTypeWallet
-	d.fc.Alert.Logs = []types.AlertLogResponse{{ID: probetest.Ptr("al_1"), EntityType: &entity, EntityID: probetest.Ptr(canary.WalletID()), CreatedAt: probetest.Ptr(d.now.Add(time.Second))}}
+	d.fc.Alert.Logs = []e2eprobe.AlertLog{{ID: "al_1", EntityType: "wallet", EntityID: canary.WalletID(), CreatedAt: d.now.Add(time.Second)}}
 	r := run(t, d, fastLowBalanceAlert(d), "alert-canary")
 	if r.Status != e2eprobe.StatusFail || r.Step != "webhook_not_delivered" || r.Infra {
 		t.Fatalf("result = %+v", r)

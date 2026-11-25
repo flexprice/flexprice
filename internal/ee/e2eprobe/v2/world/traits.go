@@ -313,6 +313,7 @@ func (w *World) ensureTaxAssociation(ctx context.Context, fx *Fixtures, p *Perso
 	})
 	if err != nil {
 		if IsAlreadyExists(err) {
+			p.setGap(e2eprobe.TraitTax, "tax association exists on the server but is not listed for the shared rate")
 			return nil
 		}
 		return fmt.Errorf("create tax association: %w", err)

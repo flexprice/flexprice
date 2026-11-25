@@ -143,7 +143,7 @@ type EventOps interface {
 // AlertOps reads alert logs, which say whether the server raised an alert
 // independently of whether its webhook was delivered.
 type AlertOps interface {
-	QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]types.AlertLogResponse, error)
+	QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]AlertLog, error)
 }
 
 // Connection is the slice of a tenant connection preflight compares.
@@ -151,6 +151,19 @@ type Connection struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
 	ProviderType string `json:"provider_type"`
+}
+
+// AlertLog is the slice of an alert log entry the probe reads. The SDK's
+// AlertLogResponse types alert_info.value_at_time as a time and cannot decode
+// the decimal the server sends.
+type AlertLog struct {
+	ID          string    `json:"id"`
+	EntityType  string    `json:"entity_type"`
+	EntityID    string    `json:"entity_id"`
+	CustomerID  string    `json:"customer_id"`
+	AlertType   string    `json:"alert_type"`
+	AlertStatus string    `json:"alert_status"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // TenantOps reads tenant-level configuration the probe verifies but never writes.
@@ -280,7 +293,8 @@ type sdkClient struct {
 	sdk  *flexprice.Flexprice
 	http *http.Client
 	// apiHost + apiKey are captured here so raw-HTTP methods
-	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
+	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed,
+	// AlertOps.QueryLogs)
 	// bypass the generated request types where the server accepts fields the
 	// SDK does not expose yet; delete them when it does.
 	apiHost string
@@ -306,21 +320,20 @@ func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
 func (c *sdkClient) TaxAssociations() TaxAssociationOps {
 	return taxAssociationOps{c.sdk.TaxAssociations}
 }
-func (c *sdkClient) Alerts() AlertOps  { return alertOps{c.sdk.Alerts} }
+func (c *sdkClient) Alerts() AlertOps  { return alertOps{parent: c} }
 func (c *sdkClient) Tenant() TenantOps { return tenantOps{parent: c} }
 func (c *sdkClient) Raw() RawOps       { return rawOps{parent: c} }
 
-type alertOps struct{ s *flexprice.Alerts }
+type alertOps struct{ parent *sdkClient }
 
-func (o alertOps) QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]types.AlertLogResponse, error) {
-	resp, err := o.s.QueryAlertLog(ctx, f)
-	if err != nil {
+func (o alertOps) QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]AlertLog, error) {
+	var out struct {
+		Items []AlertLog `json:"items"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodPost, "/alerts/search", "", f, &out); err != nil {
 		return nil, err
 	}
-	if resp == nil || resp.ListAlertLogsResponse == nil {
-		return nil, nil
-	}
-	return resp.ListAlertLogsResponse.Items, nil
+	return out.Items, nil
 }
 
 type tenantOps struct{ parent *sdkClient }
