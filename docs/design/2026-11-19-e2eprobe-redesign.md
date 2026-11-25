@@ -80,7 +80,7 @@ correctness, not just liveness. Today it cannot carry that weight:
   `internal/ee/e2eprobe/v2` with its own (`e2eprobeV2.*`, `ghcr.io/flexprice/e2eprobe-v2`,
   `publish-e2eprobe-v2-image.yml`, `make run-e2eprobe-v2`). Secrets stay in env: `E2EPROBE_API_HOST`, `E2EPROBE_API_KEY`, Slack webhook or bot token,
   tenant and environment ids, bootstrap credentials. Everything optional moves to the suite file.
-- **SDK v2.1.51** is the client. Fields the SDK does not carry go through `RawOps`.
+- **SDK v2.1.51** is the client. Fields the SDK does not carry go through `RawOps`; a response the SDK cannot decode is read raw into a probe-owned type (`AlertLog`: the SDK types `alert_info.value_at_time` as a time because the swagger marks it `date-time`) and the type is dropped once the SDK is fixed.
 - **Single replica.** Personas are shared mutable fixtures.
 - **Webhook delivery** is configured server-side (`webhook.tenants.<id>` or a Svix endpoint); the
   probe cannot register an endpoint and must detect, not fix, missing wiring.
