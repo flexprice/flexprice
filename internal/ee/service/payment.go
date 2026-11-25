@@ -307,12 +307,7 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		return ierr.NewError("invoice is already paid").
-			WithHint("Cannot create payment for an already paid invoice").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": p.DestinationID,
-			}).
-			Mark(ierr.ErrValidation)
+		return errInvoicePaid(invoice.ID)
 	}
 
 	if invoice.InvoiceStatus == types.InvoiceStatusVoided {
@@ -1404,6 +1399,15 @@ func (s *paymentService) GetOrCreateInvoicePaymentLink(ctx context.Context, req 
 func errInvoiceVoided(invoiceID string) error {
 	return ierr.NewError("invoice is voided").
 		WithHint("Cannot create payment for a voided invoice").
+		WithReportableDetails(map[string]interface{}{
+			"invoice_id": invoiceID,
+		}).
+		Mark(ierr.ErrValidation)
+}
+
+func errInvoicePaid(invoiceID string) error {
+	return ierr.NewError("invoice is already paid").
+		WithHint("Cannot create payment for an already paid invoice").
 		WithReportableDetails(map[string]interface{}{
 			"invoice_id": invoiceID,
 		}).
