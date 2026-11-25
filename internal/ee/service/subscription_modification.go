@@ -907,7 +907,7 @@ func (s *subscriptionModificationService) publishSystemEvent(ctx context.Context
 	if err := s.serviceParams.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.serviceParams.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
-	NewAggregatedUsageService(s.serviceParams).EvaluateEligibility(ctx, AggregatedUsageSubscription, subscriptionID)
+	NewUsageRollupService(s.serviceParams).ClearEligibility(ctx, UsageRollupSubscription, subscriptionID)
 }
 
 // ─────────────────────────────────────────────

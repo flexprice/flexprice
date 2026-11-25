@@ -9,7 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// UsageCheckpointActivities lists the environments with aggregated usage and checkpoints one at a time.
+// UsageCheckpointActivities lists the environments with usage rollup and checkpoints one at a time.
 type UsageCheckpointActivities struct {
 	checkpointService service.UsageCheckpointService
 	logger            *logger.Logger
@@ -19,7 +19,7 @@ func NewUsageCheckpointActivities(checkpointService service.UsageCheckpointServi
 	return &UsageCheckpointActivities{checkpointService: checkpointService, logger: log}
 }
 
-// ListUsageCheckpointEnvironmentsActivity returns every environment of the tenants with aggregated usage on.
+// ListUsageCheckpointEnvironmentsActivity returns every environment of the tenants with usage rollup on.
 func (a *UsageCheckpointActivities) ListUsageCheckpointEnvironmentsActivity(ctx context.Context) ([]cronModels.UsageCheckpointEnvironment, error) {
 	environments, err := a.checkpointService.ActiveEnvironments(ctx)
 	if err != nil {

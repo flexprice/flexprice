@@ -62,7 +62,7 @@ type Configuration struct {
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
-	AggregatedUsage        AggregatedUsageConfig        `mapstructure:"aggregated_usage" validate:"omitempty"`
+	UsageRollup        UsageRollupConfig        `mapstructure:"usage_rollup" validate:"omitempty"`
 	EntitlementGrants      EntitlementGrantsConfig      `mapstructure:"entitlement_grants" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
@@ -1025,33 +1025,33 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
 }
 
-// AggregatedUsageConfig gates writing hourly per-customer meter quantities to Redis on ingest.
-type AggregatedUsageConfig struct {
-	// Enabled is the master switch; aggregated usage runs only for the tenants in EnabledTenants.
+// UsageRollupConfig gates writing hourly per-customer meter quantities to Redis on ingest.
+type UsageRollupConfig struct {
+	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
-	// BalanceFreshSeconds lets a real-time balance read reuse a balance computed within this many seconds; 0 turns it off.
-	BalanceFreshSeconds int64 `mapstructure:"balance_fresh_seconds" default:"5"`
+	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds.
+	BalanceMaxLiveSeconds int64 `mapstructure:"balance_max_live_seconds" default:"5"`
 }
 
-// IsEnabledForTenant reports whether ingestion writes aggregated usage for tenantID.
-func (c AggregatedUsageConfig) IsEnabledForTenant(tenantID string) bool {
+// IsEnabledForTenant reports whether ingestion writes usage rollup for tenantID.
+func (c UsageRollupConfig) IsEnabledForTenant(tenantID string) bool {
 	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
 }
 
-// IsEnabledForAnyTenant reports whether aggregated usage is on for at least one tenant.
-func (c AggregatedUsageConfig) IsEnabledForAnyTenant() bool {
+// IsEnabledForAnyTenant reports whether usage rollup is on for at least one tenant.
+func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
 	return c.Enabled && len(c.EnabledTenants) > 0
 }
 
-// ValidateAggregatedUsage rejects an enabled aggregated usage without Redis event dedup on both meter
+// ValidateUsageRollup rejects an enabled usage rollup without Redis event dedup on both meter
 // usage consumers: without it a redelivered batch would be counted twice in real time.
-func (c *Configuration) ValidateAggregatedUsage() error {
-	if !c.AggregatedUsage.IsEnabledForAnyTenant() {
+func (c *Configuration) ValidateUsageRollup() error {
+	if !c.UsageRollup.IsEnabledForAnyTenant() {
 		return nil
 	}
 	if !c.MeterUsageTracking.RedisDeduplicationEnabled || !c.BulkMeterUsageTracking.RedisDeduplicationEnabled {
-		return fmt.Errorf("aggregated_usage is enabled but Redis event dedup is off: set meter_usage_tracking.redis_deduplication_enabled=true and bulk_meter_usage_tracking.redis_deduplication_enabled=true, or disable aggregated_usage")
+		return fmt.Errorf("usage_rollup is enabled but Redis event dedup is off: set meter_usage_tracking.redis_deduplication_enabled=true and bulk_meter_usage_tracking.redis_deduplication_enabled=true, or disable usage_rollup")
 	}
 	return nil
 }
@@ -1344,7 +1344,7 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
-	v.SetDefault("aggregated_usage.balance_fresh_seconds", 5)
+	v.SetDefault("usage_rollup.balance_max_live_seconds", 5)
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")

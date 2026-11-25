@@ -1,6 +1,6 @@
-// Package aggregatedusage holds the hourly per-customer meter quantities kept in Redis
+// Package usagerollup holds the hourly per-customer meter quantities kept in Redis
 // for real-time usage reads, and the rules for which usage lands there.
-package aggregatedusage
+package usagerollup
 
 import (
 	"context"
@@ -59,8 +59,8 @@ type Repository interface {
 	// Increment merges usage into Redis: SUM and COUNT add, MAX keeps the higher value. Entries for
 	// the same customer, meter and hour may repeat.
 	Increment(ctx context.Context, usage []HourlyUsage) error
-	// ListForCustomer reads one customer's usage for the given hours in one round trip.
-	ListForCustomer(ctx context.Context, externalCustomerID string, hours []time.Time) ([]HourlyUsage, error)
+	// ListCustomerHourlyUsage reads one customer's usage for the given hours in one round trip.
+	ListCustomerHourlyUsage(ctx context.Context, externalCustomerID string, hours []time.Time) ([]HourlyUsage, error)
 	// ListActiveCustomers returns the external customer IDs with usage in the UTC hour starting at hour.
 	ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error)
 }

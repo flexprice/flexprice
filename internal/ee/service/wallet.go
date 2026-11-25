@@ -3327,16 +3327,16 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
-	// Reuse a balance computed in the last few seconds, so the read rate doesn't drive computations.
-	if fresh := s.Config.AggregatedUsage.BalanceFreshSeconds; fresh > 0 && s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
-		if cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, &fresh); cached != nil {
-			return s.buildResponseFromCachedBalance(w, *cached), nil
-		}
-	}
-
 	// PRE_PAID: try real-time compute under a deadline so a hung or slow DB
 	// trips fallback instead of starving the request. On any failure (timeout
 	// or otherwise) fall back to the last cached balance if available.
+
+	// Usage rollup tenants reuse a balance cached within max-live.
+	if usage := s.Config.UsageRollup; usage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		if fresh := s.getWalletRealtimeBalanceFromCache(ctx, walletID, &usage.BalanceMaxLiveSeconds); fresh != nil {
+			return s.buildResponseFromCachedBalance(w, *fresh), nil
+		}
+	}
 
 	cached := s.getWalletRealtimeBalanceFromCache(ctx, walletID, nil)
 

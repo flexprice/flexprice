@@ -967,28 +967,28 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 	}
 }
 
-// markEntitlementSourceChanged re-evaluates the aggregated usage eligibility of the customers an entitlement change
+// markEntitlementSourceChanged clears the usage rollup eligibility of the customers an entitlement change
 // affects: everyone on its plan or addon, or its subscription's customer.
 func (s *entitlementService) markEntitlementSourceChanged(ctx context.Context, entitlementID string) {
-	if s.Config == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if s.Config == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return
 	}
 	ent, err := s.EntitlementRepo.Get(ctx, entitlementID)
 	if ierr.IsNotFound(err) {
-		return // deleted: losing an entitlement can't make an aggregated usage price wrong
+		return // deleted: losing an entitlement can't make a usage rollup price wrong
 	}
 	if err != nil {
-		s.Logger.Error(ctx, "aggregated usage: failed to load changed entitlement", "error", err, "entitlement_id", entitlementID)
+		s.Logger.Error(ctx, "usage rollup: failed to load changed entitlement", "error", err, "entitlement_id", entitlementID)
 		return
 	}
-	aggregatedUsage := NewAggregatedUsageService(s.ServiceParams)
+	usageRollup := NewUsageRollupService(s.ServiceParams)
 	switch ent.EntityType {
 	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
-		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsagePlan, ent.EntityID)
+		usageRollup.ClearEligibility(ctx, UsageRollupPlan, ent.EntityID)
 	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
-		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsageAddon, ent.EntityID)
+		usageRollup.ClearEligibility(ctx, UsageRollupAddon, ent.EntityID)
 	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
-		aggregatedUsage.EvaluateEligibility(ctx, AggregatedUsageSubscription, ent.EntityID)
+		usageRollup.ClearEligibility(ctx, UsageRollupSubscription, ent.EntityID)
 	}
 }
 

@@ -62,8 +62,8 @@ const (
 	FieldBillingEntityID = "billing_entity_id"
 	// FieldSettings holds the string denoting the settings field in the database.
 	FieldSettings = "settings"
-	// FieldAggregatedUsageEligible holds the string denoting the aggregated_usage_eligible field in the database.
-	FieldAggregatedUsageEligible = "aggregated_usage_eligible"
+	// FieldUsageRollupEligible holds the string denoting the usage_rollup_eligible field in the database.
+	FieldUsageRollupEligible = "usage_rollup_eligible"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -95,7 +95,7 @@ var Columns = []string{
 	FieldContactPersons,
 	FieldBillingEntityID,
 	FieldSettings,
-	FieldAggregatedUsageEligible,
+	FieldUsageRollupEligible,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -131,8 +131,6 @@ var (
 	DefaultTaxTreatment types.TaxTreatment
 	// TaxTreatmentValidator is a validator for the "tax_treatment" field. It is called by the builders before save.
 	TaxTreatmentValidator func(string) error
-	// DefaultAggregatedUsageEligible holds the default value on creation for the "aggregated_usage_eligible" field.
-	DefaultAggregatedUsageEligible bool
 )
 
 // OrderOption defines the ordering options for the Customer queries.
@@ -248,7 +246,7 @@ func ByBillingEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingEntityID, opts...).ToFunc()
 }
 
-// ByAggregatedUsageEligible orders the results by the aggregated_usage_eligible field.
-func ByAggregatedUsageEligible(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAggregatedUsageEligible, opts...).ToFunc()
+// ByUsageRollupEligible orders the results by the usage_rollup_eligible field.
+func ByUsageRollupEligible(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageRollupEligible, opts...).ToFunc()
 }

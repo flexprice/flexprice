@@ -276,7 +276,7 @@ type GetSubscriptionMeterUsageRequest struct {
 	BillingAnchor   *time.Time
 	UseFinal        bool // true for invoice creation
 	IncludeFeatures bool // true for analytics (resolve meter → feature)
-	// Source is the caller; wallet reads of an eligible customer's current period come from the aggregated usage.
+	// Source is the caller; wallet reads of an eligible customer's current period come from the usage rollup.
 	Source types.UsageSource
 
 	// Analytics-only filters. These are forwarded to the windowed
@@ -492,40 +492,40 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	return s.GetSubscriptionMeterUsageWithSub(ctx, sub, req)
 }
 
-// aggregatedMeterUsage serves a wallet read of a customer on the aggregated usage path: one usage per charged meter,
-// with its plan or addon price and its quantity from the aggregated usage. served is false off that path; a
-// aggregated usage failure is logged and the caller reads Postgres and ClickHouse instead.
-func (s *meterUsageService) aggregatedMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
-	if !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+// usageRollupMeterUsage serves a wallet read of a customer on the usage rollup path: one usage per charged meter,
+// with its plan or addon price and its quantity from the usage rollup. served is false off that path; a
+// usage rollup failure is logged and the caller reads Postgres and ClickHouse instead.
+func (s *meterUsageService) usageRollupMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
+	if !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return nil, false
 	}
-	aggregatedUsage := NewAggregatedUsageService(s.ServiceParams)
-	if !aggregatedUsage.IsAggregatedUsageEligible(ctx, sub, types.UsageSourceWallet) {
-		metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadIneligible))
+	usageRollup := NewUsageRollupService(s.ServiceParams)
+	if !usageRollup.IsUsageRollupEligible(ctx, sub, types.UsageSourceWallet) {
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadIneligible))
 		return nil, false
 	}
-	prices, meters, err := aggregatedUsage.UsagePrices(ctx, sub)
+	prices, meters, err := usageRollup.UsagePrices(ctx, sub)
 	if err != nil {
-		return s.aggregatedUsageReadFailed(ctx, sub, err)
+		return s.usageRollupReadFailed(ctx, sub, err)
 	}
-	quantities, err := aggregatedUsage.PeriodQuantities(ctx, sub, meters)
+	quantities, err := usageRollup.PeriodQuantities(ctx, sub, meters)
 	if err != nil {
-		return s.aggregatedUsageReadFailed(ctx, sub, err)
+		return s.usageRollupReadFailed(ctx, sub, err)
 	}
-	metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadServed))
-	return aggregatedSubscriptionMeterUsage(sub, prices, meters, quantities), true
+	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadServed))
+	return usageRollupSubscriptionMeterUsage(sub, prices, meters, quantities), true
 }
 
-// aggregatedUsageReadFailed records a failed aggregated usage read so the caller falls back to Postgres and ClickHouse.
-func (s *meterUsageService) aggregatedUsageReadFailed(ctx context.Context, sub *subscription.Subscription, err error) (*SubscriptionMeterUsage, bool) {
-	metrics.RecordCounter(ctx, metrics.AggregatedUsageReads, 1, metrics.L(metrics.KeyOutcome, aggregatedUsageReadError))
-	s.logger.Error(ctx, "aggregated usage read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
+// usageRollupReadFailed records a failed usage rollup read so the caller falls back to Postgres and ClickHouse.
+func (s *meterUsageService) usageRollupReadFailed(ctx context.Context, sub *subscription.Subscription, err error) (*SubscriptionMeterUsage, bool) {
+	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadError))
+	s.logger.Error(ctx, "usage rollup read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
 	return nil, false
 }
 
-// aggregatedSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or
+// usageRollupSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or
 // addon price over the current period.
-func aggregatedSubscriptionMeterUsage(
+func usageRollupSubscriptionMeterUsage(
 	sub *subscription.Subscription,
 	pricesByMeter map[string]*price.Price,
 	meters map[string]*meter.Meter,
@@ -572,7 +572,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 
 	if req.Source == types.UsageSourceWallet && !req.LifetimeUsage &&
 		req.StartTime.Equal(sub.CurrentPeriodStart) && req.EndTime.Equal(sub.CurrentPeriodEnd) {
-		if result, served := s.aggregatedMeterUsage(ctx, sub); served {
+		if result, served := s.usageRollupMeterUsage(ctx, sub); served {
 			return result, nil
 		}
 	}

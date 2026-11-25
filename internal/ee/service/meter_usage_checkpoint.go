@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -175,7 +175,7 @@ func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
 // UsageCheckpointService adds finalized ClickHouse usage to per-period meter totals for customers
 // whose usage is in the Redis hourly totals.
 type UsageCheckpointService interface {
-	// ActiveEnvironments returns every environment of the tenants with aggregated usage on.
+	// ActiveEnvironments returns every environment of the tenants with usage rollup on.
 	ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error)
 
 	// UpdateCustomerCheckpoints brings the period totals of the customers active in the hour before
@@ -238,12 +238,12 @@ type customerWindow struct {
 }
 
 func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error) {
-	aggregatedUsage := s.Config.AggregatedUsage
-	if !aggregatedUsage.Enabled {
+	usageRollup := s.Config.UsageRollup
+	if !usageRollup.Enabled {
 		return nil, nil
 	}
 	var environments []UsageCheckpointEnvironment
-	for _, tenantID := range aggregatedUsage.EnabledTenants {
+	for _, tenantID := range usageRollup.EnabledTenants {
 		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantID)
 		filter := types.GetDefaultFilter()
 		for {
@@ -265,15 +265,15 @@ func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]Usag
 
 func (s *usageCheckpointService) UpdateCustomerCheckpoints(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
 	if s.HourlyUsageRepo == nil {
-		return nil, ierr.NewError("aggregated usage repository is not configured").
-			WithHint("Usage checkpoints need Redis; fix the redis config or disable aggregated_usage.").
+		return nil, ierr.NewError("usage rollup repository is not configured").
+			WithHint("Usage checkpoints need Redis; fix the redis config or disable usage_rollup.").
 			Mark(ierr.ErrSystem)
 	}
 	// Only the hour this run finalizes: a customer missed by a failed run is caught up the next time
 	// they are active, from their watermark.
 	externalCustomerIDs, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, cutoff.Add(-time.Hour))
 	if err != nil {
-		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the aggregated usage").Mark(ierr.ErrSystem)
+		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the usage rollup").Mark(ierr.ErrSystem)
 	}
 
 	result := &UsageCheckpointResult{Customers: len(externalCustomerIDs), Outcomes: make(map[string]int)}
@@ -420,7 +420,7 @@ func (s *usageCheckpointService) addWindowUsage(
 	aggregationByMeter := make(map[string]types.AggregationType, len(meters))
 	for _, m := range meters {
 		// Never-reset SUM meters keep running totals instead, and the read path doesn't use them.
-		if aggregatedusage.SupportsAggregation(m.Aggregation.Type) && !keepsRunningAggregate(m) {
+		if usagerollup.SupportsAggregation(m.Aggregation.Type) && !keepsRunningAggregate(m) {
 			aggregationByMeter[m.ID] = m.Aggregation.Type
 		}
 	}

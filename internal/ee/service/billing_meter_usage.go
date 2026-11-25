@@ -104,10 +104,10 @@ func (s *billingService) CalculateMeterUsageCharges(
 		return nil, decimal.Zero, nil
 	}
 
-	// A customer on the aggregated usage path has no entitlements, grants or commitments: its charge is price × quantity.
+	// A customer on the usage rollup path has no entitlements, grants or commitments: its charge is price × quantity.
 	if periodStart.Equal(sub.CurrentPeriodStart) && periodEnd.Equal(sub.CurrentPeriodEnd) &&
-		NewAggregatedUsageService(s.ServiceParams).IsAggregatedUsageEligible(ctx, sub, source) {
-		return s.aggregatedUsageCharges(ctx, usage, periodStart, periodEnd)
+		NewUsageRollupService(s.ServiceParams).IsUsageRollupEligible(ctx, sub, source) {
+		return s.usageRollupCharges(ctx, usage, periodStart, periodEnd)
 	}
 
 	querySource := source
@@ -507,9 +507,9 @@ func (s *billingService) CalculateMeterUsageCharges(
 	return append(usageCharges, commitmentLines...), totalUsageCost.Add(commitmentTotal), nil
 }
 
-// aggregatedUsageCharges prices each usage charge as its plan or addon price × quantity, rounded per charge as
+// usageRollupCharges prices each usage charge as its plan or addon price × quantity, rounded per charge as
 // billing rounds.
-func (s *billingService) aggregatedUsageCharges(
+func (s *billingService) usageRollupCharges(
 	ctx context.Context,
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart, periodEnd time.Time,

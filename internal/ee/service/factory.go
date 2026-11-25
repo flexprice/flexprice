@@ -9,7 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/addonpricesync"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/domain/alert"
 	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	domainAnalytics "github.com/flexprice/flexprice/internal/domain/analytics"
@@ -97,7 +97,7 @@ type ServiceParams struct {
 	RedisCache    cache.RedisCache
 	Locker        cache.Locker
 	// HourlyUsageRepo holds hourly per-customer meter quantities in Redis; nil without Redis.
-	HourlyUsageRepo aggregatedusage.Repository
+	HourlyUsageRepo usagerollup.Repository
 	// WalletBalanceComputes merges concurrent real-time balance computes of one wallet into one; shared by
 	// every service built from these params. Nil (tests) computes each call.
 	WalletBalanceComputes *singleflight.Group
@@ -225,7 +225,7 @@ func NewServiceParams(
 	inMemoryCache cache.InMemoryCache,
 	redisCache cache.RedisCache,
 	locker cache.Locker,
-	hourlyUsageRepository aggregatedusage.Repository,
+	hourlyUsageRepository usagerollup.Repository,
 	authRepo auth.Repository,
 	userRepo user.Repository,
 	eventRepo events.Repository,

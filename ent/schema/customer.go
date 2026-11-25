@@ -117,9 +117,11 @@ func (Customer) Fields() []ent.Field {
 			Nillable(),
 		field.JSON("settings", &types.SettingsOverride{}).
 			Optional(),
-		// aggregated_usage_eligible marks a customer whose wallet balance can be served from aggregated usage.
-		field.Bool("aggregated_usage_eligible").
-			Default(false),
+		// usage_rollup_eligible marks a customer whose wallet balance can be served from the usage rollup;
+		// NULL means not evaluated since the last write that can change it.
+		field.Bool("usage_rollup_eligible").
+			Optional().
+			Nillable(),
 	}
 }
 

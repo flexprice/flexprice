@@ -9,95 +9,91 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clock"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// AggregatedUsageService keeps the per-customer flag that puts a customer's wallet reads on the aggregated usage path,
+// UsageRollupService keeps the per-customer flag that puts a customer's wallet reads on the usage rollup path,
 // and serves that path its plan and addon prices and usage quantities.
-type AggregatedUsageService interface {
-	// EvaluateEligibility re-evaluates, in the background once ctx's transaction commits, every customer
-	// whose billing a write to the entity can change, and saves their flags. Failures are logged, never
-	// returned: callers are writes that must not fail on this.
-	EvaluateEligibility(ctx context.Context, entity AggregatedUsageEntity, entityID string)
-	// IsAggregatedUsageEligible reports whether this read of sub is on the aggregated usage path: a wallet read, for a tenant
-	// with the aggregated usage enabled, and a customer whose flag is set.
-	IsAggregatedUsageEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool
+type UsageRollupService interface {
+	// ClearEligibility clears, in ctx's transaction, the flag of every customer whose billing a write to the entity
+	// can change, so their next wallet read evaluates it again. Failures are logged, never returned: callers are
+	// writes that must not fail on this.
+	ClearEligibility(ctx context.Context, entity UsageRollupEntity, entityID string)
+	// IsUsageRollupEligible reports whether this read of sub is on the usage rollup path: a wallet read, for a tenant
+	// with the usage rollup enabled, and a customer whose flag is set.
+	IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool
 	// UsagePrices returns the usage prices of sub's plan and addons that match its currency and billing
-	// period, and their meters, both by meter ID. Call it only for a subscription on the aggregated usage path.
+	// period, and their meters, both by meter ID. Call it only for a subscription on the usage rollup path.
 	UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error)
 	// PeriodQuantities returns sub's current-period quantity of each meter in meters that has usage.
-	// Call it only for a subscription on the aggregated usage path.
+	// Call it only for a subscription on the usage rollup path.
 	PeriodQuantities(ctx context.Context, sub *subscription.Subscription, meters map[string]*meter.Meter) (map[string]decimal.Decimal, error)
 }
 
-// AggregatedUsageEntity is the kind of entity whose write changes which customers are on the aggregated usage path.
-type AggregatedUsageEntity string
+// UsageRollupEntity is the kind of entity whose write changes which customers are on the usage rollup path.
+type UsageRollupEntity string
 
 const (
-	AggregatedUsageCustomer     AggregatedUsageEntity = "customer"
-	AggregatedUsageSubscription AggregatedUsageEntity = "subscription"
-	AggregatedUsagePlan         AggregatedUsageEntity = "plan"
-	AggregatedUsageAddon        AggregatedUsageEntity = "addon"
+	UsageRollupCustomer     UsageRollupEntity = "customer"
+	UsageRollupSubscription UsageRollupEntity = "subscription"
+	UsageRollupPlan         UsageRollupEntity = "plan"
+	UsageRollupAddon        UsageRollupEntity = "addon"
 )
 
-type aggregatedUsageIneligibleReason string
+type usageRollupIneligibleReason string
 
 const (
-	aggregatedUsageIneligibleNotStandalone aggregatedUsageIneligibleReason = "not_standalone"
-	aggregatedUsageIneligibleCommitment    aggregatedUsageIneligibleReason = "commitment"
-	aggregatedUsageIneligibleGrant         aggregatedUsageIneligibleReason = "grant"
-	aggregatedUsageIneligibleEntitlement   aggregatedUsageIneligibleReason = "entitlement"
-	aggregatedUsageIneligibleOverride      aggregatedUsageIneligibleReason = "override"
-	aggregatedUsageIneligiblePriceChanged  aggregatedUsageIneligibleReason = "price_changed"
-	aggregatedUsageIneligibleMeter         aggregatedUsageIneligibleReason = "meter"
-	aggregatedUsageIneligiblePriceUnit     aggregatedUsageIneligibleReason = "price_unit"
+	usageRollupIneligibleNotStandalone usageRollupIneligibleReason = "not_standalone"
+	usageRollupIneligibleCommitment    usageRollupIneligibleReason = "commitment"
+	usageRollupIneligibleGrant         usageRollupIneligibleReason = "grant"
+	usageRollupIneligibleEntitlement   usageRollupIneligibleReason = "entitlement"
+	usageRollupIneligibleOverride      usageRollupIneligibleReason = "override"
+	usageRollupIneligiblePriceChanged  usageRollupIneligibleReason = "price_changed"
+	usageRollupIneligibleMeter         usageRollupIneligibleReason = "meter"
+	usageRollupIneligiblePriceUnit     usageRollupIneligibleReason = "price_unit"
 )
 
 const (
-	// aggregatedUsageCacheTTL bounds how long a change no refresh caught can leave stale cached prices or addons.
-	aggregatedUsageCacheTTL = 10 * time.Minute
-	// aggregatedUsageEligibilityTTL bounds a cached flag; every write that can change it saves it again.
-	aggregatedUsageEligibilityTTL = 24 * time.Hour
-	// evaluateEligibilityTimeout bounds one background evaluation, which may cover a large plan's customers.
-	evaluateEligibilityTimeout = 10 * time.Minute
-	// evaluateEligibilityBatchSize is how many customers one flag update writes.
-	evaluateEligibilityBatchSize = 500
+	// usageRollupCacheTTL bounds how long a change no refresh caught can leave stale cached prices or addons.
+	usageRollupCacheTTL = 10 * time.Minute
+	// usageRollupEligibilityTTL bounds how long a cached flag outlives a write that cleared it.
+	usageRollupEligibilityTTL = time.Hour
 	// usageSnapshotTTL backs up the checkpoint job, which drops a period's snapshot after updating it.
 	usageSnapshotTTL = time.Hour
 )
 
-// Outcomes of a wallet read for a tenant that reads from the aggregated usage, recorded on aggregated_usage.reads.
+// Outcomes of a wallet read for a tenant that reads from the usage rollup, recorded on usage_rollup.reads.
 const (
-	aggregatedUsageReadServed     = "fast"
-	aggregatedUsageReadIneligible = "ineligible"
-	aggregatedUsageReadError      = "error"
+	usageRollupReadServed     = "fast"
+	usageRollupReadIneligible = "ineligible"
+	usageRollupReadError      = "error"
 )
 
-// aggregatedUsageSubscription is what the aggregated usage path reads about a subscription besides its prices, cached per
+// usageRollupSubscription is what the usage rollup path reads about a subscription besides its prices, cached per
 // subscription and period. Exported fields: it is stored as JSON.
-type aggregatedUsageSubscription struct {
+type usageRollupSubscription struct {
 	ExternalCustomerID string   `json:"external_customer_id"`
 	AddonIDs           []string `json:"addon_ids"`
 }
 
-// aggregatedUsageEntityPrices is a plan's or addon's active usage prices with their meters by ID.
-type aggregatedUsageEntityPrices struct {
+// usageRollupEntityPrices is a plan's or addon's active usage prices with their meters by ID.
+type usageRollupEntityPrices struct {
 	Prices []*price.Price
 	Meters map[string]*meter.Meter
 }
 
-// aggregatedUsagePrice is the part of a usage price and its meter that the read path prices with, cached per plan or
+// usageRollupPrice is the part of a usage price and its meter that the read path prices with, cached per plan or
 // addon instead of the full records: a read decodes every price of the plan. Exported fields: it is stored as JSON.
-type aggregatedUsagePrice struct {
+type usageRollupPrice struct {
 	ID                 string                       `json:"id"`
 	MeterID            string                       `json:"meter_id"`
 	Amount             decimal.Decimal              `json:"amount"`
@@ -119,74 +115,57 @@ type usageSnapshot struct {
 	Totals          map[string]decimal.Decimal `json:"totals"`
 }
 
-type aggregatedUsageService struct {
+type usageRollupService struct {
 	ServiceParams
 }
 
-// NewAggregatedUsageService returns the service behind the aggregated usage path.
-func NewAggregatedUsageService(params ServiceParams) AggregatedUsageService {
-	return &aggregatedUsageService{ServiceParams: params}
+// NewUsageRollupService returns the service behind the usage rollup path.
+func NewUsageRollupService(params ServiceParams) UsageRollupService {
+	return &usageRollupService{ServiceParams: params}
 }
 
-func (s *aggregatedUsageService) EvaluateEligibility(ctx context.Context, entity AggregatedUsageEntity, entityID string) {
-	if !s.aggregatedUsageEnabled(ctx) {
+func (s *usageRollupService) ClearEligibility(ctx context.Context, entity UsageRollupEntity, entityID string) {
+	if !s.usageRollupEnabled(ctx) {
 		return
 	}
-	runCtx := context.WithoutCancel(types.WithoutDBTransaction(ctx))
-	if !types.RegisterPostCommit(ctx, func() { go s.evaluateEligibility(runCtx, entity, entityID) }) {
-		go s.evaluateEligibility(runCtx, entity, entityID)
-	}
-}
-
-// evaluateEligibility evaluates the entity's customers and saves their flags in batches.
-func (s *aggregatedUsageService) evaluateEligibility(ctx context.Context, entity AggregatedUsageEntity, entityID string) {
-	ctx, cancel := context.WithTimeout(ctx, evaluateEligibilityTimeout)
-	defer cancel()
-	defer func() {
-		if r := recover(); r != nil {
-			s.Logger.Error(ctx, "aggregated usage: panic while evaluating eligibility", "error", fmt.Sprintf("%v", r), "entity", entity, "entity_id", entityID)
-		}
-	}()
-
 	customerIDs, err := s.eligibilityCustomers(ctx, entity, entityID)
 	if err != nil {
-		s.Logger.Error(ctx, "aggregated usage: failed to resolve customers to evaluate", "error", err, "entity", entity, "entity_id", entityID)
+		s.Logger.Error(ctx, "usage rollup: failed to resolve customers to clear", "error", err, "entity", entity, "entity_id", entityID)
 		return
 	}
-	for _, batch := range lo.Chunk(customerIDs, evaluateEligibilityBatchSize) {
-		var eligible, ineligible []string
-		for _, customerID := range batch {
-			reason, err := s.ineligibleReason(ctx, customerID)
-			switch {
-			case err != nil:
-				s.Logger.Error(ctx, "aggregated usage: failed to evaluate eligibility", "error", err, "customer_id", customerID)
-			case reason == "":
-				eligible = append(eligible, customerID)
-			default:
-				ineligible = append(ineligible, customerID)
-			}
+	if err := s.CustomerRepo.ClearUsageRollupEligible(ctx, customerIDs); err != nil {
+		s.Logger.Error(ctx, "usage rollup: failed to clear eligibility", "error", err, "entity", entity, "entity_id", entityID)
+		return
+	}
+	if s.RedisCache == nil {
+		return
+	}
+	// Dropped after commit, so a read in between can't cache the old flag or prices again.
+	dropCached := func() {
+		if entity == UsageRollupPlan || entity == UsageRollupAddon {
+			s.RedisCache.ForceCacheDelete(ctx, usageRollupEntityPricesKey(ctx, entityID))
 		}
-		s.saveEligibility(ctx, eligible, true)
-		s.saveEligibility(ctx, ineligible, false)
+		for _, customerID := range customerIDs {
+			s.RedisCache.ForceCacheDelete(ctx, usageRollupEligibilityKey(ctx, customerID))
+		}
+	}
+	if !types.RegisterPostCommit(ctx, dropCached) {
+		dropCached()
 	}
 }
 
-// eligibilityCustomers returns the customers whose billing a write to the entity can change. A plan or
-// addon write also drops its cached prices.
-func (s *aggregatedUsageService) eligibilityCustomers(ctx context.Context, entity AggregatedUsageEntity, entityID string) ([]string, error) {
+// eligibilityCustomers returns the customers whose billing a write to the entity can change.
+func (s *usageRollupService) eligibilityCustomers(ctx context.Context, entity UsageRollupEntity, entityID string) ([]string, error) {
 	switch entity {
-	case AggregatedUsageCustomer:
+	case UsageRollupCustomer:
 		return []string{entityID}, nil
-	case AggregatedUsageSubscription:
+	case UsageRollupSubscription:
 		sub, err := s.SubRepo.Get(ctx, entityID)
 		if err != nil {
 			return nil, err
 		}
 		return []string{sub.CustomerID}, nil
-	case AggregatedUsagePlan, AggregatedUsageAddon:
-		if s.RedisCache != nil {
-			s.RedisCache.ForceCacheDelete(ctx, aggregatedUsageEntityPricesKey(ctx, entityID))
-		}
+	case UsageRollupPlan, UsageRollupAddon:
 		filter := types.NewNoLimitSubscriptionLineItemFilter()
 		filter.EntityIDs = []string{entityID}
 		filter.ActiveFilter = true
@@ -196,48 +175,30 @@ func (s *aggregatedUsageService) eligibilityCustomers(ctx context.Context, entit
 		}
 		return lo.Uniq(lo.Map(lineItems, func(li *subscription.SubscriptionLineItem, _ int) string { return li.CustomerID })), nil
 	default:
-		return nil, fmt.Errorf("aggregated usage: unknown eligibility entity %q", entity)
+		return nil, fmt.Errorf("usage rollup: unknown eligibility entity %q", entity)
 	}
 }
 
-// saveEligibility writes the flag to Postgres and to its cached copy. Writes are the only place the
-// cached copy is set, so a read can never cache a flag a write has since replaced.
-func (s *aggregatedUsageService) saveEligibility(ctx context.Context, customerIDs []string, eligible bool) {
-	if len(customerIDs) == 0 {
-		return
-	}
-	if _, err := s.CustomerRepo.SetAggregatedUsageEligible(ctx, customerIDs, eligible); err != nil {
-		s.Logger.Error(ctx, "aggregated usage: failed to save eligibility", "error", err, "customer_count", len(customerIDs))
-		return
-	}
-	if s.RedisCache == nil {
-		return
-	}
-	for _, customerID := range customerIDs {
-		s.RedisCache.ForceCacheSet(ctx, aggregatedUsageEligibilityKey(ctx, customerID), eligible, aggregatedUsageEligibilityTTL)
-	}
+// usageRollupEnabled reports whether the tenant in ctx writes usage rollup; eligibility is kept only for those.
+func (s *usageRollupService) usageRollupEnabled(ctx context.Context) bool {
+	return s.Config != nil && s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx))
 }
 
-// aggregatedUsageEnabled reports whether the tenant in ctx writes aggregated usage; eligibility is kept only for those.
-func (s *aggregatedUsageService) aggregatedUsageEnabled(ctx context.Context) bool {
-	return s.Config != nil && s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx))
+func usageRollupEligibilityKey(ctx context.Context, customerID string) string {
+	return cache.GenerateKey(ctx, cache.PrefixUsageRollupEligibility, customerID)
 }
 
-func aggregatedUsageEligibilityKey(ctx context.Context, customerID string) string {
-	return cache.GenerateKey(ctx, cache.PrefixAggregatedUsageEligibility, customerID)
+func usageRollupSubscriptionKey(ctx context.Context, sub *subscription.Subscription) string {
+	return cache.GenerateKey(ctx, cache.PrefixUsageRollupSubscription, sub.ID, sub.CurrentPeriodStart.Unix())
 }
 
-func aggregatedUsageSubscriptionKey(ctx context.Context, sub *subscription.Subscription) string {
-	return cache.GenerateKey(ctx, cache.PrefixAggregatedUsageSubscription, sub.ID, sub.CurrentPeriodStart.Unix())
-}
-
-func aggregatedUsageEntityPricesKey(ctx context.Context, entityID string) string {
-	return cache.GenerateKey(ctx, cache.PrefixAggregatedUsageEntityPrices, entityID)
+func usageRollupEntityPricesKey(ctx context.Context, entityID string) string {
+	return cache.GenerateKey(ctx, cache.PrefixUsageRollupEntityPrices, entityID)
 }
 
 // ineligibleReason evaluates the customer's active subscriptions and returns the first reason the
-// customer can't be on the aggregated usage path, or "" when it can.
-func (s *aggregatedUsageService) ineligibleReason(ctx context.Context, customerID string) (aggregatedUsageIneligibleReason, error) {
+// customer can't be on the usage rollup path, or "" when it can.
+func (s *usageRollupService) ineligibleReason(ctx context.Context, customerID string) (usageRollupIneligibleReason, error) {
 	subs, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
 		QueryFilter:        types.NewNoLimitQueryFilter(),
 		CustomerID:         customerID,
@@ -253,10 +214,10 @@ func (s *aggregatedUsageService) ineligibleReason(ctx context.Context, customerI
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	for _, sub := range subs {
 		if sub.SubscriptionType != types.SubscriptionTypeStandalone || lo.FromPtr(sub.ParentSubscriptionID) != "" {
-			return aggregatedUsageIneligibleNotStandalone, nil
+			return usageRollupIneligibleNotStandalone, nil
 		}
 		if sub.HasCommitment() {
-			return aggregatedUsageIneligibleCommitment, nil
+			return usageRollupIneligibleCommitment, nil
 		}
 		usageItems, err := s.usageLineItems(ctx, sub)
 		if err != nil {
@@ -284,7 +245,7 @@ func (s *aggregatedUsageService) ineligibleReason(ctx context.Context, customerI
 }
 
 // usageLineItems returns sub's metered usage line items active in its current period.
-func (s *aggregatedUsageService) usageLineItems(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
+func (s *usageRollupService) usageLineItems(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionLineItem, error) {
 	lineItems, err := NewMeterUsageService(s.ServiceParams).ListUsageLineItems(ctx, sub, sub.CurrentPeriodStart, false)
 	if err != nil {
 		return nil, err
@@ -295,7 +256,7 @@ func (s *aggregatedUsageService) usageLineItems(ctx context.Context, sub *subscr
 }
 
 // activeAddonIDs returns the addons associated with sub in its current period.
-func (s *aggregatedUsageService) activeAddonIDs(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
+func (s *usageRollupService) activeAddonIDs(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	associations, err := NewAddonService(s.ServiceParams).GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
 		EntityID:   sub.ID,
 		EntityType: types.AddonAssociationEntityTypeSubscription,
@@ -309,7 +270,7 @@ func (s *aggregatedUsageService) activeAddonIDs(ctx context.Context, sub *subscr
 }
 
 // customerLevelReason checks what spans the customer's subscriptions: entitlement grants and commitments.
-func (s *aggregatedUsageService) customerLevelReason(ctx context.Context, customerID string, subs []*subscription.Subscription) (aggregatedUsageIneligibleReason, error) {
+func (s *usageRollupService) customerLevelReason(ctx context.Context, customerID string, subs []*subscription.Subscription) (usageRollupIneligibleReason, error) {
 	grants, err := s.EntitlementGrantRepo.Count(ctx, &types.EntitlementGrantFilter{
 		QueryFilter:  types.NewNoLimitQueryFilter(),
 		CustomerIDs:  []string{customerID},
@@ -319,7 +280,7 @@ func (s *aggregatedUsageService) customerLevelReason(ctx context.Context, custom
 		return "", err
 	}
 	if grants > 0 {
-		return aggregatedUsageIneligibleGrant, nil
+		return usageRollupIneligibleGrant, nil
 	}
 	commitments, err := s.CommitmentRepo.Count(ctx, &commitment.Filter{
 		QueryFilter:     types.NewNoLimitQueryFilter(),
@@ -330,37 +291,37 @@ func (s *aggregatedUsageService) customerLevelReason(ctx context.Context, custom
 		return "", err
 	}
 	if commitments > 0 {
-		return aggregatedUsageIneligibleCommitment, nil
+		return usageRollupIneligibleCommitment, nil
 	}
 	return "", nil
 }
 
 // lineItemReason rejects line items that change pricing within the period or price outside the plan and addons.
-func lineItemReason(sub *subscription.Subscription, items []*subscription.SubscriptionLineItem) aggregatedUsageIneligibleReason {
+func lineItemReason(sub *subscription.Subscription, items []*subscription.SubscriptionLineItem) usageRollupIneligibleReason {
 	for _, item := range items {
 		switch {
 		case item.EntityType == types.SubscriptionLineItemEntityTypeSubscription:
-			return aggregatedUsageIneligibleOverride
+			return usageRollupIneligibleOverride
 		case item.HasAnyCommitment():
-			return aggregatedUsageIneligibleCommitment
+			return usageRollupIneligibleCommitment
 		case item.PriceUnit != nil:
-			return aggregatedUsageIneligiblePriceUnit
+			return usageRollupIneligiblePriceUnit
 		case item.StartDate.After(sub.CurrentPeriodStart),
 			!item.EndDate.IsZero() && item.EndDate.Before(sub.CurrentPeriodEnd):
-			return aggregatedUsageIneligiblePriceChanged
+			return usageRollupIneligiblePriceChanged
 		}
 	}
 	return ""
 }
 
-// priceSourceReason checks the plan's and addons' prices and returns the usage prices the aggregated usage path
+// priceSourceReason checks the plan's and addons' prices and returns the usage prices the usage rollup path
 // charges and their meters, both by meter ID. Any plan or addon price added, edited or ended since the subscription
-// started keeps it ineligible, as does a usage price whose meter the aggregated usage can't hold.
-func (s *aggregatedUsageService) priceSourceReason(
+// started keeps it ineligible, as does a usage price whose meter the usage rollup can't hold.
+func (s *usageRollupService) priceSourceReason(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	addonIDs []string,
-) (map[string]*price.Price, map[string]*meter.Meter, aggregatedUsageIneligibleReason, error) {
+) (map[string]*price.Price, map[string]*meter.Meter, usageRollupIneligibleReason, error) {
 	sourceFilter := types.NewNoLimitPriceFilter()
 	sourceFilter.EntityIDs = append([]string{sub.PlanID}, addonIDs...)
 	sourceFilter.AllowExpiredPrices = true
@@ -370,7 +331,7 @@ func (s *aggregatedUsageService) priceSourceReason(
 	}
 	for _, p := range sourcePrices.Items {
 		if priceChangedSince(p.Price, sub.StartDate) {
-			return nil, nil, aggregatedUsageIneligiblePriceChanged, nil
+			return nil, nil, usageRollupIneligiblePriceChanged, nil
 		}
 	}
 
@@ -383,8 +344,8 @@ func (s *aggregatedUsageService) priceSourceReason(
 	for _, p := range prices {
 		m := meters[p.MeterID]
 		_, duplicate := pricesByMeter[p.MeterID]
-		if m == nil || duplicate || !aggregatedusage.SupportsAggregation(m.Aggregation.Type) || price.IsBucketed(p, m) || keepsRunningAggregate(m) {
-			return nil, nil, aggregatedUsageIneligibleMeter, nil
+		if m == nil || duplicate || !usagerollup.SupportsAggregation(m.Aggregation.Type) || price.IsBucketed(p, m) || keepsRunningAggregate(m) {
+			return nil, nil, usageRollupIneligibleMeter, nil
 		}
 		pricesByMeter[p.MeterID] = p
 		chargedMeters[p.MeterID] = m
@@ -392,21 +353,21 @@ func (s *aggregatedUsageService) priceSourceReason(
 	return pricesByMeter, chargedMeters, "", nil
 }
 
-// lineItemPriceReason requires the plan and addon prices the aggregated usage path charges to be exactly the
+// lineItemPriceReason requires the plan and addon prices the usage rollup path charges to be exactly the
 // prices on the subscription's usage line items: an override, or a price the subscription doesn't
 // carry, would be charged wrongly.
-func lineItemPriceReason(items []*subscription.SubscriptionLineItem, pricesByMeter map[string]*price.Price) aggregatedUsageIneligibleReason {
+func lineItemPriceReason(items []*subscription.SubscriptionLineItem, pricesByMeter map[string]*price.Price) usageRollupIneligibleReason {
 	carried := make(map[string]bool, len(items))
 	for _, item := range items {
 		p, charged := pricesByMeter[item.MeterID]
 		if !charged || p.ID != item.PriceID {
-			return aggregatedUsageIneligibleOverride
+			return usageRollupIneligibleOverride
 		}
 		carried[item.PriceID] = true
 	}
 	for _, p := range pricesByMeter {
 		if !carried[p.ID] {
-			return aggregatedUsageIneligiblePriceChanged
+			return usageRollupIneligiblePriceChanged
 		}
 	}
 	return ""
@@ -424,7 +385,7 @@ func entitlementReason(
 	subscriptionService SubscriptionService,
 	sub *subscription.Subscription,
 	meters map[string]*meter.Meter,
-) (aggregatedUsageIneligibleReason, error) {
+) (usageRollupIneligibleReason, error) {
 	if len(meters) == 0 {
 		return "", nil
 	}
@@ -437,43 +398,52 @@ func entitlementReason(
 			continue
 		}
 		if _, charged := meters[f.Feature.MeterID]; charged && types.FeatureType(f.Feature.Type) == types.FeatureTypeMetered {
-			return aggregatedUsageIneligibleEntitlement, nil
+			return usageRollupIneligibleEntitlement, nil
 		}
 	}
 	return "", nil
 }
 
-func (s *aggregatedUsageService) IsAggregatedUsageEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool {
-	if source != types.UsageSourceWallet || !s.aggregatedUsageEnabled(ctx) {
+func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool {
+	if source != types.UsageSourceWallet || !s.usageRollupEnabled(ctx) {
 		return false
 	}
 	eligible, err := s.isEligible(ctx, sub.CustomerID)
 	if err != nil {
-		s.Logger.Error(ctx, "aggregated usage: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", sub.CustomerID)
+		s.Logger.Error(ctx, "usage rollup: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", sub.CustomerID)
 		return false
 	}
 	return eligible
 }
 
-// isEligible reads the flag through the cache. A read fills the cache only if it is still empty, so it never
-// replaces a newer flag an evaluation saved meanwhile.
-func (s *aggregatedUsageService) isEligible(ctx context.Context, customerID string) (bool, error) {
-	key := aggregatedUsageEligibilityKey(ctx, customerID)
+// isEligible reads the flag from the cache, then Postgres, and evaluates it when a write has cleared it.
+func (s *usageRollupService) isEligible(ctx context.Context, customerID string) (bool, error) {
+	key := usageRollupEligibilityKey(ctx, customerID)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
 		if eligible, ok := cache.UnmarshalCacheValue[bool](cached); ok {
 			return *eligible, nil
 		}
 	}
-	eligible, err := s.CustomerRepo.IsAggregatedUsageEligible(ctx, customerID)
+	saved, err := s.CustomerRepo.GetUsageRollupEligible(ctx, customerID)
 	if err != nil {
 		return false, err
 	}
-	s.RedisCache.ForceCacheSetNX(ctx, key, eligible, aggregatedUsageEligibilityTTL)
-	return eligible, nil
+	if saved == nil {
+		reason, err := s.ineligibleReason(ctx, customerID)
+		if err != nil {
+			return false, err
+		}
+		saved = lo.ToPtr(reason == "")
+		if err := s.CustomerRepo.SetUsageRollupEligible(ctx, customerID, *saved); err != nil {
+			return false, err
+		}
+	}
+	s.RedisCache.ForceCacheSet(ctx, key, *saved, usageRollupEligibilityTTL)
+	return *saved, nil
 }
 
-func (s *aggregatedUsageService) UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error) {
-	cached, err := s.aggregatedUsageSubscription(ctx, sub)
+func (s *usageRollupService) UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error) {
+	cached, err := s.usageRollupSubscription(ctx, sub)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -496,7 +466,7 @@ func (s *aggregatedUsageService) UsagePrices(ctx context.Context, sub *subscript
 }
 
 // price rebuilds the fields of the usage price that pricing and the eligibility filter read.
-func (cp *aggregatedUsagePrice) price() *price.Price {
+func (cp *usageRollupPrice) price() *price.Price {
 	return &price.Price{
 		ID:                 cp.ID,
 		MeterID:            cp.MeterID,
@@ -513,17 +483,17 @@ func (cp *aggregatedUsagePrice) price() *price.Price {
 }
 
 // meter rebuilds the fields of the price's meter that the quantity read and the charge read.
-func (cp *aggregatedUsagePrice) meter() *meter.Meter {
+func (cp *usageRollupPrice) meter() *meter.Meter {
 	return &meter.Meter{ID: cp.MeterID, Name: cp.MeterName, Aggregation: meter.Aggregation{Type: cp.AggregationType}}
 }
 
-// aggregatedUsageSubscription reads the subscription's external customer ID and active addons through the cache.
+// usageRollupSubscription reads the subscription's external customer ID and active addons through the cache.
 // The key holds the period, so a rollover reads them afresh; within a period an addon change makes the
 // customer ineligible.
-func (s *aggregatedUsageService) aggregatedUsageSubscription(ctx context.Context, sub *subscription.Subscription) (*aggregatedUsageSubscription, error) {
-	key := aggregatedUsageSubscriptionKey(ctx, sub)
+func (s *usageRollupService) usageRollupSubscription(ctx context.Context, sub *subscription.Subscription) (*usageRollupSubscription, error) {
+	key := usageRollupSubscriptionKey(ctx, sub)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
-		if value, ok := cache.UnmarshalCacheValue[aggregatedUsageSubscription](cached); ok {
+		if value, ok := cache.UnmarshalCacheValue[usageRollupSubscription](cached); ok {
 			return value, nil
 		}
 	}
@@ -535,14 +505,14 @@ func (s *aggregatedUsageService) aggregatedUsageSubscription(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	value := &aggregatedUsageSubscription{ExternalCustomerID: cust.ExternalID, AddonIDs: addonIDs}
-	s.RedisCache.ForceCacheSet(ctx, key, value, aggregatedUsageCacheTTL)
+	value := &usageRollupSubscription{ExternalCustomerID: cust.ExternalID, AddonIDs: addonIDs}
+	s.RedisCache.ForceCacheSet(ctx, key, value, usageRollupCacheTTL)
 	return value, nil
 }
 
 // subscriptionUsagePrices returns the active usage prices of sub's plan and addons that match its
 // currency and billing period, and the meters of all their usage prices by ID.
-func (s *aggregatedUsageService) subscriptionUsagePrices(ctx context.Context, sub *subscription.Subscription, addonIDs []string) ([]*price.Price, map[string]*meter.Meter, error) {
+func (s *usageRollupService) subscriptionUsagePrices(ctx context.Context, sub *subscription.Subscription, addonIDs []string) ([]*price.Price, map[string]*meter.Meter, error) {
 	var prices []*price.Price
 	meters := make(map[string]*meter.Meter)
 	for _, entityID := range append([]string{sub.PlanID}, addonIDs...) {
@@ -561,10 +531,10 @@ func (s *aggregatedUsageService) subscriptionUsagePrices(ctx context.Context, su
 }
 
 // cachedEntityUsagePrices reads the compact form of a plan's or addon's active usage prices through the cache.
-func (s *aggregatedUsageService) cachedEntityUsagePrices(ctx context.Context, entityID string) ([]*aggregatedUsagePrice, error) {
-	key := aggregatedUsageEntityPricesKey(ctx, entityID)
+func (s *usageRollupService) cachedEntityUsagePrices(ctx context.Context, entityID string) ([]*usageRollupPrice, error) {
+	key := usageRollupEntityPricesKey(ctx, entityID)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
-		if entityPrices, ok := cache.UnmarshalCacheValue[[]*aggregatedUsagePrice](cached); ok {
+		if entityPrices, ok := cache.UnmarshalCacheValue[[]*usageRollupPrice](cached); ok {
 			return *entityPrices, nil
 		}
 	}
@@ -572,13 +542,13 @@ func (s *aggregatedUsageService) cachedEntityUsagePrices(ctx context.Context, en
 	if err != nil {
 		return nil, err
 	}
-	compact := make([]*aggregatedUsagePrice, 0, len(entityPrices.Prices))
+	compact := make([]*usageRollupPrice, 0, len(entityPrices.Prices))
 	for _, p := range entityPrices.Prices {
 		m := entityPrices.Meters[p.MeterID]
 		if m == nil {
 			continue
 		}
-		compact = append(compact, &aggregatedUsagePrice{
+		compact = append(compact, &usageRollupPrice{
 			ID:                 p.ID,
 			MeterID:            p.MeterID,
 			Amount:             p.Amount,
@@ -593,12 +563,12 @@ func (s *aggregatedUsageService) cachedEntityUsagePrices(ctx context.Context, en
 			AggregationType:    m.Aggregation.Type,
 		})
 	}
-	s.RedisCache.ForceCacheSet(ctx, key, compact, aggregatedUsageCacheTTL)
+	s.RedisCache.ForceCacheSet(ctx, key, compact, usageRollupCacheTTL)
 	return compact, nil
 }
 
 // entityUsagePrices loads a plan's or addon's active usage prices and their meters from Postgres.
-func (s *aggregatedUsageService) entityUsagePrices(ctx context.Context, entityID string) (*aggregatedUsageEntityPrices, error) {
+func (s *usageRollupService) entityUsagePrices(ctx context.Context, entityID string) (*usageRollupEntityPrices, error) {
 	filter := types.NewNoLimitPriceFilter()
 	filter.EntityIDs = []string{entityID}
 	filter.Expand = lo.ToPtr(string(types.ExpandMeters))
@@ -606,7 +576,7 @@ func (s *aggregatedUsageService) entityUsagePrices(ctx context.Context, entityID
 	if err != nil {
 		return nil, err
 	}
-	entityPrices := &aggregatedUsageEntityPrices{Meters: make(map[string]*meter.Meter)}
+	entityPrices := &usageRollupEntityPrices{Meters: make(map[string]*meter.Meter)}
 	for _, p := range list.Items {
 		if p.Type != types.PRICE_TYPE_USAGE {
 			continue
@@ -621,8 +591,8 @@ func (s *aggregatedUsageService) entityUsagePrices(ctx context.Context, entityID
 
 // PeriodQuantities reads the checkpoint total, then ClickHouse for any range neither the checkpoint nor
 // Redis holds, then Redis.
-func (s *aggregatedUsageService) PeriodQuantities(ctx context.Context, sub *subscription.Subscription, meters map[string]*meter.Meter) (map[string]decimal.Decimal, error) {
-	cached, err := s.aggregatedUsageSubscription(ctx, sub)
+func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscription.Subscription, meters map[string]*meter.Meter) (map[string]decimal.Decimal, error) {
+	cached, err := s.usageRollupSubscription(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
@@ -649,13 +619,13 @@ func (s *aggregatedUsageService) PeriodQuantities(ctx context.Context, sub *subs
 	// Hours past the checkpoint but before the cutoff (the job hasn't reached this customer yet, or
 	// missed a run) are still in Redis; read them there instead of ClickHouse. The checkpoint replaces
 	// them with ClickHouse's totals when it lands.
-	redisFrom := aggregatedusage.Cutoff(now)
-	if !snapshot.AggregatedUntil.IsZero() && !snapshot.AggregatedUntil.Before(aggregatedusage.OldestRedisHour(now)) {
+	redisFrom := usagerollup.Cutoff(now)
+	if !snapshot.AggregatedUntil.IsZero() && !snapshot.AggregatedUntil.Before(usagerollup.OldestRedisHour(now)) {
 		redisFrom = lo.Earliest(redisFrom, snapshot.AggregatedUntil)
 	}
 	clickhouseWindows, hours := planUsageReads(from, end, redisFrom, ongoing)
 	for _, window := range clickhouseWindows {
-		metrics.RecordCounter(ctx, metrics.AggregatedUsageGapQueries, 1)
+		metrics.RecordCounter(ctx, metrics.UsageRollupGapQueries, 1)
 		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
@@ -670,7 +640,7 @@ func (s *aggregatedUsageService) PeriodQuantities(ctx context.Context, sub *subs
 			addMeterTotal(quantities, meters, total)
 		}
 	}
-	hourlyUsage, err := s.HourlyUsageRepo.ListForCustomer(ctx, cached.ExternalCustomerID, hours)
+	hourlyUsage, err := s.HourlyUsageRepo.ListCustomerHourlyUsage(ctx, cached.ExternalCustomerID, hours)
 	if err != nil {
 		return nil, err
 	}
@@ -735,7 +705,7 @@ func usageSnapshotKey(ctx context.Context, customerID string, periodStart time.T
 
 // periodSnapshot reads a period's checkpoint through the snapshot cache. A period with no checkpoint has a zero
 // AggregatedUntil.
-func (s *aggregatedUsageService) periodSnapshot(ctx context.Context, customerID string, periodStart time.Time) (*usageSnapshot, error) {
+func (s *usageRollupService) periodSnapshot(ctx context.Context, customerID string, periodStart time.Time) (*usageSnapshot, error) {
 	key := usageSnapshotKey(ctx, customerID, periodStart)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
 		if snapshot, ok := cache.UnmarshalCacheValue[usageSnapshot](cached); ok {

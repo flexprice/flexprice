@@ -3,7 +3,7 @@ package cron
 import (
 	"time"
 
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	cronModels "github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -25,7 +25,7 @@ var usageCheckpointRetryPolicy = &temporal.RetryPolicy{
 	MaximumAttempts:    2,
 }
 
-// UsageCheckpointWorkflow brings per-period meter totals up to the aggregated usage cutoff, one activity
+// UsageCheckpointWorkflow brings per-period meter totals up to the usage rollup cutoff, one activity
 // per environment so a slow environment cannot time out the others. The cutoff comes from the
 // scheduled time, so a retry or manual re-run covers the same window.
 func UsageCheckpointWorkflow(ctx workflow.Context, _ cronModels.UsageCheckpointWorkflowInput) error {
@@ -33,7 +33,7 @@ func UsageCheckpointWorkflow(ctx workflow.Context, _ cronModels.UsageCheckpointW
 	if !ok {
 		scheduledTime = workflow.Now(ctx)
 	}
-	cutoff := aggregatedusage.Cutoff(scheduledTime)
+	cutoff := usagerollup.Cutoff(scheduledTime)
 
 	listCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: usageCheckpointListTimeout,

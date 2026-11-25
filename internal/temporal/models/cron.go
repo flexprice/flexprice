@@ -157,7 +157,7 @@ type SelfBillingHourlyWorkflowInput struct{}
 // UsageCheckpointWorkflowInput is the input for UsageCheckpointWorkflow.
 type UsageCheckpointWorkflowInput struct{}
 
-// UsageCheckpointEnvironment names one tenant environment with aggregated usage enabled.
+// UsageCheckpointEnvironment names one tenant environment with usage rollup enabled.
 type UsageCheckpointEnvironment struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`

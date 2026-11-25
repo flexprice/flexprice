@@ -375,17 +375,23 @@ func (_u *CustomerUpdate) ClearSettings() *CustomerUpdate {
 	return _u
 }
 
-// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
-func (_u *CustomerUpdate) SetAggregatedUsageEligible(v bool) *CustomerUpdate {
-	_u.mutation.SetAggregatedUsageEligible(v)
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (_u *CustomerUpdate) SetUsageRollupEligible(v bool) *CustomerUpdate {
+	_u.mutation.SetUsageRollupEligible(v)
 	return _u
 }
 
-// SetNillableAggregatedUsageEligible sets the "aggregated_usage_eligible" field if the given value is not nil.
-func (_u *CustomerUpdate) SetNillableAggregatedUsageEligible(v *bool) *CustomerUpdate {
+// SetNillableUsageRollupEligible sets the "usage_rollup_eligible" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableUsageRollupEligible(v *bool) *CustomerUpdate {
 	if v != nil {
-		_u.SetAggregatedUsageEligible(*v)
+		_u.SetUsageRollupEligible(*v)
 	}
+	return _u
+}
+
+// ClearUsageRollupEligible clears the value of the "usage_rollup_eligible" field.
+func (_u *CustomerUpdate) ClearUsageRollupEligible() *CustomerUpdate {
+	_u.mutation.ClearUsageRollupEligible()
 	return _u
 }
 
@@ -578,8 +584,11 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.AggregatedUsageEligible(); ok {
-		_spec.SetField(customer.FieldAggregatedUsageEligible, field.TypeBool, value)
+	if value, ok := _u.mutation.UsageRollupEligible(); ok {
+		_spec.SetField(customer.FieldUsageRollupEligible, field.TypeBool, value)
+	}
+	if _u.mutation.UsageRollupEligibleCleared() {
+		_spec.ClearField(customer.FieldUsageRollupEligible, field.TypeBool)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -945,17 +954,23 @@ func (_u *CustomerUpdateOne) ClearSettings() *CustomerUpdateOne {
 	return _u
 }
 
-// SetAggregatedUsageEligible sets the "aggregated_usage_eligible" field.
-func (_u *CustomerUpdateOne) SetAggregatedUsageEligible(v bool) *CustomerUpdateOne {
-	_u.mutation.SetAggregatedUsageEligible(v)
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (_u *CustomerUpdateOne) SetUsageRollupEligible(v bool) *CustomerUpdateOne {
+	_u.mutation.SetUsageRollupEligible(v)
 	return _u
 }
 
-// SetNillableAggregatedUsageEligible sets the "aggregated_usage_eligible" field if the given value is not nil.
-func (_u *CustomerUpdateOne) SetNillableAggregatedUsageEligible(v *bool) *CustomerUpdateOne {
+// SetNillableUsageRollupEligible sets the "usage_rollup_eligible" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableUsageRollupEligible(v *bool) *CustomerUpdateOne {
 	if v != nil {
-		_u.SetAggregatedUsageEligible(*v)
+		_u.SetUsageRollupEligible(*v)
 	}
+	return _u
+}
+
+// ClearUsageRollupEligible clears the value of the "usage_rollup_eligible" field.
+func (_u *CustomerUpdateOne) ClearUsageRollupEligible() *CustomerUpdateOne {
+	_u.mutation.ClearUsageRollupEligible()
 	return _u
 }
 
@@ -1178,8 +1193,11 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
 	}
-	if value, ok := _u.mutation.AggregatedUsageEligible(); ok {
-		_spec.SetField(customer.FieldAggregatedUsageEligible, field.TypeBool, value)
+	if value, ok := _u.mutation.UsageRollupEligible(); ok {
+		_spec.SetField(customer.FieldUsageRollupEligible, field.TypeBool, value)
+	}
+	if _u.mutation.UsageRollupEligibleCleared() {
+		_spec.ClearField(customer.FieldUsageRollupEligible, field.TypeBool)
 	}
 	_node = &Customer{config: _u.config}
 	_spec.Assign = _node.assignValues

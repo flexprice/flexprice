@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -19,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -28,23 +28,23 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type AggregatedUsageSuite struct {
+type UsageRollupSuite struct {
 	testutil.BaseServiceTestSuite
-	svc         *aggregatedUsageService
+	svc         *usageRollupService
 	periodStart time.Time
 	periodEnd   time.Time
 }
 
-func TestAggregatedUsage(t *testing.T) {
-	suite.Run(t, new(AggregatedUsageSuite))
+func TestUsageRollup(t *testing.T) {
+	suite.Run(t, new(UsageRollupSuite))
 }
 
-func (s *AggregatedUsageSuite) SetupTest() {
+func (s *UsageRollupSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	st := s.GetStores()
 	cfg := s.GetConfig()
-	cfg.AggregatedUsage = config.AggregatedUsageConfig{Enabled: true, EnabledTenants: []string{types.DefaultTenantID}}
-	s.svc = &aggregatedUsageService{ServiceParams: ServiceParams{
+	cfg.UsageRollup = config.UsageRollupConfig{Enabled: true, EnabledTenants: []string{types.DefaultTenantID}}
+	s.svc = &usageRollupService{ServiceParams: ServiceParams{
 		Logger:                   s.GetLogger(),
 		Config:                   cfg,
 		DB:                       s.GetDB(),
@@ -73,7 +73,7 @@ func (s *AggregatedUsageSuite) SetupTest() {
 		CouponApplicationRepo:    st.CouponApplicationRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
-		HourlyUsageRepo:          &fakeHourlyUsageRepository{hourly: map[time.Time][]aggregatedusage.HourlyUsage{}},
+		HourlyUsageRepo:          &fakeHourlyUsageRepository{hourly: map[time.Time][]usagerollup.HourlyUsage{}},
 	}}
 	s.periodStart = time.Now().UTC().Truncate(time.Hour).AddDate(0, 0, -10)
 	s.periodEnd = s.periodStart.AddDate(0, 1, 0)
@@ -81,7 +81,7 @@ func (s *AggregatedUsageSuite) SetupTest() {
 
 // seed creates customer cus_rt on plan_rt with one SUM meter priced per unit, and returns the subscription.
 // change edits the seeded rows before they are saved.
-func (s *AggregatedUsageSuite) seed(change func(sub *subscription.Subscription, m *meter.Meter, p *price.Price, li *subscription.SubscriptionLineItem)) *subscription.Subscription {
+func (s *UsageRollupSuite) seed(change func(sub *subscription.Subscription, m *meter.Meter, p *price.Price, li *subscription.SubscriptionLineItem)) *subscription.Subscription {
 	ctx, st := s.GetContext(), s.GetStores()
 	before := s.periodStart.AddDate(0, 0, -5)
 	base := func() types.BaseModel {
@@ -116,18 +116,18 @@ func (s *AggregatedUsageSuite) seed(change func(sub *subscription.Subscription, 
 	return sub
 }
 
-func (s *AggregatedUsageSuite) reason(sub *subscription.Subscription) aggregatedUsageIneligibleReason {
+func (s *UsageRollupSuite) reason(sub *subscription.Subscription) usageRollupIneligibleReason {
 	reason, err := s.svc.ineligibleReason(s.GetContext(), sub.CustomerID)
 	s.Require().NoError(err)
 	return reason
 }
 
-func (s *AggregatedUsageSuite) TestEligibleCustomer() {
+func (s *UsageRollupSuite) TestEligibleCustomer() {
 	s.Empty(s.reason(s.seed(nil)))
 }
 
 // UsagePrices charges the plan's usage prices for the subscription's currency and billing period only.
-func (s *AggregatedUsageSuite) TestUsagePricesMatchTheSubscription() {
+func (s *UsageRollupSuite) TestUsagePricesMatchTheSubscription() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
 	eur := &price.Price{ID: "price_rt_eur", Amount: decimal.NewFromInt(3), Currency: "eur", Type: types.PRICE_TYPE_USAGE,
@@ -144,7 +144,7 @@ func (s *AggregatedUsageSuite) TestUsagePricesMatchTheSubscription() {
 }
 
 // An addon associated with the subscription has its usage prices charged next to the plan's.
-func (s *AggregatedUsageSuite) TestUsagePricesIncludeActiveAddons() {
+func (s *UsageRollupSuite) TestUsagePricesIncludeActiveAddons() {
 	ctx, st := s.GetContext(), s.GetStores()
 	sub := s.seed(nil)
 	base := types.GetDefaultBaseModel(ctx)
@@ -168,7 +168,7 @@ func (s *AggregatedUsageSuite) TestUsagePricesIncludeActiveAddons() {
 }
 
 // Redis stores the cached prices, snapshot and subscription as JSON, so what the read path uses must survive the round trip.
-func (s *AggregatedUsageSuite) TestCachedEntriesJSONRoundTrip() {
+func (s *UsageRollupSuite) TestCachedEntriesJSONRoundTrip() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
 	compact, err := s.svc.cachedEntityUsagePrices(ctx, "plan_rt")
@@ -176,7 +176,7 @@ func (s *AggregatedUsageSuite) TestCachedEntriesJSONRoundTrip() {
 	compact[0].Tiers = price.JSONBTiers{{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(1)}}
 	raw, err := json.Marshal(compact)
 	s.Require().NoError(err)
-	var decodedPrices []*aggregatedUsagePrice
+	var decodedPrices []*usageRollupPrice
 	s.Require().NoError(json.Unmarshal(raw, &decodedPrices))
 	s.Require().Len(decodedPrices, 1)
 	got, want := decodedPrices[0].price(), compact[0].price()
@@ -196,54 +196,54 @@ func (s *AggregatedUsageSuite) TestCachedEntriesJSONRoundTrip() {
 	s.True(s.periodStart.Equal(decodedSnapshot.AggregatedUntil))
 	s.Equal("12.5", decodedSnapshot.Totals["mtr_rt"].String())
 
-	cached, err := s.svc.aggregatedUsageSubscription(ctx, sub)
+	cached, err := s.svc.usageRollupSubscription(ctx, sub)
 	s.Require().NoError(err)
 	raw, err = json.Marshal(cached)
 	s.Require().NoError(err)
-	var decodedSubscription aggregatedUsageSubscription
+	var decodedSubscription usageRollupSubscription
 	s.Require().NoError(json.Unmarshal(raw, &decodedSubscription))
 	s.Equal("ext_rt", decodedSubscription.ExternalCustomerID)
 }
 
-func (s *AggregatedUsageSuite) TestIneligibleReasons() {
+func (s *UsageRollupSuite) TestIneligibleReasons() {
 	tests := []struct {
 		name   string
 		change func(sub *subscription.Subscription, m *meter.Meter, p *price.Price, li *subscription.SubscriptionLineItem)
-		want   aggregatedUsageIneligibleReason
+		want   usageRollupIneligibleReason
 	}{
 		{"parent subscription", func(sub *subscription.Subscription, _ *meter.Meter, _ *price.Price, _ *subscription.SubscriptionLineItem) {
 			sub.SubscriptionType = types.SubscriptionTypeParent
-		}, aggregatedUsageIneligibleNotStandalone},
+		}, usageRollupIneligibleNotStandalone},
 		{"subscription commitment", func(sub *subscription.Subscription, _ *meter.Meter, _ *price.Price, _ *subscription.SubscriptionLineItem) {
 			sub.CommitmentAmount, sub.OverageFactor = lo.ToPtr(decimal.NewFromInt(100)), lo.ToPtr(decimal.NewFromFloat(1.5))
-		}, aggregatedUsageIneligibleCommitment},
+		}, usageRollupIneligibleCommitment},
 		{"line item added to the subscription", func(_ *subscription.Subscription, _ *meter.Meter, _ *price.Price, li *subscription.SubscriptionLineItem) {
 			li.EntityType = types.SubscriptionLineItemEntityTypeSubscription
-		}, aggregatedUsageIneligibleOverride},
+		}, usageRollupIneligibleOverride},
 		{"override price", func(_ *subscription.Subscription, _ *meter.Meter, p *price.Price, li *subscription.SubscriptionLineItem) {
 			p.EntityType, p.EntityID, p.ParentPriceID = types.PRICE_ENTITY_TYPE_SUBSCRIPTION, "subs_rt", "price_plan"
 			li.EntityID = "subs_rt"
-		}, aggregatedUsageIneligibleOverride},
+		}, usageRollupIneligibleOverride},
 		{"plan price edited this period", func(_ *subscription.Subscription, _ *meter.Meter, p *price.Price, _ *subscription.SubscriptionLineItem) {
 			p.UpdatedAt = time.Now().UTC()
-		}, aggregatedUsageIneligiblePriceChanged},
+		}, usageRollupIneligiblePriceChanged},
 		{"plan price added in an earlier period", func(sub *subscription.Subscription, _ *meter.Meter, p *price.Price, _ *subscription.SubscriptionLineItem) {
 			sub.StartDate = s.periodStart.AddDate(0, -2, 0)
 			p.CreatedAt = s.periodStart.AddDate(0, -1, 0)
-		}, aggregatedUsageIneligiblePriceChanged},
+		}, usageRollupIneligiblePriceChanged},
 		{"line item started mid-period", func(_ *subscription.Subscription, _ *meter.Meter, _ *price.Price, li *subscription.SubscriptionLineItem) {
 			li.StartDate = s.periodStart.AddDate(0, 0, 3)
-		}, aggregatedUsageIneligiblePriceChanged},
+		}, usageRollupIneligiblePriceChanged},
 		{"unsupported meter", func(_ *subscription.Subscription, m *meter.Meter, _ *price.Price, _ *subscription.SubscriptionLineItem) {
 			m.Aggregation.Type = types.AggregationCountUnique
-		}, aggregatedUsageIneligibleMeter},
+		}, usageRollupIneligibleMeter},
 		{"bucketed price", func(_ *subscription.Subscription, m *meter.Meter, p *price.Price, _ *subscription.SubscriptionLineItem) {
 			m.Aggregation.Type = types.AggregationMax
 			p.BucketSize = types.WindowSizeHour
-		}, aggregatedUsageIneligibleMeter},
+		}, usageRollupIneligibleMeter},
 		{"custom price unit", func(_ *subscription.Subscription, _ *meter.Meter, _ *price.Price, li *subscription.SubscriptionLineItem) {
 			li.PriceUnit = lo.ToPtr("credits")
-		}, aggregatedUsageIneligiblePriceUnit},
+		}, usageRollupIneligiblePriceUnit},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -254,8 +254,8 @@ func (s *AggregatedUsageSuite) TestIneligibleReasons() {
 }
 
 // A plan price with no line item on the subscription (the plan price sync never ran) would be charged
-// by the aggregated usage path but not by invoices, so the customer is ineligible.
-func (s *AggregatedUsageSuite) TestPlanPriceNotOnTheSubscription() {
+// by the usage rollup path but not by invoices, so the customer is ineligible.
+func (s *UsageRollupSuite) TestPlanPriceNotOnTheSubscription() {
 	ctx, st := s.GetContext(), s.GetStores()
 	sub := s.seed(nil)
 	base := types.GetDefaultBaseModel(ctx)
@@ -267,15 +267,15 @@ func (s *AggregatedUsageSuite) TestPlanPriceNotOnTheSubscription() {
 		BillingPeriodCount: 1, MeterID: "mtr_rt_storage", EntityType: types.PRICE_ENTITY_TYPE_PLAN, EntityID: "plan_rt",
 		EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: base}))
 
-	s.Equal(aggregatedUsageIneligiblePriceChanged, s.reason(sub))
+	s.Equal(usageRollupIneligiblePriceChanged, s.reason(sub))
 }
 
 // A plan entitlement on a priced meter makes the plan's customers ineligible, and removing it makes them
 // eligible again.
-func (s *AggregatedUsageSuite) TestPlanEntitlementChangeIsEvaluated() {
+func (s *UsageRollupSuite) TestPlanEntitlementChangeClearsEligibility() {
 	ctx, st := s.GetContext(), s.GetStores()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 	s.Require().True(s.eligible(sub))
 	s.Require().NoError(st.FeatureRepo.Create(ctx, &feature.Feature{ID: "feat_rt", Name: "API calls", LookupKey: "api_calls",
 		MeterID: "mtr_rt", Type: types.FeatureTypeMetered, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}))
@@ -285,78 +285,69 @@ func (s *AggregatedUsageSuite) TestPlanEntitlementChangeIsEvaluated() {
 	s.Require().NoError(err)
 
 	(&entitlementService{ServiceParams: s.svc.ServiceParams}).markEntitlementSourceChanged(ctx, ent.ID)
-	s.Eventually(func() bool { return !s.eligible(sub) }, time.Second, 10*time.Millisecond, "the background evaluation finds the entitlement")
+	s.False(s.eligible(sub), "the cleared flag is evaluated again and finds the entitlement")
 
 	s.Require().NoError(st.EntitlementRepo.Delete(ctx, ent.ID))
-	s.evaluate(AggregatedUsagePlan, "plan_rt")
+	s.clearEligibility(UsageRollupPlan, "plan_rt")
 	s.True(s.eligible(sub), "with the entitlement gone the customer is eligible again")
 }
 
-// A read fills an empty cache from Postgres; a flag a write saved is never replaced by a read.
-func (s *AggregatedUsageSuite) TestCachedFlagIsReadThrough() {
+// A read takes the flag from the cache, then Postgres, and evaluates it once a write has cleared it.
+func (s *UsageRollupSuite) TestEligibilityReadsCacheThenPostgresThenEvaluates() {
 	ctx, customers := s.GetContext(), s.GetStores().CustomerRepo
 	sub := s.seed(nil)
-	_, err := customers.SetAggregatedUsageEligible(ctx, []string{sub.CustomerID}, true)
-	s.Require().NoError(err)
-	s.True(s.eligible(sub), "nothing cached: the read falls through to Postgres")
-	cached, found := s.svc.RedisCache.ForceCacheGet(ctx, aggregatedUsageEligibilityKey(ctx, sub.CustomerID))
-	s.Require().True(found, "the read filled the cache")
-	eligible, ok := cache.UnmarshalCacheValue[bool](cached)
-	s.Require().True(ok)
-	s.True(*eligible)
+	key := usageRollupEligibilityKey(ctx, sub.CustomerID)
 
-	s.svc.saveEligibility(ctx, []string{sub.CustomerID}, false)
-	_, err = customers.SetAggregatedUsageEligible(ctx, []string{sub.CustomerID}, true)
+	s.True(s.eligible(sub), "never evaluated: the read evaluates it")
+	saved, err := customers.GetUsageRollupEligible(ctx, sub.CustomerID)
 	s.Require().NoError(err)
-	s.False(s.eligible(sub), "the flag the write saved wins over Postgres")
-	s.svc.RedisCache.ForceCacheSetNX(ctx, aggregatedUsageEligibilityKey(ctx, sub.CustomerID), true, aggregatedUsageEligibilityTTL)
-	s.False(s.eligible(sub), "a read's fill never replaces a saved flag")
+	s.Equal(lo.ToPtr(true), saved, "the evaluation is saved in Postgres")
+	cached, found := s.svc.RedisCache.ForceCacheGet(ctx, key)
+	s.Require().True(found, "and cached")
+	s.True(*lo.Must(cache.UnmarshalCacheValue[bool](cached)))
+
+	s.Require().NoError(customers.SetUsageRollupEligible(ctx, sub.CustomerID, false))
+	s.True(s.eligible(sub), "the cache is read first")
+	s.svc.RedisCache.ForceCacheDelete(ctx, key)
+	s.False(s.eligible(sub), "on a cache miss Postgres is read")
+
+	s.svc.ClearEligibility(ctx, UsageRollupSubscription, sub.ID)
+	saved, err = customers.GetUsageRollupEligible(ctx, sub.CustomerID)
+	s.Require().NoError(err)
+	s.Nil(saved, "a write clears the flag")
+	s.True(s.eligible(sub), "and the next read evaluates it again")
 }
 
-// EvaluateEligibility runs in the background and saves the flag.
-func (s *AggregatedUsageSuite) TestEvaluateEligibilitySavesFlagInTheBackground() {
+func (s *UsageRollupSuite) TestClearEligibilitySkipsTenantsWithoutUsageRollup() {
 	ctx, customers := s.GetContext(), s.GetStores().CustomerRepo
 	sub := s.seed(nil)
+	s.Require().NoError(customers.SetUsageRollupEligible(ctx, sub.CustomerID, false))
+	s.svc.Config.UsageRollup = config.UsageRollupConfig{}
 
-	s.svc.EvaluateEligibility(ctx, AggregatedUsageSubscription, sub.ID)
-	s.Eventually(func() bool {
-		eligible, err := customers.IsAggregatedUsageEligible(ctx, sub.CustomerID)
-		return err == nil && eligible
-	}, time.Second, 10*time.Millisecond)
+	s.svc.ClearEligibility(ctx, UsageRollupCustomer, sub.CustomerID)
+	saved, err := customers.GetUsageRollupEligible(ctx, sub.CustomerID)
+	s.Require().NoError(err)
+	s.Equal(lo.ToPtr(false), saved)
 }
 
-func (s *AggregatedUsageSuite) TestEvaluateEligibilitySkipsTenantsWithoutAggregatedUsage() {
-	ctx := s.GetContext()
-	sub := s.seed(nil)
-	s.svc.Config.AggregatedUsage = config.AggregatedUsageConfig{}
-
-	// Read the repo once: Never can return while a check is still running, and the next test replaces the stores.
-	customers := s.GetStores().CustomerRepo
-	s.svc.EvaluateEligibility(ctx, AggregatedUsageCustomer, sub.CustomerID)
-	s.Never(func() bool {
-		eligible, err := customers.IsAggregatedUsageEligible(ctx, sub.CustomerID)
-		return err == nil && eligible
-	}, 200*time.Millisecond, 20*time.Millisecond)
+// clearEligibility clears the entity's customers' flags, as a write to it does.
+func (s *UsageRollupSuite) clearEligibility(entity UsageRollupEntity, entityID string) {
+	s.svc.ClearEligibility(s.GetContext(), entity, entityID)
 }
 
-// evaluate runs one evaluation synchronously.
-func (s *AggregatedUsageSuite) evaluate(entity AggregatedUsageEntity, entityID string) {
-	s.svc.evaluateEligibility(s.GetContext(), entity, entityID)
-}
-
-func (s *AggregatedUsageSuite) eligible(sub *subscription.Subscription) bool {
-	return s.svc.IsAggregatedUsageEligible(s.GetContext(), sub, types.UsageSourceWallet)
+func (s *UsageRollupSuite) eligible(sub *subscription.Subscription) bool {
+	return s.svc.IsUsageRollupEligible(s.GetContext(), sub, types.UsageSourceWallet)
 }
 
 // periodQuantitiesWithCheckpointAt seeds a checkpoint total of 10 up to aggregatedUntil, 3 in ClickHouse and 5 in
 // Redis for the hour before the cutoff, 4 in Redis at the cutoff and 1 in the current hour, and reads the period.
-func (s *AggregatedUsageSuite) periodQuantitiesWithCheckpointAt(aggregatedUntil func(cutoff time.Time) time.Time) (first, cached decimal.Decimal) {
+func (s *UsageRollupSuite) periodQuantitiesWithCheckpointAt(aggregatedUntil func(cutoff time.Time) time.Time) (first, cached decimal.Decimal) {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 
 	now := time.Now().UTC()
-	cutoff := aggregatedusage.Cutoff(now)
+	cutoff := usagerollup.Cutoff(now)
 	_, err := s.svc.MeterUsageCheckpointRepo.UpdateCustomerCheckpoints(ctx, []*meterusagecheckpoint.CustomerCheckpointUpdate{{
 		CustomerID: sub.CustomerID, To: aggregatedUntil(cutoff),
 		Totals: []meterusagecheckpoint.PeriodTotal{{PeriodStart: s.periodStart, MeterID: "mtr_rt", AggregationType: types.AggregationSum, Quantity: decimal.NewFromInt(10)}},
@@ -367,10 +358,10 @@ func (s *AggregatedUsageSuite) periodQuantitiesWithCheckpointAt(aggregatedUntil 
 			ExternalCustomerID: "ext_rt", Timestamp: cutoff.Add(-30 * time.Minute)},
 		MeterID: "mtr_rt", QtyTotal: decimal.NewFromInt(3),
 	}}))
-	aggregatedUsage := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
-	aggregatedUsage.hourly[cutoff.Add(-time.Hour)] = []aggregatedusage.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(5)}}
-	aggregatedUsage.hourly[cutoff] = []aggregatedusage.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(4)}}
-	aggregatedUsage.hourly[now.Truncate(time.Hour)] = []aggregatedusage.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
+	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
+	usageRollup.hourly[cutoff.Add(-time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(5)}}
+	usageRollup.hourly[cutoff] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(4)}}
+	usageRollup.hourly[now.Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
 
 	s.Require().True(s.eligible(sub))
 	_, meters, err := s.svc.UsagePrices(ctx, sub)
@@ -382,43 +373,43 @@ func (s *AggregatedUsageSuite) periodQuantitiesWithCheckpointAt(aggregatedUntil 
 	return quantities["mtr_rt"], cachedQuantities["mtr_rt"]
 }
 
-func (s *AggregatedUsageSuite) TestPeriodQuantitiesReadsUncheckpointedHoursFromRedis() {
+func (s *UsageRollupSuite) TestPeriodQuantitiesReadsUncheckpointedHoursFromRedis() {
 	first, cached := s.periodQuantitiesWithCheckpointAt(func(cutoff time.Time) time.Time { return cutoff.Add(-time.Hour) })
 	s.Equal("20", first.String(), "10 + 5 (Redis, not ClickHouse's 3) + 4 + 1")
 	s.Equal("20", cached.String(), "the second read takes the checkpoint from the snapshot cache")
 }
 
-func (s *AggregatedUsageSuite) TestPeriodQuantitiesReadsClickHouseBeforeOldestRedisHour() {
+func (s *UsageRollupSuite) TestPeriodQuantitiesReadsClickHouseBeforeOldestRedisHour() {
 	first, _ := s.periodQuantitiesWithCheckpointAt(func(time.Time) time.Time {
-		return aggregatedusage.OldestRedisHour(time.Now()).Add(-time.Hour)
+		return usagerollup.OldestRedisHour(time.Now()).Add(-time.Hour)
 	})
 	s.Equal("18", first.String(), "10 + 3 (ClickHouse; hours this old may have expired in Redis) + 4 + 1")
 }
 
-func (s *AggregatedUsageSuite) TestIsAggregatedUsageEligible() {
+func (s *UsageRollupSuite) TestIsUsageRollupEligible() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 
 	s.True(s.eligible(sub))
-	s.False(s.svc.IsAggregatedUsageEligible(ctx, sub, types.UsageSourceInvoiceCreation), "only wallet reads")
+	s.False(s.svc.IsUsageRollupEligible(ctx, sub, types.UsageSourceInvoiceCreation), "only wallet reads")
 
 	p, err := s.GetStores().PriceRepo.Get(ctx, "price_rt")
 	s.Require().NoError(err)
 	p.UpdatedAt = time.Now().UTC()
 	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
-	s.evaluate(AggregatedUsagePlan, "plan_rt")
-	s.False(s.eligible(sub), "evaluating the plan finds the price change")
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupPlan, "plan_rt")
+	s.False(s.eligible(sub), "clearing the plan finds the price change on the next read")
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 	s.False(s.eligible(sub), "a price change keeps the customer ineligible")
 }
 
-// On the aggregated usage path a charge is price × quantity. sub carries no line items, so the full path would
-// price nothing: a non-zero total shows the aggregated usage branch ran.
-func (s *AggregatedUsageSuite) TestCalculateMeterUsageChargesOnTheAggregatedUsagePath() {
+// On the usage rollup path a charge is price × quantity. sub carries no line items, so the full path would
+// price nothing: a non-zero total shows the usage rollup branch ran.
+func (s *UsageRollupSuite) TestCalculateMeterUsageChargesOnTheUsageRollupPath() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 	p, err := s.GetStores().PriceRepo.Get(ctx, "price_rt")
 	s.Require().NoError(err)
 	usage := &dto.GetUsageBySubscriptionResponse{Charges: []*dto.SubscriptionUsageByMetersResponse{{
@@ -468,12 +459,12 @@ func TestPlanUsageReads(t *testing.T) {
 	}
 }
 
-// Money parity: the same usage priced by the full compute (aggregated usage reads off) and by the aggregated usage gives the
+// Money parity: the same usage priced by the full compute (usage rollup reads off) and by the usage rollup gives the
 // same wallet balance.
-func (s *AggregatedUsageSuite) TestWalletBalanceMatchesFullCompute() {
+func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 	w := &wallet.Wallet{ID: "wallet_rt", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
 		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
 		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
@@ -489,16 +480,16 @@ func (s *AggregatedUsageSuite) TestWalletBalanceMatchesFullCompute() {
 		usage("evt_old", s.periodStart.Add(24*time.Hour), 5),
 		usage("evt_recent", recent, 2),
 	}))
-	// The recent event is past the cutoff, so the aggregated usage holds it in Redis and ClickHouse covers the rest.
-	s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository).hourly[recent.Truncate(time.Hour)] = []aggregatedusage.HourlyUsage{
+	// The recent event is past the cutoff, so the usage rollup holds it in Redis and ClickHouse covers the rest.
+	s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository).hourly[recent.Truncate(time.Hour)] = []usagerollup.HourlyUsage{
 		{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(2)},
 	}
 	wallets := NewWalletService(s.svc.ServiceParams)
 
-	s.svc.Config.AggregatedUsage.Enabled = false
+	s.svc.Config.UsageRollup.Enabled = false
 	full, err := wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
-	s.svc.Config.AggregatedUsage.Enabled = true
+	s.svc.Config.UsageRollup.Enabled = true
 	fast, err := wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
 
@@ -507,9 +498,9 @@ func (s *AggregatedUsageSuite) TestWalletBalanceMatchesFullCompute() {
 	s.Equal(lo.FromPtr(full.CurrentPeriodUsage).String(), lo.FromPtr(fast.CurrentPeriodUsage).String())
 	s.False(fast.IsCachedFallback)
 
-	// A unit only Redis holds shows the wallet reads quantities from the aggregated usage and invoicing doesn't.
-	aggregatedUsage := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
-	aggregatedUsage.hourly[now.Truncate(time.Hour)] = []aggregatedusage.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
+	// A unit only Redis holds shows the wallet reads quantities from the usage rollup and invoicing doesn't.
+	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
+	usageRollup.hourly[now.Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
 	fast, err = wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
 	s.Equal("984", lo.FromPtr(fast.RealTimeBalance).String(), "1000 - 8 units at 2")
@@ -518,30 +509,30 @@ func (s *AggregatedUsageSuite) TestWalletBalanceMatchesFullCompute() {
 }
 
 // Within the freshness window a real-time read reuses the last computed balance; with the window off it recomputes.
-func (s *AggregatedUsageSuite) TestWalletBalanceReusesFreshBalance() {
+func (s *UsageRollupSuite) TestWalletBalanceReusesFreshBalance() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.evaluate(AggregatedUsageCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
 	w := &wallet.Wallet{ID: "wallet_fresh", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
 		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
 		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
 	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
 	wallets := NewWalletService(s.svc.ServiceParams)
-	s.svc.Config.AggregatedUsage.BalanceFreshSeconds = 5
+	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 5
 
 	first, err := wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
 	s.Equal("1000", lo.FromPtr(first.RealTimeBalance).String())
 	s.False(first.IsCachedFallback)
 
-	aggregatedUsage := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
-	aggregatedUsage.hourly[time.Now().UTC().Truncate(time.Hour)] = []aggregatedusage.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(3)}}
+	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
+	usageRollup.hourly[time.Now().UTC().Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(3)}}
 	reused, err := wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
 	s.Equal("1000", lo.FromPtr(reused.RealTimeBalance).String(), "the balance computed within the window")
 	s.True(reused.IsCachedFallback)
 
-	s.svc.Config.AggregatedUsage.BalanceFreshSeconds = 0
+	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 0
 	recomputed, err := wallets.GetWalletBalanceV2(ctx, w.ID)
 	s.Require().NoError(err)
 	s.Equal("994", lo.FromPtr(recomputed.RealTimeBalance).String(), "1000 - 3 units at 2")
@@ -549,7 +540,7 @@ func (s *AggregatedUsageSuite) TestWalletBalanceReusesFreshBalance() {
 }
 
 // lineItemUsage returns the seeded line item's current-period usage as read for source.
-func (s *AggregatedUsageSuite) lineItemUsage(subscriptionID string, source types.UsageSource) decimal.Decimal {
+func (s *UsageRollupSuite) lineItemUsage(subscriptionID string, source types.UsageSource) decimal.Decimal {
 	ctx := s.GetContext()
 	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, subscriptionID)
 	s.Require().NoError(err)

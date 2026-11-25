@@ -123,9 +123,9 @@ const (
 	PrefixMeterFeature                = "meter:feature:v1:"
 	PrefixReportResult                = "report_result:v1:"
 	PrefixUsageSnapshot               = "usage_snapshot:v2:"
-	PrefixAggregatedUsageEligibility  = "aggregated_usage_eligibility:v1:"
-	PrefixAggregatedUsageEntityPrices = "aggregated_usage_entity_prices:v2:"
-	PrefixAggregatedUsageSubscription = "aggregated_usage_subscription:v1:"
+	PrefixUsageRollupEligibility  = "usage_rollup_eligibility:v1:"
+	PrefixUsageRollupEntityPrices = "usage_rollup_entity_prices:v2:"
+	PrefixUsageRollupSubscription = "usage_rollup_subscription:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

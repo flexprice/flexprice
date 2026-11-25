@@ -19,7 +19,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/domain/aggregatedusage"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
@@ -420,7 +420,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
-	s.recordAggregatedUsage(ctx, lockedRecords, metersByID)
+	s.recordUsageRollup(ctx, lockedRecords, metersByID)
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
@@ -613,7 +613,7 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	}
 
 	if lockAcquired {
-		s.recordAggregatedUsage(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
+		s.recordUsageRollup(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
 	}
 
 	s.Logger.Debug(ctx, "meter usage records inserted",
@@ -631,22 +631,22 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	return nil
 }
 
-// recordAggregatedUsage adds inserted usage whose dedup lock this delivery took to the Redis hourly
+// recordUsageRollup adds inserted usage whose dedup lock this delivery took to the Redis hourly
 // usage for enabled tenants. Failures are logged and counted and never fail the message.
-func (s *meterUsageTrackingService) recordAggregatedUsage(
+func (s *meterUsageTrackingService) recordUsageRollup(
 	ctx context.Context,
 	lockedRecords []*events.MeterUsage,
 	metersByID map[string]*meter.Meter,
 ) {
-	if s.HourlyUsageRepo == nil || !s.Config.AggregatedUsage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if s.HourlyUsageRepo == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
 		return
 	}
-	cutoff := aggregatedusage.Cutoff(clock.Now())
-	usage := make([]aggregatedusage.HourlyUsage, 0, len(lockedRecords))
+	cutoff := usagerollup.Cutoff(clock.Now())
+	usage := make([]usagerollup.HourlyUsage, 0, len(lockedRecords))
 	tooOld := 0
 	for _, r := range lockedRecords {
 		m, ok := metersByID[r.MeterID]
-		if !ok || r.ExternalCustomerID == "" || !aggregatedusage.SupportsAggregation(m.Aggregation.Type) {
+		if !ok || r.ExternalCustomerID == "" || !usagerollup.SupportsAggregation(m.Aggregation.Type) {
 			continue
 		}
 		if r.Timestamp.Before(cutoff) {
@@ -658,7 +658,7 @@ func (s *meterUsageTrackingService) recordAggregatedUsage(
 			// One per event, matching ClickHouse's COUNT(DISTINCT id).
 			quantity = decimal.NewFromInt(1)
 		}
-		usage = append(usage, aggregatedusage.HourlyUsage{
+		usage = append(usage, usagerollup.HourlyUsage{
 			ExternalCustomerID: r.ExternalCustomerID,
 			Hour:               r.Timestamp.UTC().Truncate(time.Hour),
 			MeterID:            r.MeterID,
@@ -668,18 +668,18 @@ func (s *meterUsageTrackingService) recordAggregatedUsage(
 	}
 
 	if tooOld > 0 {
-		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
+		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
 	}
 	rowCount := len(usage)
 	if rowCount == 0 {
 		return
 	}
 	if err := s.HourlyUsageRepo.Increment(ctx, usage); err != nil {
-		s.Logger.Error(ctx, "failed to write aggregated usage", "error", err, "row_count", rowCount)
-		metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
+		s.Logger.Error(ctx, "failed to write usage rollup", "error", err, "row_count", rowCount)
+		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
 		return
 	}
-	metrics.RecordCounter(ctx, metrics.AggregatedUsageRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
+	metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
 }
 
 // publishRejectedEventWebhook fires the event.rejected webhook when an event

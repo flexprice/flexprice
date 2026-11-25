@@ -562,10 +562,10 @@ meter_usage_tracking_lazy:
   topic_dlq: "meter_usage_tracking_service_lazy_dlq"
 
 # Hourly per-customer meter quantities in Redis for real-time usage reads.
-aggregated_usage:
+usage_rollup:
   enabled: false # master switch; when true, runs only for enabled_tenants
-  enabled_tenants: [] # tenant IDs with aggregated usage
-  balance_fresh_seconds: 5 # real-time balance reads reuse a balance computed within this window; 0 = off
+  enabled_tenants: [] # tenant IDs with usage rollup
+  balance_max_live_seconds: 5 # real-time balance reads reuse a balance cached within this window
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
 # per-customer Temporal workflow (spend + entitlement grants + wallet alerts).

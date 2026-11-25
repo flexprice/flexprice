@@ -1173,14 +1173,14 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 	return nil
 }
 
-// markPriceSourceChanged re-evaluates the aggregated usage eligibility of the customers billed on a plan or addon
+// markPriceSourceChanged clears the usage rollup eligibility of the customers billed on a plan or addon
 // once one of its prices is added, edited or ended.
 func (s *priceService) markPriceSourceChanged(ctx context.Context, p *price.Price) {
 	switch p.EntityType {
 	case types.PRICE_ENTITY_TYPE_PLAN:
-		NewAggregatedUsageService(s.ServiceParams).EvaluateEligibility(ctx, AggregatedUsagePlan, p.EntityID)
+		NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupPlan, p.EntityID)
 	case types.PRICE_ENTITY_TYPE_ADDON:
-		NewAggregatedUsageService(s.ServiceParams).EvaluateEligibility(ctx, AggregatedUsageAddon, p.EntityID)
+		NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupAddon, p.EntityID)
 	}
 }
 

@@ -31,11 +31,11 @@ const (
 	RawEvents           Name = "raw_events.processed"
 	EmailDeliveries     Name = "email.deliveries"
 	EventsScopeDropped  Name = "events.scope_dropped"
-	AggregatedUsageRows Name = "aggregated_usage.rows"
+	UsageRollupRows Name = "usage_rollup.rows"
 
 	UsageCheckpointCustomers  Name = "usage_checkpoint.customers"
-	AggregatedUsageReads      Name = "aggregated_usage.reads"
-	AggregatedUsageGapQueries Name = "aggregated_usage.gap_queries"
+	UsageRollupReads      Name = "usage_rollup.reads"
+	UsageRollupGapQueries Name = "usage_rollup.gap_queries"
 
 	ActivityDropped            Name = "activity.dropped"
 	ActivityUncaptured         Name = "activity.uncaptured"
@@ -61,11 +61,11 @@ var catalog = map[Name]definition{
 	RawEvents:           {"Raw events handled per attempt by outcome (success, skipped, error); retried batches are counted again", "{event}"},
 	EmailDeliveries:     {"Customer email send attempts by the dispatcher, by outcome; a deferred email is counted again on each retry", "{email}"},
 	EventsScopeDropped:  {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
-	AggregatedUsageRows: {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
+	UsageRollupRows: {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
 
 	UsageCheckpointCustomers:  {"Customer billing periods handled by the usage checkpoint job, by outcome", "{period}"},
-	AggregatedUsageReads:      {"Wallet usage reads: fast (from the aggregated usage) or why they read ClickHouse instead", "{read}"},
-	AggregatedUsageGapQueries: {"ClickHouse queries a fast wallet read made for usage not in the checkpoint or Redis", "{query}"},
+	UsageRollupReads:      {"Wallet usage reads: fast (from the usage rollup) or why they read ClickHouse instead", "{read}"},
+	UsageRollupGapQueries: {"ClickHouse queries a fast wallet read made for usage not in the checkpoint or Redis", "{query}"},
 
 	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
 	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},
