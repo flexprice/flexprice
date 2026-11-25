@@ -1615,9 +1615,8 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 		return nil
 	}
 
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	// By ID, not List: past periods bill at prices that have since ended.
+	prices, err := s.PriceRepo.ListByIDs(ctx, priceIDs)
 	if err != nil {
 		return err
 	}

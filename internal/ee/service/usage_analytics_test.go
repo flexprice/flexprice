@@ -144,8 +144,11 @@ func (s *UsageAnalyticsSuite) seed() {
 	tiered := flat("p_tiered", "m_tiered", "0")
 	tiered.BillingModel, tiered.TierMode = types.BILLING_MODEL_TIERED, types.BILLING_TIER_SLAB
 	tiered.Tiers = []price.PriceTier{{UpTo: lo.ToPtr(uint64(100)), UnitAmount: decimal.NewFromInt(1)}, {UnitAmount: decimal.RequireFromString("0.5")}}
+	// A price change ends the old price when the new one starts.
+	tokOld := flat("p_tok_old", "m_tokens", "0.002")
+	tokOld.EndDate = lo.ToPtr(queryOct15)
 	prices := []*price.Price{
-		flat("p_tok_old", "m_tokens", "0.002"), flat("p_tok_new", "m_tokens", "0.0025"),
+		tokOld, flat("p_tok_new", "m_tokens", "0.0025"),
 		flat("p_calls", "m_calls", "0.01"), flat("p_scaled", "m_scaled", "0.5"), tiered,
 	}
 	for _, p := range prices {

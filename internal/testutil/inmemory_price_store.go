@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -72,6 +73,11 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
+		return false
+	}
+
+	// Like the ent repository, drop prices ended by now unless expired prices are allowed
+	if !f.AllowExpiredPrices && p.EndDate != nil && !p.EndDate.After(clock.Now()) {
 		return false
 	}
 
