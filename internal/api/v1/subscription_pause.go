@@ -26,7 +26,7 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 
 // @Summary Pause subscription
 // @ID pauseSubscription
-// @Description Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice: the period keeps its one invoice, billed at the period end. The subscription is cancelled if it is not resumed within its pause grace period.
+// @Description Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice: the period keeps its one invoice. If the subscription is not resumed within its pause grace period, it is cancelled and that invoice is billed at the cancellation, otherwise it is billed at the period end.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json

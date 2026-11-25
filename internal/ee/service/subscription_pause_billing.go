@@ -20,8 +20,8 @@ import (
 // pausedStretch is a part of a window the subscription spent paused.
 type pausedStretch struct {
 	period types.Period
-	// refundable is set when the pause was sent with create_prorations.
-	refundable bool
+	// prorated is set when the pause was sent with create_prorations.
+	prorated bool
 }
 
 // pausedStretches clips every pause overlapping [from, to) to that window, oldest first. A pause
@@ -42,18 +42,18 @@ func pausedStretches(pauses []*subscription.SubscriptionPause, from, to time.Tim
 			continue
 		}
 		stretches = append(stretches, pausedStretch{
-			period:     types.Period{Start: start, End: end},
-			refundable: p.ProrationBehavior == types.ProrationBehaviorCreateProrations,
+			period:   types.Period{Start: start, End: end},
+			prorated: p.ProrationBehavior == types.ProrationBehaviorCreateProrations,
 		})
 	}
 	sort.Slice(stretches, func(i, j int) bool { return stretches[i].period.Start.Before(stretches[j].period.Start) })
 	return stretches
 }
 
-// refundablePeriods returns the stretches whose time is taken off fixed charges.
-func refundablePeriods(stretches []pausedStretch) []types.Period {
+// proratedPausedPeriods returns the stretches whose time is taken off fixed charges.
+func proratedPausedPeriods(stretches []pausedStretch) []types.Period {
 	return lo.FilterMap(stretches, func(s pausedStretch, _ int) (types.Period, bool) {
-		return s.period, s.refundable
+		return s.period, s.prorated
 	})
 }
 
@@ -103,7 +103,7 @@ func pausedDuration(period types.Period, paused []types.Period) time.Duration {
 	return covered
 }
 
-// creditPausedAdvanceCharges credits the customer's wallet with the refundable paused part of the
+// creditPausedAdvanceCharges credits the customer's wallet with the prorated paused part of the
 // advance fixed charges billed for inv's period, once that period has closed.
 func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *invoice.Invoice) error {
 	reason := types.InvoiceBillingReason(inv.BillingReason)
@@ -132,8 +132,8 @@ func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *in
 		return nil
 	}
 	billedPeriod := types.Period{Start: periodPauses[0].OriginalPeriodStart, End: periodPauses[0].OriginalPeriodEnd}
-	refundable := refundablePeriods(pausedStretches(periodPauses, *inv.PeriodStart, billedPeriod.End))
-	if len(refundable) == 0 {
+	prorated := proratedPausedPeriods(pausedStretches(periodPauses, *inv.PeriodStart, billedPeriod.End))
+	if len(prorated) == 0 {
 		return nil
 	}
 
@@ -182,7 +182,7 @@ func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *in
 	credit := decimal.Zero
 	for _, line := range advance.LineItems {
 		linePeriod := types.Period{Start: lo.FromPtr(line.PeriodStart), End: lo.FromPtr(line.PeriodEnd)}
-		credit = credit.Add(line.Amount.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, refundable))))
+		credit = credit.Add(line.Amount.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, prorated))))
 	}
 	// A converted invoice is issued in the billing currency, so the credit takes its frozen rate.
 	if inv.FxConversion != nil && !inv.FxConversion.Rate.IsZero() {

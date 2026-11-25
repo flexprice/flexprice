@@ -95,8 +95,8 @@ still open runs to the end of the invoice period, and the time after a cancel be
 subscription was cancelled from.
 
 - **Active:** the subscription was not paused.
-- **Paused, refundable:** paused by a pause sent with `create_prorations`.
-- **Paused, not refundable:** paused by a pause sent with `none`.
+- **Paused, prorated:** paused by a pause sent with `create_prorations`.
+- **Paused, not prorated:** paused by a pause sent with `none`.
 
 Usage and fixed charges are then computed from these stretches:
 
@@ -105,19 +105,19 @@ queries take every paused stretch as a range to exclude, so each meter is aggreg
 time. Tiers, volume pricing, MAX, COUNT_UNIQUE and LATEST then apply to the combined active usage, not per
 stretch. This aggregation does not exist today and is the main piece of work. The invoice preview uses the
 same query.
-- **Arrear fixed charges** are billed for the period minus the refundable time: amount × (period −
-refundable time) ÷ period.
-- **Advance fixed charges** were billed when the period started. The refundable part, amount × refundable
-time ÷ period, is credited to the customer's wallet when the draft is finalized. The credit is keyed on the
-invoice, so a retried finalization does not credit twice.
+- **Arrear fixed charges** have not been paid yet, so they are billed only for the period minus the prorated
+time: amount × (period − prorated time) ÷ period. Nothing is refunded.
+- **Advance fixed charges** were paid when the period started. Each charge's prorated part, amount ×
+prorated time ÷ its own period, is credited to the customer's wallet when the period's invoice is
+finalized. The credit is keyed on the subscription and the billing period, so the period is credited once.
 
 A pause sent with `none` therefore counts as billed time for fixed charges, which is what `none` means
-today. The refundable stretches are recorded on the invoice so the fixed charge amounts can be reconciled.
+today.
 
 **Example.** A monthly subscription with a 30-day period, a $300 advance fee and a $60 arrear fee, is
 paused twice:
 
-| Pause | Days | `proration_behavior` | Refundable days |
+| Pause | Days | `proration_behavior` | Prorated days |
 |---|---|---|---|
 | Day 5 to day 10 | 5 | `create_prorations` | 5 |
 | Day 20 to day 25 | 5 | `none` | 0 |
@@ -184,7 +184,7 @@ sequenceDiagram
         Run->>Svc: cancel at cancel_at
         Run->>Inv: compute draft up to cancel_at over active stretches, finalize
     end
-    Inv->>DB: wallet credit for refundable paused time
+    Inv->>DB: wallet credit for prorated paused time
 ```
 
 ### ERD
