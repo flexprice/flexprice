@@ -50,5 +50,5 @@ Gin HTTP handlers: deserialize requests, validate input, call service layer, ser
 - Don't log sensitive fields (PII, amounts) at DEBUG level without redaction.
 
 ## Related layers
-- `internal/service/invoice.go` — all logic delegated here
+- `internal/ee/service/invoice.go` — all logic delegated here
 - `internal/api/router.go` — route registration

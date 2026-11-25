@@ -35,7 +35,7 @@ Wraps invoice operations that must be durable, retryable, and observable: comput
 - All activities MUST be idempotent — Temporal will retry them on failure.
 - Workflow inputs and outputs must be JSON-serializable.
 - Register every new workflow + activity in `internal/temporal/registration.go`.
-- Never call `internal/service` directly from a workflow function — always via activity.
+- Never call `internal/ee/service` directly from a workflow function — always via activity.
 
 ## Common pitfalls
 - Side effects (random values, timestamps) must use `workflow.Now(ctx)` and `workflow.SideEffect()` — not `time.Now()`.
@@ -45,4 +45,4 @@ Wraps invoice operations that must be durable, retryable, and observable: comput
 ## Related layers
 - `internal/temporal/activities/` — activity implementations called by these workflows
 - `internal/temporal/registration.go` — registration of all workflows/activities
-- `internal/service/invoice.go` — `StartWorkflow` calls originate here
+- `internal/ee/service/invoice.go` — `StartWorkflow` calls originate here

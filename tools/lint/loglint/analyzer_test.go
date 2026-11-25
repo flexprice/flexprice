@@ -5,7 +5,7 @@ import (
 
 	"golang.org/x/tools/go/analysis/analysistest"
 
-	loglint "github.com/flexprice/flexprice/tools/loglint"
+	"github.com/flexprice/flexprice/tools/lint/loglint"
 )
 
 func TestAnalyzer(t *testing.T) {
