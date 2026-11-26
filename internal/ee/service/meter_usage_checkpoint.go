@@ -243,7 +243,7 @@ func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]Usag
 		return nil, nil
 	}
 	var environments []UsageCheckpointEnvironment
-	for _, tenantID := range usageRollup.EnabledTenants {
+	for _, tenantID := range usageRollup.Tenants() {
 		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantID)
 		filter := types.GetDefaultFilter()
 		for {

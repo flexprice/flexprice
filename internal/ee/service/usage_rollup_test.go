@@ -589,6 +589,83 @@ func (s *UsageRollupSuite) TestWalletBalanceReusesFreshBalance() {
 	s.False(recomputed.IsCachedFallback)
 }
 
+// A shadow tenant's wallet read is served from ClickHouse, never from the usage rollup or a reused balance, and the
+// background comparison sees where the usage rollup differs.
+func (s *UsageRollupSuite) TestShadowTenantServesClickHouseAndCompares() {
+	ctx := s.GetContext()
+	sub := s.seed(nil)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
+	s.svc.Config.UsageRollup = config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{types.DefaultTenantID}, BalanceMaxLiveSeconds: 5}
+	var shadowReads int
+	defer func(original func(func())) { runUsageRollupShadowRead = original }(runUsageRollupShadowRead)
+	runUsageRollupShadowRead = func(read func()) { shadowReads++; read() }
+
+	now := time.Now().UTC()
+	s.Require().NoError(s.svc.MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+		Event: events.Event{ID: "evt_shadow", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+			ExternalCustomerID: "ext_rt", Timestamp: now.Add(-time.Hour)},
+		MeterID: "mtr_rt", QtyTotal: decimal.NewFromInt(2),
+	}}))
+	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
+	usageRollup.hourly[now.Add(-time.Hour).Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(2)}}
+
+	s.Equal("2", s.lineItemUsage(sub.ID, types.UsageSourceWallet).String())
+	s.Equal(1, shadowReads, "a wallet read starts one shadow read")
+	s.Equal(0, s.lineItemUsageReads(types.UsageSourceInvoiceCreation, &shadowReads), "only wallet reads are compared")
+
+	meterUsage := NewMeterUsageService(s.svc.ServiceParams).(*meterUsageService)
+	want := map[string]decimal.Decimal{"mtr_rt/price_rt": decimal.NewFromInt(2)}
+	s.Equal(usageRollupShadowMatch, meterUsage.compareUsageRollup(ctx, sub, want, 0))
+
+	// A unit only Redis holds: ClickHouse still serves 2, the usage rollup reads 3.
+	usageRollup.hourly[now.Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
+	s.Equal("2", s.lineItemUsage(sub.ID, types.UsageSourceWallet).String(), "the shadow result is never served")
+	s.Equal(usageRollupShadowMismatch, meterUsage.compareUsageRollup(ctx, sub, want, 0))
+
+	p, err := s.GetStores().PriceRepo.Get(ctx, "price_rt")
+	s.Require().NoError(err)
+	p.UpdatedAt = time.Now().UTC()
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
+	s.clearEligibility(UsageRollupPlan, "plan_rt")
+	s.Equal(usageRollupReadIneligible, meterUsage.compareUsageRollup(ctx, sub, want, 0))
+}
+
+// A shadow tenant never reuses a balance cached within the max-live window: every read recomputes from ClickHouse.
+func (s *UsageRollupSuite) TestShadowTenantSkipsBalanceReuse() {
+	ctx := s.GetContext()
+	sub := s.seed(nil)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
+	s.svc.Config.UsageRollup = config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{types.DefaultTenantID}, BalanceMaxLiveSeconds: 5}
+	defer func(original func(func())) { runUsageRollupShadowRead = original }(runUsageRollupShadowRead)
+	runUsageRollupShadowRead = func(read func()) { read() }
+	w := &wallet.Wallet{ID: "wallet_shadow", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
+		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
+	wallets := NewWalletService(s.svc.ServiceParams)
+
+	first, err := wallets.GetWalletBalanceV2(ctx, w.ID)
+	s.Require().NoError(err)
+	s.Equal("1000", lo.FromPtr(first.RealTimeBalance).String())
+
+	s.Require().NoError(s.svc.MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+		Event: events.Event{ID: "evt_shadow_wallet", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+			ExternalCustomerID: "ext_rt", Timestamp: time.Now().UTC().Add(-time.Hour)},
+		MeterID: "mtr_rt", QtyTotal: decimal.NewFromInt(3),
+	}}))
+	second, err := wallets.GetWalletBalanceV2(ctx, w.ID)
+	s.Require().NoError(err)
+	s.Equal("994", lo.FromPtr(second.RealTimeBalance).String(), "1000 - 3 units at 2, read within the window")
+	s.False(second.IsCachedFallback)
+}
+
+// lineItemUsageReads reads the seeded line item's usage for source and returns how many shadow reads it started.
+func (s *UsageRollupSuite) lineItemUsageReads(source types.UsageSource, shadowReads *int) int {
+	before := *shadowReads
+	s.lineItemUsage("subs_rt", source)
+	return *shadowReads - before
+}
+
 // lineItemUsage returns the seeded line item's current-period usage as read for source.
 func (s *UsageRollupSuite) lineItemUsage(subscriptionID string, source types.UsageSource) decimal.Decimal {
 	ctx := s.GetContext()

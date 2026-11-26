@@ -1027,21 +1027,47 @@ type MeterUsageTrackingConfig struct {
 
 // UsageRollupConfig gates writing hourly per-customer meter quantities to Redis on ingest.
 type UsageRollupConfig struct {
-	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants.
+	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants and ShadowTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
+	// ShadowTenants keep the usage rollup current but wallet reads stay on ClickHouse; each read also
+	// computes the usage rollup result in the background and records whether the two match.
+	ShadowTenants []string `mapstructure:"shadow_tenants"`
 	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds; 0 = off.
 	BalanceMaxLiveSeconds int64 `mapstructure:"balance_max_live_seconds" default:"5"`
 }
 
-// IsEnabledForTenant reports whether ingestion writes usage rollup for tenantID.
+// IsEnabledForTenant reports whether the usage rollup is kept current for tenantID: ingestion, checkpoints and
+// eligibility. True for enabled and shadow tenants.
 func (c UsageRollupConfig) IsEnabledForTenant(tenantID string) bool {
+	return c.Enabled && slices.Contains(c.Tenants(), tenantID)
+}
+
+// IsEnabledForAnyTenant reports whether usage rollup is on for at least one enabled or shadow tenant.
+func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
+	return c.Enabled && len(c.Tenants()) > 0
+}
+
+// ServesTenant reports whether wallet reads of tenantID are served from the usage rollup. Shadow tenants are not.
+func (c UsageRollupConfig) ServesTenant(tenantID string) bool {
 	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
 }
 
-// IsEnabledForAnyTenant reports whether usage rollup is on for at least one tenant.
-func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
-	return c.Enabled && len(c.EnabledTenants) > 0
+// IsShadowTenant reports whether tenantID only compares usage rollup reads against ClickHouse. A tenant listed in
+// both lists is served.
+func (c UsageRollupConfig) IsShadowTenant(tenantID string) bool {
+	return c.Enabled && !c.ServesTenant(tenantID) && slices.Contains(c.ShadowTenants, tenantID)
+}
+
+// Tenants is every tenant whose usage rollup is kept current: enabled and shadow, without duplicates.
+func (c UsageRollupConfig) Tenants() []string {
+	tenants := slices.Clone(c.EnabledTenants)
+	for _, tenantID := range c.ShadowTenants {
+		if !slices.Contains(tenants, tenantID) {
+			tenants = append(tenants, tenantID)
+		}
+	}
+	return tenants
 }
 
 // ValidateUsageRollup rejects an enabled usage rollup without Redis event dedup on both meter

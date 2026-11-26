@@ -76,6 +76,15 @@ const (
 	usageRollupReadError      = "error"
 )
 
+// Outcomes of a shadow tenant's background usage rollup read, recorded on usage_rollup.shadow_reads alongside
+// usageRollupReadIneligible and usageRollupReadError.
+const (
+	usageRollupShadowMatch    = "match"
+	usageRollupShadowMismatch = "mismatch"
+	// usageRollupShadowTimeout bounds a background read so a slow Redis or ClickHouse can't pile them up.
+	usageRollupShadowTimeout = 5 * time.Second
+)
+
 // customerAndAddons is the subscription's external customer ID and the addons active in its current period,
 // cached per subscription and period. Exported fields: it is stored as JSON.
 type customerAndAddons struct {

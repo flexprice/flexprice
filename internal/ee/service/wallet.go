@@ -3332,7 +3332,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	// or otherwise) fall back to the last cached balance if available.
 
 	// Usage rollup tenants reuse a balance cached within max-live; 0 turns reuse off.
-	if usage := s.Config.UsageRollup; usage.BalanceMaxLiveSeconds > 0 && usage.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if usage := s.Config.UsageRollup; usage.BalanceMaxLiveSeconds > 0 && usage.ServesTenant(types.GetTenantID(ctx)) {
 		if fresh := s.getWalletRealtimeBalanceFromCache(ctx, walletID, &usage.BalanceMaxLiveSeconds); fresh != nil {
 			return s.buildResponseFromCachedBalance(w, *fresh), nil
 		}
