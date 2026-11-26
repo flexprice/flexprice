@@ -30054,55 +30054,18 @@ const docTemplate = `{
                 }
             }
         },
-        "SavedBankAccountDetails": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string"
-                },
-                "auth_type": {
-                    "type": "string"
-                },
-                "bank": {
-                    "type": "string"
-                },
-                "ifsc": {
-                    "type": "string"
-                },
-                "last4": {
-                    "type": "string"
-                }
-            }
-        },
-        "SavedCardDetails": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "exp_month": {
-                    "type": "integer"
-                },
-                "exp_year": {
-                    "type": "integer"
-                },
-                "last4": {
-                    "type": "string"
-                }
-            }
-        },
         "SavedPaymentMethod": {
             "type": "object",
             "properties": {
                 "bank_account": {
-                    "$ref": "#/definitions/SavedBankAccountDetails"
+                    "$ref": "#/definitions/types.BankDetails"
                 },
                 "can_auto_charge": {
                     "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate.",
                     "type": "boolean"
                 },
                 "card": {
-                    "$ref": "#/definitions/SavedCardDetails"
+                    "$ref": "#/definitions/types.CardDetails"
                 },
                 "id": {
                     "type": "string"
@@ -30127,7 +30090,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentMethodType"
                 },
                 "upi": {
-                    "$ref": "#/definitions/SavedUPIDetails"
+                    "$ref": "#/definitions/types.UPIDetails"
                 }
             }
         },
@@ -30153,14 +30116,6 @@ const docTemplate = `{
                 },
                 "status": {
                     "$ref": "#/definitions/types.RecurringPaymentStatus"
-                }
-            }
-        },
-        "SavedUPIDetails": {
-            "type": "object",
-            "properties": {
-                "vpa": {
-                    "type": "string"
                 }
             }
         },
@@ -42291,7 +42246,19 @@ const docTemplate = `{
         "types.BankDetails": {
             "type": "object",
             "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "auth_type": {
+                    "type": "string"
+                },
                 "bank": {
+                    "type": "string"
+                },
+                "ifsc": {
+                    "type": "string"
+                },
+                "last4": {
                     "type": "string"
                 }
             }
@@ -42307,6 +42274,9 @@ const docTemplate = `{
                 },
                 "exp_year": {
                     "type": "integer"
+                },
+                "fingerprint": {
+                    "type": "string"
                 },
                 "funding": {
                     "description": "credit, debit or prepaid",
@@ -42543,6 +42513,14 @@ const docTemplate = `{
                 "ReminderToneFirm",
                 "ReminderToneFinal"
             ]
+        },
+        "types.UPIDetails": {
+            "type": "object",
+            "properties": {
+                "vpa": {
+                    "type": "string"
+                }
+            }
         },
         "types.WalletDetails": {
             "type": "object",
@@ -43259,10 +43237,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "bank_account": {
-                    "$ref": "#/definitions/webhookDto.MandateBankAccount"
+                    "$ref": "#/definitions/types.BankDetails"
                 },
                 "card": {
-                    "$ref": "#/definitions/webhookDto.MandateCard"
+                    "$ref": "#/definitions/types.CardDetails"
                 },
                 "currency": {
                     "type": "string"
@@ -43298,52 +43276,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentMethodType"
                 },
                 "upi": {
-                    "$ref": "#/definitions/webhookDto.MandateUPI"
-                }
-            }
-        },
-        "webhookDto.MandateBankAccount": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "type": "string"
-                },
-                "auth_type": {
-                    "type": "string"
-                },
-                "bank": {
-                    "type": "string"
-                },
-                "ifsc": {
-                    "type": "string"
-                },
-                "last4": {
-                    "type": "string"
-                }
-            }
-        },
-        "webhookDto.MandateCard": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string"
-                },
-                "exp_month": {
-                    "type": "integer"
-                },
-                "exp_year": {
-                    "type": "integer"
-                },
-                "last4": {
-                    "type": "string"
-                }
-            }
-        },
-        "webhookDto.MandateUPI": {
-            "type": "object",
-            "properties": {
-                "vpa": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.UPIDetails"
                 }
             }
         },

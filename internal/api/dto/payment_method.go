@@ -390,7 +390,7 @@ type SavedPaymentMethod struct {
 	Provider types.PaymentGatewayType  `json:"provider"`
 	Type     types.PaymentMethodType   `json:"type"`
 	Status   types.PaymentMethodStatus `json:"status"`
-	Card     *SavedCardDetails         `json:"card,omitempty"`
+	Card     *types.CardDetails        `json:"card,omitempty"`
 	// Which method to use when several are saved at this provider.
 	// Scoped to the provider: two providers means two defaults.
 	IsDefault bool `json:"is_default"`
@@ -399,34 +399,15 @@ type SavedPaymentMethod struct {
 	// construction); false for a Razorpay token without a mandate.
 	CanAutoCharge       bool                          `json:"can_auto_charge"`
 	InstantlyChargeable bool                          `json:"instantly_chargeable"`
-	UPI                 *SavedUPIDetails              `json:"upi,omitempty"`
-	BankAccount         *SavedBankAccountDetails      `json:"bank_account,omitempty"`
+	UPI                 *types.UPIDetails             `json:"upi,omitempty"`
+	BankAccount         *types.BankDetails            `json:"bank_account,omitempty"`
 	Recurring           *SavedRecurringPaymentDetails `json:"recurring,omitempty"`
-}
-
-type SavedUPIDetails struct {
-	VPA string `json:"vpa,omitempty"`
-}
-
-type SavedBankAccountDetails struct {
-	Bank        string `json:"bank,omitempty"`
-	IFSC        string `json:"ifsc,omitempty"`
-	Last4       string `json:"last4,omitempty"`
-	AccountType string `json:"account_type,omitempty"`
-	AuthType    string `json:"auth_type,omitempty"`
 }
 
 type SavedRecurringPaymentDetails struct {
 	Status             types.RecurringPaymentStatus `json:"status,omitempty"`
 	AutoChargeableTill *time.Time                   `json:"auto_chargeable_till,omitempty"`
 	MaxAmount          *decimal.Decimal             `json:"max_amount,omitempty" swaggertype:"string"`
-}
-
-type SavedCardDetails struct {
-	Brand    string `json:"brand,omitempty"`
-	Last4    string `json:"last4,omitempty"`
-	ExpMonth int    `json:"exp_month,omitempty"`
-	ExpYear  int    `json:"exp_year,omitempty"`
 }
 
 type ProviderSavedPaymentMethods struct {

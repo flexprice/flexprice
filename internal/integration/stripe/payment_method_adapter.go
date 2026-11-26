@@ -73,9 +73,9 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 			continue
 		}
 
-		var card *interfaces.ProviderCardDetails
+		var card *types.CardDetails
 		if pm.Card != nil {
-			card = &interfaces.ProviderCardDetails{
+			card = &types.CardDetails{
 				Brand:    string(pm.Card.Brand),
 				Last4:    pm.Card.Last4,
 				ExpMonth: int(pm.Card.ExpMonth),

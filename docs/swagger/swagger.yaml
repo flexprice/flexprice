@@ -8420,34 +8420,10 @@ definitions:
       pob_id:
         type: string
     type: object
-  SavedBankAccountDetails:
-    properties:
-      account_type:
-        type: string
-      auth_type:
-        type: string
-      bank:
-        type: string
-      ifsc:
-        type: string
-      last4:
-        type: string
-    type: object
-  SavedCardDetails:
-    properties:
-      brand:
-        type: string
-      exp_month:
-        type: integer
-      exp_year:
-        type: integer
-      last4:
-        type: string
-    type: object
   SavedPaymentMethod:
     properties:
       bank_account:
-        $ref: '#/definitions/SavedBankAccountDetails'
+        $ref: '#/definitions/types.BankDetails'
       can_auto_charge:
         description: |-
           Capability, not permission: could this be charged with nobody present.
@@ -8455,7 +8431,7 @@ definitions:
           construction); false for a Razorpay token without a mandate.
         type: boolean
       card:
-        $ref: '#/definitions/SavedCardDetails'
+        $ref: '#/definitions/types.CardDetails'
       id:
         type: string
       instantly_chargeable:
@@ -8474,7 +8450,7 @@ definitions:
       type:
         $ref: '#/definitions/types.PaymentMethodType'
       upi:
-        $ref: '#/definitions/SavedUPIDetails'
+        $ref: '#/definitions/types.UPIDetails'
     type: object
   SavedPaymentMethodsResponse:
     properties:
@@ -8491,11 +8467,6 @@ definitions:
         type: string
       status:
         $ref: '#/definitions/types.RecurringPaymentStatus'
-    type: object
-  SavedUPIDetails:
-    properties:
-      vpa:
-        type: string
     type: object
   ScheduledTaskResponse:
     properties:
@@ -17460,7 +17431,15 @@ definitions:
     type: object
   types.BankDetails:
     properties:
+      account_type:
+        type: string
+      auth_type:
+        type: string
       bank:
+        type: string
+      ifsc:
+        type: string
+      last4:
         type: string
     type: object
   types.CardDetails:
@@ -17471,6 +17450,8 @@ definitions:
         type: integer
       exp_year:
         type: integer
+      fingerprint:
+        type: string
       funding:
         description: credit, debit or prepaid
         type: string
@@ -17642,6 +17623,11 @@ definitions:
     - ReminderToneFriendly
     - ReminderToneFirm
     - ReminderToneFinal
+  types.UPIDetails:
+    properties:
+      vpa:
+        type: string
+    type: object
   types.WalletDetails:
     properties:
       provider:
@@ -18111,9 +18097,9 @@ definitions:
   webhookDto.Mandate:
     properties:
       bank_account:
-        $ref: '#/definitions/webhookDto.MandateBankAccount'
+        $ref: '#/definitions/types.BankDetails'
       card:
-        $ref: '#/definitions/webhookDto.MandateCard'
+        $ref: '#/definitions/types.CardDetails'
       currency:
         type: string
       customer_id:
@@ -18137,36 +18123,7 @@ definitions:
       type:
         $ref: '#/definitions/types.PaymentMethodType'
       upi:
-        $ref: '#/definitions/webhookDto.MandateUPI'
-    type: object
-  webhookDto.MandateBankAccount:
-    properties:
-      account_type:
-        type: string
-      auth_type:
-        type: string
-      bank:
-        type: string
-      ifsc:
-        type: string
-      last4:
-        type: string
-    type: object
-  webhookDto.MandateCard:
-    properties:
-      brand:
-        type: string
-      exp_month:
-        type: integer
-      exp_year:
-        type: integer
-      last4:
-        type: string
-    type: object
-  webhookDto.MandateUPI:
-    properties:
-      vpa:
-        type: string
+        $ref: '#/definitions/types.UPIDetails'
     type: object
   webhookDto.MandateWebhookPayload:
     properties:

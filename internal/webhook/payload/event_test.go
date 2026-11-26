@@ -151,7 +151,7 @@ func TestMandatePayloadBuilder_BuildPayload(t *testing.T) {
 		FailureReason: lo.ToPtr("Rejected by bank"),
 		MaxAmount:     &maxAmount,
 		Currency:      "INR",
-		BankAccount:   &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "4361"},
+		BankAccount:   &types.BankDetails{Bank: "HDFC", IFSC: "HDFC0001", Last4: "4361"},
 	}}
 	data, err := json.Marshal(internal)
 	require.NoError(t, err)

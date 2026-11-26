@@ -156,9 +156,9 @@ type ProviderPaymentMethod struct {
 	ProviderMetadata map[string]string
 
 	// Card is set only for card methods; nil for UPI, ACH and the rest.
-	Card                *ProviderCardDetails
-	UPI                 *ProviderUPIDetails
-	BankAccount         *ProviderBankAccountDetails
+	Card                *types.CardDetails
+	UPI                 *types.UPIDetails
+	BankAccount         *types.BankDetails
 	Recurring           *ProviderRecurringPaymentDetails
 	InstantlyChargeable bool
 	// IsDefault is the gateway's own default/primary flag, which is what decides
@@ -172,29 +172,6 @@ type ProviderPaymentMethod struct {
 	// it in dto.SavedPaymentMethod. It exists so a split vault (cards spread over
 	// several gateway accounts) is diagnosable.
 	GatewayAccountID string
-}
-
-// ProviderCardDetails is the displayable part of a vaulted card. Field names
-// follow Stripe's card object; Chargebee says expiry_month/expiry_year and its
-// adapter normalises.
-type ProviderCardDetails struct {
-	Brand    string
-	Last4    string
-	ExpMonth int
-	ExpYear  int
-}
-
-type ProviderUPIDetails struct {
-	VPA string
-}
-
-// ProviderBankAccountDetails is the displayable part of a bank-account mandate.
-type ProviderBankAccountDetails struct {
-	Bank        string
-	IFSC        string
-	Last4       string
-	AccountType string
-	AuthType    string
 }
 
 type ProviderRecurringPaymentDetails struct {

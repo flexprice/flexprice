@@ -849,14 +849,6 @@ func toMandate(token *interfaces.ProviderPaymentMethod, customerID string) webho
 		mandate.ExpiresAt = token.Recurring.AutoChargeableTill
 		mandate.FailureReason = lo.EmptyableToPtr(token.Recurring.FailureReason)
 	}
-	if b := token.BankAccount; b != nil {
-		mandate.BankAccount = &webhookDto.MandateBankAccount{Bank: b.Bank, IFSC: b.IFSC, Last4: b.Last4, AccountType: b.AccountType, AuthType: b.AuthType}
-	}
-	if c := token.Card; c != nil {
-		mandate.Card = &webhookDto.MandateCard{Brand: c.Brand, Last4: c.Last4, ExpMonth: c.ExpMonth, ExpYear: c.ExpYear}
-	}
-	if u := token.UPI; u != nil {
-		mandate.UPI = &webhookDto.MandateUPI{VPA: u.VPA}
-	}
+	mandate.BankAccount, mandate.Card, mandate.UPI = token.BankAccount, token.Card, token.UPI
 	return mandate
 }

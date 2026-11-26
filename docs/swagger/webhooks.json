@@ -5156,7 +5156,19 @@
       "types.BankDetails": {
         "type": "object",
         "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "auth_type": {
+            "type": "string"
+          },
           "bank": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "last4": {
             "type": "string"
           }
         },
@@ -5296,6 +5308,9 @@
           },
           "exp_year": {
             "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
           },
           "funding": {
             "type": "string",
@@ -6394,6 +6409,15 @@
         ],
         "x-speakeasy-name-override": "TransactionType"
       },
+      "types.UPIDetails": {
+        "type": "object",
+        "properties": {
+          "vpa": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "UPIDetails"
+      },
       "types.WalletDetails": {
         "type": "object",
         "properties": {
@@ -7019,10 +7043,10 @@
         "type": "object",
         "properties": {
           "bank_account": {
-            "$ref": "#/components/schemas/webhookDto.MandateBankAccount"
+            "$ref": "#/components/schemas/types.BankDetails"
           },
           "card": {
-            "$ref": "#/components/schemas/webhookDto.MandateCard"
+            "$ref": "#/components/schemas/types.CardDetails"
           },
           "currency": {
             "type": "string"
@@ -7059,52 +7083,7 @@
             "$ref": "#/components/schemas/types.PaymentMethodType"
           },
           "upi": {
-            "$ref": "#/components/schemas/webhookDto.MandateUPI"
-          }
-        }
-      },
-      "webhookDto.MandateBankAccount": {
-        "type": "object",
-        "properties": {
-          "account_type": {
-            "type": "string"
-          },
-          "auth_type": {
-            "type": "string"
-          },
-          "bank": {
-            "type": "string"
-          },
-          "ifsc": {
-            "type": "string"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateCard": {
-        "type": "object",
-        "properties": {
-          "brand": {
-            "type": "string"
-          },
-          "exp_month": {
-            "type": "integer"
-          },
-          "exp_year": {
-            "type": "integer"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateUPI": {
-        "type": "object",
-        "properties": {
-          "vpa": {
-            "type": "string"
+            "$ref": "#/components/schemas/types.UPIDetails"
           }
         }
       },

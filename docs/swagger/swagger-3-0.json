@@ -31163,55 +31163,18 @@
           }
         }
       },
-      "SavedBankAccountDetails": {
-        "type": "object",
-        "properties": {
-          "account_type": {
-            "type": "string"
-          },
-          "auth_type": {
-            "type": "string"
-          },
-          "bank": {
-            "type": "string"
-          },
-          "ifsc": {
-            "type": "string"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "SavedCardDetails": {
-        "type": "object",
-        "properties": {
-          "brand": {
-            "type": "string"
-          },
-          "exp_month": {
-            "type": "integer"
-          },
-          "exp_year": {
-            "type": "integer"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
       "SavedPaymentMethod": {
         "type": "object",
         "properties": {
           "bank_account": {
-            "$ref": "#/components/schemas/SavedBankAccountDetails"
+            "$ref": "#/components/schemas/types.BankDetails"
           },
           "can_auto_charge": {
             "type": "boolean",
             "description": "Capability, not permission: could this be charged with nobody present.\nTrue for any active Chargebee or Stripe card (both vault off-session by\nconstruction); false for a Razorpay token without a mandate."
           },
           "card": {
-            "$ref": "#/components/schemas/SavedCardDetails"
+            "$ref": "#/components/schemas/types.CardDetails"
           },
           "id": {
             "type": "string"
@@ -31236,7 +31199,7 @@
             "$ref": "#/components/schemas/types.PaymentMethodType"
           },
           "upi": {
-            "$ref": "#/components/schemas/SavedUPIDetails"
+            "$ref": "#/components/schemas/types.UPIDetails"
           }
         }
       },
@@ -31262,14 +31225,6 @@
           },
           "status": {
             "$ref": "#/components/schemas/types.RecurringPaymentStatus"
-          }
-        }
-      },
-      "SavedUPIDetails": {
-        "type": "object",
-        "properties": {
-          "vpa": {
-            "type": "string"
           }
         }
       },
@@ -43278,7 +43233,19 @@
       "types.BankDetails": {
         "type": "object",
         "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "auth_type": {
+            "type": "string"
+          },
           "bank": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "last4": {
             "type": "string"
           }
         },
@@ -43295,6 +43262,9 @@
           },
           "exp_year": {
             "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
           },
           "funding": {
             "type": "string",
@@ -43544,6 +43514,15 @@
           "ReminderToneFinal"
         ],
         "x-speakeasy-name-override": "ReminderTone"
+      },
+      "types.UPIDetails": {
+        "type": "object",
+        "properties": {
+          "vpa": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "UPIDetails"
       },
       "types.WalletDetails": {
         "type": "object",
@@ -44282,10 +44261,10 @@
         "type": "object",
         "properties": {
           "bank_account": {
-            "$ref": "#/components/schemas/webhookDto.MandateBankAccount"
+            "$ref": "#/components/schemas/types.BankDetails"
           },
           "card": {
-            "$ref": "#/components/schemas/webhookDto.MandateCard"
+            "$ref": "#/components/schemas/types.CardDetails"
           },
           "currency": {
             "type": "string"
@@ -44322,52 +44301,7 @@
             "$ref": "#/components/schemas/types.PaymentMethodType"
           },
           "upi": {
-            "$ref": "#/components/schemas/webhookDto.MandateUPI"
-          }
-        }
-      },
-      "webhookDto.MandateBankAccount": {
-        "type": "object",
-        "properties": {
-          "account_type": {
-            "type": "string"
-          },
-          "auth_type": {
-            "type": "string"
-          },
-          "bank": {
-            "type": "string"
-          },
-          "ifsc": {
-            "type": "string"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateCard": {
-        "type": "object",
-        "properties": {
-          "brand": {
-            "type": "string"
-          },
-          "exp_month": {
-            "type": "integer"
-          },
-          "exp_year": {
-            "type": "integer"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateUPI": {
-        "type": "object",
-        "properties": {
-          "vpa": {
-            "type": "string"
+            "$ref": "#/components/schemas/types.UPIDetails"
           }
         }
       },
