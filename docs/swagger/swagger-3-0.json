@@ -22771,7 +22771,13 @@
             }
           },
           "range": {
-            "$ref": "#/components/schemas/CollectionsRange"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollectionsRange"
+              }
+            ],
+            "description": "Range is the date range the board was read with (open columns by due date, paid by paid date); null when none\nwas given, then open columns are unbounded and paid is the last 7 days.",
+            "nullable": true
           }
         }
       },
@@ -22797,7 +22803,12 @@
             "type": "integer"
           },
           "range": {
-            "$ref": "#/components/schemas/CollectionsRange"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollectionsRange"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -29154,7 +29165,13 @@
             "type": "integer"
           },
           "range": {
-            "$ref": "#/components/schemas/CollectionsRange"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CollectionsRange"
+              }
+            ],
+            "description": "Range is the due date range the list and summary were read with; null when none was given.",
+            "nullable": true
           },
           "summary": {
             "$ref": "#/components/schemas/ReminderSummary"
