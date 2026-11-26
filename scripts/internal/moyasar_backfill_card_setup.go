@@ -211,6 +211,7 @@ func MoyasarBackfillCardSetup() error {
 		nil, // TemporalService — not available in script context
 		nil, // Locker — not needed in script context
 		settingsRepo,
+		nil, // taxAppliedRepo — not needed in script context
 	)
 
 	params := service.ServiceParams{
