@@ -37,7 +37,7 @@ type CollectionsBoardRequest struct {
 }
 
 // CollectionsMaxRangeYears is the longest From to To span the board accepts.
-const CollectionsMaxRangeYears = 5 * 365 * 24 * time.Hour
+const CollectionsMaxRangeYears = 5
 
 // CollectionsRange is the date range a board response was read with; a missing side is unbounded.
 type CollectionsRange struct {
@@ -109,7 +109,7 @@ func (f *CollectionsDateFilter) validateRange() error {
 		return ierr.NewError("from is after to").WithHint("from must be on or before to.").Mark(ierr.ErrValidation)
 	}
 
-	if f.To.After(f.From.Add(CollectionsMaxRangeYears)) {
+	if f.To.After(f.From.AddDate(CollectionsMaxRangeYears, 0, 0)) {
 		return ierr.NewErrorf("range too long").
 			WithHintf("The range between from and to cannot be longer than %d years.", CollectionsMaxRangeYears).
 			Mark(ierr.ErrValidation)
