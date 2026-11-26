@@ -3042,7 +3042,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		"distinct_event_names", distinctEventNames)
 
 	meterUsageRequests := make([]*dto.GetUsageByMeterRequest, 0, len(lineItems))
-	requestLineItems := lineItems[:0:0]
 	for _, lineItem := range lineItems {
 		if lineItem.PriceType != types.PRICE_TYPE_USAGE {
 			continue
@@ -3091,6 +3090,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			PriceID:             lineItem.PriceID,
 			Price:               priceMap[lineItem.PriceID],
 			Meter:               meter.ToMeter(),
+			LineItem:            lineItem,
 			ExternalCustomerIDs: externalCustomerIDs,
 			StartTime:           lineItem.GetPeriodStart(usageStartTime),
 			EndTime:             lineItem.GetPeriodEnd(usageEndTime),
@@ -3101,7 +3101,6 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			usageRequest.Filters[filter.Key] = filter.Values
 		}
 		meterUsageRequests = append(meterUsageRequests, usageRequest)
-		requestLineItems = append(requestLineItems, lineItem)
 	}
 
 	s.Logger.Debug(ctx, "performance optimization results",
@@ -3132,7 +3131,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 	// as there can be multiple requests for the same meterID with different priceIDs
 	// Ideally this will not be the case and we will have a single request per meterID
 	// TODO: should add validation to ensure that same subscription does not have multiple line items with the same meterID
-	for i, request := range meterUsageRequests {
+	for _, request := range meterUsageRequests {
 		meterID := request.MeterID
 		priceID := request.PriceID
 		usage, ok := usageMap[priceID]
@@ -3165,7 +3164,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 		// Get meter info
 		meterInfo := meterMap[meterID]
-		priceObj, err = prorateUsageFlatFees(subscription, requestLineItems[i], priceObj, meterInfo.ToMeter(),
+		priceObj, err = prorateUsageFlatFees(subscription, request.LineItem, priceObj, meterInfo.ToMeter(),
 			types.Period{Start: request.StartTime, End: request.EndTime})
 		if err != nil {
 			return nil, err

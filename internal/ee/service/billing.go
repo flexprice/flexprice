@@ -251,15 +251,14 @@ func (s *billingService) CalculateFixedCharges(
 				return nil, err
 			}
 
-			var skip bool
-			amount, skip, err = prorateFixedCharge(sub, item, anchor,
-				priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, subPeriodStart)
+			fraction, skip, err := prorationFraction(sub, item, anchor, serviceablePeriod, subPeriodStart)
 			if err != nil {
 				return nil, err
 			}
 			if skip {
 				continue
 			}
+			amount = priceService.CalculateCost(ctx, price, item.Quantity).Mul(fraction)
 
 			line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, amount, linePeriodStart, linePeriodEnd)
 			if !include {
@@ -293,14 +292,14 @@ func (s *billingService) CalculateFixedCharges(
 				}
 
 				serviceablePeriod := types.Period{Start: effectiveStart, End: effectiveEnd}
-				wAmount, skip, err := prorateFixedCharge(sub, item, sub.BillingAnchor,
-					priceService.CalculateCost(ctx, price, item.Quantity), serviceablePeriod, w.Start)
+				fraction, skip, err := prorationFraction(sub, item, sub.BillingAnchor, serviceablePeriod, w.Start)
 				if err != nil {
 					return nil, err
 				}
 				if skip {
 					continue
 				}
+				wAmount := priceService.CalculateCost(ctx, price, item.Quantity).Mul(fraction)
 
 				// Shared: price unit + rounding. Emit one invoice line item per window.
 				line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, wAmount, effectiveStart, effectiveEnd)
@@ -587,15 +586,13 @@ func longerItemPeriod(sub *subscription.Subscription, item *subscription.Subscri
 	return types.Period{Start: types.LatestOf(full.Start, item.StartDate), End: full.End}, nil
 }
 
-// prorateFixedCharge prices a fixed charge for its serviceable period, measured on the item's grid
-// from anchor. Under none, an item starting after periodStart is free until its next period (skip).
-// e.g. $31 monthly, serviceable [Jan 20, Feb 1) on a Feb 1 grid: $12 (12/31); under none skipped if
-// periodStart is Jan 1, $31 if periodStart is Jan 20.
-func prorateFixedCharge(
+// prorationFraction is the share of the item's period that serviceablePeriod covers, measured on the item's grid
+// from anchor. Under none it is 1, and an item starting after periodStart is free until its next period (skip).
+// e.g. monthly, serviceable [Jan 20, Feb 1) on a Feb 1 grid: 12/31; under none skipped if periodStart is Jan 1, 1 if Jan 20.
+func prorationFraction(
 	sub *subscription.Subscription,
 	item *subscription.SubscriptionLineItem,
 	anchor time.Time,
-	amount decimal.Decimal,
 	serviceablePeriod types.Period,
 	periodStart time.Time,
 ) (decimal.Decimal, bool, error) {
@@ -607,22 +604,20 @@ func prorateFixedCharge(
 		return decimal.Zero, false, err
 	}
 
-	if !fraction.LessThan(decimal.NewFromInt(1)) {
-		return amount, false, nil
+	one := decimal.NewFromInt(1)
+	if !fraction.LessThan(one) {
+		return one, false, nil
 	}
 
 	if sub.ProrationBehavior == types.ProrationBehaviorNone {
-		return amount, serviceablePeriod.Start.Sub(periodStart).Round(time.Second) > 0, nil
+		return one, serviceablePeriod.Start.Sub(periodStart).Round(time.Second) > 0, nil
 	}
 
-	return amount.Mul(fraction), false, nil
+	return fraction, false, nil
 }
 
-// prorateUsageFlatFees prices a tiered usage price's flat fees the way prorateFixedCharge prices a fixed charge:
-// on the share of the item's billing period that window (the priced usage, bounded by the item's dates) covers.
-// Under none an item starting after the period start pays no flat fee until its next period.
-// p is returned unchanged for bucketed meters (each bucket carries its own flat fee) and when window spans periods.
-// e.g. $100 flat, window [Nov 16, Dec 1): $50; under none $0, or $100 if Nov 16 starts the subscription's period.
+// prorateUsageFlatFees scales a tiered usage price's flat fees by prorationFraction of window, the priced usage
+// bounded by the item's dates; a skipped window pays no flat fee. Bucketed meters keep their per-bucket fees.
 func prorateUsageFlatFees(
 	sub *subscription.Subscription,
 	item *subscription.SubscriptionLineItem,
@@ -631,36 +626,34 @@ func prorateUsageFlatFees(
 	window types.Period,
 ) (*price.Price, error) {
 	if p == nil || item == nil || p.Type != types.PRICE_TYPE_USAGE || p.BillingModel != types.BILLING_MODEL_TIERED ||
-		!p.HasTierFlatAmount() || price.IsBucketed(p, m) ||
-		item.BillingPeriod == types.BILLING_PERIOD_ONETIME ||
+		!p.HasTierFlatAmount() || price.IsBucketed(p, m) {
+		return p, nil
+	}
+	if item.BillingPeriod == types.BILLING_PERIOD_ONETIME ||
 		types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
 		return p, nil
 	}
 
-	grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
+	// The period start the invoice window would begin at: the subscription's, or the item's own window inside it.
+	period, err := periodAt(sub, window.Start)
 	if err != nil {
 		return nil, err
 	}
-	full := types.FullBillingPeriod(window.Start, grid)
-	if window.End.After(full.End) {
-		return p, nil
-	}
-
-	if sub.ProrationBehavior == types.ProrationBehaviorNone {
-		subPeriodStart, err := subPeriodStartAt(sub, window.Start)
+	periodStart := period.Start
+	if types.IsLongerCadence(sub.BillingPeriod, sub.BillingPeriodCount, item.BillingPeriod, item.BillingPeriodCount) {
+		grid, err := types.NewBillingPeriodGrid(sub.BillingAnchor, item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
 		if err != nil {
 			return nil, err
 		}
-		if item.StartDate.Sub(types.LatestOf(full.Start, subPeriodStart)).Round(time.Second) > 0 {
-			return p.WithTierFlatAmountsScaled(decimal.Zero), nil
-		}
-		return p, nil
+		periodStart = types.LatestOf(periodStart, types.FullBillingPeriod(window.Start, grid).Start)
 	}
 
-	fraction, _, err := proration.CalculateProrationCoefficient(sub, item.BillingPeriod, item.BillingPeriodCount,
-		window, types.StrategySecondBased)
+	fraction, skip, err := prorationFraction(sub, item, sub.BillingAnchor, window, periodStart)
 	if err != nil {
 		return nil, err
+	}
+	if skip {
+		fraction = decimal.Zero
 	}
 	if !fraction.LessThan(decimal.NewFromInt(1)) {
 		return p, nil

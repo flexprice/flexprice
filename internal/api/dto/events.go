@@ -172,6 +172,9 @@ type GetUsageByMeterRequest struct {
 	//   - April period: 2024-04-05 14:30:45 to 2024-05-05 14:30:45
 	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45Z"`
 	Timezone      string     `form:"timezone" json:"timezone,omitempty"`
+
+	// LineItem is the subscription line item the usage is priced for. Internal only.
+	LineItem *subscription.SubscriptionLineItem `form:"-" json:"-"`
 }
 
 type GetEventsRequest struct {

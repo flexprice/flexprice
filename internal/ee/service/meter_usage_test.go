@@ -5756,12 +5756,18 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_ProratesTierFlatFee
 	slab := tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_MONTHLY)
 	bucketed := tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_MONTHLY)
 	bucketed.BucketSize = types.WindowSizeHour
+	// Calendar every 2 days from Monday noon: anchor Tue 00:00, periods [Mon 12:00, Wed), [Wed, Fri) drift off the anchor grid.
+	everyTwoDays := tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_DAILY)
+	everyTwoDays.BillingPeriodCount = 2
+	mon12, tue, tue12, wed, fri := time.Date(2026, 1, 12, 12, 0, 0, 0, time.UTC), time.Date(2026, 1, 13, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 13, 12, 0, 0, 0, time.UTC), time.Date(2026, 1, 14, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 16, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name       string
 		price      *price.Price
 		behavior   types.ProrationBehavior
 		subStart   time.Time // zero = Jan 1
+		anchor     time.Time // with a non-monthly price: the sub takes the price's cadence and this anchor
 		start, end time.Time // line item dates; zero end = open
 		window     types.Period
 		usage      int64
@@ -5778,6 +5784,8 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_ProratesTierFlatFee
 		{name: "none: item from the period start keeps the whole flat fee when it ends mid-period", price: slab, behavior: types.ProrationBehaviorNone, start: jan1, end: jan16, window: types.Period{Start: jan1, End: jan16}, usage: 500, want: "105"},
 		{name: "none: item starting mid-period pays no flat fee until its next period", price: slab, behavior: types.ProrationBehaviorNone, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "5"},
 		{name: "none: first calendar period starting mid-month keeps the whole flat fee", price: slab, behavior: types.ProrationBehaviorNone, subStart: jan16, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "105"},
+		{name: "drifted multi-day period cancelled mid-period", price: everyTwoDays, subStart: mon12, anchor: tue, start: mon12, window: types.Period{Start: mon12, End: tue12}, usage: 500, want: "55"}, // 5 + 100×24h/48h
+		{name: "none: drifted multi-day period starting with the item keeps the whole flat fee", price: everyTwoDays, behavior: types.ProrationBehaviorNone, subStart: mon12, anchor: tue, start: wed, window: types.Period{Start: wed, End: fri}, usage: 500, want: "105"},
 		{name: "window spanning periods is not prorated", price: slab, start: jan16, window: types.Period{Start: jan16, End: feb20}, usage: 500, want: "105"},
 		{name: "bucketed meter keeps per-bucket flat fees", price: bucketed, start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, bucketed: true, want: "105"},
 		{name: "longer-cadence item is not prorated", price: tieredPrice(types.BILLING_TIER_SLAB, types.BILLING_PERIOD_ANNUAL), start: jan16, window: types.Period{Start: jan16, End: feb1}, usage: 500, want: "105"},
@@ -5791,11 +5799,14 @@ func (s *MeterUsageServiceSuite) TestConvertToBillingCharges_ProratesTierFlatFee
 			if !tt.subStart.IsZero() {
 				sub.StartDate = tt.subStart
 			}
+			if !tt.anchor.IsZero() {
+				sub.BillingAnchor, sub.BillingPeriod, sub.BillingPeriodCount = tt.anchor, tt.price.BillingPeriod, tt.price.BillingPeriodCount
+			}
 			usage := decimal.NewFromInt(tt.usage)
 			lu := &LineItemMeterUsage{
 				LineItem: &subscription.SubscriptionLineItem{
 					ID: "li_tiered", PriceID: tt.price.ID, PriceType: types.PRICE_TYPE_USAGE, MeterID: s.meterAPI.ID,
-					BillingPeriod: tt.price.BillingPeriod, BillingPeriodCount: 1, StartDate: tt.start, EndDate: tt.end,
+					BillingPeriod: tt.price.BillingPeriod, BillingPeriodCount: tt.price.BillingPeriodCount, StartDate: tt.start, EndDate: tt.end,
 				},
 				MeterID: s.meterAPI.ID, Meter: s.meterAPI, Price: tt.price,
 				PeriodStart: tt.window.Start, PeriodEnd: tt.window.End, Usage: usage,

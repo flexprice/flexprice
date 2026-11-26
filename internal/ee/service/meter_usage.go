@@ -2776,6 +2776,14 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		if !hasPricing {
 			continue
 		}
+		if line, sub := data.SubscriptionLineItems[item.SubLineItemID], data.SubscriptionsMap[item.SubscriptionID]; line != nil && sub != nil {
+			var err error
+			p, err = prorateUsageFlatFees(sub, line, p, m,
+				types.Period{Start: line.GetPeriodStart(data.Params.StartTime), End: line.GetPeriodEnd(data.Params.EndTime)})
+			if err != nil {
+				return err
+			}
+		}
 
 		if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
 			s.calculateBucketedCost(ctx, priceService, item, p, m, data, skipCommitment)
@@ -3204,8 +3212,12 @@ func (s *meterUsageService) collectLineItemCharges(
 	chargesByLine := make(map[string]*dto.SubscriptionUsageByMetersResponse, len(groupsByLine))
 	var linesToFetch []*subscription.SubscriptionLineItem
 	for lineID, groups := range groupsByLine {
-		linePrice := groups[0].Price
 		lineMeter := groups[0].Meter
+		linePrice, err := prorateUsageFlatFees(usage.Subscription, groups[0].LineItem, groups[0].Price, lineMeter,
+			types.Period{Start: groups[0].PeriodStart, End: groups[0].PeriodEnd})
+		if err != nil {
+			return nil, err
+		}
 		charge := &dto.SubscriptionUsageByMetersResponse{
 			SubscriptionLineItemID: lineID,
 			MeterID:                lineMeter.ID,
@@ -3302,7 +3314,11 @@ func (s *meterUsageService) fetchLineItemCharges(
 			if meterUsage == nil {
 				meterUsage = &events.MeterUsageAggregationResult{}
 			}
-			linePrice := usage.PriceMap[item.PriceID]
+			linePrice, err := prorateUsageFlatFees(usage.Subscription, item, usage.PriceMap[item.PriceID], usage.MeterMap[item.MeterID],
+				types.Period{Start: batchKey.Start, End: batchKey.End})
+			if err != nil {
+				return nil, err
+			}
 			charge := &dto.SubscriptionUsageByMetersResponse{
 				SubscriptionLineItemID: item.ID,
 				MeterID:                item.MeterID,
