@@ -167,3 +167,15 @@ func ValidateCustomerID(id string) error {
 func ValidateExternalCustomerID(id string) error {
 	return validateID(id, "external customer id")
 }
+
+// EmailType names a kind of email a customer's contact person can be responsible for.
+type EmailType string
+
+const (
+	EmailTypeInvoice                EmailType = "invoice"
+	EmailTypeInvoicePaymentReminder EmailType = "invoice_payment_reminder"
+)
+
+func (t EmailType) Validate() error {
+	return validateEnum("email_types", t, []EmailType{EmailTypeInvoice, EmailTypeInvoicePaymentReminder})
+}

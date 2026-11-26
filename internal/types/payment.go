@@ -478,3 +478,69 @@ const (
 	InvoicePaymentFailureReasonProviderError            InvoicePaymentFailureReason = "provider_error"
 	InvoicePaymentFailureReasonDeclined                 InvoicePaymentFailureReason = "declined"
 )
+
+// PaymentAttemptMethod is how the customer paid on one gateway attempt.
+type PaymentAttemptMethod string
+
+const (
+	PaymentAttemptMethodCard         PaymentAttemptMethod = "CARD"
+	PaymentAttemptMethodUPI          PaymentAttemptMethod = "UPI"
+	PaymentAttemptMethodNetBanking   PaymentAttemptMethod = "NETBANKING"
+	PaymentAttemptMethodWallet       PaymentAttemptMethod = "WALLET"
+	PaymentAttemptMethodEMI          PaymentAttemptMethod = "EMI"
+	PaymentAttemptMethodPayLater     PaymentAttemptMethod = "PAYLATER"
+	PaymentAttemptMethodBankTransfer PaymentAttemptMethod = "BANK_TRANSFER"
+	PaymentAttemptMethodOther        PaymentAttemptMethod = "OTHER"
+)
+
+// CardDetails is the displayable part of a card, shared by attempts, saved methods and mandates.
+type CardDetails struct {
+	Brand       string `json:"brand,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	Issuer      string `json:"issuer,omitempty"`
+	Funding     string `json:"funding,omitempty"` // credit, debit or prepaid
+	ExpMonth    int    `json:"exp_month,omitempty"`
+	ExpYear     int    `json:"exp_year,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// UPIDetails is the displayable part of a UPI handle.
+type UPIDetails struct {
+	VPA string `json:"vpa,omitempty"`
+}
+
+// BankDetails is the displayable part of a bank account or netbanking bank.
+type BankDetails struct {
+	Bank        string `json:"bank,omitempty"`
+	IFSC        string `json:"ifsc,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	AccountType string `json:"account_type,omitempty"`
+	AuthType    string `json:"auth_type,omitempty"`
+}
+
+// WalletDetails is the wallet used on an attempt.
+type WalletDetails struct {
+	Provider string `json:"provider,omitempty"`
+}
+
+// InstrumentDetails is the instrument used on one attempt, in a gateway-neutral shape.
+type InstrumentDetails struct {
+	Type   PaymentAttemptMethod `json:"type"`
+	Card   *CardDetails         `json:"card,omitempty"`
+	Bank   *BankDetails         `json:"bank,omitempty"`
+	Wallet *WalletDetails       `json:"wallet,omitempty"`
+}
+
+// PaymentAttemptError is the gateway's reason for a failed attempt.
+type PaymentAttemptError struct {
+	Code   string `json:"code,omitempty"`
+	Source string `json:"source,omitempty"`
+	Step   string `json:"step,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// PaymentAttemptDetails is what the gateway reports about one attempt.
+type PaymentAttemptDetails struct {
+	PaymentMethod *InstrumentDetails   `json:"payment_method,omitempty"`
+	Error         *PaymentAttemptError `json:"error,omitempty"`
+}

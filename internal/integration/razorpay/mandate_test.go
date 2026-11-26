@@ -364,7 +364,7 @@ func TestNormalizeRazorpayToken(t *testing.T) {
 			wantRecurring: types.RecurringPaymentStatusActive,
 			check: func(t *testing.T, pm *interfaces.ProviderPaymentMethod) {
 				assert.Equal(t, types.PaymentMethodTypeENACH, pm.Method)
-				assert.Equal(t, &interfaces.ProviderBankAccountDetails{IFSC: "HDFC0000001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, pm.BankAccount)
+				assert.Equal(t, &types.BankDetails{IFSC: "HDFC0000001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, pm.BankAccount)
 			},
 		},
 		{

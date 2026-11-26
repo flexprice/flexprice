@@ -107,7 +107,7 @@ type reminderFixture struct {
 	customers *testutil.InMemoryCustomerStore
 	tenants   *testutil.InMemoryTenantStore
 	reminders *testutil.InMemoryInvoiceReminderStore
-	board     *fakeBoard
+	board     *testutil.InMemoryCollectionsStore
 	svc       ReminderService
 	logs      *testutil.InMemoryEmailLogStore
 	settings  *testutil.InMemorySettingsStore
@@ -118,10 +118,11 @@ type reminderFixture struct {
 
 func newReminderFixture(t *testing.T, ctx context.Context) *reminderFixture {
 	t.Helper()
-	invoices := testutil.NewInMemoryInvoiceStore()
+	invoices, customers := testutil.NewInMemoryInvoiceStore(), testutil.NewInMemoryCustomerStore()
+	reminders := testutil.NewInMemoryInvoiceReminderStore(invoices)
 	f := &reminderFixture{
-		invoices: invoices, customers: testutil.NewInMemoryCustomerStore(), tenants: testutil.NewInMemoryTenantStore(),
-		reminders: testutil.NewInMemoryInvoiceReminderStore(invoices), board: &fakeBoard{},
+		invoices: invoices, customers: customers, tenants: testutil.NewInMemoryTenantStore(),
+		reminders: reminders, board: testutil.NewInMemoryCollectionsStore(invoices, reminders, customers),
 		logs: testutil.NewInMemoryEmailLogStore(), settings: testutil.NewInMemorySettingsStore(), sent: &sentEmails{},
 	}
 	require.NoError(t, f.tenants.Create(ctx, &tenant.Tenant{ID: types.GetTenantID(ctx), Name: "Flex"}))
@@ -769,35 +770,38 @@ func TestReminder_ListUsesTheCollectionsRepositoryAndDoesNotWrite(t *testing.T) 
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
 	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.example")
-	due := clock.Now().Add(-3 * day)
-	listed := collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: "a1"}).WithInvoice("INV-1", "cust_1", "usd").
-		WithAmounts(decimal.NewFromInt(100), decimal.NewFromInt(100)).WithDates(&due, nil).Build()
-	f.board.rows = []collections.InvoiceWithReminder{*listed}
-	f.board.hasMore = true
-	f.board.summary = *collections.NewReminderSummaryBuilder(nil).
-		WithTotals([]collections.CurrencyTotal{{Currency: "usd", Amount: decimal.NewFromInt(100)}}).
-		WithCounts(4, 2).
-		WithStatuses(map[types.ReminderStatus]int{types.ReminderStatusPending: 3, types.ReminderStatusApproved: 1}).
-		Build()
-
-	resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{Status: "pending", Q: " acme ", Currency: "USD", CustomerID: "cust_1", Limit: 10, Page: 3})
+	f.customer(t, ctx, "cust_2", "Beta", "ap@beta.example")
+	for i := 0; i < 21; i++ {
+		f.overdue(t, ctx, fmt.Sprintf("a%02d", i), "cust_1", 100, 3)
+	}
+	f.overdue(t, ctx, "b1", "cust_2", 100, 3)
+	f.invoice(t, ctx, "e1", func(i *invoice.Invoice) {
+		i.Currency, i.DueDate = "eur", lo.ToPtr(types.UTCDay(clock.Now()).Add(-3*day))
+	})
+	f.overdue(t, ctx, "c1", "cust_1", 100, 3)
+	_, err := f.svc.UpdateReminder(ctx, "c1", setStatus(types.ReminderStatusApproved, ""))
 	require.NoError(t, err)
-	require.Equal(t, 20, f.board.offset)
-	require.Equal(t, 10, f.board.limit)
-	require.Equal(t, []types.ReminderStatus{types.ReminderStatusPending}, f.board.filter.Statuses)
-	require.Equal(t, "cust_1", f.board.filter.CustomerID)
-	require.Equal(t, "acme", f.board.query.Text)
-	require.Equal(t, "usd", f.board.query.Currency)
-	require.True(t, resp.HasMore)
+	writes := f.reminders.Writes()
+
+	req := dto.ListRemindersRequest{Status: "pending", Q: " acme ", Currency: "USD", CustomerID: "cust_1", Limit: 10}
+	second, err := f.svc.List(ctx, &req)
+	require.NoError(t, err)
+	require.Len(t, second.Drafts, 10)
+	require.True(t, second.HasMore)
+	req.Page = 3
+	resp, err := f.svc.List(ctx, &req)
+	require.NoError(t, err)
+	require.False(t, resp.HasMore)
 	require.Equal(t, 3, resp.Page)
-	require.Len(t, resp.Drafts, 1)
+	require.Len(t, resp.Drafts, 1, "rows 21 and on: the 21 pending USD invoices of Acme, by id on equal balances")
+	require.Equal(t, "a20", resp.Drafts[0].ID)
 	require.Equal(t, "ap@acme.example", resp.Drafts[0].CustomerEmail)
 	require.Equal(t, 3, resp.Drafts[0].DaysOverdue)
 	require.Equal(t, dto.ReminderSummary{
-		OverdueTotals: []dto.CollectionsCurrencyTotal{{Currency: "usd", Amount: decimal.NewFromInt(100)}},
-		InvoiceCount:  4, CustomerCount: 2, ToReview: 3, Approved: 1,
-	}, resp.Summary)
-	require.Zero(t, f.reminders.Writes())
+		OverdueTotals: []dto.CollectionsCurrencyTotal{{Currency: "usd", Amount: decimal.NewFromInt(2200)}},
+		InvoiceCount:  22, CustomerCount: 1, ToReview: 21, Approved: 1,
+	}, resp.Summary, "the summary follows q and currency, not status or customer")
+	require.Equal(t, writes, f.reminders.Writes(), "listing writes nothing")
 
 	for name, req := range map[string]dto.ListRemindersRequest{
 		"limit above the maximum": {Limit: 101}, "negative page": {Page: -1}, "too deep": {Page: 51, Limit: 100},
@@ -813,36 +817,33 @@ func TestReminder_ListUsesTheCollectionsRepositoryAndDoesNotWrite(t *testing.T) 
 	require.NoError(t, err, "the deepest allowed page")
 	defaults, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
 	require.NoError(t, err)
-	require.Equal(t, 15, f.board.limit, "the list defaults to 15")
+	require.Len(t, defaults.Drafts, 15, "the list defaults to 15")
 	require.Equal(t, 1, defaults.Page)
+
 	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
 	pinned, err := f.svc.List(ctx, &dto.ListRemindersRequest{AsOf: &asOf})
 	require.NoError(t, err)
 	require.True(t, pinned.AsOf.Equal(asOf))
-	require.True(t, f.board.query.AsOf.Equal(asOf))
+	require.Zero(t, pinned.Summary.Approved, "an approval made after as_of is left out")
+	require.NotContains(t, lo.Map(pinned.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }), "c1")
 }
 
 func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T) {
 	ctx := reminderCtxFor("tenant_a", "env_a")
 	f := newReminderFixture(t, ctx)
 	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
-	due := clock.Now().Add(-3 * day)
-	row := func(id string, rem *collections.InvoiceReminder) collections.InvoiceWithReminder {
-		return *collections.NewInvoiceWithReminderBuilder(&collections.InvoiceWithReminder{InvoiceID: id}).WithInvoice(id, "cust_1", "usd").
-			WithAmounts(decimal.Zero, decimal.NewFromInt(10)).WithDates(&due, nil).WithReminder(rem).Build()
+	for _, id := range []string{"untouched_held", "edited_held", "approved"} {
+		f.overdue(t, ctx, id, "cust_1", 10, 3)
 	}
-	stored := func(status types.ReminderStatus, mailBody string) *collections.InvoiceReminder {
-		return collections.NewInvoiceReminderBuilder(&collections.InvoiceReminder{ID: "irem_x"}).
-			WithStatus(status, "", nil).
-			WithOriginal(types.ReminderToneFriendly, "orig", "orig body").
-			WithText(types.ReminderToneFriendly, "orig", mailBody).
-			Build()
-	}
-	f.board.rows = []collections.InvoiceWithReminder{
-		row("untouched_held", stored(types.ReminderStatusHeld, "orig body")),
-		row("edited_held", stored(types.ReminderStatusHeld, "my words")),
-		row("approved", stored(types.ReminderStatusApproved, "orig body")),
-	}
+	_, err := f.svc.UpdateReminder(ctx, "untouched_held", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+	_, err = f.svc.UpdateReminder(ctx, "edited_held", &dto.UpdateReminderRequest{Body: lo.ToPtr("my words")})
+	require.NoError(t, err)
+	_, err = f.svc.UpdateReminder(ctx, "edited_held", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+	approved, err := f.svc.UpdateReminder(ctx, "approved", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+
 	resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
 	require.NoError(t, err)
 	byID := lo.KeyBy(resp.Drafts, func(d dto.InvoiceReminderResponse) string { return d.ID })
@@ -850,8 +851,8 @@ func TestReminder_ListedRowsShowStoredMailOnlyWhenEditedOrApproved(t *testing.T)
 	require.False(t, byID["untouched_held"].Edited)
 	require.Equal(t, "my words", byID["edited_held"].Body)
 	require.True(t, byID["edited_held"].Edited)
-	require.Equal(t, "orig body", byID["edited_held"].OriginalBody)
-	require.Equal(t, "orig body", byID["approved"].Body, "an approved reminder shows exactly what was approved")
+	require.Contains(t, byID["edited_held"].OriginalBody, "Hi Acme")
+	require.Equal(t, approved.Body, byID["approved"].Body, "an approved reminder shows exactly what was approved")
 }
 
 func TestReminder_RowsOfManyInvoicesStayDistinct(t *testing.T) {
@@ -948,4 +949,104 @@ func TestReminder_EditedSubjectStaysOnOneLine(t *testing.T) {
 	got, err := f.svc.UpdateReminder(ctx, "a1", &dto.UpdateReminderRequest{Subject: lo.ToPtr("Pay now\r\nBcc: x@example.com")})
 	require.NoError(t, err)
 	require.Equal(t, "Pay now Bcc: x@example.com", got.Subject)
+}
+
+func TestReminder_ListHonorsTheBoardDateRange(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	today := types.UTCDay(clock.Now())
+	from, to := today.Add(-20*day+15*time.Hour), today.Add(-3*day+9*time.Hour)
+	asOf := time.Now().Add(-time.Hour).UTC().Truncate(time.Microsecond)
+	for id, due := range map[string]time.Time{
+		"before": today.Add(-20*day - time.Microsecond), "first": today.Add(-20 * day), "last": today.Add(-3*day + 23*time.Hour), "after": today.Add(-2 * day),
+	} {
+		f.invoice(t, ctx, id, func(i *invoice.Invoice) { i.DueDate = &due })
+		_, err := f.svc.UpdateReminder(ctx, id, setStatus(types.ReminderStatusHeld, "wait"))
+		require.NoError(t, err)
+	}
+	f.paidAt(t, ctx, "eur_paid", "EUR", 10, asOf.Add(-2*day))
+	f.paidAt(t, ctx, "gbp_paid", "GBP", 10, asOf.Add(-30*day))
+	filter := dto.CollectionsDateFilter{From: &from, To: &to}
+
+	for page, want := range map[int][]string{1: {"first"}, 2: {"last"}, 3: {}} {
+		resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{Page: page, Limit: 1, AsOf: &asOf, Status: "held", CollectionsDateFilter: filter})
+		require.NoError(t, err)
+		require.Equal(t, want, lo.Map(resp.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }), "page %d keeps the range", page)
+		require.Equal(t, 2, resp.Summary.Held, "so does the summary, page %d", page)
+		require.Equal(t, 2, resp.Summary.InvoiceCount)
+		require.True(t, resp.AsOf.Equal(asOf), "as_of stays pinned")
+		require.Equal(t, &dto.CollectionsRange{From: lo.ToPtr(from.Format("2006-01-02")), To: lo.ToPtr(to.Format("2006-01-02"))}, resp.Range)
+		require.Equal(t, []string{"eur", "usd"}, resp.AvailableCurrencies, "open and recently paid invoices, whatever the range")
+	}
+
+	none, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
+	require.NoError(t, err)
+	require.Equal(t, 4, none.Summary.Held, "no range: every overdue invoice, as before")
+	require.Len(t, none.Drafts, 4)
+	require.Nil(t, none.Range)
+
+	for name, bad := range map[string]dto.CollectionsDateFilter{
+		"from after to": {From: &to, To: &from},
+		"over 5 years":  {From: lo.ToPtr(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)), To: &to},
+	} {
+		_, err := f.svc.List(ctx, &dto.ListRemindersRequest{CollectionsDateFilter: bad})
+		requireKind(t, err, ierr.ErrValidation)
+		_ = name
+	}
+}
+
+func TestReminder_StatusFilterListsThatStatusOnly(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.overdue(t, ctx, "pending", "cust_1", 30, 5)
+	f.overdue(t, ctx, "approved", "cust_1", 20, 5)
+	f.overdue(t, ctx, "held", "cust_1", 10, 5)
+	_, err := f.svc.UpdateReminder(ctx, "approved", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+	_, err = f.svc.UpdateReminder(ctx, "held", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+
+	for status, want := range map[string][]string{
+		"approved": {"approved"},
+		"held":     {"held"},
+		"":         {"pending", "approved", "held"},
+	} {
+		resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{Status: status})
+		require.NoError(t, err)
+		require.Equal(t, want, lo.Map(resp.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }), "status %q", status)
+	}
+}
+
+func TestReminder_SummaryFollowsCurrencyAndSearchButNotStatusOrCustomer(t *testing.T) {
+	ctx := reminderCtxFor("tenant_a", "env_a")
+	f := newReminderFixture(t, ctx)
+	f.customer(t, ctx, "cust_1", "Acme", "ap@acme.test")
+	f.customer(t, ctx, "cust_2", "Beta", "ap@beta.test")
+	eur := func(id, customerID string, amount int64) {
+		f.invoice(t, ctx, id, func(i *invoice.Invoice) {
+			i.CustomerID, i.Currency, i.DueDate = customerID, "eur", lo.ToPtr(types.UTCDay(clock.Now()).Add(-5*day))
+			i.AmountDue, i.AmountRemaining = decimal.NewFromInt(amount), decimal.NewFromInt(amount)
+		})
+	}
+	eur("held", "cust_1", 100)
+	eur("pending", "cust_1", 50)
+	eur("beta", "cust_2", 70)
+	f.overdue(t, ctx, "usd", "cust_1", 30, 5)
+	_, err := f.svc.UpdateReminder(ctx, "held", setStatus(types.ReminderStatusHeld, "wait"))
+	require.NoError(t, err)
+
+	resp, err := f.svc.List(ctx, &dto.ListRemindersRequest{Currency: " EUR ", Q: "acme", Status: "held", CustomerID: "cust_1"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"held"}, lo.Map(resp.Drafts, func(d dto.InvoiceReminderResponse, _ int) string { return d.ID }))
+	require.Equal(t, dto.ReminderSummary{
+		OverdueTotals: []dto.CollectionsCurrencyTotal{{Currency: "eur", Amount: decimal.NewFromInt(150)}},
+		InvoiceCount:  2, CustomerCount: 1, ToReview: 1, Held: 1,
+	}, resp.Summary, "currency is normalized like the board's, and the summary ignores status and customer")
+
+	all, err := f.svc.List(ctx, &dto.ListRemindersRequest{})
+	require.NoError(t, err)
+	require.Equal(t, 4, all.Summary.InvoiceCount)
+	require.Equal(t, 2, all.Summary.CustomerCount)
 }

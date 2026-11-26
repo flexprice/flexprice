@@ -22,7 +22,7 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 // ListReminders godoc
 // @Summary List reminder drafts
 // @ID listReminderDrafts
-// @Description Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent.
+// @Description Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). Approvals made after as_of are left out of the list and the summary. from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); The summary (counts per status, totals per currency) follows from, to, currency and q like the board, and ignores status and customer_id so the status tabs count every status; available_currencies lists the currencies of open invoices and of invoices paid in the last 7 days, regardless of filters.
 // @Tags Collections
 // @Produce json
 // @Security ApiKeyAuth
@@ -33,6 +33,8 @@ func NewReminderHandler(service service.ReminderService, log *logger.Logger) *Re
 // @Param currency query string false "Currency code"
 // @Param limit query int false "Page size (1-100, default 15)"
 // @Param page query int false "Page number, from 1 (default 1); page times limit may not exceed 5000"
+// @Param from query string false "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary"
+// @Param to query string false "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from"
 // @Param as_of query string false "as_of (RFC3339) of an earlier response; within the last 24 hours and not in the future"
 // @Success 200 {object} dto.ListRemindersResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
@@ -82,7 +84,7 @@ func (h *ReminderHandler) GetReminder(c *gin.Context) {
 // UpdateReminder godoc
 // @Summary Update reminder
 // @ID updateReminderDraft
-// @Description Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty) or the tenant has no reply-to email; where emails are off, approving only records the decision.
+// @Description Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty and no contact person lists invoice_payment_reminder in email_types) or the tenant has no reply-to email; where emails are off, approving only records the decision.
 // @Tags Collections
 // @Accept json
 // @Produce json

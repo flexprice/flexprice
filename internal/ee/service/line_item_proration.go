@@ -300,13 +300,19 @@ func (s *lineItemProrationService) Compute(ctx context.Context, req LineItemPror
 			if !w.End.After(req.EffectiveDate) {
 				continue
 			}
-			// Skip items ended before the cancel; stop at a period-end removal.
-			if entry.Action == types.ProrationActionCancellation && !item.EndDate.IsZero() {
-				if !item.EndDate.After(req.EffectiveDate) {
+			// Skip items not active during this window (not yet started or already ended before cancel);
+			// stop at a period-end removal.
+			if entry.Action == types.ProrationActionCancellation {
+				if !item.StartDate.IsZero() && !item.StartDate.Before(w.End) {
 					continue
 				}
-				if !item.EndDate.Before(sub.CurrentPeriodEnd) && item.EndDate.Before(w.End) {
-					w.End = item.EndDate
+				if !item.EndDate.IsZero() {
+					if !item.EndDate.After(req.EffectiveDate) {
+						continue
+					}
+					if !item.EndDate.Before(sub.CurrentPeriodEnd) && item.EndDate.Before(w.End) {
+						w.End = item.EndDate
+					}
 				}
 			}
 

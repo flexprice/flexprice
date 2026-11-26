@@ -253,7 +253,7 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 		return nil, nil
 	}
 
-	newEndDate := sub.CurrentPeriodEnd
+	var newEndDate time.Time
 	if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 		newEndDate = lineItem.EndDate
 	}
@@ -385,9 +385,9 @@ func validateEffectiveDateWithinCurrentPeriod(effectiveDate time.Time, sub *subs
 			Mark(ierr.ErrValidation)
 	}
 
-	if !effectiveDate.Before(sub.CurrentPeriodEnd) {
-		return ierr.NewError("effective_date must be before the current period end").
-			WithHint("Set effective_date to a time within the current billing period").
+	if effectiveDate.After(sub.CurrentPeriodEnd) {
+		return ierr.NewError("effective_date cannot be after the current period end").
+			WithHint("Set effective_date to a time within the current billing period or at the current period end").
 			WithReportableDetails(map[string]interface{}{
 				"effective_date":     effectiveDate,
 				"current_period_end": sub.CurrentPeriodEnd,
@@ -421,7 +421,7 @@ func changedLineItemPair(
 			PriceID:      created.PriceID,
 			Quantity:     created.Quantity,
 			StartDate:    &newStart,
-			EndDate:      &createdEndDate,
+			EndDate:      optionalTimePtr(createdEndDate),
 			ChangeAction: dto.ChangedLineItemActionCreated,
 		},
 	}

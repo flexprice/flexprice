@@ -65,12 +65,15 @@ func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.Webh
 }
 
 type PaymentAttempt struct {
-	ID               string         `json:"id"`
-	AttemptNumber    int            `json:"attempt_number"`
-	GatewayAttemptID *string        `json:"gateway_attempt_id,omitempty"`
-	ErrorMessage     *string        `json:"error_message,omitempty"`
-	Metadata         types.Metadata `json:"metadata,omitempty"`
-	CreatedAt        time.Time      `json:"created_at"`
+	ID               string                     `json:"id"`
+	PaymentStatus    types.PaymentStatus        `json:"payment_status"`
+	AttemptNumber    int                        `json:"attempt_number"`
+	GatewayAttemptID *string                    `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string                    `json:"error_message,omitempty"`
+	Metadata         types.Metadata             `json:"metadata,omitempty"`
+	PaymentMethod    *types.InstrumentDetails   `json:"payment_method,omitempty"`
+	Error            *types.PaymentAttemptError `json:"error,omitempty"`
+	CreatedAt        time.Time                  `json:"created_at"`
 }
 
 func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
@@ -79,10 +82,13 @@ func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
 	}
 	return &PaymentAttempt{
 		ID:               resp.ID,
+		PaymentStatus:    resp.PaymentStatus,
 		AttemptNumber:    resp.AttemptNumber,
 		GatewayAttemptID: resp.GatewayAttemptID,
 		ErrorMessage:     resp.ErrorMessage,
 		Metadata:         resp.Metadata,
+		PaymentMethod:    resp.PaymentMethod,
+		Error:            resp.Error,
 		CreatedAt:        resp.CreatedAt,
 	}
 }
@@ -111,28 +117,9 @@ type Mandate struct {
 	MaxAmount          *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
 	Currency           string                   `json:"currency"`
 	ExpiresAt          *time.Time               `json:"expires_at,omitempty"`
-	BankAccount        *MandateBankAccount      `json:"bank_account,omitempty"`
-	Card               *MandateCard             `json:"card,omitempty"`
-	UPI                *MandateUPI              `json:"upi,omitempty"`
-}
-
-type MandateCard struct {
-	Brand    string `json:"brand,omitempty"`
-	Last4    string `json:"last4,omitempty"`
-	ExpMonth int    `json:"exp_month,omitempty"`
-	ExpYear  int    `json:"exp_year,omitempty"`
-}
-
-type MandateUPI struct {
-	VPA string `json:"vpa,omitempty"`
-}
-
-type MandateBankAccount struct {
-	Bank        string `json:"bank,omitempty"`
-	IFSC        string `json:"ifsc,omitempty"`
-	Last4       string `json:"last4,omitempty"`
-	AccountType string `json:"account_type,omitempty"`
-	AuthType    string `json:"auth_type,omitempty"`
+	BankAccount        *types.BankDetails       `json:"bank_account,omitempty"`
+	Card               *types.CardDetails       `json:"card,omitempty"`
+	UPI                *types.UPIDetails        `json:"upi,omitempty"`
 }
 
 // MandateWebhookPayload is the outbound payload for every mandate.* event.

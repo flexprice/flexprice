@@ -2,6 +2,7 @@ package invoice
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
@@ -98,4 +99,34 @@ func TestInvoice_AppliedTax(t *testing.T) {
 	require.True(t, d("20").Equal(inv.AppliedTax(taxes, types.TaxBehaviorExclusive)))
 	require.True(t, d("12").Equal(inv.AppliedTax(taxes, types.TaxBehaviorInclusive)))
 	require.True(t, decimal.Zero.Equal(inv.AppliedTax(nil, types.TaxBehaviorExclusive)))
+}
+
+func TestIssueDateFor(t *testing.T) {
+	start := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		reason types.InvoiceBillingReason
+		want   *time.Time
+	}{
+		{types.InvoiceBillingReasonSubscriptionCycle, &end},
+		{types.InvoiceBillingReasonProration, &end},
+		{types.InvoiceBillingReasonAutoInvoiceThreshold, &end},
+		{types.InvoiceBillingReasonSubscriptionPaused, &end},
+		{types.InvoiceBillingReasonSubscriptionCreate, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialStart, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialEnd, &start},
+		{types.InvoiceBillingReasonSubscriptionResume, &start},
+		{types.InvoiceBillingReasonSubscriptionUpdate, &start},
+		{types.InvoiceBillingReasonManual, nil},
+		{types.InvoiceBillingReasonWalletAutoTopup, nil},
+		{types.InvoiceBillingReasonBillingTerms, nil},
+		{types.InvoiceBillingReasonCommitmentTermination, nil},
+		{"", nil},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.reason), func(t *testing.T) {
+			require.Equal(t, tt.want, IssueDateFor(tt.reason, &start, &end))
+		})
+	}
 }

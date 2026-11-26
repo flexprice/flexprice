@@ -2070,6 +2070,65 @@
         }
       }
     },
+    "payment.attempt.succeeded": {
+      "post": {
+        "tags": [
+          "Payment and refund"
+        ],
+        "summary": "payment.attempt.succeeded",
+        "description": "Fired when one charge attempt succeeds.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SvixId"
+          },
+          {
+            "$ref": "#/components/parameters/SvixTimestamp"
+          },
+          {
+            "$ref": "#/components/parameters/SvixSignature"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attempt": {
+                    "$ref": "#/components/schemas/webhookDto.PaymentAttempt"
+                  },
+                  "checkout_session": {
+                    "$ref": "#/components/schemas/webhookDto.CheckoutSession"
+                  },
+                  "event_type": {
+                    "type": "string",
+                    "enum": [
+                      "payment.attempt.succeeded"
+                    ]
+                  },
+                  "payment": {
+                    "$ref": "#/components/schemas/webhookDto.Payment"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Return any 2xx status to acknowledge receipt."
+          }
+        },
+        "x-mint": {
+          "metadata": {
+            "title": "Payment attempt succeeded",
+            "sidebarTitle": "payment.attempt.succeeded"
+          },
+          "href": "/api-reference/webhook-events/paymentattemptsucceeded"
+        }
+      }
+    },
     "payment.created": {
       "post": {
         "tags": [
@@ -5094,6 +5153,27 @@
         ],
         "x-speakeasy-name-override": "AlertType"
       },
+      "types.BankDetails": {
+        "type": "object",
+        "properties": {
+          "account_type": {
+            "type": "string"
+          },
+          "auth_type": {
+            "type": "string"
+          },
+          "bank": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BankDetails"
+      },
       "types.BillingCadence": {
         "type": "string",
         "enum": [
@@ -5216,6 +5296,34 @@
           }
         },
         "x-speakeasy-name-override": "Bucket"
+      },
+      "types.CardDetails": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "funding": {
+            "type": "string",
+            "description": "credit, debit or prepaid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CardDetails"
       },
       "types.CheckoutAction": {
         "type": "string",
@@ -5674,6 +5782,24 @@
         ],
         "x-speakeasy-name-override": "InstalmentStatus"
       },
+      "types.InstrumentDetails": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/types.BankDetails"
+          },
+          "card": {
+            "$ref": "#/components/schemas/types.CardDetails"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentAttemptMethod"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/types.WalletDetails"
+          }
+        },
+        "x-speakeasy-name-override": "InstrumentDetails"
+      },
       "types.InvoiceCadence": {
         "type": "string",
         "enum": [
@@ -5778,6 +5904,48 @@
           "PaymentActionTypePaymentLink"
         ],
         "x-speakeasy-name-override": "PaymentActionType"
+      },
+      "types.PaymentAttemptError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAttemptError"
+      },
+      "types.PaymentAttemptMethod": {
+        "type": "string",
+        "enum": [
+          "CARD",
+          "UPI",
+          "NETBANKING",
+          "WALLET",
+          "EMI",
+          "PAYLATER",
+          "BANK_TRANSFER",
+          "OTHER"
+        ],
+        "x-enum-varnames": [
+          "PaymentAttemptMethodCard",
+          "PaymentAttemptMethodUPI",
+          "PaymentAttemptMethodNetBanking",
+          "PaymentAttemptMethodWallet",
+          "PaymentAttemptMethodEMI",
+          "PaymentAttemptMethodPayLater",
+          "PaymentAttemptMethodBankTransfer",
+          "PaymentAttemptMethodOther"
+        ],
+        "x-speakeasy-name-override": "PaymentAttemptMethod"
       },
       "types.PaymentDestinationType": {
         "type": "string",
@@ -6240,6 +6408,24 @@
           "TransactionTypeDebit"
         ],
         "x-speakeasy-name-override": "TransactionType"
+      },
+      "types.UPIDetails": {
+        "type": "object",
+        "properties": {
+          "vpa": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "UPIDetails"
+      },
+      "types.WalletDetails": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "WalletDetails"
       },
       "types.WalletStatus": {
         "type": "string",
@@ -6857,10 +7043,10 @@
         "type": "object",
         "properties": {
           "bank_account": {
-            "$ref": "#/components/schemas/webhookDto.MandateBankAccount"
+            "$ref": "#/components/schemas/types.BankDetails"
           },
           "card": {
-            "$ref": "#/components/schemas/webhookDto.MandateCard"
+            "$ref": "#/components/schemas/types.CardDetails"
           },
           "currency": {
             "type": "string"
@@ -6897,52 +7083,7 @@
             "$ref": "#/components/schemas/types.PaymentMethodType"
           },
           "upi": {
-            "$ref": "#/components/schemas/webhookDto.MandateUPI"
-          }
-        }
-      },
-      "webhookDto.MandateBankAccount": {
-        "type": "object",
-        "properties": {
-          "account_type": {
-            "type": "string"
-          },
-          "auth_type": {
-            "type": "string"
-          },
-          "bank": {
-            "type": "string"
-          },
-          "ifsc": {
-            "type": "string"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateCard": {
-        "type": "object",
-        "properties": {
-          "brand": {
-            "type": "string"
-          },
-          "exp_month": {
-            "type": "integer"
-          },
-          "exp_year": {
-            "type": "integer"
-          },
-          "last4": {
-            "type": "string"
-          }
-        }
-      },
-      "webhookDto.MandateUPI": {
-        "type": "object",
-        "properties": {
-          "vpa": {
-            "type": "string"
+            "$ref": "#/components/schemas/types.UPIDetails"
           }
         }
       },
@@ -7030,6 +7171,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "error": {
+            "$ref": "#/components/schemas/types.PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -7041,6 +7185,12 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/types.InstrumentDetails"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           }
         }
       },

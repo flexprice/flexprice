@@ -307,8 +307,10 @@ func (s *PortalWalletSuite) TestTopUpUseSavedMethodValidation() {
 }
 
 type stubPaymentMethodProvider struct {
-	methods []interfaces.ProviderPaymentMethod
-	err     error
+	methods        []interfaces.ProviderPaymentMethod
+	err            error
+	attemptDetails *types.PaymentAttemptDetails
+	hangDetails    bool
 }
 
 func (p *stubPaymentMethodProvider) ListSavedMethods(_ context.Context, _ string) ([]interfaces.ProviderPaymentMethod, error) {
@@ -325,6 +327,14 @@ func (p *stubPaymentMethodProvider) SetDefaultSavedMethod(_ context.Context, _ s
 
 func (p *stubPaymentMethodProvider) CreateSetupLink(_ context.Context, _ interfaces.SetupLinkRequest) (*interfaces.SetupLinkResponse, error) {
 	return nil, nil
+}
+
+func (p *stubPaymentMethodProvider) GetAttemptDetails(ctx context.Context, _ string) (*types.PaymentAttemptDetails, error) {
+	if p.hangDetails {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return p.attemptDetails, nil
 }
 
 func (s *PortalWalletSuite) TestValidateSavedMethodForTopUp_ActiveSavedCard_Success() {

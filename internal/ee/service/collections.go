@@ -53,6 +53,7 @@ func boardQuery(asOf time.Time, req *dto.CollectionsBoardRequest) collections.Qu
 		AsOf:     asOf,
 		Text:     req.Q,
 		Currency: normalizedCurrency(req.Currency),
+		Range:    req.ToDomain(),
 	}
 }
 
@@ -101,6 +102,7 @@ func (s *collectionsService) GetBoard(ctx context.Context, req *dto.CollectionsB
 
 	resp := &dto.CollectionsBoardResponse{
 		AsOf:                query.AsOf,
+		Range:               req.DateRange(),
 		AvailableCurrencies: board.AvailableCurrencies,
 		Columns:             []dto.CollectionsBoardColumn{},
 	}
@@ -171,6 +173,7 @@ func (s *collectionsService) GetColumn(ctx context.Context, key string, req *dto
 	return &dto.CollectionsColumnPageResponse{
 		Key:     column,
 		AsOf:    asOf,
+		Range:   req.DateRange(),
 		Page:    req.PageNumber(),
 		Cards:   cardsOf(column, asOf, invoices, customers),
 		HasMore: hasMore,

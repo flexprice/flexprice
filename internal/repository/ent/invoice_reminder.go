@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
@@ -27,13 +26,17 @@ import (
 // An empty currency, search text or customer and an empty status list mean "no filter".
 
 // boardSummarySQL totals every board column in one pass.
-// $4 as of, $5 start of the paid window, $6 currency, $7 search pattern.
+// $4 as of, $5 start of the paid window, $6 currency, $7 search pattern, $8 date range start (NULL: none),
+// $9 date range end, exclusive (NULL: none). The range bounds due_date of open invoices and paid_at of paid ones.
+// A reminder approved after as of is left out, as on the cards.
 const boardSummarySQL = `
 SELECT 'not_due', lower(i.currency), count(*), sum(i.amount_remaining)
 FROM invoices i
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status <> 'SUCCEEDED' AND i.amount_remaining > 0
   AND (i.due_date IS NULL OR i.due_date >= $4)
+  AND ($8::timestamptz IS NULL OR i.due_date >= $8)
+  AND ($9::timestamptz IS NULL OR i.due_date < $9)
   AND ($6 = '' OR lower(i.currency) = $6)
   AND ($7 = '' OR i.invoice_number ILIKE $7 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -48,6 +51,7 @@ FROM invoices i
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status IN ('SUCCEEDED', 'OVERPAID')
   AND i.paid_at >= $5 AND i.paid_at <= $4
+  AND ($9::timestamptz IS NULL OR i.paid_at < $9)
   AND ($6 = '' OR lower(i.currency) = $6)
   AND ($7 = '' OR i.invoice_number ILIKE $7 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -71,6 +75,9 @@ LEFT JOIN invoice_reminders r
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status <> 'SUCCEEDED' AND i.amount_remaining > 0
   AND i.due_date < $4
+  AND (coalesce(r.reminder_status, 'pending') <> 'approved' OR r.approved_at <= $4)
+  AND ($8::timestamptz IS NULL OR i.due_date >= $8)
+  AND ($9::timestamptz IS NULL OR i.due_date < $9)
   AND ($6 = '' OR lower(i.currency) = $6)
   AND ($7 = '' OR i.invoice_number ILIKE $7 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -78,8 +85,8 @@ WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
           AND (c.name ILIKE $7 ESCAPE '\' OR c.email ILIKE $7 ESCAPE '\')))
 GROUP BY 1, 2`
 
-// boardCurrenciesSQL lists the currencies of the open and recently paid invoices, ignoring the board's filters.
-// $4 as of, $5 start of the paid window.
+// boardCurrenciesSQL lists the currencies of the open invoices and of those paid inside the paid window, ignoring
+// the other filters. $4 as of, $5 start of the paid window.
 const boardCurrenciesSQL = `
 SELECT DISTINCT lower(i.currency)
 FROM invoices i
@@ -92,7 +99,7 @@ WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
 ORDER BY 1`
 
 // listNotDueSQL pages the open invoices not yet due. It selects only invoice columns, so the covering index serves it.
-// $4 as of, $5 currency, $6 search pattern, $7 limit, $8 offset.
+// $4 as of, $5 currency, $6 search pattern, $7 limit, $8 offset, $9 date range start, $10 date range end (exclusive).
 const listNotDueSQL = `
 SELECT i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency),
        0::numeric, i.amount_remaining, i.due_date, NULL::timestamptz
@@ -100,6 +107,8 @@ FROM invoices i
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status <> 'SUCCEEDED' AND i.amount_remaining > 0
   AND (i.due_date IS NULL OR i.due_date >= $4)
+  AND ($9::timestamptz IS NULL OR i.due_date >= $9)
+  AND ($10::timestamptz IS NULL OR i.due_date < $10)
   AND ($5 = '' OR lower(i.currency) = $5)
   AND ($6 = '' OR i.invoice_number ILIKE $6 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -109,7 +118,7 @@ ORDER BY i.due_date ASC NULLS LAST, i.id ASC
 LIMIT $7 OFFSET $8`
 
 // listPaidSQL pages the invoices paid inside the window. It selects only invoice columns, so the covering index serves it.
-// $4 as of, $5 start of the paid window, $6 currency, $7 search pattern, $8 limit, $9 offset.
+// $4 as of, $5 start of the paid window, $6 currency, $7 search pattern, $8 limit, $9 offset, $10 paid range end (exclusive).
 const listPaidSQL = `
 SELECT i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency),
        i.amount_due, 0::numeric, NULL::timestamptz, i.paid_at
@@ -117,6 +126,7 @@ FROM invoices i
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status IN ('SUCCEEDED', 'OVERPAID')
   AND i.paid_at >= $5 AND i.paid_at <= $4
+  AND ($10::timestamptz IS NULL OR i.paid_at < $10)
   AND ($6 = '' OR lower(i.currency) = $6)
   AND ($7 = '' OR i.invoice_number ILIKE $7 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -126,7 +136,10 @@ ORDER BY i.paid_at DESC, i.id ASC
 LIMIT $8 OFFSET $9`
 
 // listOverdueSQL pages the open overdue invoices with their reminders; no reminder row means pending.
-// $4 as of, $5 currency, $6 search pattern, $7 customer, $8 reminder statuses, $9 limit, $10 offset.
+// $4 as of, $5 currency, $6 search pattern, $7 customer, $8 reminder statuses, $9 limit, $10 offset, $11 date range
+// start, $12 date range end (exclusive), $13 true to list approved reminders newest approval first, ties broken by
+// invoice id; otherwise the largest balance comes first. Reminders approved after as of are left out, so a page does
+// not shift under new approvals.
 const listOverdueSQL = `
 SELECT i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency),
        0::numeric, i.amount_remaining, i.due_date, NULL::timestamptz,
@@ -138,6 +151,8 @@ LEFT JOIN invoice_reminders r
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status <> 'SUCCEEDED' AND i.amount_remaining > 0
   AND i.due_date < $4
+  AND ($11::timestamptz IS NULL OR i.due_date >= $11)
+  AND ($12::timestamptz IS NULL OR i.due_date < $12)
   AND ($5 = '' OR lower(i.currency) = $5)
   AND ($6 = '' OR i.invoice_number ILIKE $6 ESCAPE '\' OR i.customer_id IN (
         SELECT c.id FROM customers c
@@ -145,11 +160,15 @@ WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
           AND (c.name ILIKE $6 ESCAPE '\' OR c.email ILIKE $6 ESCAPE '\')))
   AND ($7 = '' OR i.customer_id = $7)
   AND (cardinality($8::text[]) = 0 OR coalesce(r.reminder_status, 'pending') = ANY($8::text[]))
-ORDER BY i.amount_remaining DESC, i.id ASC
+  AND (coalesce(r.reminder_status, 'pending') <> 'approved' OR r.approved_at <= $4)
+ORDER BY CASE WHEN $13::boolean THEN r.approved_at END DESC NULLS LAST,
+         CASE WHEN $13::boolean THEN 0 ELSE i.amount_remaining END DESC,
+         i.id ASC
 LIMIT $9 OFFSET $10`
 
 // reminderSummarySQL counts the open overdue invoices per reminder status and currency, and their distinct customers.
-// $4 as of.
+// $4 as of, $5 date range start (NULL: none), $6 date range end, exclusive (NULL: none), $7 currency, $8 search
+// pattern: filtered exactly like the board's totals, so reminders approved after as of are left out.
 const reminderSummarySQL = `
 SELECT grouping(coalesce(r.reminder_status, 'pending'), lower(i.currency)),
        coalesce(r.reminder_status, 'pending'), lower(i.currency),
@@ -160,6 +179,14 @@ LEFT JOIN invoice_reminders r
 WHERE i.tenant_id = $1 AND i.environment_id = $2 AND i.status = $3
   AND i.invoice_status = 'FINALIZED' AND i.payment_status <> 'SUCCEEDED' AND i.amount_remaining > 0
   AND i.due_date < $4
+  AND (coalesce(r.reminder_status, 'pending') <> 'approved' OR r.approved_at <= $4)
+  AND ($5::timestamptz IS NULL OR i.due_date >= $5)
+  AND ($6::timestamptz IS NULL OR i.due_date < $6)
+  AND ($7 = '' OR lower(i.currency) = $7)
+  AND ($8 = '' OR i.invoice_number ILIKE $8 ESCAPE '\' OR i.customer_id IN (
+        SELECT c.id FROM customers c
+        WHERE c.tenant_id = $1 AND c.environment_id = $2 AND c.status = $3
+          AND (c.name ILIKE $8 ESCAPE '\' OR c.email ILIKE $8 ESCAPE '\')))
 GROUP BY GROUPING SETS ((coalesce(r.reminder_status, 'pending'), lower(i.currency)), ())`
 
 // invoicesWithRemindersSQL reads the given invoices that are still open and overdue, with their reminders.
@@ -225,6 +252,32 @@ func searchPattern(text string) string {
 
 func paidSince(asOf time.Time) time.Time {
 	return asOf.Add(-types.CollectionsPaidWindow)
+}
+
+// paidFrom is where the paid column starts: the range start, the beginning of time when only an end is given, or the
+// last week when there is no range.
+func paidFrom(q collections.Query) time.Time {
+	if q.Range == nil {
+		return paidSince(q.AsOf)
+	}
+	if q.Range.From == nil {
+		return time.Unix(0, 0).UTC()
+	}
+	return *q.Range.From
+}
+
+// rangeBounds are the start and exclusive end of the date range as query arguments; nil is no bound.
+func rangeBounds(q collections.Query) (from, to any) {
+	if q.Range == nil {
+		return nil, nil
+	}
+	if q.Range.From != nil {
+		from = *q.Range.From
+	}
+	if q.Range.To != nil {
+		to = *q.Range.To
+	}
+	return from, to
 }
 
 func dbError(err error, hint string) error {
@@ -412,7 +465,8 @@ func (r *collectionsRepository) board(ctx context.Context, db queryer, q collect
 		board = board.WithColumn(column, *col.Build())
 	}
 
-	currencies, err := boardCurrencies(ctx, db, q, summaries)
+	// Currencies come from the invoices, not the totals: an invoice approved after as of is in no column but is still open.
+	currencies, err := queryCurrencies(ctx, db, q.AsOf, paidFrom(q))
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +476,8 @@ func (r *collectionsRepository) board(ctx context.Context, db queryer, q collect
 
 // summarizeBoard counts and totals every board column with one query.
 func summarizeBoard(ctx context.Context, db queryer, q collections.Query) (map[types.CollectionsColumnKey]collections.ColumnSummary, error) {
-	args := append(scopeArgs(ctx), q.AsOf, paidSince(q.AsOf), q.Currency, searchPattern(q.Text))
+	from, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, paidFrom(q), q.Currency, searchPattern(q.Text), from, to)
 	rows, err := db.QueryContext(ctx, boardSummarySQL, args...)
 	if err != nil {
 		return nil, dbError(err, "Failed to total the board")
@@ -459,21 +514,9 @@ func summarizeBoard(ctx context.Context, db queryer, q collections.Query) (map[t
 	return summaries, nil
 }
 
-// boardCurrencies lists every currency the board can be filtered by. An unfiltered board already has them in its totals.
-func boardCurrencies(ctx context.Context, db queryer, q collections.Query, summaries map[types.CollectionsColumnKey]collections.ColumnSummary) ([]string, error) {
-	if q.Text == "" && q.Currency == "" {
-		currencies := []string{}
-		for _, summary := range summaries {
-			for _, total := range summary.Totals {
-				currencies = append(currencies, total.Currency)
-			}
-		}
-		currencies = lo.Uniq(currencies)
-		sort.Strings(currencies)
-		return currencies, nil
-	}
-
-	args := append(scopeArgs(ctx), q.AsOf, paidSince(q.AsOf))
+// queryCurrencies lists the currencies of the open invoices and of those paid from paidFrom to asOf.
+func queryCurrencies(ctx context.Context, db queryer, asOf, paidFrom time.Time) ([]string, error) {
+	args := append(scopeArgs(ctx), asOf, paidFrom)
 	rows, err := db.QueryContext(ctx, boardCurrenciesSQL, args...)
 	if err != nil {
 		return nil, dbError(err, "Failed to list board currencies")
@@ -491,6 +534,19 @@ func boardCurrencies(ctx context.Context, db queryer, q collections.Query, summa
 	if err != nil {
 		return nil, dbError(err, "Failed to list board currencies")
 	}
+	return currencies, nil
+}
+
+func (r *collectionsRepository) AvailableCurrencies(ctx context.Context, asOf time.Time) ([]string, error) {
+	span := StartRepositorySpan(ctx, "board", "available_currencies", nil)
+	defer FinishSpan(span)
+
+	currencies, err := queryCurrencies(ctx, r.client.Reader(ctx), asOf, paidSince(asOf))
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, err
+	}
+	SetSpanSuccess(span)
 	return currencies, nil
 }
 
@@ -532,7 +588,8 @@ func listInvoices(ctx context.Context, db queryer, q collections.Query, f collec
 }
 
 func listNotDue(ctx context.Context, db queryer, q collections.Query, offset, limit int) ([]collections.InvoiceWithReminder, error) {
-	args := append(scopeArgs(ctx), q.AsOf, q.Currency, searchPattern(q.Text), limit, offset)
+	from, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, q.Currency, searchPattern(q.Text), limit, offset, from, to)
 	rows, err := db.QueryContext(ctx, listNotDueSQL, args...)
 	if err != nil {
 		return nil, err
@@ -541,7 +598,8 @@ func listNotDue(ctx context.Context, db queryer, q collections.Query, offset, li
 }
 
 func listPaid(ctx context.Context, db queryer, q collections.Query, offset, limit int) ([]collections.InvoiceWithReminder, error) {
-	args := append(scopeArgs(ctx), q.AsOf, paidSince(q.AsOf), q.Currency, searchPattern(q.Text), limit, offset)
+	_, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, paidFrom(q), q.Currency, searchPattern(q.Text), limit, offset, to)
 	rows, err := db.QueryContext(ctx, listPaidSQL, args...)
 	if err != nil {
 		return nil, err
@@ -555,7 +613,10 @@ func listOverdue(ctx context.Context, db queryer, q collections.Query, f collect
 		statuses = append(statuses, string(status))
 	}
 
-	args := append(scopeArgs(ctx), q.AsOf, q.Currency, searchPattern(q.Text), f.CustomerID, pq.Array(statuses), limit, offset)
+	byApproval := len(f.Statuses) == 1 && f.Statuses[0] == types.ReminderStatusApproved
+
+	from, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, q.Currency, searchPattern(q.Text), f.CustomerID, pq.Array(statuses), limit, offset, from, to, byApproval)
 	rows, err := db.QueryContext(ctx, listOverdueSQL, args...)
 	if err != nil {
 		return nil, err
@@ -563,11 +624,13 @@ func listOverdue(ctx context.Context, db queryer, q collections.Query, f collect
 	return scanInvoicesWithReminders(ctx, rows)
 }
 
-func (r *collectionsRepository) SummarizeReminders(ctx context.Context, asOf time.Time) (collections.ReminderSummary, error) {
+func (r *collectionsRepository) SummarizeReminders(ctx context.Context, q collections.Query) (collections.ReminderSummary, error) {
 	span := StartRepositorySpan(ctx, "board", "summarize_reminders", nil)
 	defer FinishSpan(span)
 
-	rows, err := r.client.Reader(ctx).QueryContext(ctx, reminderSummarySQL, append(scopeArgs(ctx), asOf)...)
+	from, to := rangeBounds(q)
+	args := append(scopeArgs(ctx), q.AsOf, from, to, q.Currency, searchPattern(q.Text))
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, reminderSummarySQL, args...)
 	if err != nil {
 		SetSpanError(span, err)
 		return collections.ReminderSummary{}, dbError(err, "Failed to total overdue invoices")

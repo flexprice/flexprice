@@ -73,9 +73,9 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 			continue
 		}
 
-		var card *interfaces.ProviderCardDetails
+		var card *types.CardDetails
 		if pm.Card != nil {
-			card = &interfaces.ProviderCardDetails{
+			card = &types.CardDetails{
 				Brand:    string(pm.Card.Brand),
 				Last4:    pm.Card.Last4,
 				ExpMonth: int(pm.Card.ExpMonth),
@@ -248,4 +248,8 @@ func paymentMethodUsable(pm *stripeapi.PaymentMethod, now time.Time) bool {
 		return pm.Card.ExpYear > year
 	}
 	return pm.Card.ExpMonth >= month
+}
+
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
+	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
 }

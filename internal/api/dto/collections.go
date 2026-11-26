@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/collections"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -30,6 +31,91 @@ type CollectionsBoardRequest struct {
 	Q string `form:"q" json:"q,omitempty"`
 	// Currency keeps receivables in this currency, ignoring case.
 	Currency string `form:"currency" json:"currency,omitempty"`
+	// The date range narrows open columns by due date and paid by paid date; without it open columns are unbounded and
+	// paid is the last 7 days.
+	CollectionsDateFilter
+}
+
+// CollectionsMaxRangeYears is the longest From to To span the board accepts.
+const CollectionsMaxRangeYears = 5 * 365 * 24 * time.Hour
+
+// CollectionsRange is the date range a board response was read with; a missing side is unbounded.
+type CollectionsRange struct {
+	From *string `json:"from"`
+	To   *string `json:"to"`
+}
+
+const collectionsDateLayout = "2006-01-02"
+
+// CollectionsDateFilter is the optional date range of the board and the reminder list: From and To are UTC days
+// (YYYY-MM-DD), both inclusive. It bounds the due date of open invoices and, on the board, the paid date of paid ones.
+type CollectionsDateFilter struct {
+	From *time.Time `form:"from" time_format:"2006-01-02" time_utc:"1" json:"from,omitempty"`
+	To   *time.Time `form:"to" time_format:"2006-01-02" time_utc:"1" json:"to,omitempty"`
+}
+
+// DateRange echoes the range, nil when there is none.
+func (f CollectionsDateFilter) DateRange() *CollectionsRange {
+	if f.From == nil && f.To == nil {
+		return nil
+	}
+
+	rng := &CollectionsRange{}
+	if f.From != nil {
+		from := f.From.UTC().Format(collectionsDateLayout)
+		rng.From = &from
+	}
+	if f.To != nil {
+		to := f.To.UTC().Format(collectionsDateLayout)
+		rng.To = &to
+	}
+
+	return rng
+}
+
+// ToDomain turns the inclusive UTC days into the half-open range the repository reads; nil when there is none.
+func (f CollectionsDateFilter) ToDomain() *collections.DateRange {
+	if f.From == nil && f.To == nil {
+		return nil
+	}
+
+	rng := &collections.DateRange{From: f.From}
+	if f.To != nil {
+		to := f.To.AddDate(0, 0, 1)
+		rng.To = &to
+	}
+
+	return rng
+}
+
+// startOfDay moves a bound to the start of its UTC day; an empty value (as in ?to=) is no bound.
+func (CollectionsDateFilter) startOfDay(t *time.Time) *time.Time {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+
+	day := types.UTCDay(*t)
+	return &day
+}
+
+// validateRange moves both bounds to UTC days, then rejects a reversed range or one longer than the maximum.
+func (f *CollectionsDateFilter) validateRange() error {
+	f.From, f.To = f.startOfDay(f.From), f.startOfDay(f.To)
+	if f.From == nil || f.To == nil {
+		return nil
+	}
+
+	if f.To.Before(*f.From) {
+		return ierr.NewError("from is after to").WithHint("from must be on or before to.").Mark(ierr.ErrValidation)
+	}
+
+	if f.To.After(f.From.Add(CollectionsMaxRangeYears)) {
+		return ierr.NewErrorf("range too long").
+			WithHintf("The range between from and to cannot be longer than %d days.", int(CollectionsMaxRangeYears.Hours()/24)).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 const CollectionsBoardMaxQueryLength = 100
@@ -49,6 +135,10 @@ func (r *CollectionsBoardRequest) Validate() error {
 	if r.Page < 0 {
 		return ierr.NewError("page out of range").WithHint("page starts at 1.").Mark(ierr.ErrValidation)
 	}
+	if err := r.validateRange(); err != nil {
+		return err
+	}
+
 	return validatePageDepth(r.PageNumber(), r.PageLimit())
 }
 
@@ -128,7 +218,10 @@ type CollectionsBoardColumn struct {
 
 // CollectionsBoardResponse is the collections board.
 type CollectionsBoardResponse struct {
-	AsOf    time.Time                `json:"as_of"`
+	AsOf time.Time `json:"as_of"`
+	// Range is the date range the board was read with (open columns by due date, paid by paid date); null when none
+	// was given, then open columns are unbounded and paid is the last 7 days.
+	Range   *CollectionsRange        `json:"range" extensions:"x-nullable"`
 	Columns []CollectionsBoardColumn `json:"columns"`
 	// AvailableCurrencies lists the currencies of all open and recently paid receivables, before q and currency apply.
 	AvailableCurrencies []string `json:"available_currencies"`
@@ -138,6 +231,7 @@ type CollectionsBoardResponse struct {
 type CollectionsColumnPageResponse struct {
 	Key     types.CollectionsColumnKey `json:"key"`
 	AsOf    time.Time                  `json:"as_of"`
+	Range   *CollectionsRange          `json:"range" extensions:"x-nullable"`
 	Page    int                        `json:"page"`
 	Cards   []CollectionsItem          `json:"cards"`
 	HasMore bool                       `json:"has_more"`
@@ -178,12 +272,13 @@ type InvoiceReminderResponse struct {
 // ReminderEmailStatus is the latest email of an approved reminder; To is who it actually went to.
 type ReminderEmailStatus struct {
 	Status       types.EmailDeliveryStatus `json:"status"`
-	To           string                    `json:"to"`
+	To           []string                  `json:"to"`
 	SentAt       *time.Time                `json:"sent_at,omitempty"`
 	StatusReason string                    `json:"status_reason,omitempty"`
 }
 
-// ReminderSummary totals all overdue invoices and counts reminders by status, ignoring list filters.
+// ReminderSummary totals the overdue invoices and counts reminders by status. It follows the date range, currency and q
+// exactly like the board's totals, and ignores customer and status so the status tabs always count every status.
 type ReminderSummary struct {
 	OverdueTotals []CollectionsCurrencyTotal `json:"overdue_totals"`
 	InvoiceCount  int                        `json:"invoice_count"`
@@ -204,6 +299,8 @@ type ListRemindersRequest struct {
 	Limit int        `form:"limit" json:"limit,omitempty"`
 	Page  int        `form:"page" json:"page,omitempty"`
 	AsOf  *time.Time `form:"as_of" json:"as_of,omitempty"`
+	// The date range narrows the list and its summary by due date; without it they cover every overdue invoice.
+	CollectionsDateFilter
 }
 
 const (
@@ -248,6 +345,9 @@ func (r *ListRemindersRequest) Validate() error {
 	if err := validatePageDepth(r.PageNumber(), r.PageLimit()); err != nil {
 		return err
 	}
+	if err := r.validateRange(); err != nil {
+		return err
+	}
 	if r.Status != "" && !types.ReminderStatus(r.Status).Valid() {
 		return ierr.NewError("invalid status").WithHint("status must be pending, approved, held or skipped.").Mark(ierr.ErrValidation)
 	}
@@ -255,11 +355,15 @@ func (r *ListRemindersRequest) Validate() error {
 }
 
 type ListRemindersResponse struct {
-	AsOf    time.Time                 `json:"as_of"`
+	AsOf time.Time `json:"as_of"`
+	// Range is the due date range the list and summary were read with; null when none was given.
+	Range   *CollectionsRange         `json:"range" extensions:"x-nullable"`
 	Summary ReminderSummary           `json:"summary"`
 	Drafts  []InvoiceReminderResponse `json:"drafts"`
 	Page    int                       `json:"page"`
 	HasMore bool                      `json:"has_more"`
+	// AvailableCurrencies lists the currencies of all open and recently paid invoices, before q, currency and range apply.
+	AvailableCurrencies []string `json:"available_currencies"`
 }
 
 // UpdateReminderRequest moves a reminder to a status and/or edits its mail; the request decides which. Status is

@@ -611,6 +611,12 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	// Merge request values with current values
 	currentMap = mergePreservingImmutableFields(key, currentMap, req.Value)
 
+	// Validate the full merged value, so a request carrying only the fields it
+	// changes is not rejected for required fields it left out
+	if err := types.ValidateSettingValue(key, currentMap); err != nil {
+		return nil, err
+	}
+
 	// Convert merged map back to typed struct for validation
 	merged, err := utils.ToStruct[T](currentMap)
 	if err != nil {

@@ -444,6 +444,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_Records
 		"error_code":   "BAD_REQUEST_ERROR",
 		"error_reason": "incorrect_card_details",
 	}, s.paymentSvc.failedAttempts()[0].Metadata)
+	s.Equal(&types.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "incorrect_card_details"}, s.paymentSvc.failedAttempts()[0].Details.Error)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
 	s.Empty(s.checkoutSvc.cleanupCalls, "a link session stays open for the customer to retry")
@@ -479,7 +480,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_UPITokenCharge_SealsPa
 	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
 
 	s.NoError(err)
-	s.Empty(s.paymentSvc.failedAttempts())
+	s.Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 }
 
@@ -511,7 +512,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonLinkPayment_SealsPa
 	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
 
 	s.NoError(err)
-	s.Empty(s.paymentSvc.failedAttempts())
+	s.Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus,
 		"a one-shot card charge has no retry vehicle, so a decline is final")
 }
@@ -525,7 +526,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_NonPendingSession_Seal
 	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
 
 	s.NoError(err)
-	s.Empty(s.paymentSvc.failedAttempts())
+	s.Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
 }
 
@@ -536,7 +537,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_SessionLookupError_Doe
 	err := s.handler.handlePaymentFailed(s.ctx, s.makeFailedEvent(), s.services)
 
 	s.NoError(err)
-	s.Empty(s.paymentSvc.failedAttempts())
+	s.Len(s.paymentSvc.failedAttempts(), 1)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"an unreadable session must fail open: sealing a live payment loses the capture")
 }
@@ -823,7 +824,7 @@ func TestHandleTokenEvent(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, m.Status)
 			assert.Equal(t, tt.wantFailReason, lo.FromPtr(m.FailureReason))
 			assert.Equal(t, "1000", m.MaxAmount.String())
-			assert.Equal(t, &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
+			assert.Equal(t, &types.BankDetails{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
 		})
 	}
 }

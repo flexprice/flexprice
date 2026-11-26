@@ -2062,7 +2062,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(6)"}},
+		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(8)"}},
 		{Name: "prefix", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_value", Type: field.TypeInt64, Default: 0, SchemaType: map[string]string{"postgres": "bigint"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
@@ -2319,6 +2319,8 @@ var (
 		{Name: "attempt_number", Type: field.TypeInt, Default: 1, SchemaType: map[string]string{"postgres": "integer"}},
 		{Name: "gateway_attempt_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "error_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "payment_method_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "error_details", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "payment_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -2330,7 +2332,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "payment_attempts_payments_attempts",
-				Columns:    []*schema.Column{PaymentAttemptsColumns[13]},
+				Columns:    []*schema.Column{PaymentAttemptsColumns[15]},
 				RefColumns: []*schema.Column{PaymentsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -2339,12 +2341,12 @@ var (
 			{
 				Name:    "idx_payment_attempt_number_unique",
 				Unique:  true,
-				Columns: []*schema.Column{PaymentAttemptsColumns[13], PaymentAttemptsColumns[9]},
+				Columns: []*schema.Column{PaymentAttemptsColumns[15], PaymentAttemptsColumns[9]},
 			},
 			{
 				Name:    "idx_payment_attempt_status",
 				Unique:  false,
-				Columns: []*schema.Column{PaymentAttemptsColumns[13], PaymentAttemptsColumns[2]},
+				Columns: []*schema.Column{PaymentAttemptsColumns[15], PaymentAttemptsColumns[2]},
 			},
 			{
 				Name:    "idx_gateway_attempt",

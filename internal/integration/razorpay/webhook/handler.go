@@ -358,6 +358,27 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 	}
 
 	errorMsg := lo.CoalesceOrEmpty(payment.ErrorDescription, "Payment failed")
+	if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   payment.ID,
+		ErrorMessage:       errorMsg,
+		Metadata: lo.OmitByValues(types.Metadata{
+			"error_code":   payment.ErrorCode,
+			"error_reason": payment.ErrorReason,
+			"error_source": payment.ErrorSource,
+			"error_step":   payment.ErrorStep,
+			"method":       string(payment.Method),
+		}, []string{""}),
+		Details: &types.PaymentAttemptDetails{
+			PaymentMethod: razorpay.AttemptMethod(string(payment.Method)),
+			Error:         &types.PaymentAttemptError{Code: payment.ErrorCode, Source: payment.ErrorSource, Step: payment.ErrorStep, Reason: payment.ErrorReason},
+		},
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record failed attempt",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", payment.ID)
+	}
 
 	if paymentRecord.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 		session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
@@ -372,25 +393,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		// A session that is no longer pending has already been cleaned up, so nothing
 		// can settle this payment now and the decline is final.
 		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
-			metadata := lo.OmitByValues(types.Metadata{
-				"error_code":   payment.ErrorCode,
-				"error_reason": payment.ErrorReason,
-				"error_source": payment.ErrorSource,
-				"error_step":   payment.ErrorStep,
-				"method":       string(payment.Method),
-			}, []string{""})
-			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
-				FlexpricePaymentID: flexpricePaymentID,
-				GatewayPaymentID:   payment.ID,
-				ErrorMessage:       errorMsg,
-				Metadata:           metadata,
-			}); err != nil {
-				h.logger.Error(ctx, "failed to record failed attempt for payment link",
-					"error", err,
-					"flexprice_payment_id", flexpricePaymentID,
-					"razorpay_payment_id", payment.ID)
-			}
-
 			// An auto-charge has no link to retry on, so its decline ends the session.
 			if session.IsAutoCharge() {
 				if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, session.ID, errors.New(errorMsg)); err != nil {
@@ -847,14 +849,6 @@ func toMandate(token *interfaces.ProviderPaymentMethod, customerID string) webho
 		mandate.ExpiresAt = token.Recurring.AutoChargeableTill
 		mandate.FailureReason = lo.EmptyableToPtr(token.Recurring.FailureReason)
 	}
-	if b := token.BankAccount; b != nil {
-		mandate.BankAccount = &webhookDto.MandateBankAccount{Bank: b.Bank, IFSC: b.IFSC, Last4: b.Last4, AccountType: b.AccountType, AuthType: b.AuthType}
-	}
-	if c := token.Card; c != nil {
-		mandate.Card = &webhookDto.MandateCard{Brand: c.Brand, Last4: c.Last4, ExpMonth: c.ExpMonth, ExpYear: c.ExpYear}
-	}
-	if u := token.UPI; u != nil {
-		mandate.UPI = &webhookDto.MandateUPI{VPA: u.VPA}
-	}
+	mandate.BankAccount, mandate.Card, mandate.UPI = token.BankAccount, token.Card, token.UPI
 	return mandate
 }

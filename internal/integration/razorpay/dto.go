@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -18,6 +19,18 @@ const (
 	// DefaultInvoiceLabel is the default label for invoice reference
 	DefaultInvoiceLabel = "Invoice"
 )
+
+// attemptMethods maps Razorpay's payment method to the gateway-neutral attempt method.
+var attemptMethods = map[string]types.PaymentAttemptMethod{
+	"card":          types.PaymentAttemptMethodCard,
+	"upi":           types.PaymentAttemptMethodUPI,
+	"netbanking":    types.PaymentAttemptMethodNetBanking,
+	"wallet":        types.PaymentAttemptMethodWallet,
+	"emi":           types.PaymentAttemptMethodEMI,
+	"cardless_emi":  types.PaymentAttemptMethodEMI,
+	"paylater":      types.PaymentAttemptMethodPayLater,
+	"bank_transfer": types.PaymentAttemptMethodBankTransfer,
+}
 
 // RazorpayConfig holds decrypted Razorpay configuration
 type RazorpayConfig struct {
@@ -235,4 +248,47 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	}
 	*f = flexInt(i)
 	return nil
+}
+
+type paymentEntity struct {
+	Method      string `json:"method"`
+	Bank        string `json:"bank"`
+	Wallet      string `json:"wallet"`
+	ErrorCode   string `json:"error_code"`
+	ErrorSource string `json:"error_source"`
+	ErrorStep   string `json:"error_step"`
+	ErrorReason string `json:"error_reason"`
+	Card        *struct {
+		Network string `json:"network"`
+		Issuer  string `json:"issuer"`
+		Last4   string `json:"last4"`
+		Type    string `json:"type"`
+	} `json:"card"`
+}
+
+func (e paymentEntity) toAttemptDetails() *types.PaymentAttemptDetails {
+	details := &types.PaymentAttemptDetails{PaymentMethod: AttemptMethod(e.Method)}
+	if details.PaymentMethod != nil {
+		if e.Card != nil {
+			details.PaymentMethod.Card = &types.CardDetails{Brand: e.Card.Network, Issuer: e.Card.Issuer, Last4: e.Card.Last4, Funding: e.Card.Type}
+		}
+		if e.Bank != "" {
+			details.PaymentMethod.Bank = &types.BankDetails{Bank: e.Bank}
+		}
+		if e.Wallet != "" {
+			details.PaymentMethod.Wallet = &types.WalletDetails{Provider: e.Wallet}
+		}
+	}
+	if attemptError := (types.PaymentAttemptError{Code: e.ErrorCode, Source: e.ErrorSource, Step: e.ErrorStep, Reason: e.ErrorReason}); attemptError != (types.PaymentAttemptError{}) {
+		details.Error = &attemptError
+	}
+	return details
+}
+
+// AttemptMethod returns the instrument for a Razorpay payment method; nil when the payment has no method.
+func AttemptMethod(method string) *types.InstrumentDetails {
+	if method == "" {
+		return nil
+	}
+	return &types.InstrumentDetails{Type: lo.ValueOr(attemptMethods, method, types.PaymentAttemptMethodOther)}
 }

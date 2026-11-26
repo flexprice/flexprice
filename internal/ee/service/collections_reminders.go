@@ -76,11 +76,19 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 	if req.Status != "" {
 		filter.Statuses = []types.ReminderStatus{types.ReminderStatus(req.Status)}
 	}
-	invoices, hasMore, err := s.CollectionsRepo.ListInvoicesWithReminders(ctx, collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency)}, filter, req.PageOffset(), req.PageLimit())
+	query := collections.Query{AsOf: asOf, Text: req.Q, Currency: normalizedCurrency(req.Currency), Range: req.ToDomain()}
+
+	invoices, hasMore, err := s.CollectionsRepo.ListInvoicesWithReminders(ctx, query, filter, req.PageOffset(), req.PageLimit())
 	if err != nil {
 		return nil, err
 	}
-	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, asOf)
+
+	summary, err := s.CollectionsRepo.SummarizeReminders(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	currencies, err := s.CollectionsRepo.AvailableCurrencies(ctx, asOf)
 	if err != nil {
 		return nil, err
 	}
@@ -106,11 +114,13 @@ func (s *reminderService) List(ctx context.Context, req *dto.ListRemindersReques
 		Skipped:       summary.Statuses[types.ReminderStatusSkipped],
 	}
 	resp := &dto.ListRemindersResponse{
-		AsOf:    asOf,
-		Summary: summaryReminder,
-		Drafts:  []dto.InvoiceReminderResponse{},
-		Page:    req.PageNumber(),
-		HasMore: hasMore,
+		AsOf:                asOf,
+		Range:               req.DateRange(),
+		Summary:             summaryReminder,
+		Drafts:              []dto.InvoiceReminderResponse{},
+		Page:                req.PageNumber(),
+		HasMore:             hasMore,
+		AvailableCurrencies: currencies,
 	}
 	for _, r := range invoices {
 		v, err := s.view(r, customers[r.CustomerID], rc)
@@ -379,7 +389,7 @@ func (s *reminderService) save(ctx context.Context, row collections.InvoiceWithR
 }
 
 // requireApprovable refuses an approval that cannot send its email: this deployment has no email provider, or the
-// customer has no address. Emails being on for the environment is guaranteed by Collections being enabled.
+// customer has no reminder recipient. Emails being on for the environment is guaranteed by Collections being enabled.
 func (s *reminderService) requireApprovable(c *customer.Customer) error {
 	if !s.Config.Email.IsProviderConfigured() {
 		return ierr.NewError("emails are not available").
@@ -387,9 +397,9 @@ func (s *reminderService) requireApprovable(c *customer.Customer) error {
 			Mark(ierr.ErrServiceUnavailable)
 	}
 
-	if strings.TrimSpace(lo.FromPtr(c).Email) == "" {
+	if c == nil || len(c.EmailRecipients(types.EmailTypeInvoicePaymentReminder)) == 0 {
 		return ierr.NewError("customer has no email address").
-			WithHint("This customer has no email address. Add one before approving.").
+			WithHint("This customer has no email address. Add one, or a contact person receiving invoice_payment_reminder emails, before approving.").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -428,7 +438,7 @@ func (s *reminderService) queueEmail(ctx context.Context, row collections.Invoic
 		InvoiceID:  row.InvoiceID,
 		CustomerID: row.CustomerID,
 		ReminderID: next.ID,
-		Recipient:  lo.FromPtr(c).Email,
+		Recipients: c.EmailRecipients(types.EmailTypeInvoicePaymentReminder),
 		Subject:    next.Subject,
 		Body:       next.Body,
 		ApprovedAt: *next.ApprovedAt,
