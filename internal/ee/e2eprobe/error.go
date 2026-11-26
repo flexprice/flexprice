@@ -1,8 +1,12 @@
 package e2eprobe
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -20,17 +24,8 @@ type CheckError struct {
 func (e *CheckError) Error() string { return e.Err.Error() }
 func (e *CheckError) Unwrap() error { return e.Err }
 
-// Errorf is a convenience constructor that wraps a fmt.Errorf-style message
-// with structured key/value attributes for the failure report.
-//
-// If the wrapped error chain contains a Flexprice SDK error type, Errorf
-// auto-populates `status_code` and `error_body` attributes. This makes
-// otherwise-opaque "%s: {}" alerts (where the SDK's ErrorResponse.Error()
-// marshals to the literal string "{}") actionable: callers don't have to
-// reach into the SDK type at every alert site.
-//
-// Caller-provided attributes win on key conflicts — Errorf only fills in
-// `status_code` / `error_body` when they're absent.
+// Errorf wraps a formatted message with attributes for the failure report; an
+// SDK error in the chain adds status_code and error_body unless already set.
 func Errorf(attrs map[string]string, format string, args ...any) error {
 	if attrs == nil {
 		attrs = map[string]string{}
@@ -53,24 +48,25 @@ func AttributesFrom(err error) map[string]string {
 	return nil
 }
 
-// enrichWithSDKError walks the error chain for known Flexprice SDK error
-// types and mutates attrs to include their structured detail. Recognized
-// types:
-//
-//   - *sdkerrors.APIError — generic SDK API errors. Has explicit Body and
-//     StatusCode fields.
-//   - *sdkerrors.ErrorResponse — typed error response. Status code
-//     lives on HTTPMeta.Response; the body marshals via json.Marshal of the
-//     struct (often "{}" when the server returns an unparseable response).
-//
-// Caller-provided keys are never overwritten — this is enrichment, not
-// replacement.
+// enrichWithSDKError adds the status, body and request id of an SDK error in
+// the chain to attrs without overwriting what the caller set.
 func enrichWithSDKError(err error, attrs map[string]string) {
+	if id := requestID(err); id != "" {
+		setIfAbsent(attrs, "request_id", id)
+	}
 	var api *sdkerrors.APIError
 	if errors.As(err, &api) && api != nil {
 		setIfAbsent(attrs, "status_code", strconv.Itoa(api.StatusCode))
 		if api.Body != "" {
 			setIfAbsent(attrs, "error_body", api.Body)
+		}
+		return
+	}
+	var rve *sdkerrors.ResponseValidationError
+	if errors.As(err, &rve) && rve != nil {
+		setIfAbsent(attrs, "status_code", strconv.Itoa(rve.StatusCode))
+		if rve.Body != "" {
+			setIfAbsent(attrs, "error_body", rve.Body)
 		}
 		return
 	}
@@ -87,6 +83,27 @@ func enrichWithSDKError(err error, attrs map[string]string) {
 		setIfAbsent(attrs, "error_body", eer.Error())
 		return
 	}
+}
+
+// requestID is the X-Request-ID the server echoed on the response behind err,
+// so a failure can be matched with the server's own log line.
+func requestID(err error) string {
+	var resp *http.Response
+	var api *sdkerrors.APIError
+	var rve *sdkerrors.ResponseValidationError
+	var eer *sdkerrors.ErrorResponse
+	switch {
+	case errors.As(err, &api) && api != nil:
+		resp = api.RawResponse
+	case errors.As(err, &rve) && rve != nil:
+		resp = rve.RawResponse
+	case errors.As(err, &eer) && eer != nil:
+		resp = eer.HTTPMeta.Response
+	}
+	if resp == nil {
+		return ""
+	}
+	return resp.Header.Get("X-Request-ID")
 }
 
 // Brief renders err for an alert: a Flexprice API error becomes "<status> <message>".
@@ -109,4 +126,42 @@ func setIfAbsent(m map[string]string, k, v string) {
 	if _, ok := m[k]; !ok {
 		m[k] = v
 	}
+}
+
+// IsInfra reports whether err means the API could not answer at all: a 5xx
+// (decodable or not), a timeout or a transport failure. Such failures feed one region-level
+// incident instead of paging per scenario.
+func IsInfra(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	var api *sdkerrors.APIError
+	if errors.As(err, &api) && api != nil {
+		return api.StatusCode >= 500
+	}
+	var rve *sdkerrors.ResponseValidationError
+	if errors.As(err, &rve) && rve != nil {
+		return rve.StatusCode >= 500
+	}
+	var eer *sdkerrors.ErrorResponse
+	if errors.As(err, &eer) && eer != nil {
+		if eer.HTTPStatusCode != nil {
+			return *eer.HTTPStatusCode >= 500
+		}
+		if eer.HTTPMeta.Response != nil {
+			return eer.HTTPMeta.Response.StatusCode >= 500
+		}
+	}
+	return false
 }

@@ -9,6 +9,22 @@ Chart versions are independent of the application (`appVersion`) version —
 `Chart.yaml#version` bumps on every chart change, `appVersion` follows the
 FlexPrice app release.
 
+## [1.11.0] - 2026-11-21
+
+### Changed
+- **`e2eprobe`** now runs the suite-driven probe (`internal/ee/e2eprobe`, image
+  `ghcr.io/flexprice/e2eprobe`) with the same values keys, Secret and bootstrap
+  contract as before. Adds a suite ConfigMap (`e2eprobe.suite`, mounted at
+  `/etc/e2eprobe/suite.yaml`, pod rolls on a checksum change), the
+  `webhook-token` secret key for the inbox, startup, liveness and readiness
+  probes on `/healthz`, and a fixed `E2EPROBE_STATE_FILE` under the `tmp`
+  volume, or on a PersistentVolumeClaim with `e2eprobe.state.persistence.enabled`
+  so the run history a support bundle (`GET /bundle`) is built from survives a
+  rescheduled pod. Per-check `E2EPROBE_CHECK_*` and `E2EPROBE_PAYMENTS_*` env
+  values are no longer read; the probe logs which suite key replaces each one.
+
+Inert: with `e2eprobe.enabled` false nothing changes.
+
 ## [1.7.0] - 2026-10-01
 
 ### Added

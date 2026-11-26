@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	flexprice "github.com/flexprice/go-sdk/v2"
 	"github.com/flexprice/go-sdk/v2/models/dtos"
@@ -16,10 +17,8 @@ import (
 	"github.com/flexprice/go-sdk/v2/models/types"
 )
 
-// GrantEntitlementInput mirrors internal/api/dto/entitlement.go:CreateEntitlementRequest
-// for the grant subset that SDK v2.0.24 doesn't cover. When the SDK is
-// regenerated with grant fields on CreateEntitlementRequest, delete this
-// and use the SDK's typed Create.
+// GrantEntitlementInput mirrors the server's CreateEntitlementRequest for the
+// grant fields the generated SDK request does not expose yet; delete it once it does.
 type GrantEntitlementInput struct {
 	FeatureID          string
 	FeatureType        string // "metered"
@@ -58,13 +57,14 @@ type Client interface {
 	Wallets() WalletOps
 	Events() EventOps
 	Invoices() InvoiceOps
-	NewAsyncEventClient() AsyncEventClient
 	Entitlements() EntitlementOps
 	Coupons() CouponOps
 	CouponAssociations() CouponAssociationOps
 	TaxRates() TaxRateOps
 	TaxAssociations() TaxAssociationOps
 	Payments() PaymentOps
+	Alerts() AlertOps
+	Tenant() TenantOps
 	Raw() RawOps
 }
 
@@ -119,7 +119,6 @@ type SubscriptionOps interface {
 	Query(ctx context.Context, filter types.SubscriptionFilter) (*dtos.QuerySubscriptionResponse, error)
 	ActivateSubscription(ctx context.Context, id string, body types.ActivateDraftSubscriptionRequest) (*dtos.ActivateSubscriptionResponse, error)
 	GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error)
-	GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error)
 	CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error)
 	UpdateLineItem(ctx context.Context, id string, body types.UpdateSubscriptionLineItemRequest) (*dtos.UpdateSubscriptionLineItemResponse, error)
 }
@@ -132,14 +131,45 @@ type WalletOps interface {
 	TopUp(ctx context.Context, id string, body types.TopUpWalletRequest) (*dtos.TopUpWalletResponse, error)
 }
 
+// EventOps covers ingest and analytics, the one usage read served from the
+// meter_usage table. Raw event listing, event lookup and the raw-table usage
+// endpoints are deliberately absent: they scan the events table.
 type EventOps interface {
 	Ingest(ctx context.Context, req types.IngestEventRequest) (*dtos.IngestEventResponse, error)
+	IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error
 	GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error)
-	// ListRaw queries the raw events table. The probe uses this to verify
-	// synchronously-ingested events actually landed before polling the
-	// aggregation pipeline — separating "ingest dropped" from "aggregation
-	// dropped" in failure attribution.
-	ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error)
+}
+
+// AlertOps reads alert logs, which say whether the server raised an alert
+// independently of whether its webhook was delivered.
+type AlertOps interface {
+	QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]AlertLog, error)
+}
+
+// Connection is the slice of a tenant connection preflight compares.
+type Connection struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ProviderType string `json:"provider_type"`
+}
+
+// AlertLog is the slice of an alert log entry the probe reads. The SDK's
+// AlertLogResponse types alert_info.value_at_time as a time and cannot decode
+// the decimal the server sends.
+type AlertLog struct {
+	ID          string    `json:"id"`
+	EntityType  string    `json:"entity_type"`
+	EntityID    string    `json:"entity_id"`
+	CustomerID  string    `json:"customer_id"`
+	AlertType   string    `json:"alert_type"`
+	AlertStatus string    `json:"alert_status"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// TenantOps reads tenant-level configuration the probe verifies but never writes.
+type TenantOps interface {
+	ListConnections(ctx context.Context) ([]Connection, error)
+	GetSetting(ctx context.Context, key string) (map[string]any, error)
 }
 
 type InvoiceOps interface {
@@ -153,9 +183,8 @@ type EntitlementOps interface {
 	Query(ctx context.Context, req types.EntitlementFilter) (*dtos.QueryEntitlementResponse, error)
 	Delete(ctx context.Context, id string) (*dtos.DeleteEntitlementResponse, error)
 
-	// CreateWithGrant sends a grant-config-enabled entitlement create via
-	// raw HTTP. SDK v2.0.24's CreateEntitlementRequest doesn't expose grant
-	// fields; when the SDK regenerates, delete this and use Create.
+	// CreateWithGrant creates an entitlement with grant fields over raw HTTP,
+	// since the generated SDK request does not expose them yet.
 	CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (id string, err error)
 
 	// GetRaw fetches an entitlement by ID via raw HTTP so callers can
@@ -247,30 +276,27 @@ type PaymentOps interface {
 	ListRefunds(ctx context.Context, req dtos.ListRefundsRequest) (*dtos.ListRefundsResponse, error)
 }
 
-type AsyncEventClient interface {
-	Enqueue(eventName, externalCustomerID string, properties map[string]any) error
-	EnqueueWithOptions(opts flexprice.EventOptions) error
-	Flush() error
-	Close() error
-}
+// httpTimeout bounds every call so a stalled connection cannot hang a run.
+const httpTimeout = 60 * time.Second
 
 func NewSDKClient(apiHost, apiKey string) Client {
+	httpClient := &http.Client{Timeout: httpTimeout}
 	sdk := flexprice.New(
 		flexprice.WithServerURL(apiHost),
 		flexprice.WithSecurity(apiKey),
+		flexprice.WithClient(httpClient),
 	)
-	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey}
+	return &sdkClient{sdk: sdk, apiHost: apiHost, apiKey: apiKey, http: httpClient}
 }
 
 type sdkClient struct {
-	sdk *flexprice.Flexprice
+	sdk  *flexprice.Flexprice
+	http *http.Client
 	// apiHost + apiKey are captured here so raw-HTTP methods
-	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed)
-	// can bypass the SDK's
-	// generated typed request/response for endpoints where the SDK
-	// doesn't cover fields the server accepts. When SDK v2.0.24 is
-	// regenerated with those fields, delete the raw-HTTP methods and
-	// remove these captures.
+	// (EntitlementOps.CreateWithGrant + GetRaw, PriceOps.CreateBucketed,
+	// AlertOps.QueryLogs)
+	// bypass the generated request types where the server accepts fields the
+	// SDK does not expose yet; delete them when it does.
 	apiHost string
 	apiKey  string
 }
@@ -283,9 +309,6 @@ func (c *sdkClient) Subscriptions() SubscriptionOps { return subscriptionOps{c.s
 func (c *sdkClient) Wallets() WalletOps             { return walletOps{c.sdk.Wallets} }
 func (c *sdkClient) Events() EventOps               { return eventOps{c.sdk.Events} }
 func (c *sdkClient) Invoices() InvoiceOps           { return invoiceOps{c.sdk.Invoices} }
-func (c *sdkClient) NewAsyncEventClient() AsyncEventClient {
-	return c.sdk.NewAsyncClient()
-}
 func (c *sdkClient) Entitlements() EntitlementOps {
 	return entitlementOps{s: c.sdk.Entitlements, parent: c}
 }
@@ -297,7 +320,43 @@ func (c *sdkClient) TaxRates() TaxRateOps { return taxRateOps{c.sdk.TaxRates} }
 func (c *sdkClient) TaxAssociations() TaxAssociationOps {
 	return taxAssociationOps{c.sdk.TaxAssociations}
 }
-func (c *sdkClient) Raw() RawOps { return rawOps{parent: c} }
+func (c *sdkClient) Alerts() AlertOps  { return alertOps{parent: c} }
+func (c *sdkClient) Tenant() TenantOps { return tenantOps{parent: c} }
+func (c *sdkClient) Raw() RawOps       { return rawOps{parent: c} }
+
+type alertOps struct{ parent *sdkClient }
+
+func (o alertOps) QueryLogs(ctx context.Context, f types.AlertLogFilter) ([]AlertLog, error) {
+	var out struct {
+		Items []AlertLog `json:"items"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodPost, "/alerts/search", "", f, &out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
+
+type tenantOps struct{ parent *sdkClient }
+
+func (o tenantOps) ListConnections(ctx context.Context) ([]Connection, error) {
+	var out struct {
+		Connections []Connection `json:"connections"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/connections", "", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Connections, nil
+}
+
+func (o tenantOps) GetSetting(ctx context.Context, key string) (map[string]any, error) {
+	var out struct {
+		Value map[string]any `json:"value"`
+	}
+	if err := o.parent.doRaw(ctx, http.MethodGet, "/settings/"+url.PathEscape(key), "", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Value, nil
+}
 
 type rawOps struct{ parent *sdkClient }
 
@@ -415,7 +474,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -437,7 +496,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 		return out.ID, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return "", errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 func (o priceOps) Query(ctx context.Context, f types.PriceFilter) (*dtos.QueryPriceResponse, error) {
@@ -472,9 +531,6 @@ func (o subscriptionOps) ActivateSubscription(ctx context.Context, id string, bo
 }
 func (o subscriptionOps) GetEntitlements(ctx context.Context, id string, featureIDs []string) (*dtos.GetSubscriptionEntitlementsResponse, error) {
 	return o.s.GetSubscriptionEntitlements(ctx, id, featureIDs, nil)
-}
-func (o subscriptionOps) GetUsage(ctx context.Context, req types.GetUsageBySubscriptionRequest) (*dtos.GetSubscriptionUsageResponse, error) {
-	return o.s.GetSubscriptionUsage(ctx, req)
 }
 func (o subscriptionOps) CreateLineItem(ctx context.Context, id string, body types.CreateSubscriptionLineItemRequest) (*dtos.CreateSubscriptionLineItemResponse, error) {
 	return o.s.CreateSubscriptionLineItem(ctx, id, body)
@@ -511,8 +567,9 @@ func (o eventOps) Ingest(ctx context.Context, req types.IngestEventRequest) (*dt
 func (o eventOps) GetUsageAnalytics(ctx context.Context, req types.GetUsageAnalyticsRequest) (*dtos.GetUsageAnalyticsResponse, error) {
 	return o.s.GetUsageAnalytics(ctx, req)
 }
-func (o eventOps) ListRaw(ctx context.Context, req types.GetEventsRequest) (*dtos.ListRawEventsResponse, error) {
-	return o.s.ListRawEvents(ctx, req)
+func (o eventOps) IngestBulk(ctx context.Context, req types.BulkIngestEventRequest) error {
+	_, err := o.s.IngestEventsBulk(ctx, req)
+	return err
 }
 
 type invoiceOps struct{ s *flexprice.Invoices }
@@ -544,9 +601,8 @@ func (o entitlementOps) Delete(ctx context.Context, id string) (*dtos.DeleteEnti
 	return o.s.DeleteEntitlement(ctx, id)
 }
 
-// CreateWithGrant POSTs a hand-rolled JSON body to /entitlements matching
-// the server's dto.CreateEntitlementRequest schema, including grant fields
-// that SDK v2.0.24's CreateEntitlementRequest doesn't expose.
+// CreateWithGrant POSTs the server's CreateEntitlementRequest shape, grant
+// fields included, which the generated SDK request lacks.
 func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlementInput) (string, error) {
 	body := map[string]any{
 		"feature_id":           req.FeatureID,
@@ -576,7 +632,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("do request: %w", err)
 	}
@@ -590,7 +646,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 		return out.ID, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return "", errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 // GetRaw fetches an entitlement's full JSON body and decodes into
@@ -605,7 +661,7 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 	httpReq.Header.Set("Accept", "application/json")
 	httpReq.Header.Set("x-api-key", o.parent.apiKey)
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := o.parent.http.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
@@ -619,17 +675,18 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 		return &out, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return nil, errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return nil, errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 // errorFromRawHTTPResponse converts a non-2xx HTTP response into an SDK-shaped
 // error so callers can reuse isNotFound / isAlreadyExists helpers unchanged.
-func errorFromRawHTTPResponse(status int, body []byte) error {
+func errorFromRawHTTPResponse(resp *http.Response, body []byte) error {
 	var er sdkerrors.ErrorResponse
 	if err := json.Unmarshal(body, &er); err == nil && er.HTTPStatusCode != nil {
+		er.HTTPMeta.Response = resp
 		return &er
 	}
-	return sdkerrors.NewAPIError("raw HTTP error", status, string(body), nil)
+	return sdkerrors.NewAPIError("raw HTTP error", resp.StatusCode, string(body), resp)
 }
 
 type couponOps struct{ s *flexprice.Coupons }
@@ -848,7 +905,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 		httpReq.Header.Set("x-api-key", c.apiKey)
 	}
 
-	resp, err := http.DefaultClient.Do(httpReq)
+	resp, err := c.http.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("do request: %w", err)
 	}
@@ -856,7 +913,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+		return errorFromRawHTTPResponse(resp, bodyBytes)
 	}
 	if out == nil {
 		return nil

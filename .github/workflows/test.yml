@@ -59,3 +59,27 @@ jobs:
 
       - name: Run loglint
         run: make lint-ci
+
+  e2eprobe:
+    name: e2eprobe module tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: internal/ee/e2eprobe
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.27.2'
+          cache: true
+          cache-dependency-path: internal/ee/e2eprobe/go.sum
+
+      - name: Vet and test the probe module
+        run: |
+          go vet ./...
+          go test -race ./...

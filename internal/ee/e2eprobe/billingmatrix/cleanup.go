@@ -69,10 +69,20 @@ func (t *tracker) add(kind, id string) {
 // customer can be deleted, then entitlements, addons, plans and features. It is best effort; it
 // returns the deletes that failed so the caller can report them without failing the scenario.
 func (c client) cleanup(ctx context.Context, t *tracker) []string {
-	var failed []string
+	errs := c.cleanupErrors(ctx, t)
+	out := make([]string, 0, len(errs))
+	for _, err := range errs {
+		out = append(out, err.Error())
+	}
+	return out
+}
+
+// cleanupErrors is cleanup keeping each failure's error.
+func (c client) cleanupErrors(ctx context.Context, t *tracker) []error {
+	var failed []error
 	note := func(what, id string, err error) {
 		if err != nil && statusOf(err) != http.StatusNotFound {
-			failed = append(failed, fmt.Sprintf("%s %s: %v", what, id, err))
+			failed = append(failed, fmt.Errorf("%s %s: %w", what, id, err))
 		}
 	}
 	for _, id := range t.subscriptions {
@@ -163,20 +173,30 @@ func (c client) listAll(ctx context.Context, path string) ([]catalogEntry, error
 	}
 }
 
-// SweepOrphans cancels and deletes billing-matrix customers and plans older than cutoff that a
-// crashed or restarted probe never cleaned up. Shared fixtures are left alone. It returns how many
-// it removed and the deletes that failed.
+// SweepOrphans is Sweep for callers that report failures as text.
 func (e *Engine) SweepOrphans(ctx context.Context, cutoff time.Time) (int, []string) {
+	removed, failed := e.Sweep(ctx, cutoff)
+	out := make([]string, 0, len(failed))
+	for _, err := range failed {
+		out = append(out, err.Error())
+	}
+	return removed, out
+}
+
+// Sweep cancels and deletes billing-matrix customers and plans older than cutoff that a crashed
+// or restarted probe never cleaned up. Shared fixtures are left alone. It returns how many it
+// removed and the deletes that failed, each keeping the error it failed with.
+func (e *Engine) Sweep(ctx context.Context, cutoff time.Time) (int, []error) {
 	c := client{api: e.api}
 	orphan := func(x catalogEntry) bool {
 		return x.CreatedAt.Before(cutoff) && !strings.HasPrefix(x.LookupKey, fixtureKeyPrefix)
 	}
 	t := &tracker{}
-	var failed []string
+	var failed []error
 	collect := func(path string, match func(catalogEntry) bool, list *[]string) {
 		items, err := c.listAll(ctx, path)
 		if err != nil {
-			failed = append(failed, fmt.Sprintf("list %s: %v", path, err))
+			failed = append(failed, fmt.Errorf("list %s: %w", path, err))
 			return
 		}
 		for _, x := range items {
@@ -191,12 +211,12 @@ func (e *Engine) SweepOrphans(ctx context.Context, cutoff time.Time) (int, []str
 	for _, custID := range t.customers {
 		subs, err := c.customerSubscriptions(ctx, custID)
 		if err != nil {
-			failed = append(failed, fmt.Sprintf("list subscriptions of %s: %v", custID, err))
+			failed = append(failed, fmt.Errorf("list subscriptions of %s: %w", custID, err))
 			continue
 		}
 		t.subscriptions = append(t.subscriptions, subs...)
 	}
-	failed = append(failed, c.cleanup(ctx, t)...)
+	failed = append(failed, c.cleanupErrors(ctx, t)...)
 	removed := len(t.customers) + len(t.plans)
 	return removed, failed
 }

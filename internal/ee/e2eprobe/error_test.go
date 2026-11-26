@@ -1,9 +1,12 @@
 package e2eprobe
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
@@ -11,7 +14,7 @@ import (
 )
 
 func TestErrorf_EnrichesAPIError(t *testing.T) {
-	apiErr := sdkerrors.NewAPIError("bad request", 400, `{"detail":"missing field"}`, nil)
+	apiErr := sdkerrors.NewAPIError("bad request", 400, `{"detail":"missing field"}`, &http.Response{StatusCode: 400, Header: http.Header{"X-Request-Id": {"req-api"}}})
 	err := Errorf(map[string]string{"customer_id": "cust_1"}, "delete customer: %w", apiErr)
 
 	attrs := AttributesFrom(err)
@@ -20,6 +23,9 @@ func TestErrorf_EnrichesAPIError(t *testing.T) {
 	}
 	if attrs["status_code"] != "400" {
 		t.Errorf("expected status_code=400, got %q", attrs["status_code"])
+	}
+	if attrs["request_id"] != "req-api" {
+		t.Errorf("the server's X-Request-ID must be recorded, got %q", attrs["request_id"])
 	}
 	if attrs["error_body"] != `{"detail":"missing field"}` {
 		t.Errorf("expected error_body to carry the JSON, got %q", attrs["error_body"])
@@ -34,7 +40,7 @@ func TestErrorf_EnrichesErrorResponse(t *testing.T) {
 	// marshals to literal "{}". The status code lives on HTTPMeta.
 	eer := &sdkerrors.ErrorResponse{
 		HTTPMeta: types.HTTPMetadata{
-			Response: &http.Response{StatusCode: 500},
+			Response: &http.Response{StatusCode: 500, Header: http.Header{"X-Request-Id": {"req-typed"}}},
 		},
 	}
 	err := Errorf(map[string]string{"event_name": "e2eprobe_latest"}, "analytics for x/y: %w", eer)
@@ -45,6 +51,9 @@ func TestErrorf_EnrichesErrorResponse(t *testing.T) {
 	}
 	if attrs["status_code"] != "500" {
 		t.Errorf("expected status_code=500, got %q", attrs["status_code"])
+	}
+	if attrs["request_id"] != "req-typed" {
+		t.Errorf("the server's X-Request-ID must be recorded, got %q", attrs["request_id"])
 	}
 	if attrs["error_body"] != "{}" {
 		t.Errorf("expected error_body=%q (the bare {} body we've been chasing), got %q",
@@ -101,5 +110,41 @@ func TestAttributesFrom_NoCheckErrorReturnsNil(t *testing.T) {
 	}
 	if attrs := AttributesFrom(nil); attrs != nil {
 		t.Errorf("expected nil for nil err, got %v", attrs)
+	}
+}
+
+func TestIsInfra(t *testing.T) {
+	status502 := int64(502)
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"api 500", sdkerrors.NewAPIError("x", 500, "", nil), true},
+		{"response 502", &sdkerrors.ErrorResponse{HTTPStatusCode: &status502}, true},
+		{"deadline", context.DeadlineExceeded, true},
+		{"wrapped deadline", fmt.Errorf("get: %w", context.DeadlineExceeded), true},
+		{"url error", &url.Error{Op: "Post", URL: "http://x", Err: &net.OpError{Op: "dial", Err: errors.New("connection refused")}}, true},
+		{"api 400", sdkerrors.NewAPIError("x", 400, "", nil), false},
+		{"undecodable 500", sdkerrors.NewResponseValidationError("x", 500, "<html>", nil, errors.New("decode")), true},
+		{"undecodable 400", sdkerrors.NewResponseValidationError("x", 400, "{}", nil, errors.New("decode")), false},
+		{"plain", errors.New("assertion"), false},
+		{"nil", nil, false},
+	}
+	for _, tc := range cases {
+		if got := IsInfra(tc.err); got != tc.want {
+			t.Errorf("%s: IsInfra = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestFail_RecordsTheResponseIdentityOfABareSDKError(t *testing.T) {
+	undecodable := sdkerrors.NewResponseValidationError("x", 502, "<html>", &http.Response{StatusCode: 502, Header: http.Header{"X-Request-Id": {"req-raw"}}}, errors.New("decode"))
+	r := Fail("analytics", undecodable, map[string]string{"persona": "taxed"})
+	if r.Attrs["status_code"] != "502" || r.Attrs["request_id"] != "req-raw" || r.Attrs["persona"] != "taxed" {
+		t.Fatalf("a failure must carry the status and request id of the response that caused it: %+v", r.Attrs)
+	}
+	if !r.Infra {
+		t.Fatal("an undecodable 502 is an infrastructure failure")
 	}
 }

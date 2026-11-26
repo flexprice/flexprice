@@ -85,6 +85,32 @@ jobs:
             --set secrets.existingSecret=flexprice-secrets \
             | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
 
+      - name: helm template + kubeconform (probe enabled with a suite)
+        run: |
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            --set secrets.existingSecret=test \
+            --set e2eprobe.enabled=true \
+            --set e2eprobe.bootstrap.enabled=true \
+            --set e2eprobe.suite.version=1 \
+            | tee /tmp/e2eprobe-render.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+          grep -q 'E2EPROBE_SUITE_FILE' /tmp/e2eprobe-render.yaml
+          grep -q 'e2eprobe-suite' /tmp/e2eprobe-render.yaml
+          grep -q 'checksum/suite' /tmp/e2eprobe-render.yaml
+          grep -q 'name: flexprice-e2eprobe-bootstrap$' /tmp/e2eprobe-render.yaml
+          grep -q 'name: flexprice-e2eprobe$' /tmp/e2eprobe-render.yaml
+
+      - name: helm template + kubeconform (probe with a persistent state volume)
+        run: |
+          helm template flexprice internal/ee/infrastructure/helm/flexprice \
+            --set secrets.existingSecret=test \
+            --set e2eprobe.enabled=true \
+            --set e2eprobe.state.persistence.enabled=true \
+            | tee /tmp/e2eprobe-pvc.yaml \
+            | kubeconform -strict -ignore-missing-schemas -skip "$SKIP_KINDS" -summary -
+          grep -q 'kind: PersistentVolumeClaim' /tmp/e2eprobe-pvc.yaml
+          grep -q '/var/lib/e2eprobe/state.json' /tmp/e2eprobe-pvc.yaml
+
       - name: helm lint (values-gce.example)
         run: helm lint internal/ee/infrastructure/helm/flexprice -f internal/ee/infrastructure/helm/values-gce.example.yaml
 

@@ -4,70 +4,49 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
+// Config is the environment the probe runs in. Everything about what it runs
+// lives in the suite file; only credentials, endpoints and process knobs stay here.
 type Config struct {
-	APIHost         string
-	APIKey          string
-	Enabled         bool
-	DryRun          bool
-	EventIngestRate int
-	EventIngestSeed int64
-	ListenerPort    int
+	APIHost string
+	APIKey  string
+	Enabled bool
+	DryRun  bool
 
-	// TenantID and EnvironmentID are optional context fields included in every
-	// failure report to make Slack/OTEL alerts immediately actionable.
-	TenantID      string // E2EPROBE_TENANT_ID, optional but recommended
-	EnvironmentID string // E2EPROBE_ENVIRONMENT_ID, optional but recommended
+	// TenantID and EnvironmentID are optional context for alerts.
+	TenantID      string
+	EnvironmentID string
 
-	// Email and Password enable signup bootstrap for airgapped deployments
-	// that have no way to pre-provision an API key. Used only when APIKey
-	// is empty. Bootstrap requires the flexprice-native auth provider.
-	Email    string // E2EPROBE_EMAIL
-	Password string // E2EPROBE_PASSWORD
+	// Email and Password enable signup bootstrap when APIKey is empty.
+	Email               string
+	Password            string
+	BootstrapSecretName string
+	BootstrapSecretKey  string
+	PodNamespace        string
 
-	// BootstrapSecretName/Key name the Kubernetes Secret that bootstrap
-	// patches the minted key into, and PodNamespace is where it lives.
-	BootstrapSecretName string // E2EPROBE_BOOTSTRAP_SECRET_NAME
-	BootstrapSecretKey  string // E2EPROBE_BOOTSTRAP_SECRET_KEY
-	PodNamespace        string // POD_NAMESPACE, via the downward API
+	LogLevel     string
+	ListenerPort int
 
-	// HeartbeatInterval controls how often a structured "e2eprobe.heartbeat" log
-	// line is emitted summarising run counts and success rate. Set to 0 to disable.
-	HeartbeatInterval time.Duration // E2EPROBE_HEARTBEAT_INTERVAL, default 1h
+	SuiteFile    string // E2EPROBE_SUITE_FILE; empty means the embedded default suite
+	StateFile    string // E2EPROBE_STATE_FILE; incident snapshot for restarts
+	WebhookToken string // E2EPROBE_WEBHOOK_TOKEN; shared secret the inbox requires when set
 
-	// JanitorMaxAge is the minimum age of an ephemeral entity before the janitor
-	// deletes it. Also controls the Flexprice-wide orphan scan sweep.
-	JanitorMaxAge time.Duration // E2EPROBE_JANITOR_MAX_AGE, default 1h
+	Slack SlackConfig
+	OTEL  OTELConfig
 
-	// LogLevel controls the zerolog level: "debug", "info", "warn", "error".
-	// Default "info". Flip to "debug" to surface the per-tick checkpoints
-	// each probe emits (analytics fetched, drop event ingested, webhook
-	// received, aggregation observed, startup grace hits, etc.).
-	LogLevel string // E2EPROBE_LOG_LEVEL, default "info"
-
-	Slack    SlackConfig
-	OTEL     OTELConfig
-	Payments PaymentsConfig
-
-	BillingMatrix BillingMatrixConfig
-
-	Checks map[string]CheckConfig
-
-	// Warnings collected during LoadConfig (e.g. malformed env vars that fell
-	// back to defaults). main.go drains these into the logger after the logger
-	// has been constructed, so we don't write to stderr from a non-bootstrap
-	// package.
+	// Warnings are malformed or removed env vars; main logs them once the
+	// logger exists.
 	Warnings []string
 }
 
 type SlackConfig struct {
 	WebhookURL string
-	// BotToken, when set, wins over WebhookURL and posts via chat.postMessage.
-	// Requires Channel.
+	// BotToken wins over WebhookURL and requires Channel.
 	BotToken string
 	Channel  string
 }
@@ -76,136 +55,19 @@ type OTELConfig struct {
 	Enabled bool
 }
 
-// PaymentsConfig enables the payment probes for the gateways connected to the
-// probe environment. Gateway credentials are optional: without them the probes
-// still cover hosted links and method listing, and skip flows that need a card
-// vaulted on the gateway.
-type PaymentsConfig struct {
-	Providers     []PaymentProviderConfig // E2EPROBE_PAYMENTS_PROVIDERS, comma-separated
-	SettleTimeout time.Duration           // E2EPROBE_PAYMENTS_SETTLE_TIMEOUT, default 90s
-	// AssertKnownIssues runs legs that fail on known, unfixed product bugs; off by default.
-	AssertKnownIssues bool // E2EPROBE_PAYMENTS_ASSERT_KNOWN_ISSUES
+// removedEnv maps env vars the suite file replaced to the suite key to use.
+var removedEnv = map[string]string{
+	"E2EPROBE_EVENT_INGEST_RATE":  "defaults.tick and the persona's events profile",
+	"E2EPROBE_EVENT_INGEST_SEED":  "the events profile (batches are deterministic)",
+	"E2EPROBE_HEARTBEAT_INTERVAL": "defaults.digest.every",
+	"E2EPROBE_JANITOR_MAX_AGE":    "defaults.janitor.max_age",
 }
 
-// PaymentProviderConfig is one gateway the payment probes exercise.
-type PaymentProviderConfig struct {
-	Provider string // "stripe" | "chargebee" | "razorpay"
-	Currency string // E2EPROBE_PAYMENTS_<PROVIDER>_CURRENCY, defaults per gateway
-
-	// SettleTimeout overrides PaymentsConfig.SettleTimeout for this gateway.
-	SettleTimeout time.Duration // E2EPROBE_PAYMENTS_<PROVIDER>_SETTLE_TIMEOUT
-	// AutoChargeInterval floors the auto-charge probe interval for this gateway.
-	AutoChargeInterval time.Duration
-
-	// FixedCustomerExternalID names a persistent customer whose cards or mandates
-	// were saved by hand; auto-charge flows run on it.
-	FixedCustomerExternalID string
-	// DeclineCardLast4 picks out the fixed customer's declining card; every other
-	// auto-chargeable method is treated as a good card.
-	DeclineCardLast4 string
-}
-
-// paymentDefaultSettleTimeout covers gateways slower than the global default:
-// Razorpay test-mode mandate debits capture up to a few minutes after submission.
-var paymentDefaultSettleTimeout = map[string]time.Duration{
-	"razorpay":  10 * time.Minute,
-	"chargebee": 5 * time.Minute,
-}
-
-// paymentFixedCustomer is the same in every region; its cards or mandates are saved by hand.
-var paymentFixedCustomer = map[string]string{
-	"stripe":    "e2eprobe-cust-pay-stripe-cards",
-	"chargebee": "e2eprobe-cust-pay-chargebee-cards",
-}
-
-// paymentDeclineCardLast4 identifies the gateway test card that saves but declines when charged.
-var paymentDeclineCardLast4 = map[string]string{
-	"stripe":    "0341",
-	"chargebee": "0004",
-}
-
-// paymentAutoChargeInterval spaces auto-charge runs, which debit hand-saved cards.
-var paymentAutoChargeInterval = map[string]time.Duration{
-	"stripe":    6 * time.Hour,
-	"chargebee": 6 * time.Hour,
-}
-
-var paymentDefaultCurrency = map[string]string{
-	"stripe":    "USD",
-	"chargebee": "USD",
-	"razorpay":  "INR",
-}
-
-// BillingMatrixConfig gates and tunes the billing-matrix checks.
-type BillingMatrixConfig struct {
-	// Enabled turns on every billing-matrix check (E2EPROBE_BILLING_MATRIX_ENABLED, default false).
-	// Off by default: the checks create plans, subscriptions and invoices every tick.
-	Enabled           bool
-	ScenariosPerRun   int  // E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN, default 3
-	AssertKnownIssues bool // E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES: run scenarios that hit known product bugs
-}
-
-type CheckConfig struct {
-	Enabled  bool
-	Interval time.Duration
-}
-
-// CheckNames is the canonical list of check identifiers. Adding a new check
-// requires extending this list AND adding a default interval below.
-var CheckNames = []string{
-	"SEED_ENSURE",
-	"EVENT_INGEST_DRIVER",
-	"ANALYTICS_PROBE",
-	"METER_AGGREGATION_PROBE",
-	"WALLET_BALANCE_PROBE",
-	"WALLET_DEBIT_VERIFICATION",
-	"CYCLE_INVOICE_PROBE",
-	"MULTI_CADENCE_INVOICE_PROBE",
-	"ENTITLEMENT_AND_USAGE_PROBE",
-	"NEW_CUSTOMER_LIFECYCLE",
-	"CANCEL_CUSTOMER_FLOW",
-	"SUBSCRIPTION_MODIFICATION_FLOW",
-	"BUCKETED_METER_PROBE",
-	"COMMITMENT_TRUE_UP_PROBE",
-	"ENTITLEMENT_ENFORCEMENT_PROBE",
-	"TAX_APPLICATION_PROBE",
-	"COUPON_APPLICATION_PROBE",
-	"PERSISTENT_BILLING_INVARIANTS_PROBE",
-	"ENTITLEMENT_GRANT_ADDITIVE_PROBE",
-	"LOW_WALLET_ALERT_LISTENER",
-	"LOW_BALANCE_ALERT_PROBE",
-	"PAYMENT_LINK_PROBE",
-	"PAYMENT_METHOD_PROBE",
-	"PAYMENT_AUTOCHARGE_PROBE",
-	"JANITOR",
-}
-
-var checkDefaultIntervals = map[string]time.Duration{
-	"SEED_ENSURE":                         6 * time.Hour,
-	"EVENT_INGEST_DRIVER":                 1 * time.Second, // rate-scheduled internally
-	"ANALYTICS_PROBE":                     2 * time.Minute,
-	"METER_AGGREGATION_PROBE":             3 * time.Minute,
-	"WALLET_BALANCE_PROBE":                2 * time.Minute,
-	"WALLET_DEBIT_VERIFICATION":           20 * time.Minute,
-	"CYCLE_INVOICE_PROBE":                 15 * time.Minute,
-	"MULTI_CADENCE_INVOICE_PROBE":         15 * time.Minute,
-	"ENTITLEMENT_AND_USAGE_PROBE":         5 * time.Minute,
-	"NEW_CUSTOMER_LIFECYCLE":              10 * time.Minute,
-	"CANCEL_CUSTOMER_FLOW":                30 * time.Minute,
-	"SUBSCRIPTION_MODIFICATION_FLOW":      20 * time.Minute,
-	"BUCKETED_METER_PROBE":                12 * time.Minute,
-	"COMMITMENT_TRUE_UP_PROBE":            17 * time.Minute,
-	"ENTITLEMENT_ENFORCEMENT_PROBE":       8 * time.Minute,
-	"TAX_APPLICATION_PROBE":               15 * time.Minute,
-	"COUPON_APPLICATION_PROBE":            15 * time.Minute,
-	"PERSISTENT_BILLING_INVARIANTS_PROBE": 30 * time.Minute,
-	"ENTITLEMENT_GRANT_ADDITIVE_PROBE":    15 * time.Minute,
-	"LOW_WALLET_ALERT_LISTENER":           0, // listener — not a ticker
-	"LOW_BALANCE_ALERT_PROBE":             5 * time.Minute,
-	"PAYMENT_LINK_PROBE":                  20 * time.Minute,
-	"PAYMENT_METHOD_PROBE":                30 * time.Minute,
-	"PAYMENT_AUTOCHARGE_PROBE":            30 * time.Minute,
-	"JANITOR":                             1 * time.Hour,
+// removedEnvPrefixes cover the per-check, payment and billing-matrix families.
+var removedEnvPrefixes = map[string]string{
+	"E2EPROBE_CHECK_":          "the scenarios list (name, every, enabled, personas)",
+	"E2EPROBE_PAYMENTS_":       "a persona with the payment trait",
+	"E2EPROBE_BILLING_MATRIX_": "the billing-matrix scenario entry (enabled, families, per_run, assert_known_issues)",
 }
 
 func LoadConfig() (*Config, error) {
@@ -215,9 +77,6 @@ func LoadConfig() (*Config, error) {
 		APIKey:              os.Getenv("E2EPROBE_API_KEY"),
 		Enabled:             getBool("E2EPROBE_ENABLED", true),
 		DryRun:              getBool("E2EPROBE_DRY_RUN", false),
-		EventIngestRate:     getInt(&warnings, "E2EPROBE_EVENT_INGEST_RATE", 5),
-		EventIngestSeed:     getInt64(&warnings, "E2EPROBE_EVENT_INGEST_SEED", 42),
-		ListenerPort:        getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
 		TenantID:            os.Getenv("E2EPROBE_TENANT_ID"),
 		EnvironmentID:       os.Getenv("E2EPROBE_ENVIRONMENT_ID"),
 		Email:               os.Getenv("E2EPROBE_EMAIL"),
@@ -225,9 +84,11 @@ func LoadConfig() (*Config, error) {
 		BootstrapSecretName: os.Getenv("E2EPROBE_BOOTSTRAP_SECRET_NAME"),
 		BootstrapSecretKey:  os.Getenv("E2EPROBE_BOOTSTRAP_SECRET_KEY"),
 		PodNamespace:        os.Getenv("POD_NAMESPACE"),
-		HeartbeatInterval:   getDuration(&warnings, "E2EPROBE_HEARTBEAT_INTERVAL", 1*time.Hour),
-		JanitorMaxAge:       getDuration(&warnings, "E2EPROBE_JANITOR_MAX_AGE", 1*time.Hour),
 		LogLevel:            getLogLevel(&warnings, "E2EPROBE_LOG_LEVEL", "info"),
+		ListenerPort:        getInt(&warnings, "E2EPROBE_LISTENER_PORT", 8765),
+		SuiteFile:           os.Getenv("E2EPROBE_SUITE_FILE"),
+		StateFile:           os.Getenv("E2EPROBE_STATE_FILE"),
+		WebhookToken:        os.Getenv("E2EPROBE_WEBHOOK_TOKEN"),
 		Slack: SlackConfig{
 			WebhookURL: os.Getenv("E2EPROBE_SLACK_WEBHOOK_URL"),
 			BotToken:   os.Getenv("E2EPROBE_SLACK_BOT_TOKEN"),
@@ -236,30 +97,21 @@ func LoadConfig() (*Config, error) {
 		OTEL: OTELConfig{
 			Enabled: getBool("E2EPROBE_OTEL_ENABLED", false),
 		},
-		BillingMatrix: BillingMatrixConfig{
-			Enabled:           getBool("E2EPROBE_BILLING_MATRIX_ENABLED", false),
-			ScenariosPerRun:   getInt(&warnings, "E2EPROBE_BILLING_MATRIX_SCENARIOS_PER_RUN", 3),
-			AssertKnownIssues: getBool("E2EPROBE_BILLING_MATRIX_ASSERT_KNOWN_ISSUES", false),
-		},
-		Checks: make(map[string]CheckConfig, len(CheckNames)),
 	}
-	for _, name := range CheckNames {
-		c.Checks[name] = CheckConfig{
-			Enabled:  getBool("E2EPROBE_CHECK_"+name+"_ENABLED", true),
-			Interval: getDuration(&warnings, "E2EPROBE_CHECK_"+name+"_INTERVAL", checkDefaultIntervals[name]),
-		}
+	if c.StateFile == "" {
+		c.StateFile = filepath.Join(os.TempDir(), "e2eprobe-state.json")
 	}
+	warnings = append(warnings, removedEnvWarnings(os.Environ())...)
 	c.Warnings = warnings
-	payments, err := loadPaymentsConfig(&c.Warnings)
-	if err != nil {
-		return nil, err
-	}
-	c.Payments = payments
+
 	if c.APIHost == "" {
 		return nil, errors.New("E2EPROBE_API_HOST is required")
 	}
 	if c.APIKey == "" && !c.NeedsBootstrap() {
 		return nil, errors.New("no credentials: set E2EPROBE_API_KEY, or set E2EPROBE_EMAIL and E2EPROBE_PASSWORD to bootstrap one (requires the flexprice-native auth provider)")
+	}
+	if c.DryRun && c.NeedsBootstrap() {
+		return nil, errors.New("E2EPROBE_DRY_RUN needs E2EPROBE_API_KEY: bootstrapping would mint a credential")
 	}
 	if c.Slack.BotToken != "" && c.Slack.Channel == "" {
 		return nil, errors.New("E2EPROBE_SLACK_CHANNEL is required when E2EPROBE_SLACK_BOT_TOKEN is set")
@@ -267,36 +119,28 @@ func LoadConfig() (*Config, error) {
 	return c, nil
 }
 
-// loadPaymentsConfig reads the payment probe settings. It refuses any gateway
-// credential that is not test mode: the probes charge cards.
-func loadPaymentsConfig(warnings *[]string) (PaymentsConfig, error) {
-	out := PaymentsConfig{
-		SettleTimeout:     getDuration(warnings, "E2EPROBE_PAYMENTS_SETTLE_TIMEOUT", 90*time.Second),
-		AssertKnownIssues: getBool("E2EPROBE_PAYMENTS_ASSERT_KNOWN_ISSUES", false),
-	}
-	for _, name := range strings.Split(os.Getenv("E2EPROBE_PAYMENTS_PROVIDERS"), ",") {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name == "" {
+// removedEnvWarnings names every env var the suite file replaced that is still set.
+func removedEnvWarnings(environ []string) []string {
+	var out []string
+	for _, kv := range environ {
+		name, _, _ := strings.Cut(kv, "=")
+		if key, ok := removedEnv[name]; ok {
+			out = append(out, fmt.Sprintf("%s is no longer read; set %s in the suite file", name, key))
 			continue
 		}
-		def, ok := paymentDefaultCurrency[name]
-		if !ok {
-			return out, fmt.Errorf("E2EPROBE_PAYMENTS_PROVIDERS: unsupported provider %q (want stripe, chargebee or razorpay)", name)
+		for prefix, key := range removedEnvPrefixes {
+			if strings.HasPrefix(name, prefix) {
+				out = append(out, fmt.Sprintf("%s is no longer read; set %s in the suite file", name, key))
+			}
 		}
-		p := PaymentProviderConfig{
-			Provider:                name,
-			Currency:                strings.ToUpper(os.Getenv("E2EPROBE_PAYMENTS_" + strings.ToUpper(name) + "_CURRENCY")),
-			FixedCustomerExternalID: paymentFixedCustomer[name],
-			DeclineCardLast4:        paymentDeclineCardLast4[name],
-			AutoChargeInterval:      paymentAutoChargeInterval[name],
-		}
-		if p.Currency == "" {
-			p.Currency = def
-		}
-		p.SettleTimeout = getDuration(warnings, "E2EPROBE_PAYMENTS_"+strings.ToUpper(name)+"_SETTLE_TIMEOUT", paymentDefaultSettleTimeout[name])
-		out.Providers = append(out.Providers, p)
 	}
-	return out, nil
+	sort.Strings(out)
+	return out
+}
+
+// NeedsBootstrap reports whether the probe must provision its own API key.
+func (c *Config) NeedsBootstrap() bool {
+	return c.APIKey == "" && c.Email != "" && c.Password != ""
 }
 
 func getBool(key string, def bool) bool {
@@ -320,19 +164,6 @@ func getInt(warnings *[]string, key string, def int) int {
 	return n
 }
 
-func getInt64(warnings *[]string, key string, def int64) int64 {
-	v := os.Getenv(key)
-	if v == "" {
-		return def
-	}
-	n, err := strconv.ParseInt(v, 10, 64)
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid int64; using default %d", key, v, def))
-		return def
-	}
-	return n
-}
-
 func getLogLevel(warnings *[]string, key, def string) string {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
 	if v == "" {
@@ -344,35 +175,4 @@ func getLogLevel(warnings *[]string, key, def string) string {
 	}
 	*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid log level (debug|info|warn|error); using default %q", key, v, def))
 	return def
-}
-
-func getDuration(warnings *[]string, key string, def time.Duration) time.Duration {
-	v := os.Getenv(key)
-	if v == "" {
-		return def
-	}
-	d, err := time.ParseDuration(v)
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s=%q is not a valid duration; using default %s", key, v, def))
-		return def
-	}
-	return d
-}
-
-// NeedsBootstrap reports whether the probe must provision its own API key.
-// An explicit API key always wins, so an existing deployment never changes
-// behaviour by having credentials present.
-func (c *Config) NeedsBootstrap() bool {
-	return c.APIKey == "" && c.Email != "" && c.Password != ""
-}
-
-func init() {
-	if len(CheckNames) != len(checkDefaultIntervals) {
-		panic(fmt.Sprintf("e2eprobe config: CheckNames has %d entries but checkDefaultIntervals has %d", len(CheckNames), len(checkDefaultIntervals)))
-	}
-	for _, name := range CheckNames {
-		if _, ok := checkDefaultIntervals[name]; !ok {
-			panic(fmt.Sprintf("e2eprobe config: CheckNames has %q but checkDefaultIntervals lacks it", name))
-		}
-	}
 }

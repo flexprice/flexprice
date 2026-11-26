@@ -6,10 +6,7 @@ on:
       - develop
       - main
     paths:
-      - 'cmd/e2eprobe/**'
       - 'internal/ee/e2eprobe/**'
-      - 'go.mod'
-      - 'go.sum'
       - 'Dockerfile.e2eprobe'
       - '.github/workflows/publish-e2eprobe-image.yml'
   workflow_dispatch:
@@ -117,11 +114,13 @@ jobs:
           provenance: true
           sbom: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha_tag }}
+          build-args: |
+            VERSION=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.title=e2eprobe
-            org.opencontainers.image.description=Flexprice end-to-end synthetic probe
+            org.opencontainers.image.description=Flexprice suite-driven synthetic probe
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Trivy vulnerability scan (fail on HIGH/CRITICAL)

@@ -66,9 +66,20 @@ down:
 run-server:
 	go run cmd/server/main.go
 
-.PHONY: run-e2eprobe
+# e2eprobe: the suite-driven synthetic probe. It is its own Go module under
+# internal/ee/e2eprobe, so the server's test, coverage and lint targets never
+# touch it. SUITE=path/to/suite.yaml overrides the suite embedded in the binary.
+E2EPROBE_DIR := internal/ee/e2eprobe
+SUITE ?=
+.PHONY: run-e2eprobe e2eprobe-validate e2eprobe-describe test-e2eprobe
 run-e2eprobe:
-	go run cmd/e2eprobe/main.go
+	cd $(E2EPROBE_DIR) && go run ./cmd/e2eprobe run $(if $(SUITE),--suite $(abspath $(SUITE)),)
+e2eprobe-validate:
+	cd $(E2EPROBE_DIR) && go run ./cmd/e2eprobe validate $(if $(SUITE),--suite $(abspath $(SUITE)),)
+e2eprobe-describe:
+	cd $(E2EPROBE_DIR) && go run ./cmd/e2eprobe describe $(if $(SUITE),--suite $(abspath $(SUITE)),)
+test-e2eprobe:
+	cd $(E2EPROBE_DIR) && go vet ./... && go test -race ./...
 
 E2EPROBE_IMAGE ?= flexprice/e2eprobe
 
