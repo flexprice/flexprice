@@ -1615,9 +1615,7 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 		return nil
 	}
 
-	priceFilter := types.NewNoLimitPriceFilter()
-	priceFilter.PriceIDs = priceIDs
-	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	prices, err := s.PriceRepo.ListByIDs(ctx, priceIDs)
 	if err != nil {
 		return err
 	}
