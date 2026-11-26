@@ -47,8 +47,12 @@ func TestInvoiceFreshness_PassFreshInvoice(t *testing.T) {
 	if r.Attrs["subscription_id"] != p.SubscriptionID() || r.Attrs["latest_period_end"] == "" || r.Attrs["lag"] == "" {
 		t.Errorf("attrs = %v", r.Attrs)
 	}
-	if q := d.fc.Invoice.Queries[0]; q.CustomerID == nil || *q.CustomerID != p.CustomerID() || q.SubscriptionID != nil {
+	q := d.fc.Invoice.Queries[0]
+	if q.CustomerID == nil || *q.CustomerID != p.CustomerID() || q.SubscriptionID != nil {
 		t.Errorf("invoices must be queried by customer and filtered here: %+v", q)
+	}
+	if q.InvoiceType == nil || *q.InvoiceType != types.InvoiceTypeSubscription || q.Order == nil || *q.Order != types.InvoiceFilterOrderDesc || q.Limit == nil || *q.Limit != invoiceScanLimit {
+		t.Errorf("the query must ask for subscription invoices only, newest first and bounded, so credit-purchase invoices cannot crowd out the cycle invoice: %+v", q)
 	}
 }
 

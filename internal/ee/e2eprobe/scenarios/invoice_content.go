@@ -381,9 +381,16 @@ func subscriptionOf(ctx context.Context, sc *scenario.Context, subID string) (ty
 // the given statuses (any when none). The query is by customer and filtered
 // here: the server-side subscription filter has returned nothing for
 // subscriptions that do have invoices.
+// invoiceScanLimit bounds one invoice query; a persona's cycle invoices fit
+// well inside it once credit-purchase invoices are filtered out.
+const invoiceScanLimit = int64(100)
+
+// subscriptionInvoices lists the persona's subscription invoices in the given
+// statuses, newest first, and keeps the subscription's own.
 func subscriptionInvoices(ctx context.Context, sc *scenario.Context, subID string, statuses ...types.InvoiceStatus) ([]types.InvoiceResponse, error) {
 	customerID := sc.Persona().CustomerID()
-	resp, err := sc.Client().Invoices().Query(ctx, types.InvoiceFilter{CustomerID: &customerID, InvoiceStatus: statuses})
+	invType, order, limit := types.InvoiceTypeSubscription, types.InvoiceFilterOrderDesc, invoiceScanLimit
+	resp, err := sc.Client().Invoices().Query(ctx, types.InvoiceFilter{CustomerID: &customerID, InvoiceStatus: statuses, InvoiceType: &invType, Order: &order, Limit: &limit})
 	if err != nil {
 		return nil, err
 	}
