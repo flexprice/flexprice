@@ -111,7 +111,7 @@ func (f *CollectionsDateFilter) validateRange() error {
 
 	if f.To.After(f.From.Add(CollectionsMaxRangeYears)) {
 		return ierr.NewErrorf("range too long").
-			WithHintf("The range between from and to cannot be longer than %d years.", CollectionsMaxRangeYears).
+			WithHintf("The range between from and to cannot be longer than %d days.", int(CollectionsMaxRangeYears.Hours()/24)).
 			Mark(ierr.ErrValidation)
 	}
 
