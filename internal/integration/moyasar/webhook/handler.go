@@ -168,7 +168,7 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		"moyasar_payment_id", payment.ID,
 	)
 
-	flexpricePayment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	flexpricePayment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID, SkipGatewaySync: true})
 	if err != nil {
 		h.logger.Error(ctx, "failed to fetch flexprice payment",
 			"flexprice_payment_id", flexpricePaymentID,
