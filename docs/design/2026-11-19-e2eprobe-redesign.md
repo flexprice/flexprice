@@ -3,7 +3,7 @@
 - **Date:** 2026-11-19
 - **Author:** Ankit Malik
 - **Status:** Approved (decisions delegated to the author)
-- **Module:** `internal/ee/e2eprobe`, `cmd/e2eprobe/v2`, `internal/ee/infrastructure/helm/flexprice/templates/probe`
+- **Module:** `internal/ee/e2eprobe`, `internal/ee/e2eprobe/cmd/e2eprobe`, `internal/ee/infrastructure/helm/flexprice/templates/probe`
 
 ## 1. Intent
 
@@ -75,11 +75,11 @@ correctness, not just liveness. Today it cannot carry that weight:
   time window no wider than one day.
 - **Ingest load** is declared and budgeted. Default cadence is one bulk batch per persona every
   10 minutes; the computed daily total must stay under the suite's `max_events_per_day`.
-- **Deployment surface stays, twice.** The previous generation keeps its chart component, image,
-  GHCR workflow and `make run-e2eprobe` untouched while this one runs beside it from
-  `internal/ee/e2eprobe/v2` with its own (`e2eprobeV2.*`, `ghcr.io/flexprice/e2eprobe-v2`,
-  `publish-e2eprobe-v2-image.yml`, `make run-e2eprobe-v2`). Secrets stay in env: `E2EPROBE_API_HOST`, `E2EPROBE_API_KEY`, Slack webhook or bot token,
-  tenant and environment ids, bootstrap credentials. Everything optional moves to the suite file.
+- **Deployment surface stays.** The chart component (`e2eprobe.*`), image name
+  (`ghcr.io/flexprice/e2eprobe`), GHCR workflow and `make run-e2eprobe` are the previous probe's;
+  the probe itself is its own Go module under `internal/ee/e2eprobe` (§5.10). Secrets stay in env:
+  `E2EPROBE_API_HOST`, `E2EPROBE_API_KEY`, Slack webhook or bot token, tenant and environment ids,
+  bootstrap credentials. Everything optional moves to the suite file.
 - **SDK v2.1.51** is the client. Fields the SDK does not carry go through `RawOps`; a response the SDK cannot decode is read raw into a probe-owned type (`AlertLog`: the SDK types `alert_info.value_at_time` as a time because the swagger marks it `date-time`) and the type is dropped once the SDK is fixed.
 - **Single replica.** Personas are shared mutable fixtures.
 - **Webhook delivery** is configured server-side (`webhook.tenants.<id>` or a Svix endpoint); the
@@ -120,7 +120,7 @@ Three independent axes were decided. Each row lists the consequence of choosing 
 ### 5.1 Package layout
 
 ```
-internal/ee/e2eprobe/v2/
+internal/ee/e2eprobe/
   e2eprobe.go       Kind, Status, Result, Attrs: the shared vocabulary
   error.go          CheckError and SDK error enrichment (kept)
   client*.go        SDK adapters (kept; EventOps drops ListRaw and gains IngestBulk)
@@ -133,7 +133,7 @@ internal/ee/e2eprobe/v2/
   incident/         result stream to incident state machine, notifiers (log, Slack, OTEL), digest, state file
   scenario/         Scenario, Context, Binding, Catalog, Runner, /status
   scenarios/        one file per scenario
-cmd/e2eprobe/v2/
+internal/ee/e2eprobe/cmd/e2eprobe/
   main.go           run (default) | once | validate | describe
   suite.example.yaml
 ```
@@ -240,8 +240,8 @@ Rules:
   instead of failing.
 - Event profiles (`standard`, `bucketed`) are defined in Go next to the oracle because the expected
   aggregate depends on the exact values sent. The suite picks a profile; `describe` prints it.
-- The default suite is embedded in the binary so `make run-e2eprobe-v2` works with no file.
-  `E2EPROBE_SUITE_FILE` points at an override; the chart renders `e2eprobeV2.suite` into a ConfigMap
+- The default suite is embedded in the binary so `make run-e2eprobe` works with no file.
+  `E2EPROBE_SUITE_FILE` points at an override; the chart renders `e2eprobe.suite` into a ConfigMap
   mounted at `/etc/e2eprobe/suite.yaml` and rolls the pod when its checksum changes.
 
 ### 5.3 World: traits, personas, clones
@@ -377,37 +377,34 @@ misconfigured gateway shows as one preflight incident plus explicit coverage gap
 - No scenario polls immediately after ingest except the alert, wallet-debit and preview flows, which
   are bounded and infrequent.
 
-### 5.10 Coexistence and migration
+### 5.10 Replacement and module boundary
 
-Both generations run side by side until this one has earned trust, so the move is reversible and
-the old probe's incidents keep flowing meanwhile.
+This generation replaced the check-based probe in place, in one change, instead of running beside
+it: one code path, one image name, one chart component, and a rollout staged per region through the
+image tag.
 
-- The old code stays byte for byte at `internal/ee/e2eprobe` and `cmd/e2eprobe`; this generation
-  lives in `internal/ee/e2eprobe/v2` and `cmd/e2eprobe/v2` and shares only `bootstrap/` and
-  `billingmatrix/`. Chart component `templates/probe-v2` with `e2eprobeV2.*` values, image
-  `ghcr.io/flexprice/e2eprobe-v2`, workflow `publish-e2eprobe-v2-image.yml` and
-  `Dockerfile.e2eprobe-v2` mirror the old ones; the old publish workflow ignores `v2/` paths.
-- Every default persona is its own customer (`e2eprobe-<name>`), so the two generations never write
-  to one customer and the oracle's totals stay exact. `external_id` on a persona still adopts an
-  existing customer for a region that wants the old invoice history after the old probe is gone.
-- The janitor deletes only customers carrying this generation's markers (`e2eprobe-eph-` prefix or
-  the ephemeral cohort tag). The old probe's ephemerals and persistent customers are listed as
-  legacy in the sweep report and digest; removing them is a manual decision.
-- Shared by lookup key and reconciled the same way by both generations: the plan and its prices,
-  meters, features, entitlements, coupon and tax rate. Neither deletes them.
-- The default suite assumes no payment gateway. A region adds a payer persona and
-  `tenant.connections`; the hand-provisioned cards customer is shared with the old probe, so the
-  payment scenarios run in one generation at a time.
-- A separate environment and API key for v2 is the recommended way to run both, and it exercises
-  provisioning from nothing, which adopting the old customers never did.
+- The probe is its own Go module (`internal/ee/e2eprobe/go.mod`; module path unchanged; main
+  package at `internal/ee/e2eprobe/cmd/e2eprobe`). It imports the public SDK and nothing from the
+  server, so `./internal/...` in the server's test, coverage and lint targets never descends into it,
+  its image builds from this directory alone, and the enterprise license path is kept. A small
+  slog-based `logger` package replaces the server logger (stdout JSON; traces and incident spans
+  still go out over OTLP); the two server metadata constants a scenario needs are copied with their
+  origin named.
+- Chart component, Secret, bootstrap contract, image name (`ghcr.io/flexprice/e2eprobe`) and
+  workflow names are the previous probe's. New in the chart: the suite ConfigMap with a checksum
+  annotation, the webhook token key, startup and health probes, the state file.
+- On a tenant the previous probe used: fixtures are looked up before they are created (plan and
+  features by lookup key, coupon and tax rate by code, meters by event name) and adopted when they
+  match; every persona is its own customer (`e2eprobe-<name>`); the previous probe's customers are
+  listed as legacy by the janitor and digest and never deleted; `external_id` adopts one on purpose
+  (the payer persona adopts the cards customer).
 - `E2EPROBE_CHECK_*`, `E2EPROBE_PAYMENTS_*`, `E2EPROBE_BILLING_MATRIX_*`, `E2EPROBE_EVENT_INGEST_*`,
-  `E2EPROBE_HEARTBEAT_INTERVAL` and `E2EPROBE_JANITOR_MAX_AGE` are not read by v2; the suite carries
-  them. Startup logs a warning for each one still set, naming the suite key that replaces it.
-- Swap, once trusted: delete the old Go files and docs, `templates/probe`, `Dockerfile.e2eprobe`
-  and its workflow; move `v2/` up and drop `/v2` from import paths; rename `e2eprobeV2` to
-  `e2eprobe` in values, region files and `helm-validate.yml`; point the image name back; fold the
-  `-v2` make targets, `.gitignore` exception and security-scan comment into their plain names.
-  Nothing in v2 depends on the old code.
+  `E2EPROBE_HEARTBEAT_INTERVAL` and `E2EPROBE_JANITOR_MAX_AGE` are not read; the suite carries them.
+  Startup logs a warning for each one still set, naming the suite key that replaces it.
+- Decision record: a coexistence layout (both generations in the tree, separate chart component and
+  image) was built and verified live on 2026-11-25, then replaced by this in-place swap on
+  2026-11-26: two generations doubled the operational surface, and the confidence they were meant
+  to buy comes from a staged rollout, not from parallel code.
 
 ### 5.11 Scenario catalog (ported coverage)
 
@@ -457,7 +454,7 @@ region's suite while debugging.
 - Incident tracker tests drive the state machine through open, remind, resolve, skip and rollup.
 - Suite tests cover the embedded default, trait validation, unknown names and the load budget.
 - Inbox tests cover store bounds, `Await` matching and the shared secret.
-- `go test -tags e2eprobe_integration ./cmd/e2eprobe/v2/` keeps the live smoke; the billing-matrix live
+- `go test -tags e2eprobe_integration ./internal/ee/e2eprobe/cmd/e2eprobe/` keeps the live smoke; the billing-matrix live
   test is kept.
 
 ## 7. Left to the builder
@@ -469,10 +466,10 @@ region's suite while debugging.
 
 ## 8. Rollout
 
-1. Land v2 beside the current probe; nothing changes for regions until `e2eprobeV2.enabled` is set.
-2. Enable v2 on staging with its own API key, ideally in its own environment; run `describe` and
-   `once --scenario preflight` first, then watch one digest cycle for false pages and skips.
-3. Add the staging gateway to a payer persona in `e2eprobeV2.suite`; move the payment scenarios
-   over by disabling them in the old probe's env for that region.
-4. Repeat per region. When every region runs v2 and the old probe has been quiet for a cycle, do
-   the swap in §5.10 and delete the legacy customers the digest lists.
+1. Merge. The image publishes under the previous name and tag scheme; nothing changes for a region
+   until its `e2eprobe.image.tag` moves.
+2. Staging first, with its own API key and ideally its own environment: `describe`, then
+   `once --scenario preflight`, then one digest cycle for false pages and skips. The invoice
+   scenarios can only pass after a first cycle invoice exists, so this stage is a billing cycle.
+3. Add the staging gateway to a payer persona in `e2eprobe.suite` and watch the payment scenarios.
+4. Roll the tag per region. Delete the legacy customers the digest lists once a region is settled.

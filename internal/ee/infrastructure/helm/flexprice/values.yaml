@@ -744,71 +744,20 @@ frontend:
   # Inherits global topologySpreadConstraints unless overridden here.
   topologySpreadConstraints: []
 
-# e2eprobe — synthetic end-to-end probe that runs continuously against a
-# live environment, driving real billing flows under a dedicated probe
-# tenant and alerting to Slack on assertion failure. Off by default so
-# existing regions are unaffected; opt in per-region.
-e2eprobe:
-  enabled: false          # opt-in; existing regions unaffected
-  # SEPARATE GHCR repo from the app image — the probe ships its own artifact.
-  image:
-    repository: ghcr.io/flexprice/e2eprobe
-    # Pin an explicit tag or digest per region. Left empty on purpose: the
-    # template falls back to the chart appVersion rather than a mutable
-    # floating tag, so enabling the probe cannot silently pull whatever was
-    # last pushed to `develop` into a production cluster.
-    tag: ""
-    pullPolicy: IfNotPresent
-  # NOTE: replica count is NOT configurable. The Deployment hardcodes 1 because
-  # concurrent probes race on shared seeded fixtures and produce false
-  # failures. See templates/probe/deployment.yaml.
-  existingSecret: e2eprobe-secrets
-  secretKeys:
-    apiKey: api-key
-    slackWebhookUrl: slack-webhook-url
-  # Signup bootstrap, for airgapped deployments with no way to pre-provision an
-  # API key. The probe signs up, mints a key, and patches it into secretName.
-  #
-  # Requires the flexprice-native auth provider (auth.provider: "flexprice",
-  # the chart default). Supabase-backed deployments reject signup outright, and
-  # a tenant enforcing SSO refuses password login.
-  #
-  # Off by default: with this false the probe renders exactly as before, and
-  # its ServiceAccount token stays unmounted.
-  bootstrap:
-    enabled: false
-    # Dedicated Secret holding ONLY the bootstrap output. Keep it separate from
-    # existingSecret above: the probe is granted write access to this object,
-    # so it must never also carry the Slack webhook.
-    secretName: e2eprobe-bootstrap
-    secretKey: api-key
-    # Secret supplying the signup credentials. Never put a password in
-    # e2eprobe.env — the chart rejects that.
-    existingCredentialsSecret: e2eprobe-bootstrap-credentials
-    emailKey: email
-    passwordKey: password
-  env: {}                 # E2EPROBE_* non-secret vars, set per region
-  service: {port: 8765}
-  resources:
-    requests: {cpu: 100m, memory: 128Mi}
-    limits: {memory: 512Mi}
-  nodeSelector: {}
-  tolerations: []
 
-# e2eprobe v2 — the suite-driven probe (internal/ee/e2eprobe/v2). Runs beside
-# e2eprobe above until that generation is retired; both are off by default.
-# Give it its own API key (ideally for its own environment) so the two never
-# write to one customer, and its own Secret so neither can read the other's.
-e2eprobeV2:
+# e2eprobe — the suite-driven synthetic probe (internal/ee/e2eprobe, image
+# ghcr.io/flexprice/e2eprobe). Off by default. Give it its own API key, ideally
+# for its own environment, so it never writes to a real customer.
+e2eprobe:
   enabled: false
   image:
-    repository: ghcr.io/flexprice/e2eprobe-v2
+    repository: ghcr.io/flexprice/e2eprobe
     # Pin an explicit tag or digest per region; empty falls back to appVersion.
     tag: ""
     pullPolicy: IfNotPresent
-  # replicas is hardcoded to 1 in templates/probe-v2/deployment.yaml: a second
+  # replicas is hardcoded to 1 in templates/probe/deployment.yaml: a second
   # sender breaks the oracle's exact usage totals.
-  existingSecret: e2eprobe-v2-secrets
+  existingSecret: e2eprobe-secrets
   secretKeys:
     apiKey: api-key
     slackWebhookUrl: slack-webhook-url
@@ -818,15 +767,15 @@ e2eprobeV2:
   # Signup bootstrap for airgapped deployments; same contract as e2eprobe.bootstrap.
   bootstrap:
     enabled: false
-    secretName: e2eprobe-v2-bootstrap
+    secretName: e2eprobe-bootstrap
     secretKey: api-key
-    existingCredentialsSecret: e2eprobe-v2-bootstrap-credentials
+    existingCredentialsSecret: e2eprobe-bootstrap-credentials
     emailKey: email
     passwordKey: password
   env: {}                 # E2EPROBE_* non-secret vars, set per region
   # Suite file for this region: personas, scenarios, tenant expectations and
   # alert thresholds. Empty runs the suite embedded in the image; see
-  # cmd/e2eprobe/v2/suite.example.yaml for every key. Rendered into a ConfigMap
+  # internal/ee/e2eprobe/cmd/e2eprobe/suite.example.yaml for every key. Rendered into a ConfigMap
   # mounted at /etc/e2eprobe/suite.yaml; a change rolls the pod.
   suite: {}
   service: {port: 8765}

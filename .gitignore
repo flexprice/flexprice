@@ -44,8 +44,7 @@ coverage.html
 !.env.project
 !.env.vault
 !.env.local
-!cmd/e2eprobe/.env.example
-!cmd/e2eprobe/v2/.env.example
+!internal/ee/e2eprobe/cmd/e2eprobe/.env.example
 .flaskenv*
 .secrets
 .secrets.git

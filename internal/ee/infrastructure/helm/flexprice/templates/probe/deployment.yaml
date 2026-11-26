@@ -1,11 +1,11 @@
 {{- if .Values.e2eprobe.enabled }}
-# e2eprobe — synthetic end-to-end probe.
+# e2eprobe — the suite-driven synthetic probe (internal/ee/e2eprobe).
+# It runs beside the previous generation (templates/probe) until that one is
+# retired; give it its own API key, secret and, ideally, environment.
 #
-# Single replica by design: the checks mutate shared seeded fixtures under one
-# tenant, and a second replica would race against the first into false
-# failures. `strategy.rollingUpdate.maxSurge: 0` preserves that invariant
-# across deploys — never bump replicaCount or maxSurge above 0 for this
-# component without first reworking the probe's fixture isolation.
+# Single replica by design: the ledger that predicts every usage total assumes
+# one sender, and personas are provisioned by one process. `maxSurge: 0`
+# preserves that across deploys — never raise replicas or maxSurge above 0.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,9 +13,7 @@ metadata:
   labels:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
 spec:
-  # Hardcoded, NOT configurable. The checks mutate shared seeded fixtures under
-  # a single tenant, so a second replica races the first into false failures.
-  # This is a correctness constraint, so the chart does not expose it as a knob.
+  # Hardcoded, NOT configurable: a second sender breaks the oracle's exact totals.
   replicas: 1
   strategy:
     type: RollingUpdate
@@ -30,6 +28,11 @@ spec:
     metadata:
       labels:
         {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "e2eprobe") | nindent 8 }}
+      {{- if .Values.e2eprobe.suite }}
+      annotations:
+        # The suite is read once at startup; a changed ConfigMap must roll the pod.
+        checksum/suite: {{ include (print $.Template.BasePath "/probe/configmap-suite.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -88,15 +91,15 @@ spec:
               secret-backed credential with a plaintext literal — the probe
               would keep running, authenticating with the wrong key.
               Reserved: E2EPROBE_API_KEY, E2EPROBE_SLACK_WEBHOOK_URL,
-              E2EPROBE_LISTENER_PORT, TMPDIR, E2EPROBE_EMAIL,
-              E2EPROBE_PASSWORD.
+              E2EPROBE_WEBHOOK_TOKEN, E2EPROBE_SUITE_FILE, E2EPROBE_STATE_FILE,
+              E2EPROBE_LISTENER_PORT, TMPDIR, E2EPROBE_EMAIL, E2EPROBE_PASSWORD.
 
               The credentials are reserved for the same reason as the key, and
               more sharply: e2eprobe.env values are plaintext in the rendered
               manifest, so a password set there would be readable by anyone who
               can view the release.
             */}}
-            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_LISTENER_PORT" "TMPDIR" "E2EPROBE_EMAIL" "E2EPROBE_PASSWORD" }}
+            {{- $reserved := list "E2EPROBE_API_KEY" "E2EPROBE_SLACK_WEBHOOK_URL" "E2EPROBE_WEBHOOK_TOKEN" "E2EPROBE_SUITE_FILE" "E2EPROBE_STATE_FILE" "E2EPROBE_LISTENER_PORT" "TMPDIR" "E2EPROBE_EMAIL" "E2EPROBE_PASSWORD" }}
             {{- range $k, $v := .Values.e2eprobe.env }}
             {{- if has $k $reserved }}
             {{- fail (printf "e2eprobe.env may not set %s — it is managed by the chart (reserved: %s)" $k (join ", " $reserved)) }}
@@ -153,21 +156,67 @@ spec:
                     cost a debugging cycle on a real cluster.
                   */}}
                   optional: true
+            {{- /*
+              Optional shared secret the inbox requires on every webhook post.
+              Set the same value as a header on the tenant's webhook endpoint
+              (X-E2EProbe-Token) so foreign posts are rejected with 401.
+            */}}
+            - name: E2EPROBE_WEBHOOK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.e2eprobe.existingSecret }}
+                  key: {{ .Values.e2eprobe.secretKeys.webhookToken }}
+                  optional: true
+            {{- if .Values.e2eprobe.suite }}
+            - name: E2EPROBE_SUITE_FILE
+              value: "/etc/e2eprobe/suite.yaml"
+            {{- end }}
+            - name: E2EPROBE_STATE_FILE
+              value: "/tmp/e2eprobe-state.json"
             - name: E2EPROBE_LISTENER_PORT
               value: {{ .Values.e2eprobe.service.port | quote }}
             - name: TMPDIR
               value: "/tmp"
-          # No HTTP liveness/readiness probe: the probe serves only /webhook, and
-          # only when the listener checks are enabled. Same posture as the
-          # chart's worker Deployment (templates/app/deployment-worker.yaml).
+          # /healthz is served once the listener is up, which comes after the
+          # signup bootstrap; the startup probe gives that path ten minutes
+          # before liveness takes over and restarts a wedged process.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            periodSeconds: 10
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: webhook
+            initialDelaySeconds: 5
+            periodSeconds: 15
           resources:
             {{- toYaml .Values.e2eprobe.resources | nindent 12 }}
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.e2eprobe.suite }}
+            - name: suite
+              mountPath: /etc/e2eprobe
+              readOnly: true
+            {{- end }}
       volumes:
+        # Holds the incident snapshot between container restarts; a rescheduled
+        # pod starts clean and re-derives open incidents within a few runs.
         - name: tmp
           emptyDir: {}
+        {{- if .Values.e2eprobe.suite }}
+        - name: suite
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-e2eprobe-suite
+        {{- end }}
       {{- with (default .Values.nodeSelector .Values.e2eprobe.nodeSelector) }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

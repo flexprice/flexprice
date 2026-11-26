@@ -1,5 +1,5 @@
 {{- if .Values.e2eprobe.enabled }}
-# Dedicated ServiceAccount for the probe.
+# Dedicated ServiceAccount for the probe; the bootstrap Role binds to it.
 #
 # Running it under the namespace `default` ServiceAccount would mount a token it
 # does not need, handing a compromised image whatever the default SA is granted
@@ -17,7 +17,7 @@ metadata:
     {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
 automountServiceAccountToken: {{ .Values.e2eprobe.bootstrap.enabled }}
 ---
-# ClusterIP for the probe's webhook listener.
+# ClusterIP for the probe's webhook listener, dashboard and /status endpoint.
 #
 # Cluster-internal only — the endpoint accepts unauthenticated JSON POSTs and
 # must NEVER be exposed through ingress. Do not add this Service to

@@ -1,9 +1,12 @@
 package e2eprobe
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	sdkerrors "github.com/flexprice/go-sdk/v2/models/errors"
@@ -101,5 +104,30 @@ func TestAttributesFrom_NoCheckErrorReturnsNil(t *testing.T) {
 	}
 	if attrs := AttributesFrom(nil); attrs != nil {
 		t.Errorf("expected nil for nil err, got %v", attrs)
+	}
+}
+
+func TestIsInfra(t *testing.T) {
+	status502 := int64(502)
+	cases := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"api 500", sdkerrors.NewAPIError("x", 500, "", nil), true},
+		{"response 502", &sdkerrors.ErrorResponse{HTTPStatusCode: &status502}, true},
+		{"deadline", context.DeadlineExceeded, true},
+		{"wrapped deadline", fmt.Errorf("get: %w", context.DeadlineExceeded), true},
+		{"url error", &url.Error{Op: "Post", URL: "http://x", Err: &net.OpError{Op: "dial", Err: errors.New("connection refused")}}, true},
+		{"api 400", sdkerrors.NewAPIError("x", 400, "", nil), false},
+		{"undecodable 500", sdkerrors.NewResponseValidationError("x", 500, "<html>", nil, errors.New("decode")), true},
+		{"undecodable 400", sdkerrors.NewResponseValidationError("x", 400, "{}", nil, errors.New("decode")), false},
+		{"plain", errors.New("assertion"), false},
+		{"nil", nil, false},
+	}
+	for _, tc := range cases {
+		if got := IsInfra(tc.err); got != tc.want {
+			t.Errorf("%s: IsInfra = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
