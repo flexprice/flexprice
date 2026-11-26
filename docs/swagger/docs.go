@@ -18910,14 +18910,6 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
-                "email_types": {
-                    "description": "EmailTypes lists the emails this contact receives; \"invoice\" makes them an invoice email recipient.",
-                    "type": "array",
-                    "maxItems": 10,
-                    "items": {
-                        "$ref": "#/definitions/types.ContactEmailType"
-                    }
-                },
                 "first_name": {
                     "type": "string",
                     "maxLength": 100
@@ -22013,6 +22005,14 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "additional_emails": {
+                    "description": "additional_emails receive the email types they list; the primary email always receives every type",
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/definitions/types.AdditionalEmail"
+                    }
+                },
                 "address_city": {
                     "description": "address_city is the city name with maximum 100 characters",
                     "type": "string",
@@ -24091,6 +24091,13 @@ const docTemplate = `{
             "description": "Customer response object containing all customer information",
             "type": "object",
             "properties": {
+                "additional_emails": {
+                    "description": "AdditionalEmails receive the email types they list; the primary Email always receives every type.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.AdditionalEmail"
+                    }
+                },
                 "address_city": {
                     "description": "AddressCity is the city of the customer's address",
                     "type": "string"
@@ -32262,6 +32269,14 @@ const docTemplate = `{
             "description": "Request object for updating an existing customer. All fields are optional - only provided fields will be updated",
             "type": "object",
             "properties": {
+                "additional_emails": {
+                    "description": "additional_emails replaces the customer's additional emails when provided; send [] to clear",
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/definitions/types.AdditionalEmail"
+                    }
+                },
                 "address_city": {
                     "description": "address_city is the updated city name with maximum 100 characters",
                     "type": "string",
@@ -34200,6 +34215,13 @@ const docTemplate = `{
         "Customer": {
             "type": "object",
             "properties": {
+                "additional_emails": {
+                    "description": "AdditionalEmails receive the email types they list; the primary Email always receives every type.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.AdditionalEmail"
+                    }
+                },
                 "address_city": {
                     "description": "AddressCity is the city of the customer's address",
                     "type": "string"
@@ -40417,6 +40439,26 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AdditionalEmail": {
+            "type": "object",
+            "required": [
+                "email",
+                "types"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "types": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/types.EmailType"
+                    }
+                }
+            }
+        },
         "types.AddonPriceOverrideRef": {
             "type": "object",
             "properties": {
@@ -40617,15 +40659,6 @@ const docTemplate = `{
                 "CommitmentStatusTerminated"
             ]
         },
-        "types.ContactEmailType": {
-            "type": "string",
-            "enum": [
-                "invoice"
-            ],
-            "x-enum-varnames": [
-                "ContactEmailTypeInvoice"
-            ]
-        },
         "types.ContractStatus": {
             "type": "string",
             "enum": [
@@ -40758,6 +40791,15 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "EmailTriggerAuto",
                 "EmailTriggerManual"
+            ]
+        },
+        "types.EmailType": {
+            "type": "string",
+            "enum": [
+                "invoice"
+            ],
+            "x-enum-varnames": [
+                "EmailTypeInvoice"
             ]
         },
         "types.EntitlementGrantScopeEntityType": {

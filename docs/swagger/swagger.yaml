@@ -811,13 +811,6 @@ definitions:
         type: string
       email:
         type: string
-      email_types:
-        description: EmailTypes lists the emails this contact receives; "invoice"
-          makes them an invoice email recipient.
-        items:
-          $ref: '#/definitions/types.ContactEmailType'
-        maxItems: 10
-        type: array
       first_name:
         maxLength: 100
         type: string
@@ -2966,6 +2959,13 @@ definitions:
   CreateCustomerRequest:
     description: Request object for creating a new customer in the system
     properties:
+      additional_emails:
+        description: additional_emails receive the email types they list; the primary
+          email always receives every type
+        items:
+          $ref: '#/definitions/types.AdditionalEmail'
+        maxItems: 10
+        type: array
       address_city:
         description: address_city is the city name with maximum 100 characters
         maxLength: 100
@@ -4555,6 +4555,12 @@ definitions:
   CustomerResponse:
     description: Customer response object containing all customer information
     properties:
+      additional_emails:
+        description: AdditionalEmails receive the email types they list; the primary
+          Email always receives every type.
+        items:
+          $ref: '#/definitions/types.AdditionalEmail'
+        type: array
       address_city:
         description: AddressCity is the city of the customer's address
         type: string
@@ -10442,6 +10448,13 @@ definitions:
     description: Request object for updating an existing customer. All fields are
       optional - only provided fields will be updated
     properties:
+      additional_emails:
+        description: additional_emails replaces the customer's additional emails when
+          provided; send [] to clear
+        items:
+          $ref: '#/definitions/types.AdditionalEmail'
+        maxItems: 10
+        type: array
       address_city:
         description: address_city is the updated city name with maximum 100 characters
         maxLength: 100
@@ -11820,6 +11833,12 @@ definitions:
     type: object
   Customer:
     properties:
+      additional_emails:
+        description: AdditionalEmails receive the email types they list; the primary
+          Email always receives every type.
+        items:
+          $ref: '#/definitions/types.AdditionalEmail'
+        type: array
       address_city:
         description: AddressCity is the city of the customer's address
         type: string
@@ -16508,6 +16527,20 @@ definitions:
           default (Stripe only).
         type: boolean
     type: object
+  types.AdditionalEmail:
+    properties:
+      email:
+        type: string
+      types:
+        items:
+          $ref: '#/definitions/types.EmailType'
+        maxItems: 10
+        minItems: 1
+        type: array
+    required:
+    - email
+    - types
+    type: object
   types.AddonPriceOverrideRef:
     properties:
       override_price_id:
@@ -16654,12 +16687,6 @@ definitions:
     - CommitmentStatusActive
     - CommitmentStatusEnded
     - CommitmentStatusTerminated
-  types.ContactEmailType:
-    enum:
-    - invoice
-    type: string
-    x-enum-varnames:
-    - ContactEmailTypeInvoice
   types.ContractStatus:
     enum:
     - draft
@@ -16759,6 +16786,12 @@ definitions:
     x-enum-varnames:
     - EmailTriggerAuto
     - EmailTriggerManual
+  types.EmailType:
+    enum:
+    - invoice
+    type: string
+    x-enum-varnames:
+    - EmailTypeInvoice
   types.EntitlementGrantScopeEntityType:
     enum:
     - feature

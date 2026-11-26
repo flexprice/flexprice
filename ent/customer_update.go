@@ -343,6 +343,24 @@ func (_u *CustomerUpdate) ClearContactPersons() *CustomerUpdate {
 	return _u
 }
 
+// SetAdditionalEmails sets the "additional_emails" field.
+func (_u *CustomerUpdate) SetAdditionalEmails(v []*types.AdditionalEmail) *CustomerUpdate {
+	_u.mutation.SetAdditionalEmails(v)
+	return _u
+}
+
+// AppendAdditionalEmails appends value to the "additional_emails" field.
+func (_u *CustomerUpdate) AppendAdditionalEmails(v []*types.AdditionalEmail) *CustomerUpdate {
+	_u.mutation.AppendAdditionalEmails(v)
+	return _u
+}
+
+// ClearAdditionalEmails clears the value of the "additional_emails" field.
+func (_u *CustomerUpdate) ClearAdditionalEmails() *CustomerUpdate {
+	_u.mutation.ClearAdditionalEmails()
+	return _u
+}
+
 // SetBillingEntityID sets the "billing_entity_id" field.
 func (_u *CustomerUpdate) SetBillingEntityID(v string) *CustomerUpdate {
 	_u.mutation.SetBillingEntityID(v)
@@ -551,6 +569,17 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ContactPersonsCleared() {
 		_spec.ClearField(customer.FieldContactPersons, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AdditionalEmails(); ok {
+		_spec.SetField(customer.FieldAdditionalEmails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedAdditionalEmails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, customer.FieldAdditionalEmails, value)
+		})
+	}
+	if _u.mutation.AdditionalEmailsCleared() {
+		_spec.ClearField(customer.FieldAdditionalEmails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BillingEntityID(); ok {
 		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
@@ -896,6 +925,24 @@ func (_u *CustomerUpdateOne) ClearContactPersons() *CustomerUpdateOne {
 	return _u
 }
 
+// SetAdditionalEmails sets the "additional_emails" field.
+func (_u *CustomerUpdateOne) SetAdditionalEmails(v []*types.AdditionalEmail) *CustomerUpdateOne {
+	_u.mutation.SetAdditionalEmails(v)
+	return _u
+}
+
+// AppendAdditionalEmails appends value to the "additional_emails" field.
+func (_u *CustomerUpdateOne) AppendAdditionalEmails(v []*types.AdditionalEmail) *CustomerUpdateOne {
+	_u.mutation.AppendAdditionalEmails(v)
+	return _u
+}
+
+// ClearAdditionalEmails clears the value of the "additional_emails" field.
+func (_u *CustomerUpdateOne) ClearAdditionalEmails() *CustomerUpdateOne {
+	_u.mutation.ClearAdditionalEmails()
+	return _u
+}
+
 // SetBillingEntityID sets the "billing_entity_id" field.
 func (_u *CustomerUpdateOne) SetBillingEntityID(v string) *CustomerUpdateOne {
 	_u.mutation.SetBillingEntityID(v)
@@ -1134,6 +1181,17 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.ContactPersonsCleared() {
 		_spec.ClearField(customer.FieldContactPersons, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AdditionalEmails(); ok {
+		_spec.SetField(customer.FieldAdditionalEmails, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedAdditionalEmails(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, customer.FieldAdditionalEmails, value)
+		})
+	}
+	if _u.mutation.AdditionalEmailsCleared() {
+		_spec.ClearField(customer.FieldAdditionalEmails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.BillingEntityID(); ok {
 		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)

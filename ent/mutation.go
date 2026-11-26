@@ -33050,38 +33050,40 @@ func (m *CreditNoteLineItemMutation) ResetEdge(name string) error {
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
 type CustomerMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *string
-	tenant_id             *string
-	status                *string
-	created_at            *time.Time
-	updated_at            *time.Time
-	created_by            *string
-	updated_by            *string
-	environment_id        *string
-	metadata              *map[string]string
-	external_id           *string
-	name                  *string
-	email                 *string
-	contact               *string
-	billing_currency      *string
-	address_line1         *string
-	address_line2         *string
-	address_city          *string
-	address_state         *string
-	address_postal_code   *string
-	address_country       *string
-	timezone              *string
-	tax_treatment         *types.TaxTreatment
-	contact_persons       *[]*schema.ContactPerson
-	appendcontact_persons []*schema.ContactPerson
-	billing_entity_id     *string
-	settings              **types.SettingsOverride
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*Customer, error)
-	predicates            []predicate.Customer
+	op                      Op
+	typ                     string
+	id                      *string
+	tenant_id               *string
+	status                  *string
+	created_at              *time.Time
+	updated_at              *time.Time
+	created_by              *string
+	updated_by              *string
+	environment_id          *string
+	metadata                *map[string]string
+	external_id             *string
+	name                    *string
+	email                   *string
+	contact                 *string
+	billing_currency        *string
+	address_line1           *string
+	address_line2           *string
+	address_city            *string
+	address_state           *string
+	address_postal_code     *string
+	address_country         *string
+	timezone                *string
+	tax_treatment           *types.TaxTreatment
+	contact_persons         *[]*schema.ContactPerson
+	appendcontact_persons   []*schema.ContactPerson
+	additional_emails       *[]*types.AdditionalEmail
+	appendadditional_emails []*types.AdditionalEmail
+	billing_entity_id       *string
+	settings                **types.SettingsOverride
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*Customer, error)
+	predicates              []predicate.Customer
 }
 
 var _ ent.Mutation = (*CustomerMutation)(nil)
@@ -34191,6 +34193,71 @@ func (m *CustomerMutation) ResetContactPersons() {
 	delete(m.clearedFields, customer.FieldContactPersons)
 }
 
+// SetAdditionalEmails sets the "additional_emails" field.
+func (m *CustomerMutation) SetAdditionalEmails(te []*types.AdditionalEmail) {
+	m.additional_emails = &te
+	m.appendadditional_emails = nil
+}
+
+// AdditionalEmails returns the value of the "additional_emails" field in the mutation.
+func (m *CustomerMutation) AdditionalEmails() (r []*types.AdditionalEmail, exists bool) {
+	v := m.additional_emails
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAdditionalEmails returns the old "additional_emails" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldAdditionalEmails(ctx context.Context) (v []*types.AdditionalEmail, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAdditionalEmails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAdditionalEmails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAdditionalEmails: %w", err)
+	}
+	return oldValue.AdditionalEmails, nil
+}
+
+// AppendAdditionalEmails adds te to the "additional_emails" field.
+func (m *CustomerMutation) AppendAdditionalEmails(te []*types.AdditionalEmail) {
+	m.appendadditional_emails = append(m.appendadditional_emails, te...)
+}
+
+// AppendedAdditionalEmails returns the list of values that were appended to the "additional_emails" field in this mutation.
+func (m *CustomerMutation) AppendedAdditionalEmails() ([]*types.AdditionalEmail, bool) {
+	if len(m.appendadditional_emails) == 0 {
+		return nil, false
+	}
+	return m.appendadditional_emails, true
+}
+
+// ClearAdditionalEmails clears the value of the "additional_emails" field.
+func (m *CustomerMutation) ClearAdditionalEmails() {
+	m.additional_emails = nil
+	m.appendadditional_emails = nil
+	m.clearedFields[customer.FieldAdditionalEmails] = struct{}{}
+}
+
+// AdditionalEmailsCleared returns if the "additional_emails" field was cleared in this mutation.
+func (m *CustomerMutation) AdditionalEmailsCleared() bool {
+	_, ok := m.clearedFields[customer.FieldAdditionalEmails]
+	return ok
+}
+
+// ResetAdditionalEmails resets all changes to the "additional_emails" field.
+func (m *CustomerMutation) ResetAdditionalEmails() {
+	m.additional_emails = nil
+	m.appendadditional_emails = nil
+	delete(m.clearedFields, customer.FieldAdditionalEmails)
+}
+
 // SetBillingEntityID sets the "billing_entity_id" field.
 func (m *CustomerMutation) SetBillingEntityID(s string) {
 	m.billing_entity_id = &s
@@ -34323,7 +34390,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -34390,6 +34457,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.contact_persons != nil {
 		fields = append(fields, customer.FieldContactPersons)
 	}
+	if m.additional_emails != nil {
+		fields = append(fields, customer.FieldAdditionalEmails)
+	}
 	if m.billing_entity_id != nil {
 		fields = append(fields, customer.FieldBillingEntityID)
 	}
@@ -34448,6 +34518,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxTreatment()
 	case customer.FieldContactPersons:
 		return m.ContactPersons()
+	case customer.FieldAdditionalEmails:
+		return m.AdditionalEmails()
 	case customer.FieldBillingEntityID:
 		return m.BillingEntityID()
 	case customer.FieldSettings:
@@ -34505,6 +34577,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTaxTreatment(ctx)
 	case customer.FieldContactPersons:
 		return m.OldContactPersons(ctx)
+	case customer.FieldAdditionalEmails:
+		return m.OldAdditionalEmails(ctx)
 	case customer.FieldBillingEntityID:
 		return m.OldBillingEntityID(ctx)
 	case customer.FieldSettings:
@@ -34672,6 +34746,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetContactPersons(v)
 		return nil
+	case customer.FieldAdditionalEmails:
+		v, ok := value.([]*types.AdditionalEmail)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAdditionalEmails(v)
+		return nil
 	case customer.FieldBillingEntityID:
 		v, ok := value.(string)
 		if !ok {
@@ -34761,6 +34842,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldContactPersons) {
 		fields = append(fields, customer.FieldContactPersons)
 	}
+	if m.FieldCleared(customer.FieldAdditionalEmails) {
+		fields = append(fields, customer.FieldAdditionalEmails)
+	}
 	if m.FieldCleared(customer.FieldBillingEntityID) {
 		fields = append(fields, customer.FieldBillingEntityID)
 	}
@@ -34825,6 +34909,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldContactPersons:
 		m.ClearContactPersons()
+		return nil
+	case customer.FieldAdditionalEmails:
+		m.ClearAdditionalEmails()
 		return nil
 	case customer.FieldBillingEntityID:
 		m.ClearBillingEntityID()
@@ -34905,6 +34992,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldContactPersons:
 		m.ResetContactPersons()
+		return nil
+	case customer.FieldAdditionalEmails:
+		m.ResetAdditionalEmails()
 		return nil
 	case customer.FieldBillingEntityID:
 		m.ResetBillingEntityID()

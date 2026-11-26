@@ -290,6 +290,12 @@ func (_c *CustomerCreate) SetContactPersons(v []*schema.ContactPerson) *Customer
 	return _c
 }
 
+// SetAdditionalEmails sets the "additional_emails" field.
+func (_c *CustomerCreate) SetAdditionalEmails(v []*types.AdditionalEmail) *CustomerCreate {
+	_c.mutation.SetAdditionalEmails(v)
+	return _c
+}
+
 // SetBillingEntityID sets the "billing_entity_id" field.
 func (_c *CustomerCreate) SetBillingEntityID(v string) *CustomerCreate {
 	_c.mutation.SetBillingEntityID(v)
@@ -542,6 +548,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ContactPersons(); ok {
 		_spec.SetField(customer.FieldContactPersons, field.TypeJSON, value)
 		_node.ContactPersons = value
+	}
+	if value, ok := _c.mutation.AdditionalEmails(); ok {
+		_spec.SetField(customer.FieldAdditionalEmails, field.TypeJSON, value)
+		_node.AdditionalEmails = value
 	}
 	if value, ok := _c.mutation.BillingEntityID(); ok {
 		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
