@@ -1048,8 +1048,8 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 	// coupon on the last one only: 60 gets the 50% subscription coupon (30 off), 40 gets 20% then
 	// 50% (24 off).
 	split := []dto.CreateInvoiceLineItemRequest{
-		{Amount: decimal.NewFromInt(60), SubscriptionLineItemID: &lineItemID},
-		{Amount: decimal.NewFromInt(40), SubscriptionLineItemID: &lineItemID},
+		{Amount: decimal.NewFromInt(60), Quantity: decimal.NewFromInt(60), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
+		{Amount: decimal.NewFromInt(40), Quantity: decimal.NewFromInt(40), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
 	}
 	discount, err := s.walletService.(*walletService).usageCouponDiscount(ctx, sub, split, start, end)
 	s.Require().NoError(err)

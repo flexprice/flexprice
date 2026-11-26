@@ -2562,53 +2562,12 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	result = applyLineItemGrouping(sub, result)
 
 	// Apply Coupons if any - both subscription level and line item level.
-	// Selection mechanics (fetch active associations + split sub/line + price mapping) are shared
-	// with the analytics path via selectSubscriptionCoupons; billing supplies its own validation
-	// predicate (ValidateCoupon over the eager-loaded coupon).
-	couponValidationService := NewCouponValidationService(s.ServiceParams)
-	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
-		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
-	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
+	validCoupons, validLineItemCoupons, err := selectInvoiceCoupons(ctx, s.ServiceParams, sub, periodStart, periodEnd,
+		append(result.FixedCharges, result.UsageCharges...), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Build set of price IDs that appear in invoice line items
-	invoiceLineItemPriceIDs := make(map[string]bool)
-	for _, lineItem := range append(result.FixedCharges, result.UsageCharges...) {
-		if lineItem.PriceID != nil {
-			invoiceLineItemPriceIDs[*lineItem.PriceID] = true
-		}
-	}
-
-	// Subscription-level coupons
-	validCoupons := make([]dto.InvoiceCoupon, 0)
-	for _, assocs := range sel.SubLevel {
-		for _, assoc := range assocs {
-			validCoupons = append(validCoupons, dto.InvoiceCoupon{
-				CouponID:            assoc.CouponID,
-				CouponAssociationID: &assoc.ID,
-			})
-		}
-	}
-
-	// Line item-level coupons - only include if the line item's price appears in the invoice
-	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
-	for sliID, assocs := range sel.LineLevel {
-		priceID, ok := sel.SubLineItemIDToPriceID[sliID]
-		if !ok || priceID == "" || !invoiceLineItemPriceIDs[priceID] {
-			continue
-		}
-		for _, assoc := range assocs {
-			validLineItemCoupons = append(validLineItemCoupons, dto.InvoiceLineItemCoupon{
-				LineItemID:             priceID,
-				SubscriptionLineItemID: lo.ToPtr(sliID),
-				CouponID:               assoc.CouponID,
-				CouponAssociationID:    &assoc.ID,
-			})
-		}
-	}
 	// Resolve tax rates for invoice level (invoice-level only per scope)
 	// Prepare minimal request for tax resolution using subscription context
 	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
@@ -3740,6 +3699,60 @@ func (s *billingService) applyCouponPreview(ctx context.Context, req *dto.Create
 		req.LineItems[i].InvoiceLevelDiscount = lo.ToPtr(lo.FromPtr(req.LineItems[i].InvoiceLevelDiscount).Add(share))
 	}
 	return nil
+}
+
+// selectInvoiceCoupons returns the subscription-level and line-item coupons an invoice with these
+// line items gets: active associations that pass ValidateCoupon (and keep, when set), with line
+// coupons only for line items whose price is on the invoice. The wallet's real-time balance uses
+// it too, so its discount matches the invoice.
+func selectInvoiceCoupons(
+	ctx context.Context, sp ServiceParams, sub *subscription.Subscription,
+	periodStart, periodEnd time.Time,
+	lineItems []dto.CreateInvoiceLineItemRequest,
+	keep func(*coupon.Coupon) bool,
+) ([]dto.InvoiceCoupon, []dto.InvoiceLineItemCoupon, error) {
+	validation := NewCouponValidationService(sp)
+	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return (keep == nil || keep(c)) && validation.ValidateCoupon(ctx, *c, sub) == nil
+	}
+	sel, err := selectSubscriptionCoupons(ctx, sp, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	invoicePriceIDs := make(map[string]bool)
+	for _, lineItem := range lineItems {
+		if lineItem.PriceID != nil {
+			invoicePriceIDs[*lineItem.PriceID] = true
+		}
+	}
+
+	subscriptionCoupons := make([]dto.InvoiceCoupon, 0)
+	for _, assocs := range sel.SubLevel {
+		for _, assoc := range assocs {
+			subscriptionCoupons = append(subscriptionCoupons, dto.InvoiceCoupon{
+				CouponID:            assoc.CouponID,
+				CouponAssociationID: &assoc.ID,
+			})
+		}
+	}
+
+	lineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
+	for sliID, assocs := range sel.LineLevel {
+		priceID, ok := sel.SubLineItemIDToPriceID[sliID]
+		if !ok || priceID == "" || !invoicePriceIDs[priceID] {
+			continue
+		}
+		for _, assoc := range assocs {
+			lineItemCoupons = append(lineItemCoupons, dto.InvoiceLineItemCoupon{
+				LineItemID:             priceID,
+				SubscriptionLineItemID: lo.ToPtr(sliID),
+				CouponID:               assoc.CouponID,
+				CouponAssociationID:    &assoc.ID,
+			})
+		}
+	}
+	return subscriptionCoupons, lineItemCoupons, nil
 }
 
 // listActiveLineItems returns published line items of subscriptionID not ended before from.

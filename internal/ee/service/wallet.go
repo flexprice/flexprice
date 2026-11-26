@@ -17,7 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
-	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -3449,56 +3448,52 @@ func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied 
 }
 
 // usageCouponDiscount is the discount the subscription's recurring percentage coupons give on its usage
-// charges. It mirrors invoice coupon application so the balance matches the coming invoice: the same
-// coupon validation, the same line grouping, and each line coupon on one charge per line item.
+// charges. It runs the invoice's own coupon selection and calculation on a draft of these charges, so
+// the balance matches the coming invoice. Fixed and once coupons wait for the invoice.
 func (s *walletService) usageCouponDiscount(ctx context.Context, sub *subscription.Subscription, charges []dto.CreateInvoiceLineItemRequest, periodStart, periodEnd time.Time) (decimal.Decimal, error) {
+	// Shape the charges as the invoice does: zero lines dropped, then line grouping.
+	charges = lo.Filter(charges, func(c dto.CreateInvoiceLineItemRequest, _ int) bool {
+		return !(c.Quantity.IsZero() && c.Amount.IsZero())
+	})
 	if len(charges) == 0 {
 		return decimal.Zero, nil
 	}
+	charges = applyLineItemGrouping(sub, &dto.BillingCalculationResult{UsageCharges: charges}).UsageCharges
 
-	validation := NewCouponValidationService(s.ServiceParams)
-	// Only percentage coupons that recur every period can be spread over usage; fixed and once
-	// coupons wait for the invoice. ValidateCoupon is the invoice's check: it also stops a
-	// repeated coupon once it reaches its application limit.
-	appliesToUsage := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+	recurringPercentage := func(c *coupon.Coupon) bool {
 		return c.Type == types.CouponTypePercentage &&
-			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
-			validation.ValidateCoupon(ctx, *c, sub) == nil
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
 	}
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, appliesToUsage)
+	subscriptionCoupons, lineItemCoupons, err := selectInvoiceCoupons(ctx, s.ServiceParams, sub, periodStart, periodEnd, charges, recurringPercentage)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	lineCoupons, subscriptionCoupons := projectAnalyticsCoupons(sel)
-
-	charges = applyLineItemGrouping(sub, &dto.BillingCalculationResult{UsageCharges: charges}).UsageCharges
-
-	// The invoice applies a line coupon to the last line for its line item (a commitment can split
-	// one item into normal and overage charges). Zero lines are skipped, as invoices drop them.
-	lineCouponTarget := make(map[string]int, len(charges))
-	for i, charge := range charges {
-		if id := lo.FromPtr(charge.SubscriptionLineItemID); id != "" && !charge.Amount.IsZero() {
-			lineCouponTarget[id] = i
-		}
+	if len(subscriptionCoupons) == 0 && len(lineItemCoupons) == 0 {
+		return decimal.Zero, nil
 	}
 
-	discount := decimal.Zero
-	for i, charge := range charges {
-		var line []*analyticsCoupon
-		if id := lo.FromPtr(charge.SubscriptionLineItemID); id != "" && lineCouponTarget[id] == i {
-			line = lineCoupons[id]
-		}
-		out := ApplyAnalyticsDiscounts(&discountInput{
-			Currency:    sub.Currency,
-			SubTotal:    charge.Amount,
-			LineCoupons: line,
-			SubCoupons:  subscriptionCoupons[sub.ID],
-			RangeStart:  periodStart,
-			RangeEnd:    periodEnd,
-		})
-		discount = discount.Add(out.TotalDiscount)
+	draft := &dto.CreateInvoiceRequest{
+		CustomerID:     sub.GetInvoicingCustomerID(),
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		Currency:       sub.Currency,
+		PeriodStart:    &periodStart,
+		PeriodEnd:      &periodEnd,
+		LineItems:      charges,
 	}
-	return discount, nil
+	inv, err := draft.ToInvoice(ctx)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	result, err := NewCouponApplicationService(s.ServiceParams).CalculateCouponsForInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice:         inv,
+		InvoiceCoupons:  subscriptionCoupons,
+		LineItemCoupons: lineItemCoupons,
+	})
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return result.TotalDiscountAmount, nil
 }
 
 // computeRealtimeBalanceDefault is the production implementation of the
