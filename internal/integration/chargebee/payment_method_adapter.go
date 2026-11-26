@@ -167,7 +167,7 @@ func toProviderPaymentMethod(src *paymentSourceModel.PaymentSource, primaryID st
 	}
 
 	if src.Card != nil {
-		out.Card = &interfaces.ProviderCardDetails{
+		out.Card = &types.CardDetails{
 			Brand:    string(src.Card.Brand),
 			Last4:    src.Card.Last4,
 			ExpMonth: int(src.Card.ExpiryMonth),

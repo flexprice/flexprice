@@ -493,19 +493,32 @@ const (
 	PaymentAttemptMethodOther        PaymentAttemptMethod = "OTHER"
 )
 
+// CardDetails is the displayable part of a card, shared by attempts, saved methods and mandates.
 type CardDetails struct {
-	Brand    string `json:"brand,omitempty"`
-	Last4    string `json:"last4,omitempty"`
-	Issuer   string `json:"issuer,omitempty"`
-	Funding  string `json:"funding,omitempty"` // credit, debit or prepaid
-	ExpMonth int    `json:"exp_month,omitempty"`
-	ExpYear  int    `json:"exp_year,omitempty"`
+	Brand       string `json:"brand,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	Issuer      string `json:"issuer,omitempty"`
+	Funding     string `json:"funding,omitempty"` // credit, debit or prepaid
+	ExpMonth    int    `json:"exp_month,omitempty"`
+	ExpYear     int    `json:"exp_year,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
+// UPIDetails is the displayable part of a UPI handle.
+type UPIDetails struct {
+	VPA string `json:"vpa,omitempty"`
+}
+
+// BankDetails is the displayable part of a bank account or netbanking bank.
 type BankDetails struct {
-	Bank string `json:"bank,omitempty"`
+	Bank        string `json:"bank,omitempty"`
+	IFSC        string `json:"ifsc,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	AccountType string `json:"account_type,omitempty"`
+	AuthType    string `json:"auth_type,omitempty"`
 }
 
+// WalletDetails is the wallet used on an attempt.
 type WalletDetails struct {
 	Provider string `json:"provider,omitempty"`
 }

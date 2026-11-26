@@ -1405,28 +1405,7 @@ func toSavedPaymentMethod(
 		InstantlyChargeable: m.Active && m.InstantlyChargeable,
 	}
 
-	if m.Card != nil {
-		out.Card = &dto.SavedCardDetails{
-			Brand:    m.Card.Brand,
-			Last4:    m.Card.Last4,
-			ExpMonth: m.Card.ExpMonth,
-			ExpYear:  m.Card.ExpYear,
-		}
-	}
-
-	if m.UPI != nil {
-		out.UPI = &dto.SavedUPIDetails{VPA: m.UPI.VPA}
-	}
-
-	if m.BankAccount != nil {
-		out.BankAccount = &dto.SavedBankAccountDetails{
-			Bank:        m.BankAccount.Bank,
-			IFSC:        m.BankAccount.IFSC,
-			Last4:       m.BankAccount.Last4,
-			AccountType: m.BankAccount.AccountType,
-			AuthType:    m.BankAccount.AuthType,
-		}
-	}
+	out.Card, out.UPI, out.BankAccount = m.Card, m.UPI, m.BankAccount
 
 	if m.Recurring != nil {
 		out.Recurring = &dto.SavedRecurringPaymentDetails{

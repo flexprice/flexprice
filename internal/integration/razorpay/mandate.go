@@ -97,12 +97,12 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	return out
 }
 
-func (t Token) cardDetails() *interfaces.ProviderCardDetails {
+func (t Token) cardDetails() *types.CardDetails {
 	if t.Card == nil {
 		return nil
 	}
 
-	return &interfaces.ProviderCardDetails{
+	return &types.CardDetails{
 		Brand:    t.Card.Network,
 		Last4:    t.Card.Last4,
 		ExpMonth: int(t.Card.ExpiryMonth),
@@ -110,13 +110,13 @@ func (t Token) cardDetails() *interfaces.ProviderCardDetails {
 	}
 }
 
-func (t Token) bankAccountDetails() *interfaces.ProviderBankAccountDetails {
+func (t Token) bankAccountDetails() *types.BankDetails {
 	if t.BankDetails == nil {
 		return nil
 	}
 
 	accountNumber := t.BankDetails.AccountNumber
-	return &interfaces.ProviderBankAccountDetails{
+	return &types.BankDetails{
 		Bank:        t.Bank,
 		IFSC:        t.BankDetails.IFSC,
 		Last4:       accountNumber[max(0, len(accountNumber)-4):],
@@ -125,11 +125,11 @@ func (t Token) bankAccountDetails() *interfaces.ProviderBankAccountDetails {
 	}
 }
 
-func (t Token) upiDetails() *interfaces.ProviderUPIDetails {
+func (t Token) upiDetails() *types.UPIDetails {
 	if t.VPA == nil || t.VPA.Username == "" || t.VPA.Handle == "" {
 		return nil
 	}
-	return &interfaces.ProviderUPIDetails{VPA: t.VPA.Username + "@" + t.VPA.Handle}
+	return &types.UPIDetails{VPA: t.VPA.Username + "@" + t.VPA.Handle}
 }
 
 func toRecurringPaymentStatus(status string) types.RecurringPaymentStatus {

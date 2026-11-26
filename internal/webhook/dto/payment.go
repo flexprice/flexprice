@@ -117,28 +117,9 @@ type Mandate struct {
 	MaxAmount          *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
 	Currency           string                   `json:"currency"`
 	ExpiresAt          *time.Time               `json:"expires_at,omitempty"`
-	BankAccount        *MandateBankAccount      `json:"bank_account,omitempty"`
-	Card               *MandateCard             `json:"card,omitempty"`
-	UPI                *MandateUPI              `json:"upi,omitempty"`
-}
-
-type MandateCard struct {
-	Brand    string `json:"brand,omitempty"`
-	Last4    string `json:"last4,omitempty"`
-	ExpMonth int    `json:"exp_month,omitempty"`
-	ExpYear  int    `json:"exp_year,omitempty"`
-}
-
-type MandateUPI struct {
-	VPA string `json:"vpa,omitempty"`
-}
-
-type MandateBankAccount struct {
-	Bank        string `json:"bank,omitempty"`
-	IFSC        string `json:"ifsc,omitempty"`
-	Last4       string `json:"last4,omitempty"`
-	AccountType string `json:"account_type,omitempty"`
-	AuthType    string `json:"auth_type,omitempty"`
+	BankAccount        *types.BankDetails       `json:"bank_account,omitempty"`
+	Card               *types.CardDetails       `json:"card,omitempty"`
+	UPI                *types.UPIDetails        `json:"upi,omitempty"`
 }
 
 // MandateWebhookPayload is the outbound payload for every mandate.* event.

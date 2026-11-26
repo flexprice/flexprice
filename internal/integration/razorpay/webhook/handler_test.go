@@ -824,7 +824,7 @@ func TestHandleTokenEvent(t *testing.T) {
 			assert.Equal(t, tt.wantStatus, m.Status)
 			assert.Equal(t, tt.wantFailReason, lo.FromPtr(m.FailureReason))
 			assert.Equal(t, "1000", m.MaxAmount.String())
-			assert.Equal(t, &webhookDto.MandateBankAccount{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
+			assert.Equal(t, &types.BankDetails{Bank: "HDFC", IFSC: "HDFC0001", Last4: "1234", AccountType: "savings", AuthType: "netbanking"}, m.BankAccount)
 		})
 	}
 }
