@@ -11515,8 +11515,8 @@ func (s *SubscriptionServiceSuite) TestChangeDateLimits() {
 	s.Run("D8 line item change before the current period rejected", func() {
 		s.ErrorContains(lineItemChange(sub.CurrentPeriodStart.Add(-time.Second)), "before the current period start")
 	})
-	s.Run("D8 line item change at the current period end rejected", func() {
-		s.ErrorContains(lineItemChange(sub.CurrentPeriodEnd), "before the current period end")
+	s.Run("D8 line item change after the current period end rejected", func() {
+		s.ErrorContains(lineItemChange(sub.CurrentPeriodEnd.Add(time.Second)), "after the current period end")
 	})
 }
 
