@@ -26,9 +26,13 @@ func TestErrorFromRawHTTPResponse_ClassifiesByStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := errorFromRawHTTPResponse(tc.code, []byte(tc.body))
+			resp := &http.Response{StatusCode: tc.code, Header: http.Header{"X-Request-Id": {"raw-" + tc.name}}}
+			err := errorFromRawHTTPResponse(resp, []byte(tc.body))
 			if err == nil || IsInfra(err) != tc.infra {
 				t.Fatalf("err = %v, infra = %v, want %v", err, IsInfra(err), tc.infra)
+			}
+			if got := requestID(err); got != "raw-"+tc.name {
+				t.Fatalf("a raw HTTP error must keep the response's request id, got %q", got)
 			}
 		})
 	}

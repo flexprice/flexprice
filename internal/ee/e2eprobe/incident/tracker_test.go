@@ -504,9 +504,12 @@ func TestTracker_KeepsRecentRunsBounded(t *testing.T) {
 	if st.Recent[0].Duration != 12*time.Millisecond {
 		t.Fatalf("the oldest surviving run must be the 13th observed, got %+v", st.Recent[0])
 	}
-	tr.Observe(ctx, usageTaxed, e2eprobe.Mismatch("assert", []string{"a", "b"}, nil))
+	tr.Observe(ctx, usageTaxed, e2eprobe.Mismatch("assert", []string{"a", "b"}, map[string]string{"invoice_id": "inv_1", "request_id": "req-1"}))
 	last := tr.Snapshot().Bindings[usageTaxed.String()].Recent
-	if got := last[len(last)-1]; got.Status != e2eprobe.StatusFail || got.Step != "assert" || got.Mismatches != 2 {
-		t.Fatalf("a failure is recorded with its step and mismatch count: %+v", got)
+	if got := last[len(last)-1]; got.Status != e2eprobe.StatusFail || got.Step != "assert" || got.Mismatches != 2 || got.Attrs["invoice_id"] != "inv_1" || got.Attrs["request_id"] != "req-1" {
+		t.Fatalf("a failure is recorded with its step, mismatch count and the ids it touched: %+v", got)
+	}
+	if last[0].Attrs != nil {
+		t.Fatalf("a passing run keeps no attributes, got %+v", last[0].Attrs)
 	}
 }

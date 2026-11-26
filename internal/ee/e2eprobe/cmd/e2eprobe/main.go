@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bootstrap"
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe/bundle"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/inbox"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/incident"
 	"github.com/flexprice/flexprice/internal/ee/e2eprobe/ledger"
@@ -146,6 +148,8 @@ type cliOptions struct {
 	scenario  string
 	persona   string
 	asJSON    bool
+	url       string
+	out       string
 }
 
 // parseCommandLine reads "command flags"; flags with no command mean run.
@@ -166,9 +170,12 @@ func parseCommandLine(usage io.Writer, args []string) (string, cliOptions, error
 		fs.StringVar(&opts.scenario, "scenario", "", "scenario to run")
 		fs.StringVar(&opts.persona, "persona", "", "persona to run it on; optional when the suite binds the scenario to one persona")
 		fs.BoolVar(&opts.asJSON, "json", false, "print the result as JSON")
+	case "bundle":
+		fs.StringVar(&opts.url, "url", "http://127.0.0.1:8765", "address of the running probe")
+		fs.StringVar(&opts.out, "out", "", "file to write the bundle to; empty prints it")
 	case "validate", "describe":
 	default:
-		return command, opts, fmt.Errorf("unknown command %q (run | once | validate | describe)", command)
+		return command, opts, fmt.Errorf("unknown command %q (run | once | validate | describe | bundle)", command)
 	}
 	if err := fs.Parse(args); err != nil {
 		return command, opts, err
@@ -199,6 +206,8 @@ func main() {
 		err = run(cat, opts.suitePath, opts.only)
 	case "once":
 		err = once(cat, opts.suitePath, opts.scenario, opts.persona, opts.asJSON, os.Stdout, os.Stderr)
+	case "bundle":
+		err = bundleCommand(opts.url, opts.out, os.Stdout)
 	}
 	if err != nil {
 		if !errors.Is(err, errScenarioFailed) {
@@ -206,6 +215,76 @@ func main() {
 		}
 		os.Exit(1)
 	}
+}
+
+// version is set by the image build; a source build reads the VCS revision.
+var version string
+
+// buildVersion identifies the binary in a support bundle.
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	rev, dirty := "", ""
+	for _, kv := range info.Settings {
+		switch kv.Key {
+		case "vcs.revision":
+			rev = kv.Value
+		case "vcs.modified":
+			if kv.Value == "true" {
+				dirty = "-dirty"
+			}
+		}
+	}
+	if rev == "" {
+		return orDefault(info.Main.Version, "unknown")
+	}
+	if len(rev) > 12 {
+		rev = rev[:12]
+	}
+	return rev + dirty
+}
+
+// bundleCommand downloads a running probe's support bundle to a file or stdout.
+func bundleCommand(url, out string, stdout io.Writer) error {
+	w := stdout
+	if out != "" {
+		f, err := os.Create(out)
+		if err != nil {
+			return fmt.Errorf("bundle: %w", err)
+		}
+		defer f.Close()
+		w = f
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return fetchBundle(ctx, url, w)
+}
+
+// fetchBundle copies GET <baseURL>/bundle into out.
+func fetchBundle(ctx context.Context, baseURL string, out io.Writer) error {
+	target := strings.TrimRight(baseURL, "/") + "/bundle"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return fmt.Errorf("bundle: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("bundle: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("bundle: GET %s: %s: %s", target, resp.Status, strings.TrimSpace(string(body)))
+	}
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		return fmt.Errorf("bundle: %w", err)
+	}
+	return nil
 }
 
 // errScenarioFailed is once's exit status when the run itself reported a failure.
@@ -218,6 +297,7 @@ type runtime struct {
 	world    *world.World
 	inbox    *inbox.Inbox
 	runner   *scenario.Runner
+	tracker  *incident.Tracker
 }
 
 type runtimeOptions struct {
@@ -277,7 +357,7 @@ func newRuntime(cat *scenario.Catalog, cfg *e2eprobe.Config, s *suite.Suite, cli
 	if err != nil {
 		return nil, err
 	}
-	return &runtime{suite: s, bindings: bindings, world: wld, inbox: box, runner: runner}, nil
+	return &runtime{suite: s, bindings: bindings, world: wld, inbox: box, runner: runner, tracker: tracker}, nil
 }
 
 func newLogger(cfg *e2eprobe.Config) (*logger.Logger, error) {
@@ -363,6 +443,14 @@ func run(cat *scenario.Catalog, suitePath string, only []string) error {
 	mux.Handle("/history", rt.runner.Handler())
 	mux.Handle("GET /{$}", ui.Handler())
 	mux.Handle("GET /ui", ui.Handler())
+	suiteBytes, err := suite.Bytes(suitePath)
+	if err != nil {
+		return err
+	}
+	mux.Handle("GET /bundle", bundle.New(bundle.Sources{
+		Version: buildVersion(), SuitePath: suitePath, SuiteBytes: suiteBytes, Suite: s, Catalog: cat,
+		Status: rt.runner.Status, State: rt.tracker.Snapshot, Logs: lg.Recent,
+	}).Handler())
 	port, err := inbox.NewServer(cfg.ListenerPort, mux).Start(ctx)
 	if err != nil {
 		return fmt.Errorf("listener: %w", err)

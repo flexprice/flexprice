@@ -172,7 +172,7 @@ spec:
               value: "/etc/e2eprobe/suite.yaml"
             {{- end }}
             - name: E2EPROBE_STATE_FILE
-              value: "/tmp/e2eprobe-state.json"
+              value: {{ ternary "/var/lib/e2eprobe/state.json" "/tmp/e2eprobe-state.json" .Values.e2eprobe.state.persistence.enabled | quote }}
             - name: E2EPROBE_LISTENER_PORT
               value: {{ .Values.e2eprobe.service.port | quote }}
             - name: TMPDIR
@@ -202,16 +202,26 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.e2eprobe.state.persistence.enabled }}
+            - name: state
+              mountPath: /var/lib/e2eprobe
+            {{- end }}
             {{- if .Values.e2eprobe.suite }}
             - name: suite
               mountPath: /etc/e2eprobe
               readOnly: true
             {{- end }}
       volumes:
-        # Holds the incident snapshot between container restarts; a rescheduled
-        # pod starts clean and re-derives open incidents within a few runs.
+        # Holds the incident snapshot between container restarts unless the
+        # state volume below is enabled; a rescheduled pod then starts clean and
+        # re-derives open incidents within a few runs.
         - name: tmp
           emptyDir: {}
+        {{- if .Values.e2eprobe.state.persistence.enabled }}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ include "flexprice.fullname" . }}-e2eprobe-state
+        {{- end }}
         {{- if .Values.e2eprobe.suite }}
         - name: suite
           configMap:

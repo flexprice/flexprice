@@ -1,0 +1,19 @@
+{{- if and .Values.e2eprobe.enabled .Values.e2eprobe.state.persistence.enabled }}
+# Keeps the probe's incident snapshot and run history across pod reschedules,
+# so a support bundle carries the history behind an incident.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "flexprice.fullname" . }}-e2eprobe-state
+  labels:
+    {{- include "flexprice.componentLabels" (dict "ctx" . "component" "e2eprobe") | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.e2eprobe.state.persistence.accessModes | nindent 4 }}
+  {{- with .Values.e2eprobe.state.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.e2eprobe.state.persistence.size }}
+{{- end }}

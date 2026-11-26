@@ -19,13 +19,15 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY internal/ee/e2eprobe/ .
 
-# TARGETARCH is provided automatically by buildx (e.g. amd64, arm64)
+# TARGETARCH is provided automatically by buildx (e.g. amd64, arm64);
+# VERSION is the commit the image was built from, reported in support bundles.
 ARG TARGETARCH
+ARG VERSION=dev
 ENV CGO_ENABLED=0 \
     GOOS=linux
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath -o e2eprobe ./cmd/e2eprobe
+    GOARCH=$TARGETARCH go build -ldflags="-w -s -X main.version=${VERSION}" -trimpath -o e2eprobe ./cmd/e2eprobe
 
 # Final stage
 FROM alpine:3.24
@@ -34,7 +36,9 @@ RUN apk --no-cache add ca-certificates tzdata && \
 
 WORKDIR /app
 COPY --from=builder /app/e2eprobe .
-RUN chown -R app:app /app
+# /var/lib/e2eprobe is where a mounted state volume goes; owned by app so a
+# named Docker volume inherits a writable directory.
+RUN chown -R app:app /app && mkdir -p /var/lib/e2eprobe && chown app:app /var/lib/e2eprobe
 
 # Defaults live in internal/ee/e2eprobe/config.go and match
 # internal/ee/e2eprobe/cmd/e2eprobe/.env.example, so nothing needs baking here.

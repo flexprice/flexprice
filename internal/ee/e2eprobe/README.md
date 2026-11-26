@@ -38,6 +38,7 @@ The probe listens on `E2EPROBE_LISTENER_PORT` (default 8765):
 | `GET /status` | live view as JSON: every binding's last result and next run, open incidents, inbox and ledger stats |
 | `GET /history` | recent runs per binding as JSON (two days at a 10-minute cadence), the data behind the dashboard |
 | `GET /healthz` | liveness |
+| `GET /bundle` | support bundle: build version, rendered suite and its hash, live status, tracker state with the recent runs and the ids each failure touched, last 500 log lines |
 | `GET /inbox/stats` | webhook counts by type |
 
 ## Where to look
@@ -59,8 +60,10 @@ The probe listens on `E2EPROBE_LISTENER_PORT` (default 8765):
   the structured log and OTEL spans; per-run traces are exported when OTEL is
   enabled. The incident tracker's state, including the recent-run history, is
   a JSON file (`E2EPROBE_STATE_FILE`) that survives container restarts, so no
-  database is needed for a single-replica probe. Longer retention belongs to
-  the OTEL backend.
+  database is needed for a single-replica probe. Failed and skipped runs keep
+  the ids they touched, including the server's `X-Request-ID`, so a failure can
+  be matched with the server's own log line. Longer retention belongs to the
+  OTEL backend.
 
 ```bash
 kubectl port-forward -n <namespace> svc/flexprice-e2eprobe 8765:8765
@@ -247,6 +250,31 @@ helm upgrade flexprice internal/ee/infrastructure/helm/flexprice -n <namespace> 
   --set e2eprobe.image.tag=<sha tag> \
   --set e2eprobe.env.E2EPROBE_API_HOST=https://<region api>/v1
 ```
+
+## Self-hosted tenants
+
+The probe needs nothing but the API. Run the image with `E2EPROBE_API_HOST`
+and `E2EPROBE_API_KEY`; for the two webhook scenarios, point a webhook endpoint
+on the tenant at `/webhook` with the `X-E2EProbe-Token` header. Slack and OTEL
+stay off unless configured; the dashboard at `/` is the view.
+
+```bash
+docker run --rm -p 8765:8765 \
+  -e E2EPROBE_API_HOST=https://<their api>/v1 -e E2EPROBE_API_KEY=sk_... \
+  -e E2EPROBE_STATE_FILE=/var/lib/e2eprobe/state.json -v e2eprobe-state:/var/lib/e2eprobe \
+  ghcr.io/flexprice/e2eprobe:<tag>
+```
+
+When something fails, ask for the support bundle: `GET /bundle` on the running
+probe, or `e2eprobe bundle --out bundle.json` next to it (it fetches
+`http://127.0.0.1:8765/bundle`; in Kubernetes
+`kubectl exec deploy/flexprice-e2eprobe -- ./e2eprobe bundle > bundle.json`).
+It is one JSON file: the build version, the rendered suite and its hash, the
+live status, the tracker state (open incidents and the recent runs per binding
+with step, reason and the ids each failure touched, including the server's
+`X-Request-ID`) and the last 500 log lines. It holds ids and reasons, never
+credentials. In Kubernetes `e2eprobe.state.persistence.enabled=true` keeps the
+history behind the bundle across pod reschedules.
 
 ## Module boundary
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -47,14 +48,25 @@ func AttributesFrom(err error) map[string]string {
 	return nil
 }
 
-// enrichWithSDKError adds the status and body of an SDK error in the chain to
-// attrs without overwriting what the caller set.
+// enrichWithSDKError adds the status, body and request id of an SDK error in
+// the chain to attrs without overwriting what the caller set.
 func enrichWithSDKError(err error, attrs map[string]string) {
+	if id := requestID(err); id != "" {
+		setIfAbsent(attrs, "request_id", id)
+	}
 	var api *sdkerrors.APIError
 	if errors.As(err, &api) && api != nil {
 		setIfAbsent(attrs, "status_code", strconv.Itoa(api.StatusCode))
 		if api.Body != "" {
 			setIfAbsent(attrs, "error_body", api.Body)
+		}
+		return
+	}
+	var rve *sdkerrors.ResponseValidationError
+	if errors.As(err, &rve) && rve != nil {
+		setIfAbsent(attrs, "status_code", strconv.Itoa(rve.StatusCode))
+		if rve.Body != "" {
+			setIfAbsent(attrs, "error_body", rve.Body)
 		}
 		return
 	}
@@ -71,6 +83,27 @@ func enrichWithSDKError(err error, attrs map[string]string) {
 		setIfAbsent(attrs, "error_body", eer.Error())
 		return
 	}
+}
+
+// requestID is the X-Request-ID the server echoed on the response behind err,
+// so a failure can be matched with the server's own log line.
+func requestID(err error) string {
+	var resp *http.Response
+	var api *sdkerrors.APIError
+	var rve *sdkerrors.ResponseValidationError
+	var eer *sdkerrors.ErrorResponse
+	switch {
+	case errors.As(err, &api) && api != nil:
+		resp = api.RawResponse
+	case errors.As(err, &rve) && rve != nil:
+		resp = rve.RawResponse
+	case errors.As(err, &eer) && eer != nil:
+		resp = eer.HTTPMeta.Response
+	}
+	if resp == nil {
+		return ""
+	}
+	return resp.Header.Get("X-Request-ID")
 }
 
 // Brief renders err for an alert: a Flexprice API error becomes "<status> <message>".

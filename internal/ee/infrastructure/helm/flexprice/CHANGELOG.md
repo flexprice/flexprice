@@ -18,8 +18,10 @@ FlexPrice app release.
   `/etc/e2eprobe/suite.yaml`, pod rolls on a checksum change), the
   `webhook-token` secret key for the inbox, startup, liveness and readiness
   probes on `/healthz`, and a fixed `E2EPROBE_STATE_FILE` under the `tmp`
-  volume. Per-check `E2EPROBE_CHECK_*` and `E2EPROBE_PAYMENTS_*` env values are
-  no longer read; the probe logs which suite key replaces each one.
+  volume, or on a PersistentVolumeClaim with `e2eprobe.state.persistence.enabled`
+  so the run history a support bundle (`GET /bundle`) is built from survives a
+  rescheduled pod. Per-check `E2EPROBE_CHECK_*` and `E2EPROBE_PAYMENTS_*` env
+  values are no longer read; the probe logs which suite key replaces each one.
 
 Inert: with `e2eprobe.enabled` false nothing changes.
 

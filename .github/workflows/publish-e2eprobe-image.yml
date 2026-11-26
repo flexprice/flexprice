@@ -114,6 +114,8 @@ jobs:
           provenance: true
           sbom: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.sha_tag }}
+          build-args: |
+            VERSION=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

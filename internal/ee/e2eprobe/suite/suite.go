@@ -165,15 +165,27 @@ func Load(path string) (*Suite, error) {
 	if path == "" {
 		return Default(), nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := Bytes(path)
 	if err != nil {
-		return nil, fmt.Errorf("suite: read %s: %w", path, err)
+		return nil, err
 	}
 	s, err := Parse(data)
 	if err != nil {
 		return nil, fmt.Errorf("suite: %s: %w", path, err)
 	}
 	return s, nil
+}
+
+// Bytes is the suite file as written, or the embedded default for an empty path.
+func Bytes(path string) ([]byte, error) {
+	if path == "" {
+		return append([]byte(nil), defaultYAML...), nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("suite: read %s: %w", path, err)
+	}
+	return data, nil
 }
 
 // Parse decodes a suite strictly (unknown fields fail) and applies defaults.

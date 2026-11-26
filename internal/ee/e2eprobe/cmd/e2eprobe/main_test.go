@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -268,5 +270,27 @@ func TestParseCommandLine_RejectsFlagsOfOtherCommands(t *testing.T) {
 	cmd, opts, err = parseCommandLine(io.Discard, []string{"once", "--scenario", "usage", "--persona", "taxed", "--json"})
 	if err != nil || cmd != "once" || opts.scenario != "usage" || opts.persona != "taxed" || !opts.asJSON {
 		t.Fatalf("once flags: %q %+v %v", cmd, opts, err)
+	}
+	cmd, opts, err = parseCommandLine(io.Discard, []string{"bundle", "--url", "http://probe:8765", "--out", "b.json"})
+	if err != nil || cmd != "bundle" || opts.url != "http://probe:8765" || opts.out != "b.json" {
+		t.Fatalf("bundle flags: %q %+v %v", cmd, opts, err)
+	}
+}
+
+func TestFetchBundle_WritesTheProbesBundle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/bundle" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"version":"v1"}`))
+	}))
+	defer srv.Close()
+	var out bytes.Buffer
+	if err := fetchBundle(context.Background(), srv.URL, &out); err != nil || out.String() != `{"version":"v1"}` {
+		t.Fatalf("fetchBundle = %q, %v", out.String(), err)
+	}
+	if err := fetchBundle(context.Background(), srv.URL+"/nope", &out); err == nil {
+		t.Fatal("a non-200 answer must be an error, not a bundle")
 	}
 }

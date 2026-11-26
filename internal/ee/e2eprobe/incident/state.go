@@ -3,6 +3,7 @@ package incident
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -42,6 +43,9 @@ type Run struct {
 	Infra      bool            `json:"infra,omitempty"`
 	Duration   time.Duration   `json:"duration,omitempty"`
 	Mismatches int             `json:"mismatches,omitempty"`
+	// Attrs are the ids a failing or skipping run touched (customer, invoice,
+	// request id); a passing run keeps none.
+	Attrs map[string]string `json:"attrs,omitempty"`
 }
 
 // BindingState is everything the tracker remembers about one binding.
@@ -64,7 +68,11 @@ func (st *BindingState) remember(at time.Time, r e2eprobe.Result) {
 	if len(reason) > 200 {
 		reason = reason[:200]
 	}
-	st.Recent = append(st.Recent, Run{At: at, Status: r.Status, Step: r.Step, Reason: reason, Infra: r.Infra, Duration: r.Duration, Mismatches: len(r.Mismatches)})
+	run := Run{At: at, Status: r.Status, Step: r.Step, Reason: reason, Infra: r.Infra, Duration: r.Duration, Mismatches: len(r.Mismatches)}
+	if r.Status != e2eprobe.StatusPass {
+		run.Attrs = maps.Clone(r.Attrs)
+	}
+	st.Recent = append(st.Recent, run)
 	if len(st.Recent) > recentRuns {
 		st.Recent = append([]Run(nil), st.Recent[len(st.Recent)-recentRuns:]...)
 	}
@@ -127,7 +135,11 @@ func (st *BindingState) clone() BindingState {
 		inc := *st.Incident
 		cp.Incident = &inc
 	}
-	cp.Recent = append([]Run(nil), st.Recent...)
+	cp.Recent = make([]Run, len(st.Recent))
+	for i, run := range st.Recent {
+		run.Attrs = maps.Clone(run.Attrs)
+		cp.Recent[i] = run
+	}
 	return cp
 }
 

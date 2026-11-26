@@ -1,6 +1,8 @@
 package suite
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -177,4 +179,22 @@ func withPayer(s *Suite) *Suite {
 		Scenario{Name: "auto-charge", Every: Duration{Duration: 6 * time.Hour}},
 	)
 	return s
+}
+
+func TestBytes_EmbeddedOrFile(t *testing.T) {
+	embedded, err := Bytes("")
+	if err != nil || len(embedded) == 0 {
+		t.Fatalf("Bytes(\"\") = %d bytes, %v; want the embedded suite", len(embedded), err)
+	}
+	if _, err := Parse(embedded); err != nil {
+		t.Fatalf("the embedded bytes must parse: %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "s.yaml")
+	if err := os.WriteFile(path, []byte("version: 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Bytes(path)
+	if err != nil || string(got) != "version: 1\n" {
+		t.Fatalf("Bytes(file) = %q, %v", got, err)
+	}
 }

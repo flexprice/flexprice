@@ -778,6 +778,15 @@ e2eprobe:
   # internal/ee/e2eprobe/cmd/e2eprobe/suite.example.yaml for every key. Rendered into a ConfigMap
   # mounted at /etc/e2eprobe/suite.yaml; a change rolls the pod.
   suite: {}
+  # Where the incident snapshot and run history live. The default emptyDir
+  # survives container restarts but not a rescheduled pod; a small
+  # PersistentVolumeClaim keeps the history a support bundle is built from.
+  state:
+    persistence:
+      enabled: false
+      size: 100Mi
+      storageClass: ""
+      accessModes: [ReadWriteOnce]
   service: {port: 8765}
   resources:
     requests: {cpu: 100m, memory: 128Mi}

@@ -131,6 +131,7 @@ func Fail(step string, err error, attrs map[string]string) Result {
 	}
 	reason := ""
 	if err != nil {
+		enrichWithSDKError(err, merged)
 		reason = Brief(err)
 	}
 	return Result{

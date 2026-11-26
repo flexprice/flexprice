@@ -496,7 +496,7 @@ func (o priceOps) CreateBucketed(ctx context.Context, req types.CreatePriceReque
 		return out.ID, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return "", errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 func (o priceOps) Query(ctx context.Context, f types.PriceFilter) (*dtos.QueryPriceResponse, error) {
@@ -646,7 +646,7 @@ func (o entitlementOps) CreateWithGrant(ctx context.Context, req GrantEntitlemen
 		return out.ID, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return "", errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return "", errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 // GetRaw fetches an entitlement's full JSON body and decodes into
@@ -675,17 +675,18 @@ func (o entitlementOps) GetRaw(ctx context.Context, id string) (*GrantEntitlemen
 		return &out, nil
 	}
 	bodyBytes, _ := io.ReadAll(resp.Body)
-	return nil, errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+	return nil, errorFromRawHTTPResponse(resp, bodyBytes)
 }
 
 // errorFromRawHTTPResponse converts a non-2xx HTTP response into an SDK-shaped
 // error so callers can reuse isNotFound / isAlreadyExists helpers unchanged.
-func errorFromRawHTTPResponse(status int, body []byte) error {
+func errorFromRawHTTPResponse(resp *http.Response, body []byte) error {
 	var er sdkerrors.ErrorResponse
 	if err := json.Unmarshal(body, &er); err == nil && er.HTTPStatusCode != nil {
+		er.HTTPMeta.Response = resp
 		return &er
 	}
-	return sdkerrors.NewAPIError("raw HTTP error", status, string(body), nil)
+	return sdkerrors.NewAPIError("raw HTTP error", resp.StatusCode, string(body), resp)
 }
 
 type couponOps struct{ s *flexprice.Coupons }
@@ -912,7 +913,7 @@ func (c *sdkClient) doRaw(ctx context.Context, method, path, sessionToken string
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return errorFromRawHTTPResponse(resp.StatusCode, bodyBytes)
+		return errorFromRawHTTPResponse(resp, bodyBytes)
 	}
 	if out == nil {
 		return nil

@@ -28,7 +28,8 @@ scenario needs is copied, with its origin named in a comment.
 | `billingmatrix` | the proration oracle and its scenario catalog |
 | `probetest` | the stateful fake `Client` every test package uses |
 | `bootstrap` | airgapped signup bootstrap |
-| `logger` | the probe's slog-based structured logger (ctx-first `Debug/Info/Warn/Error`) |
+| `logger` | the probe's slog-based structured logger (ctx-first `Debug/Info/Warn/Error`), remembers its last 500 lines for the bundle |
+| `bundle` | the support bundle served at `/bundle`: build, suite, status, tracker state, recent logs |
 
 ## 2. Adding a scenario
 

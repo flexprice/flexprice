@@ -444,6 +444,11 @@ image tag.
   areas it exercises (`covers(...)`), and the section lists per area which bindings cover it or why
   none does (no suite entry, no persona with the trait, entry disabled). The uncovered lines are
   the gap list a suite author works from.
+- `GET /bundle` (and `e2eprobe bundle`, which fetches it): one JSON document with the build version,
+  the rendered suite and its hash, the live status, the tracker state and the last 500 log lines.
+  Failed and skipped runs keep the ids they touched, including the server's `X-Request-ID`, so a
+  self-hosted tenant can hand over one file and the failure can be matched with their server log.
+  The chart can keep the state on a PersistentVolumeClaim so that history survives a reschedule.
 - Hourly heartbeat log line and daily Slack digest.
 
 `once --scenario <name> [--persona <p>] [--json]` provisions the suite and runs one binding with
