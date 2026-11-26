@@ -69,6 +69,9 @@ type CreateCustomerRequest struct {
 	// contact_persons are people at the customer; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
+	// additional_emails receive the email types they list; the primary email always receives every type
+	AdditionalEmails []*types.AdditionalEmail `json:"additional_emails,omitempty" validate:"omitempty,max=10,dive"`
+
 	// settings overrides the environment settings for this customer's subscriptions
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
 
@@ -138,6 +141,9 @@ type UpdateCustomerRequest struct {
 
 	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
+
+	// additional_emails replaces the customer's additional emails when provided; send [] to clear
+	AdditionalEmails []*types.AdditionalEmail `json:"additional_emails,omitempty" validate:"omitempty,max=10,dive"`
 
 	// settings merges into the customer's setting overrides when provided; send {} to inherit the environment settings
 	Settings *types.SettingsOverride `json:"settings,omitempty"`
@@ -225,6 +231,10 @@ func (r *CreateCustomerRequest) Validate() error {
 		}
 	}
 
+	if err := customer.ValidateAdditionalEmails(r.AdditionalEmails); err != nil {
+		return err
+	}
+
 	return customer.ValidatePersons(r.ContactPersons)
 }
 
@@ -282,6 +292,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		Contact:           r.Contact,
 		BillingCurrency:   NormalizeBillingCurrency(r.BillingCurrency),
 		ContactPersons:    r.ContactPersons,
+		AdditionalEmails:  r.AdditionalEmails,
 		Settings:          NormalizeSettingsOverride(r.Settings),
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
@@ -325,6 +336,10 @@ func (r *UpdateCustomerRequest) Validate() error {
 		if err := r.TaxTreatment.Validate(); err != nil {
 			return err
 		}
+	}
+
+	if err := customer.ValidateAdditionalEmails(r.AdditionalEmails); err != nil {
+		return err
 	}
 
 	return customer.ValidatePersons(r.ContactPersons)

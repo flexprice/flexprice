@@ -168,13 +168,23 @@ func ValidateExternalCustomerID(id string) error {
 	return validateID(id, "external customer id")
 }
 
-// ContactEmailType names a kind of email a customer's contact person receives.
-type ContactEmailType string
+// EmailType names a kind of email a customer receives.
+type EmailType string
 
 const (
-	ContactEmailTypeInvoice ContactEmailType = "invoice"
+	EmailTypeInvoice EmailType = "invoice"
 )
 
-func (t ContactEmailType) Validate() error {
-	return validateEnum("email_types", t, []ContactEmailType{ContactEmailTypeInvoice})
+// EmailTypes lists every supported email type.
+var EmailTypes = []EmailType{EmailTypeInvoice}
+
+func (t EmailType) Validate() error {
+	return validateEnum("types", t, EmailTypes)
+}
+
+// AdditionalEmail is an extra customer address that receives the listed email types,
+// alongside the customer's primary email.
+type AdditionalEmail struct {
+	Email string      `json:"email" validate:"required,email"`
+	Types []EmailType `json:"types" validate:"required,min=1,max=10"`
 }

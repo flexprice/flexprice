@@ -7,7 +7,7 @@ import (
 )
 
 // SendInvoiceEmailRequest overrides who receives an invoice email; empty To sends to the customer's
-// invoice contacts, else the customer's email.
+// email plus its additional emails tagged "invoice".
 // A repeated IdempotencyKey returns the email first sent with it.
 type SendInvoiceEmailRequest struct {
 	To             []string `json:"to,omitempty" validate:"omitempty,max=50,dive,email"`

@@ -22,7 +22,7 @@ The send path must stay generic: custom domains (Phase 2), receipts, payment fai
 | Domain | New `mail.flexprice.io` (prod) and `staging.mail.flexprice.io` (staging); root `flexprice.io` stays with Supabase Auth |
 | From | `"<Tenant name>" <invoices+<tenant_id>@mail.flexprice.io>`; `<tenant_id>` is the lowercased `tenant.id` (unique, immutable, no migration, same in sandbox and production) |
 | Reply-To | Tenant `billing_details.help_email`, else `billing_details.email`; one is required |
-| To / CC | Contact persons with `invoice` in `email_types` (primary first), else `customer.email`; manual send can override |
+| To / CC | `customer.email` always, plus `additional_emails` entries with `invoice` in `types` (deduped, case-insensitive); manual send can override |
 | Trigger | `invoice.update.finalized` when auto-send is on; manual send always |
 | Setting | Per environment, default off |
 | Content | One template in code, hosted invoice link, PDF attached |
