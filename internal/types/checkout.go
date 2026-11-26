@@ -169,6 +169,12 @@ func (p CheckoutPaymentProvider) SessionGrace() time.Duration {
 	return 5 * time.Minute
 }
 
+// ClosesLinkOnSessionEnd reports whether a session that ends unpaid closes its provider link,
+// so the customer cannot pay after the session is gone.
+func (p CheckoutPaymentProvider) ClosesLinkOnSessionEnd() bool {
+	return p == CheckoutPaymentProviderStripe
+}
+
 // SavedMethodSettlement is how long a charge on a saved method can take to settle.
 // Razorpay debits a mandate 24-36h after the pre-debit notice, and eNACH takes up to 2 working days more; zero means it settles at once.
 func (p CheckoutPaymentProvider) SavedMethodSettlement(method PaymentMethodType) time.Duration {
@@ -186,6 +192,35 @@ func (p CheckoutPaymentProvider) SavedMethodSettlement(method PaymentMethodType)
 // so the two cannot drift apart.
 func (p CheckoutPaymentProvider) SessionExpiry() time.Duration {
 	return p.LinkExpiry() + p.SessionGrace()
+}
+
+// ValidateLinkExpiry rejects a link expiry shorter than the provider default.
+func (p CheckoutPaymentProvider) ValidateLinkExpiry(cfg *CheckoutPaymentProviderConfig) error {
+	if cfg == nil || !cfg.LinkExpiry.IsSet() {
+		return nil
+	}
+	expiry, err := cfg.LinkExpiry.ToDuration()
+	if err != nil {
+		return err
+	}
+	if expiry < p.LinkExpiry() {
+		return ierr.NewError("link_expiry is too short").
+			WithHintf("link_expiry must be at least %s for %s", p.LinkExpiry(), p).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ResolveSessionExpiry is SessionExpiry with the checkout's link expiry override applied.
+func (p CheckoutPaymentProvider) ResolveSessionExpiry(cfg *CheckoutPaymentProviderConfig) time.Duration {
+	if cfg == nil || !cfg.LinkExpiry.IsSet() {
+		return p.SessionExpiry()
+	}
+	expiry, err := cfg.LinkExpiry.ToDuration()
+	if err != nil {
+		return p.SessionExpiry()
+	}
+	return expiry + p.SessionGrace()
 }
 
 type PaymentActionType string

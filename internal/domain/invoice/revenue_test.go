@@ -2,6 +2,7 @@ package invoice
 
 import (
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	"github.com/flexprice/flexprice/internal/types"
@@ -81,6 +82,51 @@ func TestInvoice_LineNets(t *testing.T) {
 			for id, want := range tt.want {
 				require.True(t, d(want).Equal(got[id]), "line %s: want %s, got %s", id, want, got[id])
 			}
+		})
+	}
+}
+
+func TestInvoice_AppliedTax(t *testing.T) {
+	d := decimal.RequireFromString
+	taxes := []*taxapplied.TaxApplied{
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("12"), TaxBehavior: types.TaxBehaviorInclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("18"), TaxBehavior: types.TaxBehaviorExclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_1", TaxAmount: d("2"), TaxBehavior: types.TaxBehaviorExclusive},
+		{EntityType: types.TaxRateEntityTypeInvoice, EntityID: "inv_other", TaxAmount: d("50"), TaxBehavior: types.TaxBehaviorExclusive},
+	}
+	inv := &Invoice{ID: "inv_1"}
+
+	require.True(t, d("20").Equal(inv.AppliedTax(taxes, types.TaxBehaviorExclusive)))
+	require.True(t, d("12").Equal(inv.AppliedTax(taxes, types.TaxBehaviorInclusive)))
+	require.True(t, decimal.Zero.Equal(inv.AppliedTax(nil, types.TaxBehaviorExclusive)))
+}
+
+func TestIssueDateFor(t *testing.T) {
+	start := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 2, 15, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		reason types.InvoiceBillingReason
+		want   *time.Time
+	}{
+		{types.InvoiceBillingReasonSubscriptionCycle, &end},
+		{types.InvoiceBillingReasonProration, &end},
+		{types.InvoiceBillingReasonAutoInvoiceThreshold, &end},
+		{types.InvoiceBillingReasonSubscriptionPaused, &end},
+		{types.InvoiceBillingReasonSubscriptionCreate, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialStart, &start},
+		{types.InvoiceBillingReasonSubscriptionTrialEnd, &start},
+		{types.InvoiceBillingReasonSubscriptionResume, &start},
+		{types.InvoiceBillingReasonSubscriptionUpdate, &start},
+		{types.InvoiceBillingReasonManual, nil},
+		{types.InvoiceBillingReasonWalletAutoTopup, nil},
+		{types.InvoiceBillingReasonBillingTerms, nil},
+		{types.InvoiceBillingReasonCommitmentTermination, nil},
+		{"", nil},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.reason), func(t *testing.T) {
+			require.Equal(t, tt.want, IssueDateFor(tt.reason, &start, &end))
 		})
 	}
 }

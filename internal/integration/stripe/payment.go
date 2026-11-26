@@ -404,7 +404,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 	params := &stripe.CheckoutSessionCreateParams{
 		LineItems:           lineItems,
 		Mode:                stripe.String("payment"),
-		AllowPromotionCodes: stripe.Bool(true),
+		AllowPromotionCodes: stripe.Bool(req.AllowPromotionCodes),
 		SuccessURL:          stripe.String(successURL),
 		CancelURL:           stripe.String(cancelURL),
 		Metadata:            metadata,
@@ -414,13 +414,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 		},
 	}
 
-	// Only save payment method for future use if SaveCardAndMakeDefault is true
-	if req.SaveCardAndMakeDefault {
+	if req.SaveCard {
 		params.PaymentIntentData = &stripe.CheckoutSessionCreatePaymentIntentDataParams{
 			SetupFutureUsage: stripe.String("off_session"),
 			Metadata:         metadata,
 		}
-		s.logger.Info(ctx, "payment link configured to save card and make default",
+		s.logger.Info(ctx, "payment link configured to save card",
 			"invoice_id", req.InvoiceID,
 			"customer_id", req.CustomerID,
 		)
@@ -1677,8 +1676,13 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Create external payment record
-	err = s.CreateExternalPaymentRecord(ctx, paymentIntent, flexpriceInvoiceID, types.PaymentStatusSucceeded, "", paymentService)
+	completed, err := s.completeHostedInvoicePayment(ctx, paymentIntent, flexpriceInvoiceID, stripeInvoiceID, paymentService)
+	if err != nil {
+		return err
+	}
+	if !completed {
+		err = s.CreateExternalPaymentRecord(ctx, paymentIntent, flexpriceInvoiceID, types.PaymentStatusSucceeded, "", paymentService)
+	}
 	if err != nil {
 		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
@@ -1780,6 +1784,43 @@ func (s *PaymentService) hasSettledInvoicePaymentIntent(ctx context.Context, str
 		}
 	}
 	return false, nil
+}
+
+// completeHostedInvoicePayment settles the pending hosted invoice page payment, if there is one.
+func (s *PaymentService) completeHostedInvoicePayment(ctx context.Context, paymentIntent *stripe.PaymentIntent, invoiceID string, stripeInvoiceID string, paymentService interfaces.PaymentService) (bool, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	payments, err := paymentService.ListPayments(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	pending, found := lo.Find(payments.Items, func(p *dto.PaymentResponse) bool {
+		return p.GatewayMetadata[types.GatewayMetadataKeyStripeInvoiceID] == stripeInvoiceID
+	})
+	if !found {
+		return false, nil
+	}
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
+		SucceededAt:      lo.ToPtr(clock.Now()),
+	}
+	if paymentIntent.PaymentMethod != nil {
+		updateReq.PaymentMethodID = lo.ToPtr(paymentIntent.PaymentMethod.ID)
+	}
+	if _, err := paymentService.UpdatePayment(ctx, pending.ID, updateReq); err != nil {
+		return false, err
+	}
+
+	s.logger.Info(ctx, "completed hosted invoice page payment",
+		"payment_id", pending.ID, "invoice_id", invoiceID, "stripe_invoice_id", stripeInvoiceID, "payment_intent_id", paymentIntent.ID)
+	return true, nil
 }
 
 // CreateExternalPaymentRecord creates a payment record in the given status for an external Stripe payment
@@ -2052,6 +2093,14 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 	s.logger.Info(ctx, "successfully updated payment record",
 		"payment_id", payment.ID,
 		"new_status", paymentStatus)
+
+	attemptReq := dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded}
+	if paymentIntent != nil {
+		attemptReq.GatewayAttemptID = paymentIntent.ID
+	}
+	if err := paymentService.RecordAttempt(ctx, payment.ID, attemptReq); err != nil {
+		s.logger.Error(ctx, "failed to record succeeded attempt", "error", err, "payment_id", payment.ID)
+	}
 
 	if hasDiscount {
 		applyDiscountReq := dto.ApplyExternalInvoiceDiscountRequest{

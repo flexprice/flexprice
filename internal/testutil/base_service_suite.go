@@ -211,6 +211,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		nil, // TemporalService — not needed in unit tests
 		NewInMemoryRedisLocker(nil),
 		s.stores.SettingsRepo,
+		s.stores.TaxAppliedRepo,
 	)
 }
 

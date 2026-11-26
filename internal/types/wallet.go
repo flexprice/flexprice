@@ -168,7 +168,7 @@ type WalletTransactionFilter struct {
 	ReferenceID        *string            `json:"reference_id,omitempty" form:"reference_id"`
 	ExpiryDateBefore   *time.Time         `json:"expiry_date_before,omitempty" form:"expiry_date_before"`
 	ExpiryDateAfter    *time.Time         `json:"expiry_date_after,omitempty" form:"expiry_date_after"`
-	CreditsAvailableGT *decimal.Decimal   `json:"credits_available_gt,omitempty" form:"credits_available_gt"`
+	CreditsAvailableGT *decimal.Decimal   `json:"credits_available_gt,omitempty" form:"credits_available_gt" swaggertype:"string"`
 	TransactionReason  *TransactionReason `json:"transaction_reason,omitempty" form:"transaction_reason"`
 	Priority           *int               `json:"priority,omitempty" form:"priority"`
 	CreatedBy          *string            `json:"created_by,omitempty" form:"created_by"`
@@ -365,8 +365,8 @@ const WalletMetadataKeyFailureReason = "failure_reason"
 // AutoTopup represents the auto top-up configuration for a wallet
 type AutoTopup struct {
 	Enabled   *bool            `json:"enabled"`
-	Threshold *decimal.Decimal `json:"threshold"`
-	Amount    *decimal.Decimal `json:"amount"`
+	Threshold *decimal.Decimal `json:"threshold" swaggertype:"string"`
+	Amount    *decimal.Decimal `json:"amount" swaggertype:"string"`
 	Invoicing *bool            `json:"invoicing"`
 	// Cooldown is an optional cooloff after a successful auto top-up before another may run.
 	Cooldown *Duration `json:"cooldown,omitempty"`

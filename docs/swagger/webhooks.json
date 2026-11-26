@@ -7545,10 +7545,10 @@
             "type": "string"
           },
           "credit_balance": {
-            "type": "number"
+            "type": "string"
           },
           "current_balance": {
-            "type": "number"
+            "type": "string"
           },
           "state": {
             "type": "string"

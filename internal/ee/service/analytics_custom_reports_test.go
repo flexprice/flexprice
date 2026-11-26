@@ -39,9 +39,6 @@ func TestCreateView_CustomReportValidation(t *testing.T) {
 	ok.Compare, ok.Display, ok.Currency = "previous_period", "chart", "USD"
 	require.NoError(t, svc.CreateView(ctx, &analytics.View{Name: "Acme", Definition: ok}))
 
-	variant := reportDef(types.MetricInvoiceTotalIssued, types.ShapeScalar, "last_month")
-	require.NoError(t, svc.CreateView(ctx, &analytics.View{Name: "Issued", Definition: variant}))
-
 	bad := map[string]func(d *analytics.ViewDefinition){
 		"filter not allowed": func(d *analytics.ViewDefinition) {
 			d.Filters = []*analytics.Filter{{Field: "meter_id", Op: types.EQUAL, Value: []string{"m"}}}

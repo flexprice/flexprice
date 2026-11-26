@@ -313,6 +313,23 @@ func (Invoice) Indexes() []ent.Index {
 			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((invoice_status)::text = 'DRAFT'::text) AND (last_computed_at IS NOT NULL))")),
 		index.Fields("tenant_id", "environment_id", "billing_entity_id").
 			StorageKey("idx_invoices_tenant_env_billing_entity"),
+		// Collections board: open receivables aggregated and paged by due date without touching the heap.
+		index.Fields("tenant_id", "environment_id", "due_date").
+			StorageKey("idx_invoices_open_receivables").
+			Annotations(entsql.IndexAnnotation{
+				Where:          "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text <> 'SUCCEEDED'::text) AND (amount_remaining > (0)::numeric))",
+				IncludeColumns: []string{"id", "customer_id", "currency", "amount_remaining", "invoice_number"},
+			}),
+		// Collections board: invoices paid in the recent window, newest first, served without touching the heap.
+		index.Fields("tenant_id", "environment_id", "paid_at").
+			StorageKey("idx_invoices_paid_recent").
+			Annotations(
+				entsql.DescColumns("paid_at"),
+				entsql.IndexAnnotation{
+					Where:          "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text = ANY ((ARRAY['SUCCEEDED'::character varying, 'OVERPAID'::character varying])::text[])))",
+					IncludeColumns: []string{"id", "customer_id", "currency", "amount_due", "invoice_number"},
+				},
+			),
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
 			Annotations(entsql.IndexWhere("(((invoice_status)::text <> 'VOIDED'::text) AND (subscription_id IS NOT NULL))")),

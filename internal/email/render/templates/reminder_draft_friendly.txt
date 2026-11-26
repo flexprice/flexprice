@@ -1,0 +1,12 @@
+{{define "subject"}}Invoice {{.Number}} is past due: {{.Amount}}{{end}}
+{{define "body"}}Hi {{.Greeting}},
+
+A quick note that invoice {{.Number}} is past due:
+
+  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{.Overdue}})
+
+Could you reply with the date we can expect payment, or pay by bank transfer using the details on the invoice? If you have already paid, please ignore this note and let us know the payment date.
+
+Thanks,
+{{.Tenant}} Billing
+{{end}}

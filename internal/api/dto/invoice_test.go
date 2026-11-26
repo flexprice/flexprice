@@ -3,6 +3,7 @@ package dto
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
@@ -301,4 +302,36 @@ func TestInvoiceResponse_ExposesFxConversionAndLineOriginals(t *testing.T) {
 	require.NoError(t, err)
 	sp := string(rawp)
 	assert.NotContains(t, sp, `"fx_conversion"`)
+}
+
+func TestCreateInvoiceRequest_ValidateIssueDate(t *testing.T) {
+	tests := []struct {
+		name      string
+		issueDate *time.Time
+		wantErr   bool
+	}{
+		{name: "unset", issueDate: nil},
+		{name: "past", issueDate: lo.ToPtr(time.Now().AddDate(0, 0, -10))},
+		{name: "future", issueDate: lo.ToPtr(time.Now().AddDate(0, 0, 1)), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := CreateInvoiceRequest{
+				CustomerID:  "cust_1",
+				InvoiceType: types.InvoiceTypeOneOff,
+				Currency:    "usd",
+				AmountDue:   decimal.NewFromInt(10),
+				Subtotal:    decimal.NewFromInt(10),
+				Total:       decimal.NewFromInt(10),
+				IssueDate:   tt.issueDate,
+				LineItems:   []CreateInvoiceLineItemRequest{{Amount: decimal.NewFromInt(10), Quantity: decimal.NewFromInt(1)}},
+			}
+			err := req.Validate()
+			if tt.wantErr {
+				require.ErrorContains(t, err, "issue_date cannot be in the future")
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
