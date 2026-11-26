@@ -183,7 +183,7 @@ func NewWalletService(params ServiceParams) WalletService {
 
 	// Test seams. Production code must not override these.
 	s.computeBalanceTimeout = walletBalanceComputeTimeout
-	s.computeRealtimeBalance = s.computeRealtimeBalanceShared
+	s.computeRealtimeBalance = s.computeRealtimeBalanceDefault
 	return s
 }
 
@@ -3555,32 +3555,6 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 		CurrentPeriodUsage:    &totalPendingCharges,
 		UnpaidInvoicesAmount:  lo.ToPtr(resp.TotalUnpaidUsageCharges),
 	}, nil
-}
-
-// computeRealtimeBalanceShared runs one compute per wallet at a time and hands its result to every
-// concurrent caller, so a burst of reads (or a Redis outage pushing reads to ClickHouse) costs one compute.
-// The compute runs detached from any caller with its own timeout, and each caller waits only as long as
-// its own context allows, so one caller giving up never fails the others.
-func (s *walletService) computeRealtimeBalanceShared(ctx context.Context, w *wallet.Wallet) (*dto.WalletBalanceResponse, error) {
-	if s.WalletBalanceComputes == nil {
-		return s.computeRealtimeBalanceDefault(ctx, w)
-	}
-	results := s.WalletBalanceComputes.DoChan(w.ID, func() (any, error) {
-		computeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.computeBalanceTimeout)
-		defer cancel()
-		return s.computeRealtimeBalanceDefault(computeCtx, w)
-	})
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case result := <-results:
-		if result.Err != nil {
-			return nil, result.Err
-		}
-		// A copy per caller: callers set fields on the response they return.
-		resp := *result.Val.(*dto.WalletBalanceResponse)
-		return &resp, nil
-	}
 }
 
 func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) (*dto.WalletBalanceResponse, error) {
