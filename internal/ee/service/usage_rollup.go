@@ -8,12 +8,12 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clock"
-	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/usagerollup"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -225,24 +225,23 @@ func (s *usageRollupService) subscriptionIneligibleReason(ctx context.Context, s
 	if reason, err := s.lineItemReason(ctx, sub, pricesByMeter); err != nil || reason != "" {
 		return reason, err
 	}
-	return s.entitlementReason(ctx, append(sources, sub.ID), meters)
+	return s.entitlementReason(ctx, sub, append(sources, sub.ID), meters)
 }
 
-// commitmentReason rejects a subscription with a commitment: billing nets usage against it.
+// commitmentReason rejects a subscription with a commitment in its current period: billing nets usage against it,
+// including a commitment terminated mid-period, up to its termination.
 func (s *usageRollupService) commitmentReason(ctx context.Context, sub *subscription.Subscription) (usageRollupIneligibleReason, error) {
 	if sub.HasCommitment() {
 		return usageRollupIneligibleCommitment, nil
 	}
-	commitments, err := s.CommitmentRepo.Count(ctx, &commitment.Filter{
-		QueryFilter:     types.NewNoLimitQueryFilter(),
-		SubscriptionIDs: []string{sub.ID},
-		Statuses:        []types.CommitmentStatus{types.CommitmentStatusActive},
-	})
+	commitments, err := newCommitmentService(s.ServiceParams).ListOverlapping(ctx, sub.ID, sub.CurrentPeriodStart, sub.CurrentPeriodEnd)
 	if err != nil {
 		return "", err
 	}
-	if commitments > 0 {
-		return usageRollupIneligibleCommitment, nil
+	for _, c := range commitments {
+		if c.TerminatedAt == nil || c.TerminatedAt.After(sub.CurrentPeriodStart) {
+			return usageRollupIneligibleCommitment, nil
+		}
 	}
 	return "", nil
 }
@@ -354,11 +353,12 @@ func (s *usageRollupService) lineItemReason(
 	return "", nil
 }
 
-// entitlementReason rejects entities with an enabled entitlement that changes what usage bills: a
-// subscription or group grant, or a metered feature on a charged meter. Grants open only from these
-// entitlements, so this also covers active grants.
+// entitlementReason rejects a subscription whose usage an entitlement changes: a subscription or group grant, or a
+// metered feature on a charged meter. It checks the enabled entitlements of entityIDs and the grants billing
+// applies to the current period, which outlive an entitlement disabled or deleted mid-period.
 func (s *usageRollupService) entitlementReason(
 	ctx context.Context,
+	sub *subscription.Subscription,
 	entityIDs []string,
 	meters map[string]*meter.Meter,
 ) (usageRollupIneligibleReason, error) {
@@ -381,6 +381,11 @@ func (s *usageRollupService) entitlementReason(
 			meteredFeatureIDs = append(meteredFeatureIDs, e.FeatureID)
 		}
 	}
+	grantFeatureIDs, reason, err := s.periodGrantFeatureIDs(ctx, sub)
+	if err != nil || reason != "" {
+		return reason, err
+	}
+	meteredFeatureIDs = append(meteredFeatureIDs, grantFeatureIDs...)
 	if len(meteredFeatureIDs) == 0 {
 		return "", nil
 	}
@@ -396,6 +401,41 @@ func (s *usageRollupService) entitlementReason(
 		}
 	}
 	return "", nil
+}
+
+// periodGrantFeatureIDs reads the grants billing applies to sub's current period, with billing's filter. A
+// subscription or group grant rejects sub; a feature grant returns its entitlement's feature, whatever that
+// entitlement's state now.
+func (s *usageRollupService) periodGrantFeatureIDs(ctx context.Context, sub *subscription.Subscription) ([]string, usageRollupIneligibleReason, error) {
+	grants, err := s.EntitlementGrantRepo.List(ctx, types.NewNoLimitEntitlementGrantFilter().
+		WithCustomerIDs(sub.CustomerID).
+		WithSubscriptionIDs(sub.ID).
+		WithCycleOverlap(sub.CurrentPeriodStart, sub.CurrentPeriodEnd))
+	if err != nil {
+		return nil, "", err
+	}
+	var featureIDs []string
+	checked := make(map[string]bool, len(grants))
+	for _, grant := range grants {
+		if grant.ScopeEntityType != types.EntitlementGrantScopeFeature {
+			return nil, usageRollupIneligibleEntitlement, nil
+		}
+		if checked[grant.EntitlementConfigID] {
+			continue
+		}
+		checked[grant.EntitlementConfigID] = true
+		ent, err := s.EntitlementRepo.Get(ctx, grant.EntitlementConfigID)
+		if ierr.IsNotFound(err) {
+			return nil, usageRollupIneligibleEntitlement, nil // can't tell which meter the grant discounts
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if ent.FeatureID != "" {
+			featureIDs = append(featureIDs, ent.FeatureID)
+		}
+	}
+	return featureIDs, "", nil
 }
 
 func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool {
