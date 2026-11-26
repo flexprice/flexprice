@@ -416,7 +416,7 @@ func TestRemoteSummary_OfferErrorsAreReturned(t *testing.T) {
 				p["amount"] = "invalid"
 				f.plans["plan_1"]["prices"] = []any{p}
 			} else {
-				f.failPaths["/plans/plan_1"] = cannedResponse{
+				f.failPaths[pathPlanSearch] = cannedResponse{
 					status: http.StatusServiceUnavailable,
 					body:   `{"message":"unavailable"}`,
 				}
@@ -478,6 +478,36 @@ func TestRemoteSummary_CancellationReselectsSubscription(t *testing.T) {
 	}
 }
 
+func TestRemoteSummary_GrandfatheredUsagePrice(t *testing.T) {
+	f := newFakeCloud(map[string]string{
+		"in:t1": "cust_1",
+	})
+	legacy := cloudPrice("legacy_price")
+	legacy["type"] = "USAGE"
+	legacy["meter_id"] = "meter_legacy"
+	legacy["end_date"] = time.Now().Add(-time.Hour).Format(time.RFC3339)
+	details := cloudSubscription(f, types.SubscriptionStatusActive)
+	details["line_items"] = []any{cloudLine("li_legacy", legacy)}
+	f.prices["legacy_price"] = map[string]any{
+		"id":       "legacy_price",
+		"end_date": legacy["end_date"],
+		"meter": map[string]any{
+			"id":   "meter_legacy",
+			"name": "Seats",
+			"aggregation": map[string]any{
+				"type":        "MAX",
+				"bucket_size": "HOUR",
+			},
+		},
+	}
+
+	got, err := newTestRemoteClient(t, f).Summary(context.Background(), "in:t1")
+
+	require.NoError(t, err)
+	require.Len(t, got.plan.Charges, 1)
+	assert.Equal(t, types.WindowSize("HOUR"), got.plan.Charges[0].BucketSize)
+}
+
 func TestRemoteSummary_EffectiveBucketSize(t *testing.T) {
 	for _, offered := range []bool{false, true} {
 		for _, priceBucket := range []string{"", "DAY"} {
@@ -534,17 +564,18 @@ func TestRemoteSummary_EffectiveBucketSize(t *testing.T) {
 					assert.Equal(t, types.WindowSize(wantBucket), charge.BucketSize)
 				}
 
-				priceReads := 0
+				priceSearches := 0
 				for _, request := range f.requests {
-					if strings.HasPrefix(request, "GET /prices/") {
-						priceReads++
+					assert.False(t, strings.HasPrefix(request, "GET /prices/"), "a price read embeds the feature, which the SDK cannot decode")
+					if request == "POST "+pathPriceSearch {
+						priceSearches++
 					}
 				}
 
 				if !offered && priceBucket == "" {
-					assert.Equal(t, 1, priceReads)
+					assert.Equal(t, 1, priceSearches)
 				} else {
-					assert.Zero(t, priceReads)
+					assert.Zero(t, priceSearches)
 				}
 			})
 		}

@@ -72,7 +72,7 @@ func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 	b.WriteString("SELECT ")
 	b.WriteString(strings.Join(selects, ", "))
 	b.WriteString(" FROM (SELECT d.*, JSONExtractArrayRaw(ifNull(d.consumption_breakdown, '[]')) AS parts FROM " + in.DB + ".wallet_transactions AS d WHERE " + in.Scope("d"))
-	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND d.transaction_reason = 'INVOICE_PAYMENT'")
+	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND d.transaction_reason IN ('INVOICE_PAYMENT', 'CREDIT_ADJUSTMENT')")
 	b.WriteString(" AND " + in.TimeCond("d.created_at"))
 	b.WriteString(") AS d ARRAY JOIN if(empty(d.parts), [''], d.parts) AS item LEFT JOIN " + in.DB + ".wallet_transactions AS g ON g.id = JSONExtractString(item, 'credit_transaction_id') AND " + in.Scope("g"))
 	var filterConds []string

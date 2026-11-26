@@ -360,11 +360,6 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[24]},
 			},
-			{
-				Name:    "idx_billing_instalments_tenant_env_owner_invoiced_at",
-				Unique:  false,
-				Columns: []*schema.Column{BillingInstalmentsColumns[1], BillingInstalmentsColumns[7], BillingInstalmentsColumns[9], BillingInstalmentsColumns[25]},
-			},
 		},
 	}
 	// BillingSequencesColumns holds the columns for the "billing_sequences" table.
@@ -1869,6 +1864,47 @@ var (
 				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[27]},
 			},
 			{
+				Name:    "idx_invoices_open_receivables",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[29]},
+				Annotation: &entsql.IndexAnnotation{
+					IncludeColumns: []string{
+						InvoicesColumns[0].Name,
+
+						InvoicesColumns[8].Name,
+
+						InvoicesColumns[14].Name,
+
+						InvoicesColumns[17].Name,
+
+						InvoicesColumns[42].Name,
+					},
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text <> 'SUCCEEDED'::text) AND (amount_remaining > (0)::numeric))",
+				},
+			},
+			{
+				Name:    "idx_invoices_paid_recent",
+				Unique:  false,
+				Columns: []*schema.Column{InvoicesColumns[1], InvoicesColumns[7], InvoicesColumns[30]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						InvoicesColumns[30].Name: true,
+					},
+					IncludeColumns: []string{
+						InvoicesColumns[0].Name,
+
+						InvoicesColumns[8].Name,
+
+						InvoicesColumns[14].Name,
+
+						InvoicesColumns[15].Name,
+
+						InvoicesColumns[42].Name,
+					},
+					Where: "(((status)::text = 'published'::text) AND ((invoice_status)::text = 'FINALIZED'::text) AND ((payment_status)::text = ANY ((ARRAY['SUCCEEDED'::character varying, 'OVERPAID'::character varying])::text[])))",
+				},
+			},
+			{
 				Name:    "idx_subscription_period_unique",
 				Unique:  false,
 				Columns: []*schema.Column{InvoicesColumns[9], InvoicesColumns[36], InvoicesColumns[37]},
@@ -1987,12 +2023,47 @@ var (
 			},
 		},
 	}
+	// InvoiceRemindersColumns holds the columns for the "invoice_reminders" table.
+	InvoiceRemindersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "reminder_status", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "status_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "approved_at", Type: field.TypeTime, Nullable: true},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// InvoiceRemindersTable holds the schema information for the "invoice_reminders" table.
+	InvoiceRemindersTable = &schema.Table{
+		Name:       "invoice_reminders",
+		Columns:    InvoiceRemindersColumns,
+		PrimaryKey: []*schema.Column{InvoiceRemindersColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_invoice_reminder_tenant_env_invoice",
+				Unique:  true,
+				Columns: []*schema.Column{InvoiceRemindersColumns[1], InvoiceRemindersColumns[7], InvoiceRemindersColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+		},
+	}
 	// InvoiceSequencesColumns holds the columns for the "invoice_sequences" table.
 	InvoiceSequencesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(6)"}},
+		{Name: "year_month", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(8)"}},
 		{Name: "prefix", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "last_value", Type: field.TypeInt64, Default: 0, SchemaType: map[string]string{"postgres": "bigint"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamp"}},
@@ -3791,6 +3862,7 @@ var (
 		IncomingWebhookEventsTable,
 		InvoicesTable,
 		InvoiceLineItemsTable,
+		InvoiceRemindersTable,
 		InvoiceSequencesTable,
 		JournalEntriesTable,
 		JournalLinesTable,

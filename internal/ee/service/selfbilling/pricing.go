@@ -73,7 +73,11 @@ func (c *remoteClient) offeredPlanIDs() []string {
 
 // offeredPlan is the default plan's offer: what a tenant with no live subscription is shown.
 func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanResponse, error) {
-	return c.offeredPlanByID(ctx, c.defaultPlanID)
+	offers, err := c.planOffers(ctx, []string{c.defaultPlanID})
+	if err != nil {
+		return nil, err
+	}
+	return offers[0], nil
 }
 
 // offeredPlans loads every plan a tenant may buy in one search. The default plan is first.
@@ -82,7 +86,12 @@ func (c *remoteClient) offeredPlans(ctx context.Context) ([]*dto.SelfBillingPlan
 	if len(ids) == 0 {
 		return nil, nil
 	}
+	return c.planOffers(ctx, ids)
+}
 
+// planOffers searches for the plans, in the given order, instead of reading each one: a plan read embeds
+// entitlements, whose reporting unit the SDK cannot decode.
+func (c *remoteClient) planOffers(ctx context.Context, ids []string) ([]*dto.SelfBillingPlanResponse, error) {
 	resp, err := c.sdk.Plans.QueryPlan(ctx, sdktypes.PlanFilter{
 		PlanIds: ids,
 		Expand:  lo.ToPtr(string(types.ExpandPrices)),
@@ -109,20 +118,6 @@ func (c *remoteClient) offeredPlans(ctx context.Context) ([]*dto.SelfBillingPlan
 		out = append(out, offer)
 	}
 	return out, nil
-}
-
-func (c *remoteClient) offeredPlanByID(ctx context.Context, planID string) (*dto.SelfBillingPlanResponse, error) {
-	resp, err := c.sdk.Plans.GetPlan(ctx, planID)
-	if err != nil {
-		return nil, cloudErr(err)
-	}
-
-	plan := resp.PlanResponse
-	if plan == nil || lo.FromPtr(plan.ID) == "" {
-		return nil, unreadablePricing()
-	}
-
-	return c.planOffer(ctx, plan)
 }
 
 func (c *remoteClient) planOffer(ctx context.Context, plan *sdktypes.PlanResponse) (*dto.SelfBillingPlanResponse, error) {
@@ -298,16 +293,27 @@ func (c *remoteClient) hydratePricingMeter(ctx context.Context, p *sdktypes.Pric
 		return nil
 	}
 
-	resp, err := c.sdk.Prices.GetPrice(ctx, lo.FromPtr(p.ID))
+	// A price search, unlike a price read, leaves out the feature, whose reporting unit the SDK cannot decode.
+	resp, err := c.sdk.Prices.QueryPrice(ctx, sdktypes.PriceFilter{
+		PriceIds:           []string{lo.FromPtr(p.ID)},
+		Expand:             lo.ToPtr(string(types.ExpandMeters)),
+		Limit:              lo.ToPtr(int64(1)),
+		AllowExpiredPrices: lo.ToPtr(true),
+	})
 	if err != nil {
 		return cloudErr(err)
 	}
 
-	if resp.PriceResponse == nil || resp.PriceResponse.Meter == nil || lo.FromPtr(resp.PriceResponse.Meter.ID) != meterID {
+	if resp.ListPricesResponse == nil || len(resp.ListPricesResponse.Items) != 1 {
 		return unreadablePricing()
 	}
 
-	p.Meter = resp.PriceResponse.Meter
+	found := resp.ListPricesResponse.Items[0]
+	if found.Meter == nil || lo.FromPtr(found.Meter.ID) != meterID {
+		return unreadablePricing()
+	}
+
+	p.Meter = found.Meter
 	meters[meterID] = p.Meter
 	return nil
 }

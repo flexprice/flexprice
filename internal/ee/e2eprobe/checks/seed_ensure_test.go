@@ -366,7 +366,7 @@ func TestSeedEnsure_PlanEntitlementsProvisioned(t *testing.T) {
 		if req.UsageResetPeriod == nil || *req.UsageResetPeriod != types.EntitlementUsageResetPeriodMonthly {
 			t.Errorf("entitlement[%d] UsageResetPeriod = %v, want Monthly", i, req.UsageResetPeriod)
 		}
-		if req.FeatureType != types.FeatureTypeMetered {
+		if req.FeatureType == nil || *req.FeatureType != types.FeatureTypeMetered {
 			t.Errorf("entitlement[%d] FeatureType = %v, want Metered", i, req.FeatureType)
 		}
 	}

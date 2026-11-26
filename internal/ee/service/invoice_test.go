@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/taxapplied"
+	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -1212,20 +1213,23 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_PublishesFinalizedSystemEventF
 	s.Equal(draftSubscriptionInvoice.ID, pl.InvoiceID)
 }
 
-func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFinalization() {
+func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtItsBoundary() {
 	ctx := s.GetContext()
 	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	boundary := early.AddDate(0, 0, 10)
 
 	tests := []struct {
 		name            string
+		periodEnd       *time.Time
 		explicitIssue   bool
 		manuallyEdited  bool
 		wantIssuedEarly bool
 		wantDueRedated  bool
 	}{
-		{name: "draft created early is issued at finalization", wantDueRedated: true},
+		{name: "cycle draft is issued at its period end", periodEnd: &boundary, wantDueRedated: true},
+		{name: "future period end is capped at finalization", periodEnd: lo.ToPtr(time.Now().UTC().AddDate(0, 0, 10)), wantDueRedated: true},
 		{name: "caller-set issue date is kept and due counts from it", explicitIssue: true, wantIssuedEarly: true, wantDueRedated: true},
-		{name: "manually edited copy keeps its dates", manuallyEdited: true, wantIssuedEarly: true},
+		{name: "manually edited copy keeps its dates", periodEnd: &boundary, manuallyEdited: true, wantIssuedEarly: true},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -1249,19 +1253,24 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFin
 				IssueDate:        lo.ToPtr(early),
 				DueDate:          lo.ToPtr(early.AddDate(0, 0, 3)),
 				IsManuallyEdited: tt.manuallyEdited,
+				BillingReason:    lo.Ternary(tt.periodEnd != nil, string(types.InvoiceBillingReasonSubscriptionCycle), ""),
+				PeriodStart:      lo.Ternary(tt.periodEnd != nil, lo.ToPtr(early), nil),
+				PeriodEnd:        tt.periodEnd,
+				LastComputedAt:   lo.ToPtr(early),
 				BaseModel:        baseModel,
 			}
 			s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
 
-			finalizeStart := time.Now().UTC()
 			s.Require().NoError(s.service.FinalizeInvoice(ctx, draft.ID, dto.FinalizeInvoiceRequest{}))
 			got, err := s.invoiceRepo.Get(ctx, draft.ID)
 			s.Require().NoError(err)
 
 			if tt.wantIssuedEarly {
 				s.WithinDuration(early, *got.IssueDate, time.Second)
+			} else if tt.periodEnd == &boundary {
+				s.WithinDuration(boundary, *got.IssueDate, time.Second)
 			} else {
-				s.False(got.IssueDate.Before(finalizeStart))
+				s.True(got.IssueDate.Equal(*got.FinalizedAt), "future boundary capped at finalization")
 			}
 			if tt.wantDueRedated {
 				s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
@@ -1272,9 +1281,10 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice_IssuesSubscriptionInvoiceAtFin
 	}
 }
 
-func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
+func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtItsBoundary() {
 	ctx := s.GetContext()
 	early := time.Now().UTC().AddDate(0, 0, -40).Truncate(time.Microsecond)
+	boundary := early.AddDate(0, 0, 10)
 	baseModel := types.GetDefaultBaseModel(ctx)
 	baseModel.CreatedAt = early
 
@@ -1293,6 +1303,10 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 		AmountRemaining: decimal.NewFromFloat(15),
 		IssueDate:       lo.ToPtr(early),
 		DueDate:         lo.ToPtr(early.AddDate(0, 0, 3)),
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
+		PeriodStart:     lo.ToPtr(early),
+		PeriodEnd:       lo.ToPtr(boundary),
+		LastComputedAt:  lo.ToPtr(early),
 		BaseModel:       baseModel,
 	}
 	s.Require().NoError(s.invoiceRepo.CreateWithLineItems(ctx, draft))
@@ -1309,14 +1323,13 @@ func (s *InvoiceServiceSuite) TestPaidDraftIsIssuedAtFinalization() {
 	}
 	s.Require().NoError(s.GetStores().PaymentRepo.Create(ctx, paid))
 
-	finalizeStart := time.Now().UTC()
 	processor := NewPaymentProcessorService(s.service.(*invoiceService).ServiceParams).(*paymentProcessor)
 	s.Require().NoError(processor.handleInvoicePostProcessing(ctx, paid))
 
 	got, err := s.invoiceRepo.Get(ctx, draft.ID)
 	s.Require().NoError(err)
 	s.Equal(types.InvoiceStatusFinalized, got.InvoiceStatus)
-	s.False(got.IssueDate.Before(finalizeStart))
+	s.WithinDuration(boundary, *got.IssueDate, time.Second)
 	s.WithinDuration(got.IssueDate.AddDate(0, 0, 1), *got.DueDate, time.Second)
 }
 
@@ -4380,4 +4393,54 @@ func (s *VoidPaymentLinksSuite) TestGetOrCreatePaymentLink_RejectsVoidedInvoice(
 	s.Require().Error(err)
 	s.True(ierr.IsValidation(err))
 	s.Empty(s.provider.linkRequests)
+}
+
+func (s *InvoiceServiceSuite) TestGetInvoice_LinkedWalletTransactions() {
+	ctx := s.GetContext()
+	tx := &wallet.Transaction{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:          "wallet_linked",
+		Type:              types.TransactionTypeCredit,
+		Amount:            decimal.NewFromInt(50),
+		CreditAmount:      decimal.NewFromInt(50),
+		TxStatus:          types.TransactionStatusPending,
+		TransactionReason: types.TransactionReasonPurchasedCreditInvoiced,
+		ReferenceType:     types.WalletTxReferenceTypeExternal,
+		ReferenceID:       "linked-ref",
+		IdempotencyKey:    "linked-ref",
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(ctx, tx))
+
+	newInvoice := func(metadata types.Metadata) *invoice.Invoice {
+		inv := &invoice.Invoice{
+			ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+			CustomerID:      s.testData.customer.ID,
+			InvoiceType:     types.InvoiceTypeOneOff,
+			InvoiceStatus:   types.InvoiceStatusFinalized,
+			PaymentStatus:   types.PaymentStatusPending,
+			Currency:        "usd",
+			AmountDue:       decimal.NewFromInt(50),
+			AmountRemaining: decimal.NewFromInt(50),
+			Metadata:        metadata,
+			BaseModel:       types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+		return inv
+	}
+	topUp := newInvoice(types.Metadata{"wallet_transaction_id": tx.ID})
+	plain := newInvoice(nil)
+
+	got, err := s.service.GetInvoice(ctx, topUp.ID)
+	s.NoError(err)
+	s.Require().Len(got.LinkedWalletTransactions, 1)
+	s.Equal(tx.ID, got.LinkedWalletTransactions[0].ID)
+	s.Equal("wallet_linked", got.LinkedWalletTransactions[0].WalletID)
+	s.True(decimal.NewFromInt(50).Equal(got.LinkedWalletTransactions[0].CreditAmount))
+	s.Equal(types.TransactionStatusPending, got.LinkedWalletTransactions[0].TransactionStatus)
+
+	got, err = s.service.GetInvoice(ctx, plain.ID)
+	s.NoError(err)
+	s.Empty(got.LinkedWalletTransactions)
 }

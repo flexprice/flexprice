@@ -105,4 +105,5 @@ const (
 	EntityAnalytics       Entity = "analytics"
 	EntityFXRate          Entity = "fxrate"
 	EntityBillingEntity   Entity = "billing_entity"
+	EntityCollections     Entity = "collections"
 )

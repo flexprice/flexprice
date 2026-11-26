@@ -157,6 +157,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{
+			// Always declared; clickhouse.meter_usage_optimize.enabled is the kill switch.
+			ID:        types.ScheduleIDMeterUsageOptimize,
+			Interval:  24 * time.Hour,
+			Offset:    5 * time.Hour,
+			Workflow:  cronWorkflows.MeterUsageOptimizeWorkflow,
+			Input:     models.MeterUsageOptimizeInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			// Always declared; a no-op unless an environment enables revenue recognition.
 			ID:        types.ScheduleIDRevenueRecognition,
 			Interval:  24 * time.Hour,

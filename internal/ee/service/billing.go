@@ -1688,8 +1688,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	isPreview := lo.Contains([]types.InvoiceReferencePoint{
 		types.ReferencePointPreview, types.ReferencePointInternalPreview, types.ReferencePointRevenueFacts,
 	}, referencePoint)
-	if !isPreview {
-		if err := refreshSubscriptionEntitlementGrantUsage(ctx, s.ServiceParams, sub, periodStart, periodEnd, asOf); err != nil {
+	if !isPreview && s.EntitlementGrantRepo != nil {
+		if err := s.refreshEntitlementGrantsForInvoice(ctx, sub, periodStart, periodEnd, asOf); err != nil {
 			return nil, err
 		}
 	}
@@ -2491,9 +2491,10 @@ func subscriptionInvoiceDueDate(sub *subscription.Subscription, invoiceConfig ty
 	if loc, err := time.LoadLocation(sub.Timezone); err == nil {
 		issueDate = issueDate.In(loc)
 	}
-	dueDate, ok := types.PaymentTermsDueDate(lo.FromPtr(sub.PaymentTerms), issueDate)
+	dueDate, ok := lo.FromPtr(sub.PaymentTermsType).DueDate(lo.FromPtr(sub.PaymentTermsDays), issueDate)
 	if !ok {
-		dueDate, ok = types.PaymentTermsDueDate(lo.FromPtr(invoiceConfig.PaymentTerms), issueDate)
+		tenantType, tenantDays := lo.FromPtr(invoiceConfig.PaymentTerms).Parts()
+		dueDate, ok = lo.FromPtr(tenantType).DueDate(lo.FromPtr(tenantDays), issueDate)
 	}
 	if !ok {
 		dueDate = issueDate.AddDate(0, 0, lo.FromPtr(invoiceConfig.DueDateDays))
@@ -2528,12 +2529,13 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Provisional due date, counted from period end or now if later; finalization re-dates the invoice
-	// from when it is issued.
+	// Provisional due date, counted from the invoice's billing boundary, else period end or now if later.
 	issueDate := clock.Now()
 	if periodEnd.After(issueDate) {
 		issueDate = periodEnd
 	}
+	reason := lo.CoalesceOrEmpty(params.BillingReason, types.InvoiceBillingReasonSubscriptionCycle)
+	issueDate = lo.FromPtrOr(invoice.IssueDateFor(reason, &periodStart, &periodEnd), issueDate)
 	invoiceDueDate := subscriptionInvoiceDueDate(sub, invoiceConfig, issueDate)
 
 	if result == nil {
@@ -2637,7 +2639,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
 		PeriodStart:      &periodStart,
 		PeriodEnd:        &periodEnd,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
+		BillingReason:    reason,
 		Metadata:         metadata,
 		LineItems:        append(result.FixedCharges, result.UsageCharges...),
 		InvoiceCoupons:   validCoupons,
@@ -2647,9 +2649,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 
 	if params.InvoiceType != "" {
 		req.InvoiceType = params.InvoiceType
-	}
-	if params.BillingReason != "" {
-		req.BillingReason = params.BillingReason
 	}
 
 	// The revenue-facts rollup needs discount amounts, which normal previews
@@ -3089,6 +3088,16 @@ func (s *billingService) GetCustomerEntitlementsForSubscriptions(ctx context.Con
 		SubscriptionID: subscriptions[0].ID,
 	})
 
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead {
+		cust, err := s.CustomerRepo.Get(ctx, customerID)
+		if err == nil {
+			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, subscriptions, clock.Now())
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before read failed; returning stored usage",
+				"error", err, "customer_id", customerID)
+		}
+	}
 	s.attachGrantState(ctx, aggregatedFeatures, subscriptions)
 
 	// Build final response
@@ -3178,6 +3187,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
 		SubscriptionIDs: req.SubscriptionIDs,
 		FeatureIDs:      featureIDs,
+		RefreshGrants:   req.RefreshGrants,
 	}
 
 	entitlements, err := s.GetCustomerEntitlements(ctx, customerID, entitlementsReq)

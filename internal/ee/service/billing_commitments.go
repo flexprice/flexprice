@@ -382,6 +382,25 @@ func (l *commitmentLoader) Stacks(ctx context.Context) ([]*commitmentStack, []*a
 	return stacks, allocs, nil
 }
 
+// commitmentBilling is one billing calculation: the allocated stacks, index-aligned with their allocations, and the
+// lines an invoice bills from them.
+type commitmentBilling struct {
+	stacks []*commitmentStack
+	allocs []*allocation
+	lines  []dto.CreateInvoiceLineItemRequest
+}
+
+// BillingLines returns the commitment lines an invoice bills and their total: the usage lines, with those of
+// billing-terms commitments covered by their instalments.
+func (l *commitmentLoader) BillingLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
+	b, err := l.bill(ctx)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	return b.lines, sumAmounts(b.lines), nil
+}
+
 // usageLines returns the commitment lines at usage value, with true-ups, before any billing terms cover them. Invoices
 // and usage analytics read BillingLines instead.
 func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, error) {
@@ -390,21 +409,30 @@ func (l *commitmentLoader) usageLines(ctx context.Context) ([]dto.CreateInvoiceL
 		return nil, err
 	}
 
+	return l.render(ctx, stacks, allocs), nil
+}
+
+// render prices allocated stacks as commitment lines at usage value.
+func (l *commitmentLoader) render(
+	ctx context.Context,
+	stacks []*commitmentStack,
+	allocs []*allocation,
+) []dto.CreateInvoiceLineItemRequest {
 	cost := func(p *price.Price, qty decimal.Decimal) decimal.Decimal {
 		return l.priceSvc.CalculateCost(ctx, p, qty)
 	}
-	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost), nil
+	return commitmentInvoiceLines(stacks, allocs, l.sub.Currency, l.periodStart, l.periodEnd, cost)
 }
 
-// BillingLines returns the commitment lines an invoice bills and their total: the usage lines, with those of
-// billing-terms commitments covered by their instalments.
-func (l *commitmentLoader) BillingLines(ctx context.Context) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
-	usageLines, err := l.usageLines(ctx)
+// bill allocates the stacks and renders what BillingLines returns, keeping the allocation for callers that place the
+// lines in time.
+func (l *commitmentLoader) bill(ctx context.Context) (*commitmentBilling, error) {
+	stacks, allocs, err := l.Stacks(ctx)
 	if err != nil {
-		return nil, decimal.Zero, err
+		return nil, err
 	}
 
-	lines := coverWithBillingTerms(usageLines, l.commitments)
+	lines := coverWithBillingTerms(l.render(ctx, stacks, allocs), l.commitments)
 	total := sumAmounts(lines)
 
 	l.billing.Logger.Debug(ctx, "applied commitments to usage charges",
@@ -415,7 +443,7 @@ func (l *commitmentLoader) BillingLines(ctx context.Context) ([]dto.CreateInvoic
 		"lines", len(lines),
 		"total", total.String(),
 	)
-	return lines, total, nil
+	return &commitmentBilling{stacks: stacks, allocs: allocs, lines: lines}, nil
 }
 
 // coverWithBillingTerms zeroes the utilized rows and drops the true-up rows of commitments collected through

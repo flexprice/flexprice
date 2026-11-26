@@ -2127,6 +2127,11 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		subscription.Settings = dto.MergeSettingsOverride(subscription.Settings, req.Settings)
 	}
 
+	// req.Validate has checked the payment terms.
+	if paymentTerms, _ := types.ResolvePaymentTerms(nil, req.PaymentTermsType, req.PaymentTermsDays); paymentTerms != nil {
+		subscription.PaymentTermsType, subscription.PaymentTermsDays = paymentTerms.Parts()
+	}
+
 	if req.CancelAtPeriodEnd != nil {
 		subscription.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
 		// Explicit false with no cancel_at clears a pending cancellation; gated on an existing
@@ -6296,7 +6301,7 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 
 			voidedInStripe := true
 			for _, inv := range overdueInvoices {
-				ok, err := stripeIntegration.InvoiceSyncSvc.VoidInvoiceInStripe(subCtx, inv.ID)
+				ok, err := stripeIntegration.InvoiceSyncSvc.VoidInvoice(subCtx, inv.ID)
 				if err != nil {
 					s.Logger.Error(ctx, "failed to void overdue invoice in Stripe, retrying next run",
 						"error", err,
@@ -7283,6 +7288,18 @@ func (s *subscriptionService) aggregateSubscriptionEntitlements(ctx context.Cont
 		}
 	}
 
+	// Window opening ignores status, so only live subscriptions are refreshed, as in the alert workflow.
+	isLive := sub.SubscriptionStatus == types.SubscriptionStatusActive || sub.SubscriptionStatus == types.SubscriptionStatusTrialing
+	if req != nil && req.RefreshGrants && s.Config.EntitlementGrants.RefreshOnRead && isLive {
+		cust, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+		if err == nil {
+			err = NewAlertService(s.ServiceParams).EvaluateAndAlertEntitlementGrants(ctx, cust, []*subscription.Subscription{sub}, clock.Now())
+		}
+		if err != nil {
+			s.Logger.Error(ctx, "entitlement grant refresh before read failed; returning stored usage",
+				"error", err, "subscription_id", sub.ID)
+		}
+	}
 	grantStates, err := NewEntitlementGrantService(s.ServiceParams).
 		GrantStateByFeature(ctx, sub, clock.Now())
 	if err != nil {
@@ -8482,7 +8499,8 @@ func (s *subscriptionService) createInheritedSubscriptions(ctx context.Context, 
 		ProrationBehavior:      parent.ProrationBehavior,
 		ParentSubscriptionID:   &parent.ID,
 		SubscriptionType:       types.SubscriptionTypeInherited,
-		PaymentTerms:           parent.PaymentTerms,
+		PaymentTermsType:       parent.PaymentTermsType,
+		PaymentTermsDays:       parent.PaymentTermsDays,
 		EnableTrueUp:           parent.EnableTrueUp,
 		SyncedPriceSequence:    parent.SyncedPriceSequence,
 		BaseModel:              types.GetDefaultBaseModel(ctx),

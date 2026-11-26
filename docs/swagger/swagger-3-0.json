@@ -2393,6 +2393,613 @@
         ]
       }
     },
+    "/collections/board": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get collections board",
+        "description": "Use when you need every open invoice by where it stands: sent but not due, overdue (one card per invoice, split by reminder status), and paid in the last 7 days. Counts and per-currency totals cover whole columns and follow the q and currency filters; by default no cards are returned (limit 0): each column carries count and totals, and has_more is true when the column has cards to fetch with GET /collections/board/columns/{key}. With limit above 0 the first page of cards is returned too, and has_more says more cards follow. available_currencies lists the currencies of open invoices and of the invoices the Paid column can show, before q and currency apply.",
+        "operationId": "getCollectionsBoard",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Cards per column in this response (0-200, default 0 = counts and totals only)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "description": "Keep receivables in this currency (case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionsBoardResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/collections/board/columns/{key}": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get a page of a collections board column",
+        "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably (not due by due date, overdue and held by remaining balance, chasing by newest approval first, paid by newest payment first); send the as_of of the board response, and the same from and to, with every page so the overdue boundary, the date range and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
+        "operationId": "getCollectionsBoardColumn",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Column key: not_due, overdue, chasing, held or paid_this_week",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, from 1 (default 1)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "description": "as_of (RFC3339) of the board response; within the last 24 hours and not in the future",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Cards per page (1-200, default 15)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "description": "Keep receivables in this currency (case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CollectionsColumnPageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, as_of or page too deep",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown column",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/collections/reminders": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "List reminder drafts",
+        "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). Approvals made after as_of are left out of the list and the summary. from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); The summary (counts per status, totals per currency) follows from, to, currency and q like the board, and ignores status and customer_id so the status tabs count every status; available_currencies lists the currencies of open invoices and of invoices paid in the last 7 days, regardless of filters.",
+        "operationId": "listReminderDrafts",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "pending, approved, held or skipped",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Match customer name, email or invoice number",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "description": "Customer ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "currency",
+            "in": "query",
+            "description": "Currency code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (1-100, default 15)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, from 1 (default 1); page times limit may not exceed 5000",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "description": "as_of (RFC3339) of an earlier response; within the last 24 hours and not in the future",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRemindersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
+    "/collections/reminders/bulk-update": {
+      "put": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Update reminders in bulk",
+        "description": "Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. All or nothing: if any invoice cannot take the change (unknown or not overdue, a change not legal for its status, someone changed it meanwhile, or, where emails are on, an approval for a customer without an email address), the request fails and no invoice changes. The error details name the invoice. Approving queues each email for the dispatcher.",
+        "operationId": "bulkUpdateReminderDrafts",
+        "requestBody": {
+          "description": "Invoice IDs and the change",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateRemindersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpdateRemindersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "An invoice was not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An invoice cannot take the change or was changed meanwhile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/collections/reminders/update/{id}": {
+      "put": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Update reminder",
+        "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
+        "operationId": "updateReminderDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Target status and/or mail changes",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReminderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceReminderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invoice is not open and overdue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Not allowed in the reminder's status, or changed by someone else",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "write",
+        "x-codegen-request-body-name": "request"
+      }
+    },
+    "/collections/reminders/{id}": {
+      "get": {
+        "tags": [
+          "Collections"
+        ],
+        "summary": "Get reminder draft",
+        "description": "Use when you need the reminder of one overdue invoice. The id is the invoice id; 404 when the invoice is not open and overdue.",
+        "operationId": "getReminderDraft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceReminderResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Collections is not enabled for this environment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read"
+      }
+    },
     "/commitments": {
       "post": {
         "tags": [
@@ -5413,6 +6020,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -5718,6 +6333,14 @@
             }
           },
           {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "RefreshGrants evaluates entitlement grants before returning their usage, so the read is slower.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "subscription_ids",
             "in": "query",
             "style": "form",
@@ -5894,6 +6517,14 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -15545,6 +16176,14 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "name": "refresh_grants",
+            "in": "query",
+            "description": "Evaluate entitlement grants before returning their usage (slower)",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -18882,7 +19521,7 @@
             "name": "credits_available_gt",
             "in": "query",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           },
           {
@@ -21539,6 +22178,50 @@
           }
         }
       },
+      "BulkUpdateRemindersRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "expected_body": {
+            "type": "string"
+          },
+          "expected_subject": {
+            "type": "string",
+            "description": "ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict\nwhen the text that would be approved now differs (the invoice changed since the preview). Optional, approval only."
+          },
+          "invoice_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.ReminderStatus"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tone": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkUpdateRemindersResponse": {
+        "type": "object",
+        "properties": {
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceReminderResponse"
+            }
+          }
+        }
+      },
       "CancelScheduleRequest": {
         "type": "object",
         "properties": {
@@ -22031,6 +22714,159 @@
           "name": {
             "type": "string",
             "description": "Name is required and must be different from the source plan's name"
+          }
+        }
+      },
+      "CollectionsBoardColumn": {
+        "type": "object",
+        "properties": {
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionsItem"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "description": "Count is the number of invoices in the whole column."
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "HasMore is true when the column has cards beyond the ones in this response."
+          },
+          "hint": {
+            "type": "string"
+          },
+          "key": {
+            "$ref": "#/components/schemas/types.CollectionsColumnKey"
+          },
+          "title": {
+            "type": "string"
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionsCurrencyTotal"
+            }
+          }
+        }
+      },
+      "CollectionsBoardResponse": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string"
+          },
+          "available_currencies": {
+            "type": "array",
+            "description": "AvailableCurrencies lists the currencies of all open and recently paid receivables, before q and currency apply.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionsBoardColumn"
+            }
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
+          }
+        }
+      },
+      "CollectionsColumnPageResponse": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string"
+          },
+          "cards": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionsItem"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "key": {
+            "$ref": "#/components/schemas/types.CollectionsColumnKey"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
+          }
+        }
+      },
+      "CollectionsCurrencyTotal": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          }
+        }
+      },
+      "CollectionsItem": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "description": "Amount is the remaining balance (not_due, overdue, chasing, held) or the invoice total (paid_this_week)."
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "customer_name": {
+            "type": "string"
+          },
+          "days_overdue": {
+            "type": "integer"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "due_in_days": {
+            "type": "integer"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "paid_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reminder_status": {
+            "$ref": "#/components/schemas/types.ReminderStatus"
+          },
+          "reminder_status_reason": {
+            "type": "string"
+          },
+          "reminder_tone": {
+            "$ref": "#/components/schemas/types.ReminderTone"
+          }
+        }
+      },
+      "CollectionsRange": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
           }
         }
       },
@@ -23925,7 +24761,6 @@
       },
       "CreatePaymentRequest": {
         "required": [
-          "amount",
           "currency",
           "destination_id",
           "destination_type",
@@ -23934,7 +24769,8 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "string"
+            "type": "string",
+            "description": "Amount defaults to the invoice's amount remaining for invoice payments when zero or omitted."
           },
           "cancel_url": {
             "type": "string"
@@ -24299,18 +25135,18 @@
         "type": "object",
         "properties": {
           "commitment_amount": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
@@ -24355,7 +25191,7 @@
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "quantity": {
-            "type": "number"
+            "type": "string"
           },
           "start_date": {
             "type": "string",
@@ -24526,7 +25362,21 @@
             "$ref": "#/components/schemas/types.PaymentBehavior"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "maximum": 365,
+            "minimum": 1,
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -26580,7 +27430,7 @@
           },
           "instalments": {
             "type": "array",
-            "description": "Instalments lists, with expand \"instalments\", the instalments of the v2 commitments covering a queried meter that\nwere invoiced in the range, or are still scheduled with a bill_on in it; it is empty with property or source\nfilters, or when no usage line runs in the range.",
+            "description": "Instalments lists the commitment instalments in the range with expand \"instalments\": start <= bill_on < end,\nor start < bill_on <= end for an ARREAR one.",
             "items": {
               "$ref": "#/components/schemas/UsageAnalyticInstalment"
             }
@@ -27532,6 +28382,90 @@
           }
         }
       },
+      "InvoiceReminderResponse": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "description": "CreatedAt and UpdatedAt are omitted until a person acts on the reminder.",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "customer_email": {
+            "type": "string"
+          },
+          "customer_id": {
+            "type": "string"
+          },
+          "customer_name": {
+            "type": "string"
+          },
+          "days_overdue": {
+            "type": "integer"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "Edited is true when the mail differs from what the system wrote; the Original fields then hold the system's version."
+          },
+          "email": {
+            "$ref": "#/components/schemas/ReminderEmailStatus"
+          },
+          "id": {
+            "type": "string"
+          },
+          "invoice_id": {
+            "type": "string"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "original_body": {
+            "type": "string"
+          },
+          "original_subject": {
+            "type": "string"
+          },
+          "original_tone": {
+            "$ref": "#/components/schemas/types.ReminderTone"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.ReminderStatus"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tone": {
+            "$ref": "#/components/schemas/types.ReminderTone"
+          },
+          "tone_reason": {
+            "type": "string",
+            "description": "ToneReason explains the tone shown: the invoice's age, \"Tone set to firm by you\", or \"Approved with a firm tone, kept as approved\". It says nothing about edits or status; use edited and status_reason."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "InvoiceResponse": {
         "type": "object",
         "properties": {
@@ -27670,6 +28604,13 @@
             "description": "line_items contains the individual items that make up this invoice (overrides embedded field)",
             "items": {
               "$ref": "#/components/schemas/InvoiceLineItemResponse"
+            }
+          },
+          "linked_wallet_transactions": {
+            "type": "array",
+            "description": "linked_wallet_transactions are the wallet credits this invoice pays for; pending ones are released when it is paid",
+            "items": {
+              "$ref": "#/components/schemas/LinkedWalletTransaction"
             }
           },
           "metadata": {
@@ -27875,13 +28816,13 @@
         "type": "object",
         "properties": {
           "commitment_amount": {
-            "type": "number"
+            "type": "string"
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_quantity": {
-            "type": "number"
+            "type": "string"
           },
           "commitment_time_buckets": {
             "type": "array",
@@ -27902,7 +28843,7 @@
             "description": "IsWindowCommitment applies commitment per window (e.g. per day) rather than per billing period."
           },
           "overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "OverageFactor is a multiplier on usage beyond commitment; 1.0 = base rate."
           }
         }
@@ -27961,6 +28902,26 @@
         "properties": {
           "mapping": {
             "$ref": "#/components/schemas/EntityIntegrationMappingResponse"
+          }
+        }
+      },
+      "LinkedWalletTransaction": {
+        "type": "object",
+        "properties": {
+          "credit_amount": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "transaction_reason": {
+            "$ref": "#/components/schemas/types.TransactionReason"
+          },
+          "transaction_status": {
+            "$ref": "#/components/schemas/types.TransactionStatus"
+          },
+          "wallet_id": {
+            "type": "string"
           }
         }
       },
@@ -28164,6 +29125,39 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
+      "ListRemindersResponse": {
+        "type": "object",
+        "properties": {
+          "as_of": {
+            "type": "string"
+          },
+          "available_currencies": {
+            "type": "array",
+            "description": "AvailableCurrencies lists the currencies of all open and recently paid invoices, before q, currency and range apply.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceReminderResponse"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "range": {
+            "$ref": "#/components/schemas/CollectionsRange"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReminderSummary"
           }
         }
       },
@@ -29489,6 +30483,53 @@
           }
         }
       },
+      "ReminderEmailStatus": {
+        "type": "object",
+        "properties": {
+          "sent_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.EmailDeliveryStatus"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        }
+      },
+      "ReminderSummary": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "integer"
+          },
+          "customer_count": {
+            "type": "integer"
+          },
+          "held": {
+            "type": "integer"
+          },
+          "invoice_count": {
+            "type": "integer"
+          },
+          "overdue_totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CollectionsCurrencyTotal"
+            }
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "to_review": {
+            "type": "integer"
+          }
+        }
+      },
       "RemoveAddonRequest": {
         "required": [
           "addon_association_id"
@@ -29845,17 +30886,17 @@
             "description": "AdjustmentType labels rows broken out by include_adjustments:\n\"commitment_trueup\", \"overage\" or \"revert\". Empty for plain rows."
           },
           "billable_qty": {
-            "type": "number"
+            "type": "string"
           },
           "day": {
             "type": "string",
             "description": "Day is set for day granularity; PeriodStart/PeriodEnd for period."
           },
           "entitlement_amount": {
-            "type": "number"
+            "type": "string"
           },
           "entitlement_qty": {
-            "type": "number"
+            "type": "string"
           },
           "group": {
             "type": "object",
@@ -29865,13 +30906,13 @@
             "description": "Group holds the requested dimensions and their values for this bucket."
           },
           "invoice_discount": {
-            "type": "number"
+            "type": "string"
           },
           "line_discount": {
-            "type": "number"
+            "type": "string"
           },
           "net_amount": {
-            "type": "number"
+            "type": "string"
           },
           "period_end": {
             "type": "string",
@@ -29885,10 +30926,10 @@
             "$ref": "#/components/schemas/types.FactStatus"
           },
           "tier_delta": {
-            "type": "number"
+            "type": "string"
           },
           "usage_at_list_rate": {
-            "type": "number"
+            "type": "string"
           }
         }
       },
@@ -30568,6 +31609,10 @@
       "StripePaymentGatewayOptions": {
         "type": "object",
         "properties": {
+          "allow_promotion_codes": {
+            "type": "boolean",
+            "description": "AllowPromotionCodes lets the customer enter a promotion code; nil keeps it on."
+          },
           "tax_id_collection_enabled": {
             "type": "boolean",
             "description": "TaxIDCollectionEnabled only applies to PAYMENT_LINK Checkout Sessions."
@@ -31825,7 +32870,19 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -32061,7 +33118,19 @@
             "description": "PaymentBehavior determines how subscription payments are handled"
           },
           "payment_terms": {
-            "$ref": "#/components/schemas/types.PaymentTerms"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/types.PaymentTerms"
+              }
+            ],
+            "deprecated": true
+          },
+          "payment_terms_days": {
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "phases": {
             "type": "array",
@@ -33462,6 +34531,33 @@
           }
         }
       },
+      "UpdateReminderRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "expected_body": {
+            "type": "string"
+          },
+          "expected_subject": {
+            "type": "string",
+            "description": "ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict\nwhen the text that would be approved now differs (the invoice changed since the preview). Optional, approval only."
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.ReminderStatus"
+          },
+          "status_reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tone": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateScheduledTaskRequest": {
         "required": [
           "enabled"
@@ -33531,18 +34627,18 @@
             "$ref": "#/components/schemas/types.WindowSize"
           },
           "commitment_amount": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_duration": {
             "$ref": "#/components/schemas/types.BillingPeriod"
           },
           "commitment_overage_factor": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_quantity": {
-            "type": "number",
+            "type": "string",
             "description": "Deprecated: use POST /commitments instead."
           },
           "commitment_time_buckets": {
@@ -33614,6 +34710,15 @@
           "parent_subscription_id": {
             "type": "string",
             "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear."
+          },
+          "payment_terms_days": {
+            "maximum": 365,
+            "minimum": 1,
+            "type": "integer",
+            "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS."
+          },
+          "payment_terms_type": {
+            "$ref": "#/components/schemas/types.PaymentTermsType"
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
@@ -33853,6 +34958,9 @@
           },
           "instalment_status": {
             "$ref": "#/components/schemas/types.InstalmentStatus"
+          },
+          "invoice_cadence": {
+            "$ref": "#/components/schemas/types.InvoiceCadence"
           },
           "invoice_id": {
             "type": "string"
@@ -34098,7 +35206,7 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "number"
+            "type": "string"
           },
           "created_at": {
             "type": "string",
@@ -34134,7 +35242,7 @@
             "type": "string"
           },
           "quantity": {
-            "type": "number"
+            "type": "string"
           },
           "status": {
             "$ref": "#/components/schemas/types.Status"
@@ -35186,6 +36294,33 @@
         },
         "x-speakeasy-name-override": "AWSMarketplaceSyncConfig"
       },
+      "types.AccountingPeriodStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "x-enum-comments": {
+          "AccountingPeriodStatusClosed": "reserved; close is deferred"
+        },
+        "x-enum-varnames": [
+          "AccountingPeriodStatusOpen",
+          "AccountingPeriodStatusClosed"
+        ],
+        "x-speakeasy-name-override": "AccountingPeriodStatus"
+      },
+      "types.ActiveWindow": {
+        "type": "object",
+        "properties": {
+          "end": {
+            "$ref": "#/components/schemas/types.Bucket"
+          },
+          "start": {
+            "$ref": "#/components/schemas/types.Bucket"
+          }
+        },
+        "x-speakeasy-name-override": "ActiveWindow"
+      },
       "types.AddAddonParams": {
         "type": "object",
         "properties": {
@@ -35241,6 +36376,23 @@
           }
         },
         "x-speakeasy-name-override": "AddAddonRef"
+      },
+      "types.AddPaymentMethodOptions": {
+        "type": "object",
+        "properties": {
+          "payment_method_types": {
+            "type": "array",
+            "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sets_default": {
+            "type": "boolean",
+            "description": "SetsDefault reports whether it can make the saved method the default (Stripe only)."
+          }
+        },
+        "x-speakeasy-name-override": "AddPaymentMethodOptions"
       },
       "types.AddonAssociationEntityType": {
         "type": "string",
@@ -35328,6 +36480,21 @@
           }
         },
         "x-speakeasy-name-override": "AddonFilter"
+      },
+      "types.AddonPriceOverrideRef": {
+        "type": "object",
+        "properties": {
+          "override_price_id": {
+            "type": "string"
+          },
+          "price_id": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "AddonPriceOverrideRef"
       },
       "types.AddonStatus": {
         "type": "string",
@@ -35648,6 +36815,20 @@
         "x-speakeasy-name-override": "AlertType",
         "x-speakeasy-unknown-values": "allow"
       },
+      "types.AmortizationMethod": {
+        "type": "string",
+        "enum": [
+          "daily",
+          "period_even",
+          "period_even_prorated"
+        ],
+        "x-enum-varnames": [
+          "AmortizationDaily",
+          "AmortizationPeriodEven",
+          "AmortizationPeriodEvenProrated"
+        ],
+        "x-speakeasy-name-override": "AmortizationMethod"
+      },
       "types.ApplicationStatus": {
         "type": "string",
         "enum": [
@@ -35670,7 +36851,7 @@
         "type": "object",
         "properties": {
           "amount": {
-            "type": "number"
+            "type": "string"
           },
           "cooldown": {
             "$ref": "#/components/schemas/types.Duration"
@@ -35682,10 +36863,34 @@
             "type": "boolean"
           },
           "threshold": {
-            "type": "number"
+            "type": "string"
           }
         },
         "x-speakeasy-name-override": "AutoTopup"
+      },
+      "types.BillingAddress": {
+        "type": "object",
+        "properties": {
+          "address_city": {
+            "type": "string"
+          },
+          "address_country": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string"
+          },
+          "address_line2": {
+            "type": "string"
+          },
+          "address_postal_code": {
+            "type": "string"
+          },
+          "address_state": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingAddress"
       },
       "types.BillingCadence": {
         "type": "string",
@@ -35708,6 +36913,38 @@
           "BillingCycleCalendar"
         ],
         "x-speakeasy-name-override": "BillingCycle"
+      },
+      "types.BillingDetails": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "$ref": "#/components/schemas/types.BillingAddress"
+          },
+          "email": {
+            "type": "string"
+          },
+          "help_email": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BillingDetails"
+      },
+      "types.BillingEntityMode": {
+        "type": "string",
+        "enum": [
+          "off",
+          "enabling",
+          "enabled"
+        ],
+        "x-enum-varnames": [
+          "BillingEntityModeOff",
+          "BillingEntityModeEnabling",
+          "BillingEntityModeEnabled"
+        ],
+        "x-speakeasy-name-override": "BillingEntityMode"
       },
       "types.BillingModel": {
         "type": "string",
@@ -35761,6 +36998,58 @@
         ],
         "x-speakeasy-name-override": "BillingPeriodBehaviour"
       },
+      "types.BillingTermKind": {
+        "type": "string",
+        "enum": [
+          "once",
+          "recurring"
+        ],
+        "x-enum-varnames": [
+          "BillingTermKindOnce",
+          "BillingTermKindRecurring"
+        ],
+        "x-speakeasy-name-override": "BillingTermKind",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.BillingTermOwnerType": {
+        "type": "string",
+        "enum": [
+          "commitment"
+        ],
+        "x-enum-varnames": [
+          "BillingTermOwnerCommitment"
+        ],
+        "x-speakeasy-name-override": "BillingTermOwnerType"
+      },
+      "types.BillingTermSplit": {
+        "type": "string",
+        "enum": [
+          "even",
+          "proportional"
+        ],
+        "x-enum-varnames": [
+          "BillingTermSplitEven",
+          "BillingTermSplitProportional"
+        ],
+        "x-speakeasy-name-override": "BillingTermSplit",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.BillingTermValueType": {
+        "type": "string",
+        "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage",
+          "remainder"
+        ],
+        "x-enum-varnames": [
+          "BillingTermValueFixed",
+          "BillingTermValuePercentage",
+          "BillingTermValueRemainder"
+        ],
+        "x-speakeasy-name-override": "BillingTermValueType",
+        "x-speakeasy-unknown-values": "allow"
+      },
       "types.BillingTier": {
         "type": "string",
         "enum": [
@@ -35801,6 +37090,19 @@
           "CancelImmediatelyInvoicePolicySkip"
         ],
         "x-speakeasy-name-override": "CancelImmediatelyInvoicePolicy"
+      },
+      "types.CancellationFeeType": {
+        "type": "string",
+        "description": "fixed; percentage is reserved and rejected as not supported yet",
+        "enum": [
+          "fixed",
+          "percentage"
+        ],
+        "x-enum-varnames": [
+          "CancellationFeeFixed",
+          "CancellationFeePercentage"
+        ],
+        "x-speakeasy-name-override": "CancellationFeeType"
       },
       "types.CancellationType": {
         "type": "string",
@@ -35887,6 +37189,9 @@
             "type": "boolean",
             "description": "CustomerNotPresent is the unattended/MIT opt-in. Zero value (omitted) means\nthe customer is present, so a missed auto-charge may fall back to a hosted\nauthorization link. Set true only from merchant-initiated paths (auto top-up)."
           },
+          "link_expiry": {
+            "$ref": "#/components/schemas/types.Duration"
+          },
           "max_mandate_limit": {
             "type": "string"
           },
@@ -35957,6 +37262,34 @@
         ],
         "x-speakeasy-name-override": "ColumnType"
       },
+      "types.CommitmentCollectionMethod": {
+        "type": "string",
+        "enum": [
+          "per_period",
+          "billing_terms"
+        ],
+        "x-enum-varnames": [
+          "CommitmentCollectionPerPeriod",
+          "CommitmentCollectionBillingTerms"
+        ],
+        "x-speakeasy-name-override": "CommitmentCollectionMethod",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.CommitmentEarlyTermination": {
+        "type": "string",
+        "enum": [
+          "forfeit",
+          "credit_note",
+          "bill_remaining"
+        ],
+        "x-enum-varnames": [
+          "CommitmentTerminationForfeit",
+          "CommitmentTerminationCreditNote",
+          "CommitmentTerminationBillRemaining"
+        ],
+        "x-speakeasy-name-override": "CommitmentEarlyTermination",
+        "x-speakeasy-unknown-values": "allow"
+      },
       "types.CommitmentInfo": {
         "type": "object",
         "properties": {
@@ -36006,6 +37339,51 @@
         },
         "x-speakeasy-name-override": "CommitmentInfo"
       },
+      "types.CommitmentMeasurement": {
+        "type": "string",
+        "enum": [
+          "billing_period",
+          "window"
+        ],
+        "x-enum-varnames": [
+          "CommitmentMeasurementBillingPeriod",
+          "CommitmentMeasurementWindow"
+        ],
+        "x-speakeasy-name-override": "CommitmentMeasurement",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.CommitmentScopeType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "group",
+          "meter",
+          "price"
+        ],
+        "x-enum-varnames": [
+          "CommitmentScopeSubscription",
+          "CommitmentScopeGroup",
+          "CommitmentScopeMeter",
+          "CommitmentScopePrice"
+        ],
+        "x-speakeasy-name-override": "CommitmentScopeType",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.CommitmentStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "ended",
+          "terminated"
+        ],
+        "x-enum-varnames": [
+          "CommitmentStatusActive",
+          "CommitmentStatusEnded",
+          "CommitmentStatusTerminated"
+        ],
+        "x-speakeasy-name-override": "CommitmentStatus",
+        "x-speakeasy-unknown-values": "allow"
+      },
       "types.CommitmentType": {
         "type": "string",
         "enum": [
@@ -36018,6 +37396,22 @@
         ],
         "x-speakeasy-name-override": "CommitmentType",
         "x-speakeasy-unknown-values": "allow"
+      },
+      "types.ContractStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "ended",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "ContractStatusDraft",
+          "ContractStatusActive",
+          "ContractStatusEnded",
+          "ContractStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "ContractStatus"
       },
       "types.CouponCadence": {
         "type": "string",
@@ -36484,10 +37878,12 @@
           }
         },
         "enum": [
-          "3600000000000"
+          "3600000000000",
+          "604800000000000"
         ],
         "x-enum-varnames": [
-          "EntitlementGrantMinDuration"
+          "EntitlementGrantMinDuration",
+          "CollectionsPaidWindow"
         ],
         "x-speakeasy-name-override": "Duration"
       },
@@ -36506,6 +37902,134 @@
           "DurationUnitDay"
         ],
         "x-speakeasy-name-override": "DurationUnit"
+      },
+      "types.EmailDeliveryStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "sent",
+          "delivery_delayed",
+          "delivered",
+          "bounced",
+          "complained",
+          "failed",
+          "suppressed",
+          "skipped"
+        ],
+        "x-enum-varnames": [
+          "EmailDeliveryStatusQueued",
+          "EmailDeliveryStatusSent",
+          "EmailDeliveryStatusDeliveryDelayed",
+          "EmailDeliveryStatusDelivered",
+          "EmailDeliveryStatusBounced",
+          "EmailDeliveryStatusComplained",
+          "EmailDeliveryStatusFailed",
+          "EmailDeliveryStatusSuppressed",
+          "EmailDeliveryStatusSkipped"
+        ],
+        "x-speakeasy-name-override": "EmailDeliveryStatus"
+      },
+      "types.EmailLogFilter": {
+        "type": "object",
+        "properties": {
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "delivery_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailDeliveryStatus"
+            }
+          },
+          "end_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/types.SystemEntityType"
+          },
+          "expand": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "sort": {
+            "type": "string"
+          },
+          "start_time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailTrigger"
+            }
+          }
+        },
+        "x-speakeasy-name-override": "EmailLogFilter"
+      },
+      "types.EmailProvider": {
+        "type": "string",
+        "enum": [
+          "resend",
+          "local"
+        ],
+        "x-enum-varnames": [
+          "EmailProviderResend",
+          "EmailProviderLocal"
+        ],
+        "x-speakeasy-name-override": "EmailProvider"
+      },
+      "types.EmailTemplateKey": {
+        "type": "string",
+        "enum": [
+          "invoice_finalized",
+          "invoice_payment_reminder"
+        ],
+        "x-enum-varnames": [
+          "EmailTemplateInvoiceFinalized",
+          "EmailTemplateInvoicePaymentReminder"
+        ],
+        "x-speakeasy-name-override": "EmailTemplateKey"
+      },
+      "types.EmailTrigger": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "manual"
+        ],
+        "x-enum-varnames": [
+          "EmailTriggerAuto",
+          "EmailTriggerManual"
+        ],
+        "x-speakeasy-name-override": "EmailTrigger"
       },
       "types.EntitlementAggregationMode": {
         "type": "string",
@@ -36660,6 +38184,20 @@
           "EntitlementGrantMeasureAmount"
         ],
         "x-speakeasy-name-override": "EntitlementGrantMeasure"
+      },
+      "types.EntitlementGrantScopeEntityType": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "subscription",
+          "group"
+        ],
+        "x-enum-varnames": [
+          "EntitlementGrantScopeFeature",
+          "EntitlementGrantScopeSubscription",
+          "EntitlementGrantScopeGroup"
+        ],
+        "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
       },
       "types.EntitlementGrantStatus": {
         "type": "string",
@@ -37316,6 +38854,100 @@
         },
         "x-speakeasy-name-override": "GroupFilter"
       },
+      "types.ImprovementDirection": {
+        "type": "string",
+        "enum": [
+          "higher",
+          "lower"
+        ],
+        "x-enum-varnames": [
+          "ImprovementHigher",
+          "ImprovementLower"
+        ],
+        "x-speakeasy-name-override": "ImprovementDirection"
+      },
+      "types.InstalmentBillTrigger": {
+        "type": "string",
+        "enum": [
+          "date",
+          "manual"
+        ],
+        "x-enum-varnames": [
+          "InstalmentBillTriggerDate",
+          "InstalmentBillTriggerManual"
+        ],
+        "x-speakeasy-name-override": "InstalmentBillTrigger",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.InstalmentDelivery": {
+        "type": "string",
+        "enum": [
+          "subscription_invoice",
+          "separate_invoice"
+        ],
+        "x-enum-varnames": [
+          "InstalmentDeliverySubscriptionInvoice",
+          "InstalmentDeliverySeparateInvoice"
+        ],
+        "x-speakeasy-name-override": "InstalmentDelivery",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.InstalmentKind": {
+        "type": "string",
+        "enum": [
+          "instalment",
+          "settlement",
+          "cancellation_fee"
+        ],
+        "x-enum-varnames": [
+          "InstalmentKindInstalment",
+          "InstalmentKindSettlement",
+          "InstalmentKindCancellationFee"
+        ],
+        "x-speakeasy-name-override": "InstalmentKind",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.InstalmentStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "invoiced",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "InstalmentStatusScheduled",
+          "InstalmentStatusInvoiced",
+          "InstalmentStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "InstalmentStatus",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.IntegrationCapabilityType": {
+        "type": "string",
+        "enum": [
+          "checkout",
+          "auto_charge",
+          "set_default_method",
+          "payment_link",
+          "payment_method_management",
+          "invoice_sync",
+          "list_payment_methods",
+          "add_payment_method",
+          "delete_payment_method"
+        ],
+        "x-enum-varnames": [
+          "IntegrationCapabilityCheckout",
+          "IntegrationCapabilityAutoCharge",
+          "IntegrationCapabilitySetDefaultMethod",
+          "IntegrationCapabilityPaymentLink",
+          "IntegrationCapabilityPaymentMethodManagement",
+          "IntegrationCapabilityInvoiceSync",
+          "IntegrationCapabilityListPaymentMethods",
+          "IntegrationCapabilityAddPaymentMethod",
+          "IntegrationCapabilityDeletePaymentMethod"
+        ],
+        "x-speakeasy-name-override": "IntegrationCapabilityType"
+      },
       "types.IntegrationEntityType": {
         "type": "string",
         "enum": [
@@ -37349,6 +38981,21 @@
           "IntegrationEntityTypePaymentMethodSetup"
         ],
         "x-speakeasy-name-override": "IntegrationEntityType"
+      },
+      "types.InvoiceBillingEntity": {
+        "type": "object",
+        "properties": {
+          "billing_details": {
+            "$ref": "#/components/schemas/types.BillingDetails"
+          },
+          "billing_entity_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "InvoiceBillingEntity"
       },
       "types.InvoiceBillingReason": {
         "type": "string",
@@ -37401,11 +39048,11 @@
         "type": "object",
         "properties": {
           "amount_due_gt": {
-            "type": "number",
+            "type": "string",
             "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices"
           },
           "amount_remaining_gt": {
-            "type": "number",
+            "type": "string",
             "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts"
           },
           "billing_entity_id": {
@@ -37550,6 +39197,21 @@
         },
         "x-speakeasy-name-override": "InvoiceFilter"
       },
+      "types.InvoicePaymentFailureReason": {
+        "type": "string",
+        "enum": [
+          "payment_method_unavailable",
+          "provider_error",
+          "declined"
+        ],
+        "x-enum-varnames": [
+          "InvoicePaymentFailureReasonPaymentMethodUnavailable",
+          "InvoicePaymentFailureReasonProviderError",
+          "InvoicePaymentFailureReasonDeclined"
+        ],
+        "x-speakeasy-name-override": "InvoicePaymentFailureReason",
+        "x-speakeasy-unknown-values": "allow"
+      },
       "types.InvoiceSourceType": {
         "type": "string",
         "enum": [
@@ -37580,6 +39242,10 @@
       "types.InvoiceSyncSettings": {
         "type": "object",
         "properties": {
+          "auto_advance": {
+            "type": "boolean",
+            "description": "Nil lets the sync decide from the collection method and saved payment method."
+          },
           "deposit_to_account_id": {
             "type": "string",
             "description": "Zoho chart-of-accounts id (\"Deposit To\"). Empty omits account_id, leaving Zoho's\nUndeposited Funds default.a"
@@ -37608,6 +39274,10 @@
             "type": "string",
             "description": "Zoho payment modes are merchant-editable free strings with no id, so this is passed\nthrough verbatim. Empty means DefaultZohoPaymentMode."
           },
+          "send_invoice_email": {
+            "type": "boolean",
+            "description": "Nil sends Stripe's invoice email for send_invoice invoices."
+          },
           "service_period_custom_fields": {
             "$ref": "#/components/schemas/types.ServicePeriodCustomFields"
           },
@@ -37632,6 +39302,68 @@
         ],
         "x-speakeasy-name-override": "InvoiceType",
         "x-speakeasy-unknown-values": "allow"
+      },
+      "types.JournalDirection": {
+        "type": "string",
+        "enum": [
+          "debit",
+          "credit"
+        ],
+        "x-enum-varnames": [
+          "JournalDirectionDebit",
+          "JournalDirectionCredit"
+        ],
+        "x-speakeasy-name-override": "JournalDirection"
+      },
+      "types.JournalEventType": {
+        "type": "string",
+        "enum": [
+          "invoice_finalized",
+          "invoice_voided",
+          "credit_note_finalized",
+          "credit_note_voided",
+          "payment_succeeded",
+          "payment_reversed",
+          "refund_succeeded",
+          "revenue_earned",
+          "revenue_offset"
+        ],
+        "x-enum-varnames": [
+          "JournalEventInvoiceFinalized",
+          "JournalEventInvoiceVoided",
+          "JournalEventCreditNoteFinalized",
+          "JournalEventCreditNoteVoided",
+          "JournalEventPaymentSucceeded",
+          "JournalEventPaymentReversed",
+          "JournalEventRefundSucceeded",
+          "JournalEventRevenueEarned",
+          "JournalEventRevenueOffset"
+        ],
+        "x-speakeasy-name-override": "JournalEventType"
+      },
+      "types.LedgerAccountKey": {
+        "type": "string",
+        "enum": [
+          "cash",
+          "accounts_receivable",
+          "unbilled_receivable",
+          "deferred_revenue",
+          "customer_credit",
+          "tax_payable",
+          "revenue",
+          "contra_revenue"
+        ],
+        "x-enum-varnames": [
+          "LedgerAccountCash",
+          "LedgerAccountReceivable",
+          "LedgerAccountUnbilledReceivable",
+          "LedgerAccountDeferredRevenue",
+          "LedgerAccountCustomerCredit",
+          "LedgerAccountTaxPayable",
+          "LedgerAccountRevenue",
+          "LedgerAccountContraRevenue"
+        ],
+        "x-speakeasy-name-override": "LedgerAccountKey"
       },
       "types.LineItemGrouping": {
         "type": "string",
@@ -37687,8 +39419,6 @@
           "credit_consumption",
           "credit_topups",
           "net_billing",
-          "invoice_total_issued",
-          "net_billing_issued",
           "active_customers"
         ],
         "x-enum-varnames": [
@@ -37704,8 +39434,6 @@
           "MetricCreditConsumption",
           "MetricCreditTopups",
           "MetricNetBilling",
-          "MetricInvoiceTotalIssued",
-          "MetricNetBillingIssued",
           "MetricActiveCustomers"
         ],
         "x-speakeasy-name-override": "Metric"
@@ -37999,6 +39727,7 @@
       },
       "types.PaymentTerms": {
         "type": "string",
+        "description": "Deprecated: use payment_terms_type and payment_terms_days. \"<days> NET\" (days 1\u2013365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
         "enum": [
           "15 NET",
           "30 NET",
@@ -38006,6 +39735,7 @@
           "60 NET",
           "75 NET",
           "90 NET",
+          "DUE_ON_RECEIPT",
           "END_OF_MONTH",
           "END_OF_NEXT_MONTH"
         ],
@@ -38016,10 +39746,27 @@
           "PaymentTerms60Net",
           "PaymentTerms75Net",
           "PaymentTerms90Net",
+          "PaymentTermsDueOnReceipt",
           "PaymentTermsEndOfMonth",
           "PaymentTermsEndOfNextMonth"
         ],
         "x-speakeasy-name-override": "PaymentTerms"
+      },
+      "types.PerformanceObligationStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "active",
+          "satisfied",
+          "cancelled"
+        ],
+        "x-enum-varnames": [
+          "PerformanceObligationStatusDraft",
+          "PerformanceObligationStatusActive",
+          "PerformanceObligationStatusSatisfied",
+          "PerformanceObligationStatusCancelled"
+        ],
+        "x-speakeasy-name-override": "PerformanceObligationStatus"
       },
       "types.PlanFilter": {
         "type": "object",
@@ -38333,6 +40080,20 @@
         },
         "x-speakeasy-name-override": "QueryFilter"
       },
+      "types.RecognitionMethod": {
+        "type": "string",
+        "enum": [
+          "point_in_time",
+          "straight_line",
+          "as_consumed"
+        ],
+        "x-enum-varnames": [
+          "RecognitionMethodPointInTime",
+          "RecognitionMethodStraightLine",
+          "RecognitionMethodAsConsumed"
+        ],
+        "x-speakeasy-name-override": "RecognitionMethod"
+      },
       "types.RecurringPaymentStatus": {
         "type": "string",
         "enum": [
@@ -38454,11 +40215,57 @@
         },
         "x-speakeasy-name-override": "RemoveAddonRef"
       },
+      "types.ReportCategory": {
+        "type": "string",
+        "enum": [
+          "billing",
+          "receivables",
+          "customers",
+          "credits",
+          "usage"
+        ],
+        "x-enum-varnames": [
+          "ReportCategoryBilling",
+          "ReportCategoryReceivables",
+          "ReportCategoryCustomers",
+          "ReportCategoryCredits",
+          "ReportCategoryUsage"
+        ],
+        "x-speakeasy-name-override": "ReportCategory"
+      },
+      "types.ReportKind": {
+        "type": "string",
+        "enum": [
+          "flow",
+          "ratio",
+          "snapshot"
+        ],
+        "x-enum-varnames": [
+          "ReportKindFlow",
+          "ReportKindRatio",
+          "ReportKindSnapshot"
+        ],
+        "x-speakeasy-name-override": "ReportKind"
+      },
+      "types.ReportValueType": {
+        "type": "string",
+        "enum": [
+          "money",
+          "count",
+          "days"
+        ],
+        "x-enum-varnames": [
+          "ReportValueTypeMoney",
+          "ReportValueTypeCount",
+          "ReportValueTypeDays"
+        ],
+        "x-speakeasy-name-override": "ReportValueType"
+      },
       "types.ReportingUnit": {
         "type": "object",
         "properties": {
           "conversion_rate": {
-            "type": "number",
+            "type": "string",
             "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be > 0"
           },
           "unit_plural": {
@@ -38499,6 +40306,28 @@
         ],
         "x-speakeasy-name-override": "ResumeMode"
       },
+      "types.RevRecEntityType": {
+        "type": "string",
+        "enum": [
+          "subscription",
+          "subscription_line_item",
+          "invoice",
+          "credit_note",
+          "payment",
+          "refund",
+          "pob"
+        ],
+        "x-enum-varnames": [
+          "RevRecEntityTypeSubscription",
+          "RevRecEntityTypeSubscriptionLineItem",
+          "RevRecEntityTypeInvoice",
+          "RevRecEntityTypeCreditNote",
+          "RevRecEntityTypePayment",
+          "RevRecEntityTypeRefund",
+          "RevRecEntityTypePOB"
+        ],
+        "x-speakeasy-name-override": "RevRecEntityType"
+      },
       "types.RevenueAllocationPolicy": {
         "type": "string",
         "enum": [
@@ -38524,6 +40353,20 @@
           "RevenueGranularityTotal"
         ],
         "x-speakeasy-name-override": "RevenueGranularity"
+      },
+      "types.RevenueReportGroupBy": {
+        "type": "string",
+        "enum": [
+          "customer_id",
+          "contract_id",
+          "pob_id"
+        ],
+        "x-enum-varnames": [
+          "RevenueReportGroupByCustomer",
+          "RevenueReportGroupByContract",
+          "RevenueReportGroupByPOB"
+        ],
+        "x-speakeasy-name-override": "RevenueReportGroupBy"
       },
       "types.RoundType": {
         "type": "string",
@@ -38756,6 +40599,15 @@
         },
         "x-speakeasy-name-override": "ServicePeriodCustomFields"
       },
+      "types.SettingsOverride": {
+        "type": "object",
+        "properties": {
+          "subscription_config": {
+            "$ref": "#/components/schemas/types.SubscriptionConfigOverride"
+          }
+        },
+        "x-speakeasy-name-override": "SettingsOverride"
+      },
       "types.Shape": {
         "type": "string",
         "enum": [
@@ -38868,6 +40720,19 @@
           "SubscriptionChangeTypeLateral"
         ],
         "x-speakeasy-name-override": "SubscriptionChangeType"
+      },
+      "types.SubscriptionConfigOverride": {
+        "type": "object",
+        "properties": {
+          "auto_cancellation_enabled": {
+            "type": "boolean"
+          },
+          "grace_period_days": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "x-speakeasy-name-override": "SubscriptionConfigOverride"
       },
       "types.SubscriptionFilter": {
         "type": "object",
@@ -39226,6 +41091,48 @@
         },
         "x-speakeasy-name-override": "SyncConfig"
       },
+      "types.SystemEntityType": {
+        "type": "string",
+        "enum": [
+          "feature",
+          "customer",
+          "plan",
+          "subscription",
+          "invoice",
+          "payment",
+          "credit_note",
+          "refund",
+          "wallet",
+          "entitlement",
+          "checkout_session",
+          "payment_method",
+          "price",
+          "event",
+          "commitment",
+          "billing_term",
+          "billing_instalment"
+        ],
+        "x-enum-varnames": [
+          "SystemEntityTypeFeature",
+          "SystemEntityTypeCustomer",
+          "SystemEntityTypePlan",
+          "SystemEntityTypeSubscription",
+          "SystemEntityTypeInvoice",
+          "SystemEntityTypePayment",
+          "SystemEntityTypeCreditNote",
+          "SystemEntityTypeRefund",
+          "SystemEntityTypeWallet",
+          "SystemEntityTypeEntitlement",
+          "SystemEntityTypeCheckoutSession",
+          "SystemEntityTypePaymentMethod",
+          "SystemEntityTypePrice",
+          "SystemEntityTypeEvent",
+          "SystemEntityTypeCommitment",
+          "SystemEntityTypeBillingTerm",
+          "SystemEntityTypeBillingInstalment"
+        ],
+        "x-speakeasy-name-override": "SystemEntityType"
+      },
       "types.TaskStatus": {
         "type": "string",
         "enum": [
@@ -39425,6 +41332,20 @@
         ],
         "x-speakeasy-name-override": "TaxTreatment"
       },
+      "types.TenantInternalStatus": {
+        "type": "string",
+        "enum": [
+          "trialing",
+          "active",
+          "suspended"
+        ],
+        "x-enum-varnames": [
+          "TenantInternalStatusTrialing",
+          "TenantInternalStatusActive",
+          "TenantInternalStatusSuspended"
+        ],
+        "x-speakeasy-name-override": "TenantInternalStatus"
+      },
       "types.TimeOfDayBucket": {
         "type": "object",
         "properties": {
@@ -39442,7 +41363,7 @@
             "description": "ID is server-assigned. Stable for the lifetime of the line item;\ninvoice breakdown and analytics responses reference this ID."
           },
           "overage_factor": {
-            "type": "number"
+            "type": "string"
           },
           "price_id": {
             "type": "string",
@@ -39861,7 +41782,7 @@
             "type": "string"
           },
           "credits_available_gt": {
-            "type": "number"
+            "type": "string"
           },
           "end_time": {
             "type": "string",
@@ -40254,6 +42175,58 @@
           }
         },
         "x-speakeasy-name-override": "WorkflowExecutionFilter"
+      },
+      "types.ZohoPayPalPaymentMethod": {
+        "type": "string",
+        "enum": [
+          "standard",
+          "adaptive"
+        ],
+        "x-enum-varnames": [
+          "ZohoPayPalPaymentMethodStandard",
+          "ZohoPayPalPaymentMethodAdaptive"
+        ],
+        "x-speakeasy-name-override": "ZohoPayPalPaymentMethod"
+      },
+      "types.ZohoPaymentGateway": {
+        "type": "string",
+        "enum": [
+          "paypal",
+          "stripe",
+          "authorize_net",
+          "payflow_pro",
+          "2checkout",
+          "braintree",
+          "razorpay"
+        ],
+        "x-enum-varnames": [
+          "ZohoPaymentGatewayPayPal",
+          "ZohoPaymentGatewayStripe",
+          "ZohoPaymentGatewayAuthorizeNet",
+          "ZohoPaymentGatewayPayflowPro",
+          "ZohoPaymentGateway2Checkout",
+          "ZohoPaymentGatewayBraintree",
+          "ZohoPaymentGatewayRazorpay"
+        ],
+        "x-speakeasy-name-override": "ZohoPaymentGateway"
+      },
+      "types.ZohoPaymentGatewaySettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "gateways": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.ZohoPaymentGateway"
+            }
+          },
+          "paypal_payment_method": {
+            "$ref": "#/components/schemas/types.ZohoPayPalPaymentMethod"
+          }
+        },
+        "x-speakeasy-name-override": "ZohoPaymentGatewaySettings"
       },
       "group.Group": {
         "type": "object",
@@ -41226,50 +43199,6 @@
           }
         }
       },
-      "types.AccountingPeriodStatus": {
-        "type": "string",
-        "enum": [
-          "open",
-          "closed"
-        ],
-        "x-enum-comments": {
-          "AccountingPeriodStatusClosed": "reserved; close is deferred"
-        },
-        "x-enum-varnames": [
-          "AccountingPeriodStatusOpen",
-          "AccountingPeriodStatusClosed"
-        ],
-        "x-speakeasy-name-override": "AccountingPeriodStatus"
-      },
-      "types.ActiveWindow": {
-        "type": "object",
-        "properties": {
-          "end": {
-            "$ref": "#/components/schemas/types.Bucket"
-          },
-          "start": {
-            "$ref": "#/components/schemas/types.Bucket"
-          }
-        },
-        "x-speakeasy-name-override": "ActiveWindow"
-      },
-      "types.AddPaymentMethodOptions": {
-        "type": "object",
-        "properties": {
-          "payment_method_types": {
-            "type": "array",
-            "description": "PaymentMethodTypes are the methods it sets up, e.g. [\"enach\"] for Razorpay.",
-            "items": {
-              "type": "string"
-            }
-          },
-          "sets_default": {
-            "type": "boolean",
-            "description": "SetsDefault reports whether it can make the saved method the default (Stripe only)."
-          }
-        },
-        "x-speakeasy-name-override": "AddPaymentMethodOptions"
-      },
       "types.AdditionalEmail": {
         "required": [
           "email",
@@ -41291,370 +43220,23 @@
         },
         "x-speakeasy-name-override": "AdditionalEmail"
       },
-      "types.AddonPriceOverrideRef": {
-        "type": "object",
-        "properties": {
-          "override_price_id": {
-            "type": "string"
-          },
-          "price_id": {
-            "type": "string"
-          },
-          "quantity": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "AddonPriceOverrideRef"
-      },
-      "types.AmortizationMethod": {
+      "types.CollectionsColumnKey": {
         "type": "string",
         "enum": [
-          "daily",
-          "period_even",
-          "period_even_prorated"
+          "not_due",
+          "overdue",
+          "chasing",
+          "held",
+          "paid_this_week"
         ],
         "x-enum-varnames": [
-          "AmortizationDaily",
-          "AmortizationPeriodEven",
-          "AmortizationPeriodEvenProrated"
+          "CollectionsColumnNotDue",
+          "CollectionsColumnOverdue",
+          "CollectionsColumnChasing",
+          "CollectionsColumnHeld",
+          "CollectionsColumnPaidThisWeek"
         ],
-        "x-speakeasy-name-override": "AmortizationMethod"
-      },
-      "types.BillingAddress": {
-        "type": "object",
-        "properties": {
-          "address_city": {
-            "type": "string"
-          },
-          "address_country": {
-            "type": "string"
-          },
-          "address_line1": {
-            "type": "string"
-          },
-          "address_line2": {
-            "type": "string"
-          },
-          "address_postal_code": {
-            "type": "string"
-          },
-          "address_state": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "BillingAddress"
-      },
-      "types.BillingDetails": {
-        "type": "object",
-        "properties": {
-          "address": {
-            "$ref": "#/components/schemas/types.BillingAddress"
-          },
-          "email": {
-            "type": "string"
-          },
-          "help_email": {
-            "type": "string"
-          },
-          "phone": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "BillingDetails"
-      },
-      "types.BillingEntityMode": {
-        "type": "string",
-        "enum": [
-          "off",
-          "enabling",
-          "enabled"
-        ],
-        "x-enum-varnames": [
-          "BillingEntityModeOff",
-          "BillingEntityModeEnabling",
-          "BillingEntityModeEnabled"
-        ],
-        "x-speakeasy-name-override": "BillingEntityMode"
-      },
-      "types.BillingTermKind": {
-        "type": "string",
-        "enum": [
-          "once",
-          "recurring"
-        ],
-        "x-enum-varnames": [
-          "BillingTermKindOnce",
-          "BillingTermKindRecurring"
-        ],
-        "x-speakeasy-name-override": "BillingTermKind",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.BillingTermOwnerType": {
-        "type": "string",
-        "enum": [
-          "commitment"
-        ],
-        "x-enum-varnames": [
-          "BillingTermOwnerCommitment"
-        ],
-        "x-speakeasy-name-override": "BillingTermOwnerType"
-      },
-      "types.BillingTermSplit": {
-        "type": "string",
-        "enum": [
-          "even",
-          "proportional"
-        ],
-        "x-enum-varnames": [
-          "BillingTermSplitEven",
-          "BillingTermSplitProportional"
-        ],
-        "x-speakeasy-name-override": "BillingTermSplit",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.BillingTermValueType": {
-        "type": "string",
-        "description": "fixed or remainder; percentage is reserved and rejected as not supported yet",
-        "enum": [
-          "fixed",
-          "percentage",
-          "remainder"
-        ],
-        "x-enum-varnames": [
-          "BillingTermValueFixed",
-          "BillingTermValuePercentage",
-          "BillingTermValueRemainder"
-        ],
-        "x-speakeasy-name-override": "BillingTermValueType",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.CancellationFeeType": {
-        "type": "string",
-        "description": "fixed; percentage is reserved and rejected as not supported yet",
-        "enum": [
-          "fixed",
-          "percentage"
-        ],
-        "x-enum-varnames": [
-          "CancellationFeeFixed",
-          "CancellationFeePercentage"
-        ],
-        "x-speakeasy-name-override": "CancellationFeeType"
-      },
-      "types.CommitmentCollectionMethod": {
-        "type": "string",
-        "enum": [
-          "per_period",
-          "billing_terms"
-        ],
-        "x-enum-varnames": [
-          "CommitmentCollectionPerPeriod",
-          "CommitmentCollectionBillingTerms"
-        ],
-        "x-speakeasy-name-override": "CommitmentCollectionMethod",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.CommitmentEarlyTermination": {
-        "type": "string",
-        "enum": [
-          "forfeit",
-          "credit_note",
-          "bill_remaining"
-        ],
-        "x-enum-varnames": [
-          "CommitmentTerminationForfeit",
-          "CommitmentTerminationCreditNote",
-          "CommitmentTerminationBillRemaining"
-        ],
-        "x-speakeasy-name-override": "CommitmentEarlyTermination",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.CommitmentMeasurement": {
-        "type": "string",
-        "enum": [
-          "billing_period",
-          "window"
-        ],
-        "x-enum-varnames": [
-          "CommitmentMeasurementBillingPeriod",
-          "CommitmentMeasurementWindow"
-        ],
-        "x-speakeasy-name-override": "CommitmentMeasurement",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.CommitmentScopeType": {
-        "type": "string",
-        "enum": [
-          "subscription",
-          "group",
-          "meter",
-          "price"
-        ],
-        "x-enum-varnames": [
-          "CommitmentScopeSubscription",
-          "CommitmentScopeGroup",
-          "CommitmentScopeMeter",
-          "CommitmentScopePrice"
-        ],
-        "x-speakeasy-name-override": "CommitmentScopeType",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.CommitmentStatus": {
-        "type": "string",
-        "enum": [
-          "active",
-          "ended",
-          "terminated"
-        ],
-        "x-enum-varnames": [
-          "CommitmentStatusActive",
-          "CommitmentStatusEnded",
-          "CommitmentStatusTerminated"
-        ],
-        "x-speakeasy-name-override": "CommitmentStatus",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.ContractStatus": {
-        "type": "string",
-        "enum": [
-          "draft",
-          "active",
-          "ended",
-          "cancelled"
-        ],
-        "x-enum-varnames": [
-          "ContractStatusDraft",
-          "ContractStatusActive",
-          "ContractStatusEnded",
-          "ContractStatusCancelled"
-        ],
-        "x-speakeasy-name-override": "ContractStatus"
-      },
-      "types.EmailDeliveryStatus": {
-        "type": "string",
-        "enum": [
-          "queued",
-          "sent",
-          "delivery_delayed",
-          "delivered",
-          "bounced",
-          "complained",
-          "failed",
-          "suppressed",
-          "skipped"
-        ],
-        "x-enum-varnames": [
-          "EmailDeliveryStatusQueued",
-          "EmailDeliveryStatusSent",
-          "EmailDeliveryStatusDeliveryDelayed",
-          "EmailDeliveryStatusDelivered",
-          "EmailDeliveryStatusBounced",
-          "EmailDeliveryStatusComplained",
-          "EmailDeliveryStatusFailed",
-          "EmailDeliveryStatusSuppressed",
-          "EmailDeliveryStatusSkipped"
-        ],
-        "x-speakeasy-name-override": "EmailDeliveryStatus"
-      },
-      "types.EmailLogFilter": {
-        "type": "object",
-        "properties": {
-          "customer_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "delivery_statuses": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.EmailDeliveryStatus"
-            }
-          },
-          "end_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "entity_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "entity_type": {
-            "$ref": "#/components/schemas/types.SystemEntityType"
-          },
-          "expand": {
-            "type": "string"
-          },
-          "limit": {
-            "maximum": 1000,
-            "minimum": 1,
-            "type": "integer"
-          },
-          "offset": {
-            "minimum": 0,
-            "type": "integer"
-          },
-          "order": {
-            "type": "string",
-            "enum": [
-              "asc",
-              "desc"
-            ]
-          },
-          "sort": {
-            "type": "string"
-          },
-          "start_time": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "status": {
-            "$ref": "#/components/schemas/types.Status"
-          },
-          "triggers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.EmailTrigger"
-            }
-          }
-        },
-        "x-speakeasy-name-override": "EmailLogFilter"
-      },
-      "types.EmailProvider": {
-        "type": "string",
-        "enum": [
-          "resend",
-          "local"
-        ],
-        "x-enum-varnames": [
-          "EmailProviderResend",
-          "EmailProviderLocal"
-        ],
-        "x-speakeasy-name-override": "EmailProvider"
-      },
-      "types.EmailTemplateKey": {
-        "type": "string",
-        "enum": [
-          "invoice_finalized"
-        ],
-        "x-enum-varnames": [
-          "EmailTemplateInvoiceFinalized"
-        ],
-        "x-speakeasy-name-override": "EmailTemplateKey"
-      },
-      "types.EmailTrigger": {
-        "type": "string",
-        "enum": [
-          "auto",
-          "manual"
-        ],
-        "x-enum-varnames": [
-          "EmailTriggerAuto",
-          "EmailTriggerManual"
-        ],
-        "x-speakeasy-name-override": "EmailTrigger"
+        "x-speakeasy-name-override": "CollectionsColumnKey"
       },
       "types.EmailType": {
         "type": "string",
@@ -41665,206 +43247,6 @@
           "EmailTypeInvoice"
         ],
         "x-speakeasy-name-override": "EmailType"
-      },
-      "types.EntitlementGrantScopeEntityType": {
-        "type": "string",
-        "enum": [
-          "feature",
-          "subscription",
-          "group"
-        ],
-        "x-enum-varnames": [
-          "EntitlementGrantScopeFeature",
-          "EntitlementGrantScopeSubscription",
-          "EntitlementGrantScopeGroup"
-        ],
-        "x-speakeasy-name-override": "EntitlementGrantScopeEntityType"
-      },
-      "types.ImprovementDirection": {
-        "type": "string",
-        "enum": [
-          "higher",
-          "lower"
-        ],
-        "x-enum-varnames": [
-          "ImprovementHigher",
-          "ImprovementLower"
-        ],
-        "x-speakeasy-name-override": "ImprovementDirection"
-      },
-      "types.InstalmentBillTrigger": {
-        "type": "string",
-        "enum": [
-          "date",
-          "manual"
-        ],
-        "x-enum-varnames": [
-          "InstalmentBillTriggerDate",
-          "InstalmentBillTriggerManual"
-        ],
-        "x-speakeasy-name-override": "InstalmentBillTrigger",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.InstalmentDelivery": {
-        "type": "string",
-        "enum": [
-          "subscription_invoice",
-          "separate_invoice"
-        ],
-        "x-enum-varnames": [
-          "InstalmentDeliverySubscriptionInvoice",
-          "InstalmentDeliverySeparateInvoice"
-        ],
-        "x-speakeasy-name-override": "InstalmentDelivery",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.InstalmentKind": {
-        "type": "string",
-        "enum": [
-          "instalment",
-          "settlement",
-          "cancellation_fee"
-        ],
-        "x-enum-varnames": [
-          "InstalmentKindInstalment",
-          "InstalmentKindSettlement",
-          "InstalmentKindCancellationFee"
-        ],
-        "x-speakeasy-name-override": "InstalmentKind",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.InstalmentStatus": {
-        "type": "string",
-        "enum": [
-          "scheduled",
-          "invoiced",
-          "cancelled"
-        ],
-        "x-enum-varnames": [
-          "InstalmentStatusScheduled",
-          "InstalmentStatusInvoiced",
-          "InstalmentStatusCancelled"
-        ],
-        "x-speakeasy-name-override": "InstalmentStatus",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.IntegrationCapabilityType": {
-        "type": "string",
-        "enum": [
-          "checkout",
-          "auto_charge",
-          "set_default_method",
-          "payment_link",
-          "payment_method_management",
-          "invoice_sync",
-          "list_payment_methods",
-          "add_payment_method",
-          "delete_payment_method"
-        ],
-        "x-enum-varnames": [
-          "IntegrationCapabilityCheckout",
-          "IntegrationCapabilityAutoCharge",
-          "IntegrationCapabilitySetDefaultMethod",
-          "IntegrationCapabilityPaymentLink",
-          "IntegrationCapabilityPaymentMethodManagement",
-          "IntegrationCapabilityInvoiceSync",
-          "IntegrationCapabilityListPaymentMethods",
-          "IntegrationCapabilityAddPaymentMethod",
-          "IntegrationCapabilityDeletePaymentMethod"
-        ],
-        "x-speakeasy-name-override": "IntegrationCapabilityType"
-      },
-      "types.InvoiceBillingEntity": {
-        "type": "object",
-        "properties": {
-          "billing_details": {
-            "$ref": "#/components/schemas/types.BillingDetails"
-          },
-          "billing_entity_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "x-speakeasy-name-override": "InvoiceBillingEntity"
-      },
-      "types.InvoicePaymentFailureReason": {
-        "type": "string",
-        "enum": [
-          "payment_method_unavailable",
-          "provider_error",
-          "declined"
-        ],
-        "x-enum-varnames": [
-          "InvoicePaymentFailureReasonPaymentMethodUnavailable",
-          "InvoicePaymentFailureReasonProviderError",
-          "InvoicePaymentFailureReasonDeclined"
-        ],
-        "x-speakeasy-name-override": "InvoicePaymentFailureReason",
-        "x-speakeasy-unknown-values": "allow"
-      },
-      "types.JournalDirection": {
-        "type": "string",
-        "enum": [
-          "debit",
-          "credit"
-        ],
-        "x-enum-varnames": [
-          "JournalDirectionDebit",
-          "JournalDirectionCredit"
-        ],
-        "x-speakeasy-name-override": "JournalDirection"
-      },
-      "types.JournalEventType": {
-        "type": "string",
-        "enum": [
-          "invoice_finalized",
-          "invoice_voided",
-          "credit_note_finalized",
-          "credit_note_voided",
-          "payment_succeeded",
-          "payment_reversed",
-          "refund_succeeded",
-          "revenue_earned",
-          "revenue_offset"
-        ],
-        "x-enum-varnames": [
-          "JournalEventInvoiceFinalized",
-          "JournalEventInvoiceVoided",
-          "JournalEventCreditNoteFinalized",
-          "JournalEventCreditNoteVoided",
-          "JournalEventPaymentSucceeded",
-          "JournalEventPaymentReversed",
-          "JournalEventRefundSucceeded",
-          "JournalEventRevenueEarned",
-          "JournalEventRevenueOffset"
-        ],
-        "x-speakeasy-name-override": "JournalEventType"
-      },
-      "types.LedgerAccountKey": {
-        "type": "string",
-        "enum": [
-          "cash",
-          "accounts_receivable",
-          "unbilled_receivable",
-          "deferred_revenue",
-          "customer_credit",
-          "tax_payable",
-          "revenue",
-          "contra_revenue"
-        ],
-        "x-enum-varnames": [
-          "LedgerAccountCash",
-          "LedgerAccountReceivable",
-          "LedgerAccountUnbilledReceivable",
-          "LedgerAccountDeferredRevenue",
-          "LedgerAccountCustomerCredit",
-          "LedgerAccountTaxPayable",
-          "LedgerAccountRevenue",
-          "LedgerAccountContraRevenue"
-        ],
-        "x-speakeasy-name-override": "LedgerAccountKey"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
@@ -41888,247 +43270,52 @@
         },
         "x-speakeasy-name-override": "Metadata"
       },
-      "types.PerformanceObligationStatus": {
+      "types.PaymentTermsType": {
         "type": "string",
+        "description": "DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
         "enum": [
-          "draft",
-          "active",
-          "satisfied",
-          "cancelled"
+          "DAYS",
+          "DUE_ON_RECEIPT",
+          "END_OF_MONTH",
+          "END_OF_NEXT_MONTH"
         ],
         "x-enum-varnames": [
-          "PerformanceObligationStatusDraft",
-          "PerformanceObligationStatusActive",
-          "PerformanceObligationStatusSatisfied",
-          "PerformanceObligationStatusCancelled"
+          "PaymentTermsTypeDays",
+          "PaymentTermsTypeDueOnReceipt",
+          "PaymentTermsTypeEndOfMonth",
+          "PaymentTermsTypeEndOfNextMonth"
         ],
-        "x-speakeasy-name-override": "PerformanceObligationStatus"
+        "x-speakeasy-name-override": "PaymentTermsType"
       },
-      "types.RecognitionMethod": {
+      "types.ReminderStatus": {
         "type": "string",
         "enum": [
-          "point_in_time",
-          "straight_line",
-          "as_consumed"
+          "pending",
+          "approved",
+          "held",
+          "skipped"
         ],
         "x-enum-varnames": [
-          "RecognitionMethodPointInTime",
-          "RecognitionMethodStraightLine",
-          "RecognitionMethodAsConsumed"
+          "ReminderStatusPending",
+          "ReminderStatusApproved",
+          "ReminderStatusHeld",
+          "ReminderStatusSkipped"
         ],
-        "x-speakeasy-name-override": "RecognitionMethod"
+        "x-speakeasy-name-override": "ReminderStatus"
       },
-      "types.ReportCategory": {
+      "types.ReminderTone": {
         "type": "string",
         "enum": [
-          "billing",
-          "receivables",
-          "customers",
-          "credits",
-          "usage"
+          "friendly",
+          "firm",
+          "final"
         ],
         "x-enum-varnames": [
-          "ReportCategoryBilling",
-          "ReportCategoryReceivables",
-          "ReportCategoryCustomers",
-          "ReportCategoryCredits",
-          "ReportCategoryUsage"
+          "ReminderToneFriendly",
+          "ReminderToneFirm",
+          "ReminderToneFinal"
         ],
-        "x-speakeasy-name-override": "ReportCategory"
-      },
-      "types.ReportKind": {
-        "type": "string",
-        "enum": [
-          "flow",
-          "ratio",
-          "snapshot"
-        ],
-        "x-enum-varnames": [
-          "ReportKindFlow",
-          "ReportKindRatio",
-          "ReportKindSnapshot"
-        ],
-        "x-speakeasy-name-override": "ReportKind"
-      },
-      "types.ReportValueType": {
-        "type": "string",
-        "enum": [
-          "money",
-          "count",
-          "days"
-        ],
-        "x-enum-varnames": [
-          "ReportValueTypeMoney",
-          "ReportValueTypeCount",
-          "ReportValueTypeDays"
-        ],
-        "x-speakeasy-name-override": "ReportValueType"
-      },
-      "types.RevRecEntityType": {
-        "type": "string",
-        "enum": [
-          "subscription",
-          "subscription_line_item",
-          "invoice",
-          "credit_note",
-          "payment",
-          "refund",
-          "pob"
-        ],
-        "x-enum-varnames": [
-          "RevRecEntityTypeSubscription",
-          "RevRecEntityTypeSubscriptionLineItem",
-          "RevRecEntityTypeInvoice",
-          "RevRecEntityTypeCreditNote",
-          "RevRecEntityTypePayment",
-          "RevRecEntityTypeRefund",
-          "RevRecEntityTypePOB"
-        ],
-        "x-speakeasy-name-override": "RevRecEntityType"
-      },
-      "types.RevenueReportGroupBy": {
-        "type": "string",
-        "enum": [
-          "customer_id",
-          "contract_id",
-          "pob_id"
-        ],
-        "x-enum-varnames": [
-          "RevenueReportGroupByCustomer",
-          "RevenueReportGroupByContract",
-          "RevenueReportGroupByPOB"
-        ],
-        "x-speakeasy-name-override": "RevenueReportGroupBy"
-      },
-      "types.SettingsOverride": {
-        "type": "object",
-        "properties": {
-          "subscription_config": {
-            "$ref": "#/components/schemas/types.SubscriptionConfigOverride"
-          }
-        },
-        "x-speakeasy-name-override": "SettingsOverride"
-      },
-      "types.SubscriptionConfigOverride": {
-        "type": "object",
-        "properties": {
-          "auto_cancellation_enabled": {
-            "type": "boolean"
-          },
-          "grace_period_days": {
-            "minimum": 0,
-            "type": "integer"
-          }
-        },
-        "x-speakeasy-name-override": "SubscriptionConfigOverride"
-      },
-      "types.SystemEntityType": {
-        "type": "string",
-        "enum": [
-          "feature",
-          "customer",
-          "plan",
-          "subscription",
-          "invoice",
-          "payment",
-          "credit_note",
-          "refund",
-          "wallet",
-          "entitlement",
-          "checkout_session",
-          "payment_method",
-          "price",
-          "event",
-          "commitment",
-          "billing_term",
-          "billing_instalment"
-        ],
-        "x-enum-varnames": [
-          "SystemEntityTypeFeature",
-          "SystemEntityTypeCustomer",
-          "SystemEntityTypePlan",
-          "SystemEntityTypeSubscription",
-          "SystemEntityTypeInvoice",
-          "SystemEntityTypePayment",
-          "SystemEntityTypeCreditNote",
-          "SystemEntityTypeRefund",
-          "SystemEntityTypeWallet",
-          "SystemEntityTypeEntitlement",
-          "SystemEntityTypeCheckoutSession",
-          "SystemEntityTypePaymentMethod",
-          "SystemEntityTypePrice",
-          "SystemEntityTypeEvent",
-          "SystemEntityTypeCommitment",
-          "SystemEntityTypeBillingTerm",
-          "SystemEntityTypeBillingInstalment"
-        ],
-        "x-speakeasy-name-override": "SystemEntityType"
-      },
-      "types.TenantInternalStatus": {
-        "type": "string",
-        "enum": [
-          "trialing",
-          "active",
-          "suspended"
-        ],
-        "x-enum-varnames": [
-          "TenantInternalStatusTrialing",
-          "TenantInternalStatusActive",
-          "TenantInternalStatusSuspended"
-        ],
-        "x-speakeasy-name-override": "TenantInternalStatus"
-      },
-      "types.ZohoPayPalPaymentMethod": {
-        "type": "string",
-        "enum": [
-          "standard",
-          "adaptive"
-        ],
-        "x-enum-varnames": [
-          "ZohoPayPalPaymentMethodStandard",
-          "ZohoPayPalPaymentMethodAdaptive"
-        ],
-        "x-speakeasy-name-override": "ZohoPayPalPaymentMethod"
-      },
-      "types.ZohoPaymentGateway": {
-        "type": "string",
-        "enum": [
-          "paypal",
-          "stripe",
-          "authorize_net",
-          "payflow_pro",
-          "2checkout",
-          "braintree",
-          "razorpay"
-        ],
-        "x-enum-varnames": [
-          "ZohoPaymentGatewayPayPal",
-          "ZohoPaymentGatewayStripe",
-          "ZohoPaymentGatewayAuthorizeNet",
-          "ZohoPaymentGatewayPayflowPro",
-          "ZohoPaymentGateway2Checkout",
-          "ZohoPaymentGatewayBraintree",
-          "ZohoPaymentGatewayRazorpay"
-        ],
-        "x-speakeasy-name-override": "ZohoPaymentGateway"
-      },
-      "types.ZohoPaymentGatewaySettings": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "gateways": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.ZohoPaymentGateway"
-            }
-          },
-          "paypal_payment_method": {
-            "$ref": "#/components/schemas/types.ZohoPayPalPaymentMethod"
-          }
-        },
-        "x-speakeasy-name-override": "ZohoPaymentGatewaySettings"
+        "x-speakeasy-name-override": "ReminderTone"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
@@ -43697,10 +44884,10 @@
             "type": "string"
           },
           "credit_balance": {
-            "type": "number"
+            "type": "string"
           },
           "current_balance": {
-            "type": "number"
+            "type": "string"
           },
           "state": {
             "type": "string"

@@ -62,6 +62,7 @@ type Configuration struct {
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
+	EntitlementGrants      EntitlementGrantsConfig      `mapstructure:"entitlement_grants" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
 	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
@@ -615,6 +616,15 @@ type ClickHouseConfig struct {
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
 	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+
+	MeterUsageOptimize MeterUsageOptimizeConfig `mapstructure:"meter_usage_optimize" validate:"omitempty"`
+}
+
+// MeterUsageOptimizeConfig gates the daily OPTIMIZE FINAL of closed
+// meter_usage day-partitions. Off by default.
+type MeterUsageOptimizeConfig struct {
+	Enabled      bool `mapstructure:"enabled" default:"false"`
+	LookbackDays int  `mapstructure:"lookback_days" default:"7"`
 }
 
 // ReportsConfig is the reports ClickHouse login.
@@ -1021,6 +1031,12 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
+
+// EntitlementGrantsConfig controls entitlement grant behaviour outside billing.
+type EntitlementGrantsConfig struct {
+	// RefreshOnRead lets entitlement reads with refresh_grants=true evaluate grants first.
+	RefreshOnRead bool `mapstructure:"refresh_on_read" default:"true"`
 }
 
 // UsageAlertsConfig controls the usage-driven alert pipeline end to end:

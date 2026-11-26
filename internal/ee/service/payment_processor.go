@@ -264,7 +264,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
 		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice &&
 		lo.FromPtr(paymentObj.GatewayTrackingID) != "" {
-		if closed, err := p.closeLinkIfInvoiceVoided(ctx, paymentObj); err != nil {
+		if closed, err := p.closeLinkIfInvoiceSettled(ctx, paymentObj); err != nil {
 			return closed, err
 		}
 	}
@@ -276,25 +276,31 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	return paymentObj, nil
 }
 
-// closeLinkIfInvoiceVoided closes a link whose invoice was voided while the link was being created.
-func (p *paymentProcessor) closeLinkIfInvoiceVoided(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
+// closeLinkIfInvoiceSettled closes a link whose invoice was voided or paid while the link was being created.
+func (p *paymentProcessor) closeLinkIfInvoiceSettled(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
 	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
 	if err != nil {
 		p.Logger.Error(ctx, "failed to recheck invoice after creating payment link",
 			"error", err, "payment_id", paymentObj.ID, "invoice_id", paymentObj.DestinationID)
 		return paymentObj, nil
 	}
-	if inv.InvoiceStatus != types.InvoiceStatusVoided {
+
+	var reason string
+	var settledErr error
+	switch {
+	case inv.InvoiceStatus == types.InvoiceStatusVoided:
+		reason, settledErr = linkVoidReasonInvoiceVoided, errInvoiceVoided(inv.ID)
+	case inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid:
+		reason, settledErr = linkVoidReasonInvoicePaid, errInvoicePaid(inv.ID)
+	default:
 		return paymentObj, nil
 	}
-	if err := NewPaymentService(p.ServiceParams).(*paymentService).voidOpenPaymentLinks(ctx, inv.ID); err != nil {
-		p.Logger.Error(ctx, "failed to close payment link created on a voided invoice",
-			"error", err, "payment_id", paymentObj.ID, "invoice_id", inv.ID)
-	}
+
+	NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, reason)
 	if refreshed, err := p.PaymentRepo.Get(ctx, paymentObj.ID); err == nil {
 		paymentObj = refreshed
 	}
-	return paymentObj, errInvoiceVoided(inv.ID)
+	return paymentObj, settledErr
 }
 
 func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment) error {
@@ -342,6 +348,14 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
+	syncOn, err := stripeInvoiceSyncEnabled(ctx, p.ConnectionRepo)
+	if err != nil {
+		return err
+	}
+	if syncOn && shouldUseStripeHostedInvoicePage(paymentObj, invoice) {
+		return p.startPaymentUsingHostedPage(ctx, paymentObj, invoice)
+	}
+
 	// Extract success URL and cancel URL from gateway metadata
 	successURL := ""
 	cancelURL := ""
@@ -376,7 +390,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Currency:   paymentObj.Currency,
 		SuccessURL: successURL,
 		CancelURL:  cancelURL,
-		SaveCardAndMakeDefault: func() bool {
+		SaveCard: func() bool {
 			if paymentObj.GatewayMetadata != nil {
 				if saveCardStr, exists := paymentObj.GatewayMetadata["save_card_and_make_default"]; exists {
 					return saveCardStr == "true"
@@ -387,6 +401,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Metadata:               linkMetadata,
 		PaymentID:              paymentObj.ID,
 		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
+		AllowPromotionCodes:    paymentObj.GatewayMetadata["allow_promotion_codes"] != "false",
 	}
 
 	// Get Stripe integration for creating payment link
@@ -441,6 +456,42 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		"session_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
 
+	return nil
+}
+
+// shouldUseStripeHostedInvoicePage reports whether the Stripe hosted invoice page, which charges the whole invoice, fits this payment.
+func shouldUseStripeHostedInvoicePage(paymentObj *payment.Payment, inv *invoice.Invoice) bool {
+	if inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] == "" {
+		return false
+	}
+	if !inv.AmountPaid.IsZero() {
+		return false
+	}
+	if !paymentObj.Amount.Equal(inv.AmountRemaining) {
+		return false
+	}
+
+	return true
+}
+
+// startPaymentUsingHostedPage points the payment at the hosted invoice page; ProcessPayment saves it.
+func (p *paymentProcessor) startPaymentUsingHostedPage(ctx context.Context, paymentObj *payment.Payment, inv *invoice.Invoice) error {
+	stripeIntegration, err := p.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return err
+	}
+	stripeInvoiceID, err := stripeIntegration.InvoiceSyncSvc.GetStripeInvoiceID(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
+	paymentObj.GatewayMetadata = lo.Assign(paymentObj.GatewayMetadata, types.Metadata{
+		"payment_url":                           inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL],
+		"gateway":                               string(types.PaymentGatewayTypeStripe),
+		types.GatewayMetadataKeyStripeInvoiceID: stripeInvoiceID,
+	})
+	p.Logger.Info(ctx, "using Stripe hosted invoice page as payment link",
+		"payment_id", paymentObj.ID, "invoice_id", inv.ID, "stripe_invoice_id", stripeInvoiceID)
 	return nil
 }
 
@@ -1050,6 +1101,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	// Invoice is fully paid — dispatch mark-paid to whichever providers are connected.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		p.DispatchMarkPaid(ctx, invoice.ID)
+		NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, invoice.ID, linkVoidReasonInvoicePaid)
 	}
 
 	return nil

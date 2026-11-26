@@ -530,6 +530,9 @@ type CheckoutPaymentProviderConfig struct {
 
 	// NotifyCustomer lets the gateway email/SMS the payment link to the customer.
 	NotifyCustomer bool `json:"notify_customer,omitempty"`
+
+	// LinkExpiry overrides how long the hosted payment page stays payable; nil keeps the provider default.
+	LinkExpiry *Duration `json:"link_expiry,omitempty"`
 }
 
 func (c *CheckoutPaymentProviderConfig) Validate() error {
@@ -551,5 +554,5 @@ func (c *CheckoutPaymentProviderConfig) Validate() error {
 	if c.MaxMandateLimit != nil && c.MaxMandateLimit.LessThanOrEqual(decimal.Zero) {
 		return ierr.NewError("mandate_limit must be greater than zero").Mark(ierr.ErrValidation)
 	}
-	return nil
+	return c.LinkExpiry.Validate()
 }

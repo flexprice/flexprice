@@ -550,6 +550,11 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 	}
 
 	if paymentID != "" {
+		if session.PaymentProvider.ClosesLinkOnSessionEnd() {
+			if err := s.closeCheckoutLinkAfterCommit(ctx, paymentID); err != nil {
+				return err
+			}
+		}
 		if err := s.PaymentRepo.Delete(ctx, paymentID); err != nil {
 			return err
 		}
@@ -562,6 +567,29 @@ func (s *checkoutSessionService) cleanupCheckoutResources(ctx context.Context, s
 		if err := archiveDraftInvoice(ctx, s.ServiceParams, invoiceID); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// closeCheckoutLinkAfterCommit closes the session's unpaid gateway link once the session's end is committed.
+func (s *checkoutSessionService) closeCheckoutLinkAfterCommit(ctx context.Context, paymentID string) error {
+	p, err := s.PaymentRepo.Get(ctx, paymentID)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if p.IsPaymentPaid() || lo.FromPtr(p.GatewayTrackingID) == "" {
+		return nil
+	}
+
+	closeCtx := types.WithoutDBTransaction(ctx)
+	closeLink := func() {
+		NewPaymentService(s.ServiceParams).(*paymentService).closeProviderLink(closeCtx, p.DestinationID, p)
+	}
+	if !types.RegisterPostCommit(ctx, closeLink) {
+		closeLink()
 	}
 	return nil
 }

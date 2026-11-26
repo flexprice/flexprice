@@ -169,8 +169,8 @@ github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a h1:yDWHCSQ40h88yi
 github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a/go.mod h1:7Ga40egUymuWXxAe151lTNnCv97MddSOVsjpPPkityA=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
-github.com/flexprice/go-sdk/v2 v2.1.40 h1:F67s/frQPfG0yV71QAFLI+ILvTQmqYqcX1yEA2DkoTY=
-github.com/flexprice/go-sdk/v2 v2.1.40/go.mod h1:iHIql7ITIC5qFTmpHwj53uiG1NTW52IXQVv7Tm19IKA=
+github.com/flexprice/go-sdk/v2 v2.1.51 h1:5PNmRpw6wFPNgxV7gRUK9hyUWsRmyl+/Nph4O6j6DY8=
+github.com/flexprice/go-sdk/v2 v2.1.51/go.mod h1:iHIql7ITIC5qFTmpHwj53uiG1NTW52IXQVv7Tm19IKA=
 github.com/fortytw2/leaktest v1.3.0 h1:u8491cBMTQ8ft8aeV+adlcytMZylmA5nnwwkRZjI8vw=
 github.com/fortytw2/leaktest v1.3.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/frankban/quicktest v1.14.2/go.mod h1:mgiwOwqx65TmIk1wJ6Q7wvnVMocbUorkibMOrVTHZps=
