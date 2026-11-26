@@ -183,6 +183,8 @@ go run scripts/main.go -cmd moyasar-backfill-card-setup -tenant-id <tenant_id> -
 
 Only the charge ID stored on the FAILED payment is checked. If a paid retry got a different Moyasar charge ID than the decline, it reads `failed` and the customer is skipped.
 
+Run order: deploy the fix, run the dry run, check that a known affected customer is listed as `settle`, then apply.
+
 ## Development
 
 When adding new scripts:
