@@ -67,7 +67,7 @@ One `model.usage` event per call. Its properties include:
 | `outcome` | How it ended: `completed`, `max_tokens`, `refused`, `cut_short` or `error` |
 | `raw_*` | The provider's usage block, as it arrived |
 
-The counts never overlap: each token is in exactly one of them, so a meter can add any of them together. Every value is text, as FlexPrice requires.
+The counts never overlap: each token is in exactly one of them, so a meter can add any of them together. Every value is text. That is what FlexPrice's meter filters compare, and FlexPrice reads the counts back as numbers when a meter adds them up.
 
 ## Problems
 
