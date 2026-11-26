@@ -47,7 +47,13 @@ The probe listens on `E2EPROBE_LISTENER_PORT` (default 8765):
   lists every scenario with the one-line statement of what it checks (declared
   with `checks(...)` at registration) and the personas, with their customer
   ids, it runs on. The old "commitment overage is covered via customer X" reads
-  here as `commitment-preview … committed (e2eprobe-committed)`.
+  here as `commitment-preview … committed (e2eprobe-committed)`. Its Areas
+  section groups the same scenarios by product area (usage, subscriptions,
+  invoicing, tax, coupons, commitments, entitlements, wallets, alerts, webhooks,
+  payments, proration, operations) and names each area the suite leaves
+  uncovered with the reason, for example `payments  not covered: not in the
+  suite and no persona has trait payment (auto-charge, checkout-link,
+  payment-methods)`. That line is the gap list.
 - **How it is doing:** the dashboard at `/` (port-forward the service), or
   `/status` and `/history` for the same data as JSON. Incidents reach Slack,
   the structured log and OTEL spans; per-run traces are exported when OTEL is
@@ -169,6 +175,7 @@ aggregate each meter must show for any window. A window with a missing batch
 | preflight | preflight | tenant | expected connections, settings, fixtures; persona gaps as attributes | connections, settings |
 | ingest | probe (every tick) | events | one bulk batch per tick | ingest |
 | usage | probe | events | exact totals for every meter over the last full hour | `events/analytics` |
+| analytics-hourly | probe | events | every hourly window over the last three closed hours equals the oracle for each unbucketed meter | `events/analytics` with `window_size=HOUR` |
 | wallet-debit | probe | wallet-a | top-up read-after-write; a 500-unit `sum_commit` ingest debits exactly $5.00 | wallet balance |
 | low-balance-alert | probe | alerts | drives the canary below critical, awaits `wallet.ongoing_balance.dropped`; a miss is attributed to the alert pipeline or to delivery via alert logs | wallet balance, inbox, `alerts/search` |
 | invoice-freshness | probe | subscription | latest cycle invoice within 2 cycles | invoices |

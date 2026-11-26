@@ -1,6 +1,7 @@
 package suite
 
 import (
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,15 @@ func (c fakeCatalog) Profile(name string) (int, bool) {
 	return n, ok
 }
 
+func (c fakeCatalog) Names() []string {
+	names := make([]string, 0, len(c.scenarios))
+	for name := range c.scenarios {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func newFakeCatalog() fakeCatalog {
 	tr := func(ts ...e2eprobe.Trait) []e2eprobe.Trait { return ts }
 	infos := []ScenarioInfo{
@@ -33,8 +43,9 @@ func newFakeCatalog() fakeCatalog {
 		{Name: "preflight", Kind: e2eprobe.KindPreflight, Every: 6 * time.Hour},
 		{Name: "janitor", Kind: e2eprobe.KindMaintenance, Every: time.Hour},
 		{Name: "webhook-wiring", Kind: e2eprobe.KindProbe, Every: 15 * time.Minute},
-		{Name: "ingest", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents)},
-		{Name: "usage", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents), Every: 15 * time.Minute, Summary: "exact totals for every meter over the last full hour"},
+		{Name: "ingest", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents), Areas: []e2eprobe.Area{e2eprobe.AreaUsage}},
+		{Name: "usage", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents), Every: 15 * time.Minute, Summary: "exact totals for every meter over the last full hour", Areas: []e2eprobe.Area{e2eprobe.AreaUsage}},
+		{Name: "analytics-hourly", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitEvents), Every: time.Hour, Areas: []e2eprobe.Area{e2eprobe.AreaUsage}},
 		{Name: "wallet-debit", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitWallet), Every: 30 * time.Minute, EventsPerRun: 500},
 		{Name: "invoice-freshness", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitSubscription), Every: time.Hour},
 		{Name: "invoice-tax", Kind: e2eprobe.KindProbe, Traits: tr(e2eprobe.TraitTax), Every: time.Hour},
@@ -51,12 +62,12 @@ func newFakeCatalog() fakeCatalog {
 		{Name: "commitment-preview", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitCommitment), Every: time.Hour, EventsPerRun: 100, Summary: "preview bills the commitment with a true-up under it and factored overage over it"},
 		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitSoftLimit), Every: time.Hour, EventsPerRun: 150},
 		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitAdditiveGrant), Every: time.Hour, EventsPerRun: 200},
-		{Name: "checkout-link", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 30 * time.Minute},
-		{Name: "payment-methods", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: time.Hour},
-		{Name: "auto-charge", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 6 * time.Hour},
+		{Name: "checkout-link", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 30 * time.Minute, Areas: []e2eprobe.Area{e2eprobe.AreaPayments}},
+		{Name: "payment-methods", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: time.Hour, Areas: []e2eprobe.Area{e2eprobe.AreaPayments}},
+		{Name: "auto-charge", Kind: e2eprobe.KindFlow, Traits: tr(e2eprobe.TraitPayment), Every: 6 * time.Hour, Areas: []e2eprobe.Area{e2eprobe.AreaPayments}},
 	}
 	for _, f := range []string{"opening", "change", "grants", "renewal", "validation"} {
-		infos = append(infos, ScenarioInfo{Name: "billing-matrix-" + f, Kind: e2eprobe.KindFlow, Every: 15 * time.Minute})
+		infos = append(infos, ScenarioInfo{Name: "billing-matrix-" + f, Kind: e2eprobe.KindFlow, Every: 15 * time.Minute, Areas: []e2eprobe.Area{e2eprobe.AreaProration}})
 	}
 	c := fakeCatalog{scenarios: map[string]ScenarioInfo{}, profiles: map[string]int{"standard": 27, "bucketed": 6}}
 	for _, info := range infos {

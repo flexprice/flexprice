@@ -108,7 +108,7 @@ func clipDetail(detail string) string {
 
 func registerBillingMatrix(cat *scenario.Catalog) {
 	for _, f := range billingmatrix.Families {
-		r := entry(billingMatrixEntry+"-"+string(f), e2eprobe.KindFlow, f.Interval(), func(scenario.Deps) scenario.Scenario { return newBillingMatrix(f) }).
+		r := entry(billingMatrixEntry+"-"+string(f), e2eprobe.KindFlow, f.Interval(), func(scenario.Deps) scenario.Scenario { return newBillingMatrix(f) }).covers(e2eprobe.AreaProration).
 			checks("billing matrix family " + string(f) + ": proration and cadence oracle on plans, subscriptions and invoices it creates for itself")
 		cat.Register(r.info, r.build)
 	}

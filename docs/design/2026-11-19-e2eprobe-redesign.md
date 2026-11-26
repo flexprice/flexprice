@@ -440,7 +440,10 @@ image tag.
   port-forward and nothing else. No database: the JSON state file is enough for one replica, and
   long retention is the OTEL backend's job.
 - `describe` carries a Coverage section: every scenario's one-line `checks(...)` statement next to
-  the personas and customer ids it runs on.
+  the personas and customer ids it runs on, and an Areas section: every scenario names the product
+  areas it exercises (`covers(...)`), and the section lists per area which bindings cover it or why
+  none does (no suite entry, no persona with the trait, entry disabled). The uncovered lines are
+  the gap list a suite author works from.
 - Hourly heartbeat log line and daily Slack digest.
 
 `once --scenario <name> [--persona <p>] [--json]` provisions the suite and runs one binding with

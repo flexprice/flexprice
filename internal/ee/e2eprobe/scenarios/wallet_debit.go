@@ -27,8 +27,8 @@ var (
 // registerWallet adds the wallet scenarios; the orchestrator calls it from Register.
 func registerWallet(cat *scenario.Catalog) {
 	for _, r := range []registration{
-		entry("wallet-debit", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWalletDebit(d) }, e2eprobe.TraitWallet).ingests(walletDebitEvents).checks("a top-up is visible on read-back and 500 units of the entitlement-free meter debit exactly $5.00; a low wallet is refilled first"),
-		entry("low-balance-alert", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts).ingests(1).checks("driving the canary below its critical threshold raises the low-balance alert and its webhook reaches the probe; the canary is refilled"),
+		entry("wallet-debit", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newWalletDebit(d) }, e2eprobe.TraitWallet).ingests(walletDebitEvents).covers(e2eprobe.AreaWallets, e2eprobe.AreaUsage).checks("a top-up is visible on read-back and 500 units of the entitlement-free meter debit exactly $5.00; a low wallet is refilled first"),
+		entry("low-balance-alert", e2eprobe.KindProbe, 30*time.Minute, func(d scenario.Deps) scenario.Scenario { return newLowBalanceAlert(d) }, e2eprobe.TraitAlerts).ingests(1).covers(e2eprobe.AreaAlerts, e2eprobe.AreaWallets, e2eprobe.AreaWebhooks).checks("driving the canary below its critical threshold raises the low-balance alert and its webhook reaches the probe; the canary is refilled"),
 	} {
 		cat.Register(r.info, r.build)
 	}

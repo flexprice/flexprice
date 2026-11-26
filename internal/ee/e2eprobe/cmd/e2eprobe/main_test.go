@@ -141,7 +141,7 @@ func TestValidateCommand_DefaultSuiteWithRealCatalog(t *testing.T) {
 	if err := validateSuite("", newCatalog(), &out); err != nil {
 		t.Fatalf("the embedded suite must validate against the shipped catalog: %v", err)
 	}
-	if !strings.Contains(out.String(), "45 bindings") || !strings.Contains(out.String(), "53472 events/day") {
+	if !strings.Contains(out.String(), "46 bindings") || !strings.Contains(out.String(), "53472 events/day") {
 		t.Errorf("summary = %q", out.String())
 	}
 }

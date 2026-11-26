@@ -146,9 +146,9 @@ func TestRegisterEntitlements_DeclaresEveryScenario(t *testing.T) {
 	cat := scenario.NewCatalog()
 	registerEntitlements(cat)
 	want := []suite.ScenarioInfo{
-		{Name: "entitlement-usage", Kind: e2eprobe.KindProbe, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents}, Every: 30 * time.Minute},
-		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit}, Every: time.Hour, EventsPerRun: overLimitEvents},
-		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitAdditiveGrant}, Every: time.Hour, EventsPerRun: grantEvents},
+		{Name: "entitlement-usage", Kind: e2eprobe.KindProbe, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit, e2eprobe.TraitEvents}, Every: 30 * time.Minute, Areas: []e2eprobe.Area{e2eprobe.AreaEntitlements}},
+		{Name: "entitlement-enforcement", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitSoftLimit}, Every: time.Hour, EventsPerRun: overLimitEvents, Areas: []e2eprobe.Area{e2eprobe.AreaEntitlements}},
+		{Name: "grant-inheritance", Kind: e2eprobe.KindFlow, Traits: []e2eprobe.Trait{e2eprobe.TraitAdditiveGrant}, Every: time.Hour, EventsPerRun: grantEvents, Areas: []e2eprobe.Area{e2eprobe.AreaEntitlements}},
 	}
 	for _, w := range want {
 		info, ok := cat.Scenario(w.Name)

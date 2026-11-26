@@ -18,11 +18,12 @@ import (
 // registerPayments adds the payment scenarios, which bind to payer personas.
 func registerPayments(cat *scenario.Catalog) {
 	payment := []e2eprobe.Trait{e2eprobe.TraitPayment}
-	cat.Register(suite.ScenarioInfo{Name: "checkout-link", Kind: e2eprobe.KindFlow, Traits: payment, Every: 30 * time.Minute, Summary: "hosted checkout links are issued for invoices and top-ups, expire on cancel, and an unattended auto-charge without a method is refused"},
+	payments := []e2eprobe.Area{e2eprobe.AreaPayments}
+	cat.Register(suite.ScenarioInfo{Name: "checkout-link", Kind: e2eprobe.KindFlow, Traits: payment, Areas: payments, Every: 30 * time.Minute, Summary: "hosted checkout links are issued for invoices and top-ups, expire on cancel, and an unattended auto-charge without a method is refused"},
 		func(d scenario.Deps) scenario.Scenario { return newCheckoutLink(d) })
-	cat.Register(suite.ScenarioInfo{Name: "payment-methods", Kind: e2eprobe.KindFlow, Traits: payment, Every: time.Hour, Summary: "saved methods are listed, the default can be switched and the declining card neither completes nor credits"},
+	cat.Register(suite.ScenarioInfo{Name: "payment-methods", Kind: e2eprobe.KindFlow, Traits: payment, Areas: payments, Every: time.Hour, Summary: "saved methods are listed, the default can be switched and the declining card neither completes nor credits"},
 		func(d scenario.Deps) scenario.Scenario { return newPaymentMethods(d) })
-	cat.Register(suite.ScenarioInfo{Name: "auto-charge", Kind: e2eprobe.KindFlow, Traits: payment, Every: 6 * time.Hour, Summary: "auto-charged top-ups, invoice payments and subscription changes settle via webhook and credit exactly once"},
+	cat.Register(suite.ScenarioInfo{Name: "auto-charge", Kind: e2eprobe.KindFlow, Traits: payment, Areas: payments, Every: 6 * time.Hour, Summary: "auto-charged top-ups, invoice payments and subscription changes settle via webhook and credit exactly once"},
 		func(d scenario.Deps) scenario.Scenario { return newAutoCharge(d) })
 }
 

@@ -139,12 +139,16 @@ type ScenarioInfo struct {
 	EventsPerRun int
 	// Summary says in one line what a run checks; describe prints it.
 	Summary string
+	// Areas are the product surfaces a run exercises.
+	Areas []e2eprobe.Area
 }
 
 // Catalog answers which scenarios and event profiles exist in the binary.
 type Catalog interface {
 	Scenario(name string) (ScenarioInfo, bool)
 	Profile(name string) (eventsPerTick int, ok bool)
+	// Names lists every scenario, sorted.
+	Names() []string
 }
 
 // Default is the suite embedded in the binary.

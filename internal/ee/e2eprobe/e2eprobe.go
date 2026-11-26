@@ -35,6 +35,31 @@ const (
 	TraitPayment       Trait = "payment"
 )
 
+// Area is a product surface a scenario exercises; describe groups coverage by
+// area and names the areas a suite leaves uncovered.
+type Area string
+
+const (
+	AreaUsage         Area = "usage"
+	AreaSubscriptions Area = "subscriptions"
+	AreaInvoicing     Area = "invoicing"
+	AreaTax           Area = "tax"
+	AreaCoupons       Area = "coupons"
+	AreaCommitments   Area = "commitments"
+	AreaEntitlements  Area = "entitlements"
+	AreaWallets       Area = "wallets"
+	AreaAlerts        Area = "alerts"
+	AreaWebhooks      Area = "webhooks"
+	AreaPayments      Area = "payments"
+	AreaProration     Area = "proration"
+	AreaOperations    Area = "operations"
+)
+
+// Areas lists every area in the order describe prints them.
+func Areas() []Area {
+	return []Area{AreaUsage, AreaSubscriptions, AreaInvoicing, AreaTax, AreaCoupons, AreaCommitments, AreaEntitlements, AreaWallets, AreaAlerts, AreaWebhooks, AreaPayments, AreaProration, AreaOperations}
+}
+
 var allTraits = []Trait{
 	TraitSubscription,
 	TraitEvents,

@@ -39,9 +39,10 @@ scenario needs is copied, with its origin named in a comment.
    means tenant-level) and `Run(ctx, sc)`.
 2. Register it with `entry(...)` in the `register<Group>` function of its file
    (or in `scenarios/register.go` for a new group) with its default `Every`.
-   Finish the registration with `.checks("...")`, the one-line statement of
-   what a run verifies that `describe` prints (a test fails without it). If a
-   run ingests events, declare how many with `.ingests(n)` so the suite's daily
+   Finish the registration with `.covers(e2eprobe.Area...)`, the product areas
+   a run exercises, and `.checks("...")`, the one-line statement of what it
+   verifies; `describe` prints both and a test fails without either. If a run
+   ingests events, declare how many with `.ingests(n)` so the suite's daily
    budget counts them; prefer more units per event over more events.
 3. Add it to the default suite (`suite/default.yaml`) and to
    `internal/ee/e2eprobe/cmd/e2eprobe/suite.example.yaml` if every region should run it.

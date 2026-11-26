@@ -28,8 +28,12 @@ func (*usage) Kind() e2eprobe.Kind        { return e2eprobe.KindProbe }
 func (*usage) Requires() []e2eprobe.Trait { return []e2eprobe.Trait{e2eprobe.TraitEvents} }
 
 func registerUsage(cat *scenario.Catalog) {
-	r := entry("usage", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newUsage(d) }, e2eprobe.TraitEvents).checks("every meter's total over the last full hour equals what the ledger sent, read through events/analytics")
-	cat.Register(r.info, r.build)
+	for _, r := range []registration{
+		entry("usage", e2eprobe.KindProbe, 15*time.Minute, func(d scenario.Deps) scenario.Scenario { return newUsage(d) }, e2eprobe.TraitEvents).covers(e2eprobe.AreaUsage).checks("every meter's total over the last full hour equals what the ledger sent, read through events/analytics"),
+		entry("analytics-hourly", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newAnalyticsHourly(d) }, e2eprobe.TraitEvents).covers(e2eprobe.AreaUsage).checks("every hourly analytics window over the last three closed hours equals the oracle for each unbucketed meter"),
+	} {
+		cat.Register(r.info, r.build)
+	}
 }
 
 func (*usage) Run(ctx context.Context, sc *scenario.Context) e2eprobe.Result {

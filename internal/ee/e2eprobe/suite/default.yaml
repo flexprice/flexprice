@@ -72,6 +72,7 @@ scenarios:
   - { name: webhook-wiring, every: 15m }
   - { name: ingest }                                   # runs every tick
   - { name: usage, every: 15m }
+  - { name: analytics-hourly, every: 1h, personas: [baseline-a] }   # hourly points of the unbucketed meters
   - { name: wallet-debit, every: 1h, personas: [wallet-a] }   # 500 events a run
   - { name: invoice-freshness, every: 1h, alert: { skip_after: 840h } }   # the first invoice lands after one cycle
   - { name: invoice, every: 1h, families: [tax, coupon, commitment], alert: { skip_after: 840h } }

@@ -3,9 +3,12 @@ package suite
 import (
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/flexprice/flexprice/internal/ee/e2eprobe"
 )
 
 // line writes one formatted line; the logger is not the destination here.
@@ -81,6 +84,11 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 		line(tw, "disabled: %s%s\n", sc.Name, families)
 	}
 
+	line(tw, "\nAreas"+"\n")
+	for _, area := range e2eprobe.Areas() {
+		line(tw, "%s\t%s\n", area, s.describeArea(cat, area, bindings))
+	}
+
 	line(tw, "\nTenant"+"\n")
 	line(tw, "connections: %s\n", orNone(strings.Join(s.Tenant.Connections, ", ")))
 	keys := make([]string, 0, len(s.Tenant.Settings))
@@ -96,6 +104,97 @@ func Describe(w io.Writer, s *Suite, cat Catalog) error {
 	profiles, flows := s.Ingest(cat)
 	line(tw, "events/day: %d of max %d (profiles %d, flows %d)\n", profiles+flows, s.Defaults.Load.MaxEventsPerDay, profiles, flows)
 	return tw.Flush()
+}
+
+// describeArea names the bindings that exercise an area, or why none does.
+func (s *Suite) describeArea(cat Catalog, area e2eprobe.Area, bindings []Binding) string {
+	counts := map[string]int{}
+	for _, b := range bindings {
+		counts[b.Scenario]++
+	}
+	var covered, unbound []string
+	for _, name := range cat.Names() {
+		info, _ := cat.Scenario(name)
+		if !slices.Contains(info.Areas, area) {
+			continue
+		}
+		if n := counts[name]; n > 0 {
+			covered = append(covered, fmt.Sprintf("%s ×%d", name, n))
+		} else {
+			unbound = append(unbound, name)
+		}
+	}
+	switch {
+	case len(covered) > 0:
+		return "covered by: " + strings.Join(covered, ", ")
+	case len(unbound) > 0:
+		return "not covered: " + s.whyUnbound(cat, unbound)
+	}
+	return "no scenario in the catalog"
+}
+
+// whyUnbound groups unbound scenarios by what keeps the suite from running
+// them: an entry switched off, a trait no persona carries, or no entry at all.
+func (s *Suite) whyUnbound(cat Catalog, names []string) string {
+	reasons := map[string][]string{}
+	var order []string
+	note := func(reason, name string) {
+		if _, seen := reasons[reason]; !seen {
+			order = append(order, reason)
+		}
+		reasons[reason] = append(reasons[reason], name)
+	}
+	for _, name := range names {
+		entry, listed := s.entryFor(name)
+		if listed && !entry.IsEnabled() {
+			note(entry.Name+" disabled", name)
+			continue
+		}
+		info, _ := cat.Scenario(name)
+		var why []string
+		if !listed {
+			why = append(why, "not in the suite")
+		}
+		for _, t := range info.Traits {
+			if !s.anyPersonaHas(t) {
+				why = append(why, "no persona has trait "+string(t))
+				break
+			}
+		}
+		if len(why) == 0 {
+			why = append(why, "not bound")
+		}
+		note(strings.Join(why, " and "), name)
+	}
+	parts := make([]string, 0, len(order))
+	for _, reason := range order {
+		if strings.HasSuffix(reason, " disabled") {
+			parts = append(parts, reason)
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s (%s)", reason, strings.Join(reasons[reason], ", ")))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// entryFor finds the suite entry that stands for a catalog scenario, by name
+// or as one of its families.
+func (s *Suite) entryFor(name string) (Scenario, bool) {
+	for _, sc := range s.Scenarios {
+		if slices.Contains(sc.names(), name) {
+			return sc, true
+		}
+	}
+	return Scenario{}, false
+}
+
+func (s *Suite) anyPersonaHas(t e2eprobe.Trait) bool {
+	for _, p := range s.Personas {
+		if p.HasTrait(t) {
+			return true
+		}
+	}
+	return false
 }
 
 func orNone(s string) string {

@@ -15,11 +15,11 @@ import (
 // expands its families to the invoice-<family> names registered here.
 func registerInvoices(cat *scenario.Catalog) {
 	all := []registration{
-		entry("invoice-freshness", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceFreshness(d) }, e2eprobe.TraitSubscription).checks("the latest cycle invoice lags now by at most one cycle plus three days"),
-		entry("invoice-tax", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceTax(d) }, e2eprobe.TraitTax).checks("the latest finalized invoice after the association started carries the shared tax rate at its percentage"),
-		entry("invoice-coupon", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceCoupon(d) }, e2eprobe.TraitCoupon).checks("the oldest invoice carries the shared coupon"),
-		entry("invoice-commitment", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceCommitment(d) }, e2eprobe.TraitCommitment).checks("the committed persona's invoices bill at least the commitment, as a true-up or as factored overage"),
-		entry("invoice-multi-cadence", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceMultiCadence(d) }, e2eprobe.TraitMultiCadence).checks("the quarterly subscription's invoice fans its monthly items out per sub-window"),
+		entry("invoice-freshness", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceFreshness(d) }, e2eprobe.TraitSubscription).covers(e2eprobe.AreaInvoicing).checks("the latest cycle invoice lags now by at most one cycle plus three days"),
+		entry("invoice-tax", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceTax(d) }, e2eprobe.TraitTax).covers(e2eprobe.AreaInvoicing, e2eprobe.AreaTax).checks("the latest finalized invoice after the association started carries the shared tax rate at its percentage"),
+		entry("invoice-coupon", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceCoupon(d) }, e2eprobe.TraitCoupon).covers(e2eprobe.AreaInvoicing, e2eprobe.AreaCoupons).checks("the oldest invoice carries the shared coupon"),
+		entry("invoice-commitment", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceCommitment(d) }, e2eprobe.TraitCommitment).covers(e2eprobe.AreaInvoicing, e2eprobe.AreaCommitments).checks("the committed persona's invoices bill at least the commitment, as a true-up or as factored overage"),
+		entry("invoice-multi-cadence", e2eprobe.KindProbe, time.Hour, func(d scenario.Deps) scenario.Scenario { return newInvoiceMultiCadence(d) }, e2eprobe.TraitMultiCadence).covers(e2eprobe.AreaInvoicing, e2eprobe.AreaSubscriptions).checks("the quarterly subscription's invoice fans its monthly items out per sub-window"),
 	}
 	for _, r := range all {
 		cat.Register(r.info, r.build)
