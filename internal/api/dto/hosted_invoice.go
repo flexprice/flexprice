@@ -24,7 +24,7 @@ type HostedInvoiceTenant struct {
 }
 
 // NewHostedInvoice copies an invoice for the public hosted link without free-form metadata,
-// idempotency keys, the subscription or the customer's contacts and integrations.
+// idempotency keys, the subscription or the customer's contacts, additional emails and integrations.
 func NewHostedInvoice(inv *InvoiceResponse) *InvoiceResponse {
 	out := *inv
 	out.Metadata = nil
@@ -36,6 +36,7 @@ func NewHostedInvoice(inv *InvoiceResponse) *InvoiceResponse {
 		c := *inv.Customer.Customer
 		c.Metadata = nil
 		c.ContactPersons = nil
+		c.AdditionalEmails = nil
 		out.Customer = &CustomerResponse{Customer: &c}
 	}
 
