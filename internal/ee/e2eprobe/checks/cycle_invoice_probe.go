@@ -65,11 +65,13 @@ func (p *CycleInvoiceProbe) Run(ctx context.Context) error {
 	invType := sdktypes.InvoiceTypeSubscription
 	order := sdktypes.InvoiceFilterOrderDesc
 	limit := cycleInvoiceScanLimit
+	skipLineItems := true
 	invResp, err := p.client.Invoices().Query(ctx, sdktypes.InvoiceFilter{
-		CustomerID:  &custID,
-		InvoiceType: &invType,
-		Limit:       &limit,
-		Order:       &order,
+		CustomerID:    &custID,
+		InvoiceType:   &invType,
+		Limit:         &limit,
+		Order:         &order,
+		SkipLineItems: &skipLineItems,
 	})
 	if err != nil {
 		return e2eprobe.Errorf(map[string]string{"subscription_id": subID, "customer_id": custID}, "query invoices for customer %s (sub %s): %w", custID, subID, err)

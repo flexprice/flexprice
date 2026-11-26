@@ -324,7 +324,7 @@ func (c client) preview(ctx context.Context, subID string, p *span) (*invoice, e
 
 func (c client) subscriptionInvoices(ctx context.Context, subID string) ([]invoice, error) {
 	var raw json.RawMessage
-	if err := c.post(ctx, "/invoices/search", map[string]any{"subscription_id": subID, "limit": 100}, &raw); err != nil {
+	if err := c.post(ctx, "/invoices/search", map[string]any{"subscription_id": subID, "limit": 100, "skip_line_items": true}, &raw); err != nil {
 		return nil, err
 	}
 	var out []invoice

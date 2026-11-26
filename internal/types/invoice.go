@@ -573,12 +573,12 @@ type InvoiceFilter struct {
 	// updated_at_gte filters invoices updated at or after the given instant
 	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte" validate:"omitempty,time_rfc3339"`
 
-	// SkipLineItems if true, will not include line items in the response
+	// SkipLineItems if true, will not include line items in the response.
+	// Pages that include line items are limited to MaxInvoiceListLimitWithLineItems invoices.
 	SkipLineItems bool `json:"skip_line_items,omitempty" form:"skip_line_items"`
 }
 
-// MaxInvoiceListLimitWithLineItems caps page size when line items are loaded.
-// 1000-invoice pages with line items reached 60-122 MB and OOM-killed 1.5 GB API tasks.
+// MaxInvoiceListLimitWithLineItems caps page size when line items are loaded, since each invoice can carry many lines.
 const MaxInvoiceListLimitWithLineItems = 50
 
 // NewInvoiceFilter creates a new invoice filter with default options
@@ -600,7 +600,7 @@ func (f *InvoiceFilter) Validate() error {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return ierr.WithError(err).WithHint("invalid query filter").Mark(ierr.ErrValidation)
 		}
-		if !f.SkipLineItems && !f.QueryFilter.IsUnlimited() && f.QueryFilter.GetLimit() > MaxInvoiceListLimitWithLineItems {
+		if !f.SkipLineItems && f.QueryFilter.GetLimit() > MaxInvoiceListLimitWithLineItems {
 			return ierr.NewErrorf("limit must be at most %d when line items are included", MaxInvoiceListLimitWithLineItems).
 				WithHintf("Use limit <= %d, or pass skip_line_items=true to page up to 1000 invoices at a time", MaxInvoiceListLimitWithLineItems).
 				WithReportableDetails(map[string]any{
