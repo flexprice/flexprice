@@ -549,7 +549,7 @@ func (s *meterUsageService) compareUsageRollupInBackground(ctx context.Context, 
 // compareUsageRollup reads the subscription's usage rollup and returns whether it matches want, the quantities
 // ClickHouse served, or why it could not be read. A mismatch is logged with both sides.
 func (s *meterUsageService) compareUsageRollup(ctx context.Context, sub *subscription.Subscription, want map[string]decimal.Decimal, servedIn time.Duration) string {
-	start := time.Now()
+	start := clock.Now()
 	result, outcome := s.readUsageRollup(ctx, sub)
 	if outcome != usageRollupReadServed {
 		return outcome
@@ -558,13 +558,13 @@ func (s *meterUsageService) compareUsageRollup(ctx context.Context, sub *subscri
 	if quantitiesEqual(want, got) {
 		return usageRollupShadowMatch
 	}
-	s.logger.Warn(ctx, "usage rollup shadow read differs from ClickHouse",
+	s.logger.Info(ctx, "usage rollup shadow read differs from ClickHouse",
 		"subscription_id", sub.ID,
 		"customer_id", sub.CustomerID,
 		"clickhouse", want,
 		"usage_rollup", got,
 		"clickhouse_ms", servedIn.Milliseconds(),
-		"usage_rollup_ms", time.Since(start).Milliseconds())
+		"usage_rollup_ms", clock.Now().Sub(start).Milliseconds())
 	return usageRollupShadowMismatch
 }
 
@@ -655,10 +655,10 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		}
 	}
 
-	start := time.Now()
+	start := clock.Now()
 	result, err := s.subscriptionMeterUsageFromClickHouse(ctx, sub, req)
 	if err == nil && walletPeriodRead && s.Config.UsageRollup.IsShadowTenant(types.GetTenantID(ctx)) {
-		s.compareUsageRollupInBackground(ctx, sub, result, time.Since(start))
+		s.compareUsageRollupInBackground(ctx, sub, result, clock.Now().Sub(start))
 	}
 	return result, err
 }
