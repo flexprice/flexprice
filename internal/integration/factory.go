@@ -7,7 +7,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/clock"
 
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/cache"
@@ -631,7 +630,6 @@ func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegratio
 		WebhookHandler:    webhookHandler,
 		Lifecycle:         f.lifecycle,
 		PaymentMethodRepo: f.paymentMethodRepo,
-		PaymentRepo:       f.paymentRepo,
 		Logger:            f.logger,
 	}, nil
 }
@@ -945,7 +943,6 @@ type MoyasarIntegration struct {
 	WebhookHandler    *moyasarwebhook.Handler
 	Lifecycle         *payments.PaymentLifecycle
 	PaymentMethodRepo paymentmethod.Repository
-	PaymentRepo       payment.Repository
 	Logger            *logger.Logger
 }
 
@@ -994,35 +991,27 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	return false, true, nil
 }
 
-// InitiateTokenization returns a Flexprice AUTH payment record for card tokenization:
-// the customer's newest untouched card-setup payment if one is open, otherwise a new one.
+// InitiateTokenization creates a Flexprice AUTH payment record for card tokenization.
 // Returns the flexprice_payment_id (anchor for webhook reconciliation) and the
 // Moyasar publishable key (needed by Moyasar.js on the frontend).
 func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerID string) (flexpricePaymentID string, publishableKey string, err error) {
-	if m.Lifecycle == nil || m.PaymentRepo == nil {
-		return "", "", ierr.NewError("lifecycle or payment repo not initialised").Mark(ierr.ErrInternal)
+	if m.Lifecycle == nil {
+		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
-	flexpricePaymentID, err = m.findOpenTokenizationPayment(ctx, customerID)
+	// A fresh key per setup gives each payment its own Moyasar given_id, so a payment
+	// closed by an earlier decline or card save is never handed out again.
+	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
+		DestinationID:     customerID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           string(types.SecretProviderMoyasar),
+		Amount:            decimal.NewFromInt(1),
+		Currency:          moyasar.DefaultCurrency,
+		IdempotencyKey:    types.GenerateUUID(),
+	})
 	if err != nil {
 		return "", "", err
-	}
-
-	if flexpricePaymentID == "" {
-		// A fresh key per setup gives each new payment its own Moyasar given_id, so a
-		// payment closed by an earlier decline or card save is never handed out again.
-		flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
-			DestinationType:   types.PaymentDestinationTypeCustomer,
-			DestinationID:     customerID,
-			PaymentMethodType: types.PaymentMethodTypeCard,
-			Gateway:           string(types.SecretProviderMoyasar),
-			Amount:            decimal.NewFromInt(1),
-			Currency:          moyasar.DefaultCurrency,
-			IdempotencyKey:    types.GenerateUUID(),
-		})
-		if err != nil {
-			return "", "", err
-		}
 	}
 
 	config, err := m.Client.GetMoyasarConfig(ctx)
@@ -1031,34 +1020,6 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 	}
 
 	return flexpricePaymentID, config.PublishableKey, nil
-}
-
-// findOpenTokenizationPayment returns the newest INITIATED card-setup payment for the
-// customer that has no attempts yet, or "" if there is none. A payment with a declined
-// attempt is skipped so a new setup after a decline gets a fresh given_id.
-func (m *MoyasarIntegration) findOpenTokenizationPayment(ctx context.Context, customerID string) (string, error) {
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeCustomer))
-	filter.DestinationID = lo.ToPtr(customerID)
-	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeMoyasar))
-	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypeCard))
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusInitiated))
-
-	candidates, err := m.PaymentRepo.List(ctx, filter)
-	if err != nil {
-		return "", err
-	}
-
-	for _, p := range candidates {
-		_, err := m.PaymentRepo.GetLatestAttempt(ctx, p.ID)
-		if ierr.IsNotFound(err) {
-			return p.ID, nil
-		}
-		if err != nil {
-			return "", err
-		}
-	}
-	return "", nil
 }
 
 // ChargeInvoiceWithToken charges an invoice using the customer's default saved Moyasar token.

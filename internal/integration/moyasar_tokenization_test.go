@@ -47,10 +47,9 @@ func (s *MoyasarTokenizationSuite) SetupTest() {
 		WebhookPublisher: s.GetWebhookPublisher(),
 	}
 	s.moyasar = &integration.MoyasarIntegration{
-		Client:      configOnlyMoyasarClient{},
-		Lifecycle:   payments.NewPaymentLifecycle(service.NewPaymentService(params), service.NewInvoiceService(params), s.GetLogger()),
-		PaymentRepo: stores.PaymentRepo,
-		Logger:      s.GetLogger(),
+		Client:    configOnlyMoyasarClient{},
+		Lifecycle: payments.NewPaymentLifecycle(service.NewPaymentService(params), service.NewInvoiceService(params), s.GetLogger()),
+		Logger:    s.GetLogger(),
 	}
 	s.Require().NoError(stores.CustomerRepo.Create(s.GetContext(), &customer.Customer{
 		ID:         "cust_tokenize",
@@ -67,29 +66,8 @@ func (s *MoyasarTokenizationSuite) initiate() string {
 	return id
 }
 
-func (s *MoyasarTokenizationSuite) TestReusesUntouchedPayment() {
-	s.Equal(s.initiate(), s.initiate())
-}
-
-func (s *MoyasarTokenizationSuite) TestPaymentWithAttemptIsNotReused() {
-	first := s.initiate()
-	s.Require().NoError(s.moyasar.Lifecycle.RecordFailedAttempt(s.GetContext(), payments.RecordFailedAttemptParams{
-		FlexpricePaymentID: first,
-		GatewayPaymentID:   "mp_declined",
-		ErrorMessage:       "declined",
-	}))
-
-	second := s.initiate()
-	s.NotEqual(first, second)
-	s.Equal(second, s.initiate())
-
-	p, err := s.GetStores().PaymentRepo.Get(s.GetContext(), second)
-	s.Require().NoError(err)
-	s.Equal(types.PaymentStatusInitiated, p.PaymentStatus)
-}
-
-func (s *MoyasarTokenizationSuite) TestRequiresPaymentRepo() {
-	s.moyasar.PaymentRepo = nil
+func (s *MoyasarTokenizationSuite) TestRequiresLifecycle() {
+	s.moyasar.Lifecycle = nil
 	_, _, err := s.moyasar.InitiateTokenization(s.GetContext(), "cust_tokenize")
 	s.Error(err)
 }
