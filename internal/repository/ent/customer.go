@@ -69,7 +69,6 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetNillableBillingCurrency(c.BillingCurrency).
 		SetNillableBillingEntityID(c.BillingEntityID).
 		SetContactPersons(c.ToEntContactPersons()).
-		SetAdditionalEmails(c.AdditionalEmails).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
 		SetAddressCity(c.AddressCity).
@@ -351,7 +350,6 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetEmail(c.Email).
 		SetNillableContact(c.Contact).
 		SetContactPersons(c.ToEntContactPersons()).
-		SetAdditionalEmails(c.AdditionalEmails).
 		SetAddressLine1(c.AddressLine1).
 		SetAddressLine2(c.AddressLine2).
 		SetAddressCity(c.AddressCity).

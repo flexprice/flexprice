@@ -1157,7 +1157,6 @@ var (
 		{Name: "timezone", Type: field.TypeString, Nullable: true, Default: "UTC", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tax_treatment", Type: field.TypeString, Default: "taxable", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "contact_persons", Type: field.TypeJSON, Nullable: true},
-		{Name: "additional_emails", Type: field.TypeJSON, Nullable: true},
 		{Name: "billing_entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "settings", Type: field.TypeJSON, Nullable: true},
 	}
@@ -1199,7 +1198,7 @@ var (
 			{
 				Name:    "idx_customers_tenant_env_billing_entity",
 				Unique:  false,
-				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[24]},
+				Columns: []*schema.Column{CustomersColumns[1], CustomersColumns[7], CustomersColumns[23]},
 			},
 			{
 				Name:    "idx_customers_settings_override",

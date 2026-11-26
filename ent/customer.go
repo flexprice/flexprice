@@ -64,8 +64,6 @@ type Customer struct {
 	TaxTreatment types.TaxTreatment `json:"tax_treatment,omitempty"`
 	// ContactPersons holds the value of the "contact_persons" field.
 	ContactPersons []*schema.ContactPerson `json:"contact_persons,omitempty"`
-	// AdditionalEmails holds the value of the "additional_emails" field.
-	AdditionalEmails []*types.AdditionalEmail `json:"additional_emails,omitempty"`
 	// BillingEntityID holds the value of the "billing_entity_id" field.
 	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 	// Settings holds the value of the "settings" field.
@@ -78,7 +76,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customer.FieldMetadata, customer.FieldContactPersons, customer.FieldAdditionalEmails, customer.FieldSettings:
+		case customer.FieldMetadata, customer.FieldContactPersons, customer.FieldSettings:
 			values[i] = new([]byte)
 		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment, customer.FieldBillingEntityID:
 			values[i] = new(sql.NullString)
@@ -243,14 +241,6 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field contact_persons: %w", err)
 				}
 			}
-		case customer.FieldAdditionalEmails:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field additional_emails", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.AdditionalEmails); err != nil {
-					return fmt.Errorf("unmarshal field additional_emails: %w", err)
-				}
-			}
 		case customer.FieldBillingEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_entity_id", values[i])
@@ -371,9 +361,6 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("contact_persons=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ContactPersons))
-	builder.WriteString(", ")
-	builder.WriteString("additional_emails=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AdditionalEmails))
 	builder.WriteString(", ")
 	if v := _m.BillingEntityID; v != nil {
 		builder.WriteString("billing_entity_id=")

@@ -280,9 +280,6 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	if req.ContactPersons != nil {
 		cust.ContactPersons = req.ContactPersons
 	}
-	if req.AdditionalEmails != nil {
-		cust.AdditionalEmails = req.AdditionalEmails
-	}
 	if req.Settings != nil {
 		cust.Settings = dto.MergeSettingsOverride(cust.Settings, req.Settings)
 	}

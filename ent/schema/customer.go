@@ -109,9 +109,6 @@ func (Customer) Fields() []ent.Field {
 			NotEmpty(),
 		field.JSON("contact_persons", []*ContactPerson{}).
 			Optional(),
-		// additional_emails receive the email types they list, alongside the primary email.
-		field.JSON("additional_emails", []*types.AdditionalEmail{}).
-			Optional(),
 		field.String("billing_entity_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -125,15 +122,16 @@ func (Customer) Fields() []ent.Field {
 
 // ContactPerson is the stored shape of a customer's contact person.
 type ContactPerson struct {
-	ID          string `json:"id,omitempty"`
-	IsPrimary   bool   `json:"is_primary,omitempty"`
-	Salutation  string `json:"salutation,omitempty"`
-	FirstName   string `json:"first_name"`
-	LastName    string `json:"last_name,omitempty"`
-	Email       string `json:"email,omitempty"`
-	Mobile      string `json:"mobile,omitempty"`
-	Designation string `json:"designation,omitempty"`
-	Department  string `json:"department,omitempty"`
+	ID          string            `json:"id,omitempty"`
+	IsPrimary   bool              `json:"is_primary,omitempty"`
+	Salutation  string            `json:"salutation,omitempty"`
+	FirstName   string            `json:"first_name"`
+	LastName    string            `json:"last_name,omitempty"`
+	Email       string            `json:"email,omitempty"`
+	Mobile      string            `json:"mobile,omitempty"`
+	Designation string            `json:"designation,omitempty"`
+	Department  string            `json:"department,omitempty"`
+	EmailTypes  []types.EmailType `json:"email_types,omitempty"`
 }
 
 // Edges of the Customer.

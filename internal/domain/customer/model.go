@@ -35,9 +35,6 @@ type Customer struct {
 
 	ContactPersons []*ContactPerson `db:"contact_persons" json:"contact_persons,omitempty" activity:"drop"`
 
-	// AdditionalEmails receive the email types they list; the primary Email always receives every type.
-	AdditionalEmails []*types.AdditionalEmail `db:"additional_emails" json:"additional_emails,omitempty" activity:"drop"`
-
 	// Settings overrides the environment's settings for this customer's subscriptions.
 	Settings *types.SettingsOverride `db:"settings" json:"settings,omitempty"`
 
@@ -89,7 +86,6 @@ func FromEnt(c *ent.Customer) *Customer {
 		BillingCurrency:   c.BillingCurrency,
 		BillingEntityID:   c.BillingEntityID,
 		ContactPersons:    contactPersonsFromEnt(c.ContactPersons),
-		AdditionalEmails:  c.AdditionalEmails,
 		Settings:          c.Settings,
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
@@ -188,6 +184,7 @@ func contactPersonsFromEnt(persons []*schema.ContactPerson) []*ContactPerson {
 		out[i] = &ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -203,6 +200,7 @@ func (c *Customer) ToEntContactPersons() []*schema.ContactPerson {
 		out[i] = &schema.ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -219,78 +217,27 @@ type ContactPerson struct {
 	Mobile      string `json:"mobile,omitempty" validate:"omitempty,max=20"`
 	Designation string `json:"designation,omitempty" validate:"omitempty,max=100"`
 	Department  string `json:"department,omitempty" validate:"omitempty,max=100"`
+	// email_types are the emails this person receives in place of the customer email, e.g. ["invoice"]
+	EmailTypes []types.EmailType `json:"email_types,omitempty" validate:"omitempty,max=10"`
 }
 
-// EmailRecipients returns who receives emails of type t: the primary email first, then every
-// additional email tagged with t, without case-insensitive repeats.
+// EmailRecipients returns the emails of contact persons responsible for emails of type t,
+// falling back to the customer email when no person is.
 func (c *Customer) EmailRecipients(t types.EmailType) []string {
 	var out []string
 	seen := make(map[string]bool)
-	add := func(email string) {
-		key := strings.ToLower(strings.TrimSpace(email))
-		if key == "" || seen[key] {
-			return
+	for _, p := range c.ContactPersons {
+		key := strings.ToLower(p.Email)
+		if p.Email == "" || seen[key] || !lo.Contains(p.EmailTypes, t) {
+			continue
 		}
 		seen[key] = true
-		out = append(out, email)
+		out = append(out, p.Email)
 	}
-	add(c.Email)
-	for _, a := range c.AdditionalEmails {
-		if a != nil && lo.Contains(a.Types, t) {
-			add(a.Email)
-		}
+	if len(out) == 0 && c.Email != "" {
+		out = []string{c.Email}
 	}
 	return out
-}
-
-// InvoiceEmailRecipients returns who receives invoice emails.
-func (c *Customer) InvoiceEmailRecipients() []string {
-	return c.EmailRecipients(types.EmailTypeInvoice)
-}
-
-// ValidateAdditionalEmails rejects null entries, repeated addresses, and empty, unknown or repeated types.
-func ValidateAdditionalEmails(emails []*types.AdditionalEmail) error {
-	seen := make(map[string]bool, len(emails))
-	for _, a := range emails {
-		if a == nil {
-			return ierr.NewError("additional email is empty").
-				WithHint("additional_emails must not contain null entries").
-				Mark(ierr.ErrValidation)
-		}
-		key := strings.ToLower(strings.TrimSpace(a.Email))
-		if key == "" {
-			return ierr.NewError("additional email has no address").
-				WithHint("Each additional email needs an email").
-				Mark(ierr.ErrValidation)
-		}
-		if seen[key] {
-			return ierr.NewError("duplicate additional email").
-				WithHintf("%s appears more than once", a.Email).
-				Mark(ierr.ErrValidation)
-		}
-		seen[key] = true
-		if len(a.Types) == 0 {
-			return ierr.NewError("additional email has no types").
-				WithHintf("types must list at least one of %v", types.EmailTypes).
-				Mark(ierr.ErrValidation)
-		}
-		if len(lo.Uniq(a.Types)) != len(a.Types) {
-			return ierr.NewError("duplicate additional email type").
-				WithHint("List each email type once").
-				Mark(ierr.ErrValidation)
-		}
-		for _, t := range a.Types {
-			if t == "" {
-				return ierr.NewError("empty additional email type").
-					WithHintf("types must be one of %v", types.EmailTypes).
-					Mark(ierr.ErrValidation)
-			}
-			if err := t.Validate(); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // ValidatePersons checks the list allows at most one primary and no repeated ids,
@@ -312,6 +259,9 @@ func ValidatePersons(persons []*ContactPerson) error {
 				Mark(ierr.ErrValidation)
 		}
 		people[person] = true
+		if err := validateEmailTypes(p); err != nil {
+			return err
+		}
 		if p.IsPrimary {
 			primaries++
 		}
@@ -329,6 +279,33 @@ func ValidatePersons(persons []*ContactPerson) error {
 		return ierr.NewError("more than one primary contact person").
 			WithHint("Mark at most one contact person as primary").
 			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func validateEmailTypes(p *ContactPerson) error {
+	if len(p.EmailTypes) == 0 {
+		return nil
+	}
+	if p.Email == "" {
+		return ierr.NewError("contact person has email types but no email").
+			WithHintf("Add an email to %s to send them emails", p.FirstName).
+			Mark(ierr.ErrValidation)
+	}
+	if len(lo.Uniq(p.EmailTypes)) != len(p.EmailTypes) {
+		return ierr.NewError("duplicate contact person email type").
+			WithHint("List each email type once").
+			Mark(ierr.ErrValidation)
+	}
+	for _, t := range p.EmailTypes {
+		if t == "" {
+			return ierr.NewError("empty contact person email type").
+				WithHint("Remove the empty entry from email_types").
+				Mark(ierr.ErrValidation)
+		}
+		if err := t.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -127,7 +127,7 @@ func (s *emailNotificationService) SendInvoiceEmail(ctx context.Context, invoice
 		if err != nil {
 			return nil, err
 		}
-		to = cust.InvoiceEmailRecipients()
+		to = cust.EmailRecipients(types.EmailTypeInvoice)
 	}
 
 	merchant, err := invoiceMerchant(ctx, s.ServiceParams, inv)
@@ -223,7 +223,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 		templateKey: types.EmailTemplateInvoiceFinalized,
 		trigger:     types.EmailTriggerAuto,
 		subject:     invoiceEmailSubject(inv, merchant.Name),
-		to:          cust.InvoiceEmailRecipients(),
+		to:          cust.EmailRecipients(types.EmailTypeInvoice),
 		senderName:  merchant.Name,
 		replyTo:     merchant.BillingDetails.ReplyToEmail(),
 	}

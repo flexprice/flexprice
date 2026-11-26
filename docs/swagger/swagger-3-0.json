@@ -21020,6 +21020,14 @@
           "email": {
             "type": "string"
           },
+          "email_types": {
+            "maxItems": 10,
+            "type": "array",
+            "description": "email_types are the emails this person receives in place of the customer email, e.g. [\"invoice\"]",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailType"
+            }
+          },
           "first_name": {
             "maxLength": 100,
             "type": "string"
@@ -24166,14 +24174,6 @@
         ],
         "type": "object",
         "properties": {
-          "additional_emails": {
-            "maxItems": 10,
-            "type": "array",
-            "description": "additional_emails receive the email types they list; the primary email always receives every type",
-            "items": {
-              "$ref": "#/components/schemas/types.AdditionalEmail"
-            }
-          },
           "address_city": {
             "maxLength": 100,
             "type": "string",
@@ -26097,13 +26097,6 @@
       "CustomerResponse": {
         "type": "object",
         "properties": {
-          "additional_emails": {
-            "type": "array",
-            "description": "AdditionalEmails receive the email types they list; the primary Email always receives every type.",
-            "items": {
-              "$ref": "#/components/schemas/types.AdditionalEmail"
-            }
-          },
           "address_city": {
             "type": "string",
             "description": "AddressCity is the city of the customer's address"
@@ -34135,14 +34128,6 @@
       "UpdateCustomerRequest": {
         "type": "object",
         "properties": {
-          "additional_emails": {
-            "maxItems": 10,
-            "type": "array",
-            "description": "additional_emails replaces the customer's additional emails when provided; send [] to clear",
-            "items": {
-              "$ref": "#/components/schemas/types.AdditionalEmail"
-            }
-          },
           "address_city": {
             "maxLength": 100,
             "type": "string",
@@ -36012,13 +35997,6 @@
       "Customer": {
         "type": "object",
         "properties": {
-          "additional_emails": {
-            "type": "array",
-            "description": "AdditionalEmails receive the email types they list; the primary Email always receives every type.",
-            "items": {
-              "$ref": "#/components/schemas/types.AdditionalEmail"
-            }
-          },
           "address_city": {
             "type": "string",
             "description": "AddressCity is the city of the customer's address"
@@ -43215,27 +43193,6 @@
             "type": "string"
           }
         }
-      },
-      "types.AdditionalEmail": {
-        "required": [
-          "email",
-          "types"
-        ],
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string"
-          },
-          "types": {
-            "maxItems": 10,
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/types.EmailType"
-            }
-          }
-        },
-        "x-speakeasy-name-override": "AdditionalEmail"
       },
       "types.CollectionsColumnKey": {
         "type": "string",

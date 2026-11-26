@@ -58,8 +58,6 @@ const (
 	FieldTaxTreatment = "tax_treatment"
 	// FieldContactPersons holds the string denoting the contact_persons field in the database.
 	FieldContactPersons = "contact_persons"
-	// FieldAdditionalEmails holds the string denoting the additional_emails field in the database.
-	FieldAdditionalEmails = "additional_emails"
 	// FieldBillingEntityID holds the string denoting the billing_entity_id field in the database.
 	FieldBillingEntityID = "billing_entity_id"
 	// FieldSettings holds the string denoting the settings field in the database.
@@ -93,7 +91,6 @@ var Columns = []string{
 	FieldTimezone,
 	FieldTaxTreatment,
 	FieldContactPersons,
-	FieldAdditionalEmails,
 	FieldBillingEntityID,
 	FieldSettings,
 }

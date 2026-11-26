@@ -1590,16 +1590,6 @@ func ContactPersonsNotNil() predicate.Customer {
 	return predicate.Customer(sql.FieldNotNull(FieldContactPersons))
 }
 
-// AdditionalEmailsIsNil applies the IsNil predicate on the "additional_emails" field.
-func AdditionalEmailsIsNil() predicate.Customer {
-	return predicate.Customer(sql.FieldIsNull(FieldAdditionalEmails))
-}
-
-// AdditionalEmailsNotNil applies the NotNil predicate on the "additional_emails" field.
-func AdditionalEmailsNotNil() predicate.Customer {
-	return predicate.Customer(sql.FieldNotNull(FieldAdditionalEmails))
-}
-
 // BillingEntityIDEQ applies the EQ predicate on the "billing_entity_id" field.
 func BillingEntityIDEQ(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldBillingEntityID, v))
