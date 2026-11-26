@@ -67,7 +67,8 @@ function render(st, hist) {
     const last = (x.last && x.last.status) ? x.last : (prior || {});
     const lastRun = (x.last && x.last.status) ? x.last_run : (prior ? prior.at : '');
     const reason = last.reason || (last.mismatches && last.mismatches.join ? last.mismatches.join('; ') : '') || last.step || '';
-    return `<tr><td>${esc(key)}</td><td><span class="pill ${cls(last)}">${esc(last.status || 'pending')}</span> <span class="muted">${fmtDur(last.duration)}</span></td><td class="hide-narrow reason" title="${esc(reason)}">${esc(reason)}</td><td>${fmtAgo(lastRun)}</td><td class="hide-narrow">${fmtAgo(x.next_run)}</td><td>${rate} <span class="muted">(${passed}/${day.length} in 24h)</span></td><td><span class="spark">${spark}</span></td></tr>`;
+    const details = Object.entries(last.attrs || {}).map(([k, v]) => `${k}=${v}`).join('\n');
+    return `<tr><td>${esc(key)}</td><td><span class="pill ${cls(last)}">${esc(last.status || 'pending')}</span> <span class="muted">${fmtDur(last.duration)}</span></td><td class="hide-narrow reason" title="${esc(details ? reason + '\n' + details : reason)}">${esc(reason)}</td><td>${fmtAgo(lastRun)}</td><td class="hide-narrow">${fmtAgo(x.next_run)}</td><td>${rate} <span class="muted">(${passed}/${day.length} in 24h)</span></td><td><span class="spark">${spark}</span></td></tr>`;
   }).join('');
   $('refreshed').textContent = 'refreshed ' + new Date().toLocaleTimeString();
 }

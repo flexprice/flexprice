@@ -238,7 +238,10 @@ a ConfigMap whose checksum rolls the pod when the suite changes. Image:
 `.github/workflows/publish-e2eprobe-image.yml` from `Dockerfile.e2eprobe`.
 
 The chart sets no API host: pass it through `e2eprobe.env`, and create the
-secret before enabling the component.
+secret before enabling the component. To cover payments, give the region's
+`e2eprobe.suite` a payer persona and `tenant.connections` as
+`suite.example.yaml` shows; the payer adopts the card-holding customer by
+`external_id`, so the saved test cards carry over.
 
 ```bash
 kubectl create secret generic e2eprobe-secrets -n <namespace> \
