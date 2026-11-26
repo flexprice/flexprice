@@ -4383,6 +4383,30 @@ func (s *VoidPaymentLinksSuite) TestGetOrCreatePaymentLink_RejectsVoidedInvoice(
 	s.Empty(s.provider.linkRequests)
 }
 
+func (s *InvoiceServiceSuite) TestGetInvoice_SubscriptionNotFound() {
+	ctx := s.GetContext()
+	inv := &invoice.Invoice{
+		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:      s.testData.customer.ID,
+		SubscriptionID:  lo.ToPtr("subs_archived_checkout_draft"),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusDraft,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromInt(50),
+		AmountRemaining: decimal.NewFromInt(50),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, inv))
+
+	got, err := s.service.GetInvoice(ctx, inv.ID)
+	s.Require().NoError(err)
+	s.Equal(inv.ID, got.ID)
+	s.Nil(got.Subscription)
+	s.Require().NotNil(got.Customer)
+	s.Equal(s.testData.customer.ID, got.Customer.ID)
+}
+
 func (s *InvoiceServiceSuite) TestGetInvoice_LinkedWalletTransactions() {
 	ctx := s.GetContext()
 	tx := &wallet.Transaction{

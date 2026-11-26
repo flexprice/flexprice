@@ -1012,13 +1012,16 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 	response := dto.NewInvoiceResponse(inv)
 
 	if inv.InvoiceType == types.InvoiceTypeSubscription {
+		// An abandoned checkout archives its draft subscription; the invoice is still readable without it.
 		subscription, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
-		if err != nil {
+		if err != nil && !ierr.IsNotFound(err) {
 			return nil, err
 		}
-		response.WithSubscription(subscription)
-		if subscription.Customer != nil {
-			response.WithCustomer(subscription.Customer)
+		if subscription != nil {
+			response.WithSubscription(subscription)
+			if subscription.Customer != nil {
+				response.WithCustomer(subscription.Customer)
+			}
 		}
 	}
 
