@@ -45,14 +45,10 @@ func (c *backfillMoyasarClient) VoidPayment(_ context.Context, id string) (*moya
 
 type backfillPaymentMethodRepo struct {
 	paymentmethod.Repository
-	methods   []*paymentmethod.PaymentMethod
-	createErr error
+	methods []*paymentmethod.PaymentMethod
 }
 
 func (r *backfillPaymentMethodRepo) Create(_ context.Context, pm *paymentmethod.PaymentMethod) error {
-	if r.createErr != nil {
-		return r.createErr
-	}
 	r.methods = append(r.methods, pm)
 	return nil
 }
@@ -205,27 +201,6 @@ func (s *MoyasarBackfillCardSetupSuite) TestPaidCharge_SettledOnReplacement() {
 
 	s.Require().Len(s.pmRepo.methods, 1)
 	s.Equal("token_mp_paid", s.pmRepo.methods[0].GatewayMethodID)
-	s.Equal([]string{"mp_paid"}, s.client.voided)
-}
-
-func (s *MoyasarBackfillCardSetupSuite) TestCardSaveFails_KeepsChargeForRerun() {
-	s.failedSetupPayment("mp_paid", moyasar.MoyasarPaymentStatusPaid)
-	s.pmRepo.createErr = errors.New("db down")
-
-	summary := s.run()
-
-	s.Zero(summary.settled)
-	s.Equal(1, summary.errors)
-	s.Empty(s.pmRepo.methods)
-	s.Empty(s.client.voided)
-
-	s.pmRepo.createErr = nil
-	summary = s.run()
-
-	s.Equal(1, summary.settled)
-	s.Zero(summary.errors)
-	s.Equal(2, s.customerPaymentCount())
-	s.Len(s.pmRepo.methods, 1)
 	s.Equal([]string{"mp_paid"}, s.client.voided)
 }
 

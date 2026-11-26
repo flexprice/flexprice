@@ -2,7 +2,6 @@ package webhook_test
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"testing"
 
@@ -54,14 +53,10 @@ func (c *fakeMoyasarClient) RefundPayment(_ context.Context, id string, _ int) (
 
 type fakePaymentMethodRepo struct {
 	paymentmethod.Repository
-	methods   []*paymentmethod.PaymentMethod
-	createErr error
+	methods []*paymentmethod.PaymentMethod
 }
 
 func (r *fakePaymentMethodRepo) Create(_ context.Context, pm *paymentmethod.PaymentMethod) error {
-	if r.createErr != nil {
-		return r.createErr
-	}
 	r.methods = append(r.methods, pm)
 	return nil
 }
@@ -308,32 +303,6 @@ func (s *MoyasarCardSetupSuite) TestChargeOnLegacyFailedPayment_RedeliveryDoesNo
 	s.Require().NoError(s.deliver(moyasarwebhook.EventPaymentPaid, "mp_legacy_paid"))
 
 	s.Equal(2, s.customerPaymentCount())
-	s.Len(s.pmRepo.methods, 1)
-	s.Equal([]string{"mp_legacy_paid"}, s.client.voided)
-	keyed, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(s.GetContext(), "mp_legacy_paid")
-	s.Require().NoError(err)
-	s.Equal([]types.PaymentStatus{types.PaymentStatusSucceeded}, s.attemptStatuses(keyed.ID))
-}
-
-func (s *MoyasarCardSetupSuite) TestChargeOnLegacyFailedPayment_CardSaveFails_KeepsChargeForRetry() {
-	failedID := s.legacyFailedSetupPayment()
-	s.pmRepo.createErr = errors.New("db down")
-	s.client.charges["mp_legacy_paid"] = &moyasar.MoyasarPayment{
-		ID:       "mp_legacy_paid",
-		Status:   string(moyasar.MoyasarPaymentStatusPaid),
-		Metadata: map[string]string{"flexprice_payment_id": failedID},
-		Source:   &moyasar.PaymentSource{Type: "creditcard", Token: "token_mp_legacy_paid"},
-	}
-
-	s.Require().Error(s.deliver(moyasarwebhook.EventPaymentPaid, "mp_legacy_paid"))
-	s.Empty(s.pmRepo.methods)
-	s.Empty(s.client.voided)
-	pending, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(s.GetContext(), "mp_legacy_paid")
-	s.Require().NoError(err)
-	s.NotEqual(types.PaymentStatusSucceeded, s.paymentStatus(pending.ID))
-
-	s.pmRepo.createErr = nil
-	s.Require().NoError(s.deliver(moyasarwebhook.EventPaymentPaid, "mp_legacy_paid"))
 	s.Len(s.pmRepo.methods, 1)
 	s.Equal([]string{"mp_legacy_paid"}, s.client.voided)
 	keyed, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(s.GetContext(), "mp_legacy_paid")

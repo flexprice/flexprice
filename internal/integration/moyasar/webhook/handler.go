@@ -180,17 +180,50 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		return err
 	}
 
+	// A paid charge on a card-setup payment a decline marked FAILED (before this fix) is
+	// recorded on a new payment keyed by the Moyasar ID; the FAILED row stays as history.
 	if h.isChargeOnFailedSetup(payment, flexpricePayment) {
-		return h.SettleChargeOnFailedSetup(ctx, payment, flexpricePayment, services.PaymentService)
+		replacementID, err := h.initiateReplacementSetupPayment(ctx, payment, flexpricePayment)
+		if err != nil {
+			return err
+		}
+		flexpricePayment, err = services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: replacementID, SkipGatewaySync: true})
+		if err != nil {
+			return err
+		}
+		flexpricePaymentID = replacementID
 	}
 
-	if err := h.recordPaymentSuccess(ctx, payment, flexpricePayment); err != nil {
+	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   payment.ID,
+		SucceededAt:        clock.Now(),
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record payment success",
+			"flexprice_payment_id", flexpricePaymentID,
+			"moyasar_payment_id", payment.ID,
+			"error", err,
+		)
 		return nil
+	}
+
+	// Only the webhook that moved the payment to SUCCEEDED records the attempt.
+	if flexpricePayment.PaymentStatus != types.PaymentStatusSucceeded {
+		if err := h.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   payment.ID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to record succeeded attempt",
+				"flexprice_payment_id", flexpricePaymentID,
+				"moyasar_payment_id", payment.ID,
+				"error", err,
+			)
+		}
 	}
 
 	switch flexpricePayment.DestinationType {
 	case types.PaymentDestinationTypeCustomer:
-		_ = h.activatePaymentMethod(ctx, payment, flexpricePayment.DestinationID)
+		h.activatePaymentMethod(ctx, payment, flexpricePayment.DestinationID)
 		h.voidOrRefundAuthPayment(ctx, flexpricePaymentID, payment.ID)
 	case types.PaymentDestinationTypeInvoice:
 		// Invoice reconciliation is handled inside RecordPaymentSuccess via InvoiceService.
@@ -209,75 +242,6 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		)
 	}
 
-	return nil
-}
-
-// recordPaymentSuccess settles the payment, then records the succeeded attempt when this
-// call is the one that moved it to SUCCEEDED, so a redelivered event adds no attempt.
-func (h *Handler) recordPaymentSuccess(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePayment *dto.PaymentResponse) error {
-	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
-		FlexpricePaymentID: flexpricePayment.ID,
-		GatewayPaymentID:   payment.ID,
-		SucceededAt:        clock.Now(),
-	}); err != nil {
-		h.logger.Error(ctx, "failed to record payment success",
-			"flexprice_payment_id", flexpricePayment.ID,
-			"moyasar_payment_id", payment.ID,
-			"error", err,
-		)
-		return err
-	}
-
-	if flexpricePayment.PaymentStatus == types.PaymentStatusSucceeded {
-		return nil
-	}
-
-	if err := h.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
-		FlexpricePaymentID: flexpricePayment.ID,
-		GatewayPaymentID:   payment.ID,
-	}); err != nil {
-		h.logger.Error(ctx, "failed to record succeeded attempt",
-			"flexprice_payment_id", flexpricePayment.ID,
-			"moyasar_payment_id", payment.ID,
-			"error", err,
-		)
-	}
-	return nil
-}
-
-// SettleChargeOnFailedSetup records a paid Moyasar charge that resolved to a FAILED
-// card-setup payment on a replacement payment keyed by the charge ID, saves the card and
-// voids or refunds the charge. The FAILED payment is left as history. Repeating it for the
-// same charge finds the same replacement and does nothing once the charge is returned.
-// A failure to create or read the replacement or to save the card is returned, leaving the
-// charge in place for a retry; other steps are logged.
-func (h *Handler) SettleChargeOnFailedSetup(ctx context.Context, payment *moyasar.MoyasarPayment, failedPayment *dto.PaymentResponse, paymentService interfaces.PaymentService) error {
-	replacementID, err := h.initiateReplacementSetupPayment(ctx, payment, failedPayment)
-	if err != nil {
-		return err
-	}
-
-	replacement, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: replacementID})
-	if err != nil {
-		return err
-	}
-	if replacement.PaymentStatus == types.PaymentStatusVoided || replacement.PaymentStatus == types.PaymentStatusRefunded {
-		h.logger.Info(ctx, "charge on failed setup payment already settled, skipping",
-			"flexprice_payment_id", replacementID,
-			"moyasar_payment_id", payment.ID,
-		)
-		return nil
-	}
-
-	// Save the card before settling: until then the replacement is not SUCCEEDED, so the
-	// settlement cron cannot void the charge before a retry saves the card.
-	if err := h.activatePaymentMethod(ctx, payment, replacement.DestinationID); err != nil {
-		return err
-	}
-	if err := h.recordPaymentSuccess(ctx, payment, replacement); err != nil {
-		return nil
-	}
-	h.voidOrRefundAuthPayment(ctx, replacementID, payment.ID)
 	return nil
 }
 
@@ -324,14 +288,14 @@ func (h *Handler) initiateReplacementSetupPayment(ctx context.Context, payment *
 
 // activatePaymentMethod saves the Moyasar token from the payment source as an ACTIVE PaymentMethod.
 // Idempotent: skips if a method with the same token already exists for the customer.
-func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.MoyasarPayment, customerID string) error {
+func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.MoyasarPayment, customerID string) {
 	if payment.Source == nil || payment.Source.Token == "" {
 		h.logger.Error(ctx, "no token in payment source, cannot activate payment method",
 			"moyasar_payment_id", payment.ID,
 			"customer_id", customerID,
 			"error", "missing token in payment source",
 		)
-		return nil
+		return
 	}
 
 	token := payment.Source.Token
@@ -346,13 +310,13 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 			"customer_id", customerID,
 			"error", err,
 		)
-		return err
+		return
 	}
 	if count > 0 {
 		h.logger.Info(ctx, "payment method already exists for token, skipping",
 			"customer_id", customerID,
 		)
-		return nil
+		return
 	}
 
 	paymentMethod := &paymentmethod.PaymentMethod{
@@ -377,14 +341,13 @@ func (h *Handler) activatePaymentMethod(ctx context.Context, payment *moyasar.Mo
 			"customer_id", customerID,
 			"error", err,
 		)
-		return err
+		return
 	}
 
 	h.logger.Info(ctx, "payment method activated",
 		"customer_id", customerID,
 		"payment_method_id", paymentMethod.ID,
 	)
-	return nil
 }
 
 // voidOrRefundAuthPayment attempts to void an AUTH payment, falling back to a full refund.

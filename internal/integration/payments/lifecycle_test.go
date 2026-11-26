@@ -457,24 +457,6 @@ func (s *PaymentLifecycleSuite) TestRecordSucceededAttempt_AppendsWithoutSettlin
 		"recording an attempt must not settle the parent — that is RecordPaymentSuccess's job")
 }
 
-func (s *PaymentLifecycleSuite) TestRecordSucceededAttempt_SameChargeTwice_RecordsOnce() {
-	ctx := s.GetContext()
-	id, err := s.lifecycle.InitiatePayment(ctx, s.invoiceParams())
-	s.NoError(err)
-	s.NoError(s.lifecycle.ConfirmGatewayPayment(ctx, id, "gw_pay_040"))
-
-	for range 2 {
-		s.NoError(s.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
-			FlexpricePaymentID: id,
-			GatewayPaymentID:   "gw_pay_040",
-		}))
-	}
-
-	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, id)
-	s.NoError(err)
-	s.Len(attempts, 1)
-}
-
 func (s *PaymentLifecycleSuite) TestRecordFailedAttempt_RequiresPaymentID() {
 	s.Error(s.lifecycle.RecordFailedAttempt(s.GetContext(), payments.RecordFailedAttemptParams{}))
 }

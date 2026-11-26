@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -15,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/moyasar"
+	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -127,11 +127,18 @@ func (b *moyasarCardSetupBackfill) process(ctx context.Context, p *payment.Payme
 		return nil
 	}
 
-	if err := moyasarIntegration.WebhookHandler.SettleChargeOnFailedSetup(scopedCtx, charge, dto.NewPaymentResponse(p), b.paymentSvc); err != nil {
+	// Replay the paid webhook: the handler records the charge on a payment keyed by the
+	// charge ID, saves the card and voids or refunds the charge.
+	event := &moyasarwebhook.MoyasarWebhookEvent{
+		ID:   "backfill_" + chargeID,
+		Type: moyasarwebhook.EventPaymentPaid,
+		Data: moyasarwebhook.PaymentEventData{ID: chargeID},
+	}
+	if err := moyasarIntegration.WebhookHandler.HandleWebhookEvent(scopedCtx, event, p.EnvironmentID, &interfaces.ServiceDependencies{PaymentService: b.paymentSvc}); err != nil {
 		return fmt.Errorf("settle charge %s: %w", chargeID, err)
 	}
 
-	// Settlement logs rather than returns its later steps, so confirm the charge was returned.
+	// The handler logs rather than returns its later steps, so confirm the charge was returned.
 	keyed, err := b.paymentRepo.GetByIdempotencyKey(scopedCtx, charge.ID)
 	if err != nil {
 		return fmt.Errorf("find replacement payment for charge %s: %w", charge.ID, err)

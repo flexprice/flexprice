@@ -711,12 +711,6 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		return err
 	}
 
-	// A gateway charge succeeds once, so a concurrent or repeated success for it adds no attempt.
-	if latestAttempt != nil && req.PaymentStatus == types.PaymentStatusSucceeded && req.GatewayAttemptID != "" &&
-		latestAttempt.PaymentStatus == types.PaymentStatusSucceeded && lo.FromPtr(latestAttempt.GatewayAttemptID) == req.GatewayAttemptID {
-		return nil
-	}
-
 	attemptNumber := 1
 	if latestAttempt != nil {
 		attemptNumber = latestAttempt.AttemptNumber + 1
