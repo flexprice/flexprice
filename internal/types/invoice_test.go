@@ -71,12 +71,22 @@ func TestPaymentTermsDueDate(t *testing.T) {
 		{"end of next month from january 31", PaymentTermsEndOfNextMonth, utc(2027, 1, 31), utc(2027, 2, 28), true},
 		{"end of next month across year", PaymentTermsEndOfNextMonth, utc(2026, 12, 15), utc(2027, 1, 31), true},
 		{"end of month uses location month", PaymentTermsEndOfMonth, utc(2026, 10, 1).In(newYork), time.Date(2026, 9, 30, 20, 0, 0, 0, newYork), true},
+		{"custom net 7", "7 NET", utc(2026, 10, 1), utc(2026, 10, 8), true},
+		{"net 1", "1 NET", utc(2026, 10, 1), utc(2026, 10, 2), true},
+		{"net 365", "365 NET", utc(2026, 10, 1), utc(2027, 10, 1), true},
+		{"due on receipt", PaymentTermsDueOnReceipt, utc(2026, 10, 1), utc(2026, 10, 1), true},
 		{"empty", "", utc(2026, 10, 1), time.Time{}, false},
-		{"invalid", "7 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"net 0", "0 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"net 366", "366 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"leading zero", "07 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"plus sign", "+7 NET", utc(2026, 10, 1), time.Time{}, false},
+		{"no days", " NET", utc(2026, 10, 1), time.Time{}, false},
+		{"lowercase", "7 net", utc(2026, 10, 1), time.Time{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := PaymentTermsDueDate(tt.terms, tt.issueDate)
+			termsType, days := tt.terms.Parts()
+			got, ok := lo.FromPtr(termsType).DueDate(lo.FromPtr(days), tt.issueDate)
 			assert.Equal(t, tt.wantOK, ok)
 			assert.True(t, tt.want.Equal(got), "want %s, got %s", tt.want, got)
 		})
@@ -96,6 +106,64 @@ func TestInvoiceConfig_PaymentTermsValidation(t *testing.T) {
 	cfg.PaymentTerms = lo.ToPtr(PaymentTermsEndOfMonth)
 	require.NoError(t, cfg.Validate())
 
+	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("120 NET"))
+	require.NoError(t, cfg.Validate())
+
+	cfg.PaymentTerms = lo.ToPtr(PaymentTermsDueOnReceipt)
+	require.NoError(t, cfg.Validate())
+
 	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("END_OF_WEEK"))
 	require.Error(t, cfg.Validate())
+
+	cfg.PaymentTerms = lo.ToPtr(PaymentTerms("366 NET"))
+	require.Error(t, cfg.Validate())
+}
+
+func TestResolvePaymentTerms(t *testing.T) {
+	terms := func(p PaymentTerms) *PaymentTerms { return &p }
+	tests := []struct {
+		name      string
+		legacy    *PaymentTerms
+		termsType *PaymentTermsType
+		days      *int
+		want      *PaymentTerms
+		wantErr   bool
+	}{
+		{name: "nothing sent"},
+		{name: "payment_terms only", legacy: terms("30 NET"), want: terms("30 NET")},
+		{name: "payment_terms clear", legacy: terms(""), want: terms("")},
+		{name: "invalid payment_terms", legacy: terms("0 NET"), wantErr: true},
+		{name: "days", termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(120), want: terms("120 NET")},
+		{name: "end of next month", termsType: lo.ToPtr(PaymentTermsTypeEndOfNextMonth), want: terms(PaymentTermsEndOfNextMonth)},
+		{name: "due on receipt", termsType: lo.ToPtr(PaymentTermsTypeDueOnReceipt), want: terms(PaymentTermsDueOnReceipt)},
+		{name: "type clear", termsType: lo.ToPtr(PaymentTermsType("")), want: terms("")},
+		{name: "type overrides payment_terms", legacy: terms("30 NET"), termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(45), want: terms("45 NET")},
+		{name: "type overrides invalid payment_terms", legacy: terms("bad"), termsType: lo.ToPtr(PaymentTermsTypeEndOfMonth), want: terms(PaymentTermsEndOfMonth)},
+		{name: "days without count", termsType: lo.ToPtr(PaymentTermsTypeDays), wantErr: true},
+		{name: "days over 365", termsType: lo.ToPtr(PaymentTermsTypeDays), days: lo.ToPtr(366), wantErr: true},
+		{name: "count with end of month", termsType: lo.ToPtr(PaymentTermsTypeEndOfMonth), days: lo.ToPtr(5), wantErr: true},
+		{name: "count without type", days: lo.ToPtr(45), wantErr: true},
+		{name: "unknown type", termsType: lo.ToPtr(PaymentTermsType("END_OF_WEEK")), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolvePaymentTerms(tt.legacy, tt.termsType, tt.days)
+			assert.Equal(t, tt.wantErr, err != nil)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPaymentTermsParts(t *testing.T) {
+	termsType, days := PaymentTerms("45 NET").Parts()
+	assert.Equal(t, lo.ToPtr(PaymentTermsTypeDays), termsType)
+	assert.Equal(t, lo.ToPtr(45), days)
+
+	termsType, days = PaymentTermsEndOfMonth.Parts()
+	assert.Equal(t, lo.ToPtr(PaymentTermsTypeEndOfMonth), termsType)
+	assert.Nil(t, days)
+
+	termsType, days = PaymentTerms("").Parts()
+	assert.Nil(t, termsType)
+	assert.Nil(t, days)
 }

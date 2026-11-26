@@ -264,7 +264,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
 		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice &&
 		lo.FromPtr(paymentObj.GatewayTrackingID) != "" {
-		if closed, err := p.closeLinkIfInvoiceVoided(ctx, paymentObj); err != nil {
+		if closed, err := p.closeLinkIfInvoiceSettled(ctx, paymentObj); err != nil {
 			return closed, err
 		}
 	}
@@ -276,25 +276,31 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	return paymentObj, nil
 }
 
-// closeLinkIfInvoiceVoided closes a link whose invoice was voided while the link was being created.
-func (p *paymentProcessor) closeLinkIfInvoiceVoided(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
+// closeLinkIfInvoiceSettled closes a link whose invoice was voided or paid while the link was being created.
+func (p *paymentProcessor) closeLinkIfInvoiceSettled(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
 	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
 	if err != nil {
 		p.Logger.Error(ctx, "failed to recheck invoice after creating payment link",
 			"error", err, "payment_id", paymentObj.ID, "invoice_id", paymentObj.DestinationID)
 		return paymentObj, nil
 	}
-	if inv.InvoiceStatus != types.InvoiceStatusVoided {
+
+	var reason string
+	var settledErr error
+	switch {
+	case inv.InvoiceStatus == types.InvoiceStatusVoided:
+		reason, settledErr = linkVoidReasonInvoiceVoided, errInvoiceVoided(inv.ID)
+	case inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid:
+		reason, settledErr = linkVoidReasonInvoicePaid, errInvoicePaid(inv.ID)
+	default:
 		return paymentObj, nil
 	}
-	if err := NewPaymentService(p.ServiceParams).(*paymentService).voidOpenPaymentLinks(ctx, inv.ID); err != nil {
-		p.Logger.Error(ctx, "failed to close payment link created on a voided invoice",
-			"error", err, "payment_id", paymentObj.ID, "invoice_id", inv.ID)
-	}
+
+	NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, reason)
 	if refreshed, err := p.PaymentRepo.Get(ctx, paymentObj.ID); err == nil {
 		paymentObj = refreshed
 	}
-	return paymentObj, errInvoiceVoided(inv.ID)
+	return paymentObj, settledErr
 }
 
 func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment) error {
@@ -1095,6 +1101,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	// Invoice is fully paid — dispatch mark-paid to whichever providers are connected.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		p.DispatchMarkPaid(ctx, invoice.ID)
+		NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, invoice.ID, linkVoidReasonInvoicePaid)
 	}
 
 	return nil

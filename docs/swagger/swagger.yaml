@@ -1611,6 +1611,37 @@ definitions:
     required:
     - events
     type: object
+  BulkUpdateRemindersRequest:
+    properties:
+      body:
+        type: string
+      expected_body:
+        type: string
+      expected_subject:
+        description: |-
+          ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict
+          when the text that would be approved now differs (the invoice changed since the preview). Optional, approval only.
+        type: string
+      invoice_ids:
+        items:
+          type: string
+        type: array
+      status:
+        $ref: '#/definitions/types.ReminderStatus'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      tone:
+        type: string
+    type: object
+  BulkUpdateRemindersResponse:
+    properties:
+      drafts:
+        items:
+          $ref: '#/definitions/InvoiceReminderResponse'
+        type: array
+    type: object
   CancelScheduleRequest:
     description: Request to cancel a subscription schedule (supports two modes)
     properties:
@@ -2026,6 +2057,116 @@ definitions:
       name:
         description: Name is required and must be different from the source plan's
           name
+        type: string
+    type: object
+  CollectionsBoardColumn:
+    properties:
+      cards:
+        items:
+          $ref: '#/definitions/CollectionsItem'
+        type: array
+      count:
+        description: Count is the number of invoices in the whole column.
+        type: integer
+      has_more:
+        description: HasMore is true when the column has cards beyond the ones in
+          this response.
+        type: boolean
+      hint:
+        type: string
+      key:
+        $ref: '#/definitions/types.CollectionsColumnKey'
+      title:
+        type: string
+      totals:
+        items:
+          $ref: '#/definitions/CollectionsCurrencyTotal'
+        type: array
+    type: object
+  CollectionsBoardResponse:
+    properties:
+      as_of:
+        type: string
+      available_currencies:
+        description: AvailableCurrencies lists the currencies of all open and recently
+          paid receivables, before q and currency apply.
+        items:
+          type: string
+        type: array
+      columns:
+        items:
+          $ref: '#/definitions/CollectionsBoardColumn'
+        type: array
+      range:
+        allOf:
+        - $ref: '#/definitions/CollectionsRange'
+        description: |-
+          Range is the date range the board was read with (open columns by due date, paid by paid date); null when none
+          was given, then open columns are unbounded and paid is the last 7 days.
+        x-nullable: true
+    type: object
+  CollectionsColumnPageResponse:
+    properties:
+      as_of:
+        type: string
+      cards:
+        items:
+          $ref: '#/definitions/CollectionsItem'
+        type: array
+      has_more:
+        type: boolean
+      key:
+        $ref: '#/definitions/types.CollectionsColumnKey'
+      page:
+        type: integer
+      range:
+        allOf:
+        - $ref: '#/definitions/CollectionsRange'
+        x-nullable: true
+    type: object
+  CollectionsCurrencyTotal:
+    properties:
+      amount:
+        type: string
+      currency:
+        type: string
+    type: object
+  CollectionsItem:
+    properties:
+      amount:
+        description: Amount is the remaining balance (not_due, overdue, chasing, held)
+          or the invoice total (paid_this_week).
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      days_overdue:
+        type: integer
+      due_date:
+        type: string
+      due_in_days:
+        type: integer
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+      paid_at:
+        type: string
+      reminder_status:
+        $ref: '#/definitions/types.ReminderStatus'
+      reminder_status_reason:
+        type: string
+      reminder_tone:
+        $ref: '#/definitions/types.ReminderTone'
+    type: object
+  CollectionsRange:
+    properties:
+      from:
+        type: string
+      to:
         type: string
     type: object
   CommitmentBucketRequest:
@@ -3969,7 +4110,21 @@ definitions:
       payment_behavior:
         $ref: '#/definitions/types.PaymentBehavior'
       payment_terms:
-        $ref: '#/definitions/types.PaymentTerms'
+        allOf:
+        - $ref: '#/definitions/types.PaymentTerms'
+        description: 'Deprecated: use payment_terms_type and payment_terms_days, which
+          override it when sent.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        maximum: 365
+        minimum: 1
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due. Omit to use the
+          tenant's.
       phases:
         items:
           $ref: '#/definitions/SubscriptionPhaseCreateRequest'
@@ -6226,6 +6381,67 @@ definitions:
         description: total is the total amount including taxes
         type: string
     type: object
+  InvoiceReminderResponse:
+    properties:
+      amount:
+        type: string
+      approved_at:
+        type: string
+      body:
+        type: string
+      created_at:
+        description: CreatedAt and UpdatedAt are omitted until a person acts on the
+          reminder.
+        type: string
+      currency:
+        type: string
+      customer_email:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      days_overdue:
+        type: integer
+      due_date:
+        type: string
+      edited:
+        description: Edited is true when the mail differs from what the system wrote;
+          the Original fields then hold the system's version.
+        type: boolean
+      email:
+        allOf:
+        - $ref: '#/definitions/ReminderEmailStatus'
+        description: Email is where the email of an approved reminder stands; absent
+          until one was queued.
+      id:
+        type: string
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+      original_body:
+        type: string
+      original_subject:
+        type: string
+      original_tone:
+        $ref: '#/definitions/types.ReminderTone'
+      status:
+        $ref: '#/definitions/types.ReminderStatus'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      tone:
+        $ref: '#/definitions/types.ReminderTone'
+      tone_reason:
+        description: 'ToneReason explains the tone shown: the invoice''s age, "Tone
+          set to firm by you", or "Approved with a firm tone, kept as approved". It
+          says nothing about edits or status; use edited and status_reason.'
+        type: string
+      updated_at:
+        type: string
+    type: object
   InvoiceResponse:
     properties:
       adjustment_amount:
@@ -6761,6 +6977,33 @@ definitions:
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListRemindersResponse:
+    properties:
+      as_of:
+        type: string
+      available_currencies:
+        description: AvailableCurrencies lists the currencies of all open and recently
+          paid invoices, before q, currency and range apply.
+        items:
+          type: string
+        type: array
+      drafts:
+        items:
+          $ref: '#/definitions/InvoiceReminderResponse'
+        type: array
+      has_more:
+        type: boolean
+      page:
+        type: integer
+      range:
+        allOf:
+        - $ref: '#/definitions/CollectionsRange'
+        description: Range is the due date range the list and summary were read with;
+          null when none was given.
+        x-nullable: true
+      summary:
+        $ref: '#/definitions/ReminderSummary'
     type: object
   ListSecretsResponse:
     properties:
@@ -7702,6 +7945,36 @@ definitions:
         type: string
       subscription_mapping_id:
         type: string
+    type: object
+  ReminderEmailStatus:
+    properties:
+      sent_at:
+        type: string
+      status:
+        $ref: '#/definitions/types.EmailDeliveryStatus'
+      status_reason:
+        type: string
+      to:
+        type: string
+    type: object
+  ReminderSummary:
+    properties:
+      approved:
+        type: integer
+      customer_count:
+        type: integer
+      held:
+        type: integer
+      invoice_count:
+        type: integer
+      overdue_totals:
+        items:
+          $ref: '#/definitions/CollectionsCurrencyTotal'
+        type: array
+      skipped:
+        type: integer
+      to_review:
+        type: integer
     type: object
   RemoveAddonRequest:
     properties:
@@ -9524,8 +9797,16 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'Deprecated: use PaymentTermsType and PaymentTermsDays; it is
+          derived from them.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due; nil uses the tenant's.
       phases:
         description: Phases are the subscription phases for this subscription
         items:
@@ -9739,8 +10020,16 @@ definitions:
       payment_terms:
         allOf:
         - $ref: '#/definitions/types.PaymentTerms'
-        description: PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due
-          date from period end
+        description: 'Deprecated: use PaymentTermsType and PaymentTermsDays; it is
+          derived from them.'
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due; nil uses the tenant's.
       phases:
         description: Phases are included when "phases" is in expand parameter
         items:
@@ -10796,6 +11085,26 @@ definitions:
       name:
         type: string
     type: object
+  UpdateReminderRequest:
+    properties:
+      body:
+        type: string
+      expected_body:
+        type: string
+      expected_subject:
+        description: |-
+          ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict
+          when the text that would be approved now differs (the invoice changed since the preview). Optional, approval only.
+        type: string
+      status:
+        $ref: '#/definitions/types.ReminderStatus'
+      status_reason:
+        type: string
+      subject:
+        type: string
+      tone:
+        type: string
+    type: object
   UpdateScheduledTaskRequest:
     properties:
       enabled:
@@ -10923,6 +11232,17 @@ definitions:
         description: ParentSubscriptionID sets or clears the parent subscription.
           Omit to leave unchanged; send "" to clear.
         type: string
+      payment_terms_days:
+        description: PaymentTermsDays is the days after the issue date an invoice
+          falls due; only with DAYS.
+        maximum: 365
+        minimum: 1
+        type: integer
+      payment_terms_type:
+        allOf:
+        - $ref: '#/definitions/types.PaymentTermsType'
+        description: PaymentTermsType sets when invoices fall due. Omit to leave unchanged;
+          send "" to use the tenant's.
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -13161,6 +13481,7 @@ definitions:
   types.Duration:
     enum:
     - 3600000000000
+    - 604800000000000
     properties:
       unit:
         $ref: '#/definitions/types.DurationUnit'
@@ -13169,6 +13490,7 @@ definitions:
     type: object
     x-enum-varnames:
     - EntitlementGrantMinDuration
+    - CollectionsPaidWindow
   types.DurationUnit:
     enum:
     - second
@@ -13257,9 +13579,11 @@ definitions:
   types.EmailTemplateKey:
     enum:
     - invoice_finalized
+    - invoice_payment_reminder
     type: string
     x-enum-varnames:
     - EmailTemplateInvoiceFinalized
+    - EmailTemplateInvoicePaymentReminder
   types.EmailTrigger:
     enum:
     - auto
@@ -14316,8 +14640,6 @@ definitions:
     - credit_consumption
     - credit_topups
     - net_billing
-    - invoice_total_issued
-    - net_billing_issued
     - active_customers
     type: string
     x-enum-varnames:
@@ -14333,8 +14655,6 @@ definitions:
     - MetricCreditConsumption
     - MetricCreditTopups
     - MetricNetBilling
-    - MetricInvoiceTotalIssued
-    - MetricNetBillingIssued
     - MetricActiveCustomers
   types.ModifySubscriptionLineItem:
     properties:
@@ -14536,6 +14856,8 @@ definitions:
     - PaymentStatusPartiallyRefunded
     - PaymentStatusVoided
   types.PaymentTerms:
+    description: 'Deprecated: use payment_terms_type and payment_terms_days. "<days>
+      NET" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.'
     enum:
     - 15 NET
     - 30 NET
@@ -14543,6 +14865,7 @@ definitions:
     - 60 NET
     - 75 NET
     - 90 NET
+    - DUE_ON_RECEIPT
     - END_OF_MONTH
     - END_OF_NEXT_MONTH
     type: string
@@ -14553,6 +14876,7 @@ definitions:
     - PaymentTerms60Net
     - PaymentTerms75Net
     - PaymentTerms90Net
+    - PaymentTermsDueOnReceipt
     - PaymentTermsEndOfMonth
     - PaymentTermsEndOfNextMonth
   types.PerformanceObligationStatus:
@@ -17213,6 +17537,20 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.CollectionsColumnKey:
+    enum:
+    - not_due
+    - overdue
+    - chasing
+    - held
+    - paid_this_week
+    type: string
+    x-enum-varnames:
+    - CollectionsColumnNotDue
+    - CollectionsColumnOverdue
+    - CollectionsColumnChasing
+    - CollectionsColumnHeld
+    - CollectionsColumnPaidThisWeek
   types.InstrumentDetails:
     properties:
       bank:
@@ -17268,6 +17606,42 @@ definitions:
     - PaymentAttemptMethodPayLater
     - PaymentAttemptMethodBankTransfer
     - PaymentAttemptMethodOther
+  types.PaymentTermsType:
+    description: DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT,
+      END_OF_MONTH or END_OF_NEXT_MONTH.
+    enum:
+    - DAYS
+    - DUE_ON_RECEIPT
+    - END_OF_MONTH
+    - END_OF_NEXT_MONTH
+    type: string
+    x-enum-varnames:
+    - PaymentTermsTypeDays
+    - PaymentTermsTypeDueOnReceipt
+    - PaymentTermsTypeEndOfMonth
+    - PaymentTermsTypeEndOfNextMonth
+  types.ReminderStatus:
+    enum:
+    - pending
+    - approved
+    - held
+    - skipped
+    type: string
+    x-enum-varnames:
+    - ReminderStatusPending
+    - ReminderStatusApproved
+    - ReminderStatusHeld
+    - ReminderStatusSkipped
+  types.ReminderTone:
+    enum:
+    - friendly
+    - firm
+    - final
+    type: string
+    x-enum-varnames:
+    - ReminderToneFriendly
+    - ReminderToneFirm
+    - ReminderToneFinal
   types.WalletDetails:
     properties:
       provider:
@@ -19763,6 +20137,372 @@ paths:
       tags:
       - Checkout
       x-scope: read
+  /collections/board:
+    get:
+      description: 'Use when you need every open invoice by where it stands: sent
+        but not due, overdue (one card per invoice, split by reminder status), and
+        paid in the last 7 days. Counts and per-currency totals cover whole columns
+        and follow the q and currency filters; by default no cards are returned (limit
+        0): each column carries count and totals, and has_more is true when the column
+        has cards to fetch with GET /collections/board/columns/{key}. With limit above
+        0 the first page of cards is returned too, and has_more says more cards follow.
+        available_currencies lists the currencies of open invoices and of the invoices
+        the Paid column can show, before q and currency apply.'
+      operationId: getCollectionsBoard
+      parameters:
+      - description: Cards per column in this response (0-200, default 0 = counts
+          and totals only)
+        in: query
+        name: limit
+        type: integer
+      - description: 'Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns
+          by due date, Paid by paid date. Without from and to, open columns are unbounded
+          and Paid is the last 7 days'
+        in: query
+        name: from
+        type: string
+      - description: End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5
+          years after from
+        in: query
+        name: to
+        type: string
+      - description: Keep receivables whose customer name, customer email or invoice
+          number contains this text (case-insensitive, max 100 characters)
+        in: query
+        name: q
+        type: string
+      - description: Keep receivables in this currency (case-insensitive)
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CollectionsBoardResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get collections board
+      tags:
+      - Collections
+      x-scope: read
+  /collections/board/columns/{key}:
+    get:
+      description: Use when you need the cards of one board column, one page at a
+        time, after the board call. Pages are numbered from 1 and ordered stably (not
+        due by due date, overdue and held by remaining balance, chasing by newest
+        approval first, paid by newest payment first); send the as_of of the board
+        response, and the same from and to, with every page so the overdue boundary,
+        the date range and the 7-day window do not move while you scroll. A row that
+        changes between page requests can repeat or be skipped, so reset pages when
+        the board changes. Page times limit may not exceed 5000.
+      operationId: getCollectionsBoardColumn
+      parameters:
+      - description: 'Column key: not_due, overdue, chasing, held or paid_this_week'
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Page number, from 1 (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: as_of (RFC3339) of the board response; within the last 24 hours
+          and not in the future
+        in: query
+        name: as_of
+        type: string
+      - description: Cards per page (1-200, default 15)
+        in: query
+        name: limit
+        type: integer
+      - description: 'Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns
+          by due date, Paid by paid date. Without from and to, open columns are unbounded
+          and Paid is the last 7 days'
+        in: query
+        name: from
+        type: string
+      - description: End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5
+          years after from
+        in: query
+        name: to
+        type: string
+      - description: Keep receivables whose customer name, customer email or invoice
+          number contains this text (case-insensitive, max 100 characters)
+        in: query
+        name: q
+        type: string
+      - description: Keep receivables in this currency (case-insensitive)
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CollectionsColumnPageResponse'
+        "400":
+          description: Invalid request, as_of or page too deep
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Unknown column
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get a page of a collections board column
+      tags:
+      - Collections
+      x-scope: read
+  /collections/reminders:
+    get:
+      description: 'Use when you need the payment reminder of each overdue invoice
+        with its tone, text and status. A reminder nobody acted on is rendered when
+        read and stored nowhere; only edits and decisions are stored. The id of a
+        reminder is its invoice id. The list is paged and nothing is sent. Order:
+        status=approved lists the newest approval first (ties by invoice id); every
+        other list puts the largest remaining balance first (ties by invoice id).
+        Approvals made after as_of are left out of the list and the summary. from
+        and to narrow the list and the summary by due date (invoices without a due
+        date are left out when either is given); The summary (counts per status, totals
+        per currency) follows from, to, currency and q like the board, and ignores
+        status and customer_id so the status tabs count every status; available_currencies
+        lists the currencies of open invoices and of invoices paid in the last 7 days,
+        regardless of filters.'
+      operationId: listReminderDrafts
+      parameters:
+      - description: pending, approved, held or skipped
+        in: query
+        name: status
+        type: string
+      - description: Match customer name, email or invoice number
+        in: query
+        name: q
+        type: string
+      - description: Customer ID
+        in: query
+        name: customer_id
+        type: string
+      - description: Currency code
+        in: query
+        name: currency
+        type: string
+      - description: Page size (1-100, default 15)
+        in: query
+        name: limit
+        type: integer
+      - description: Page number, from 1 (default 1); page times limit may not exceed
+          5000
+        in: query
+        name: page
+        type: integer
+      - description: Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies
+          to the list and the summary
+        in: query
+        name: from
+        type: string
+      - description: End of the due date range, YYYY-MM-DD (UTC, inclusive); at most
+          5 years after from
+        in: query
+        name: to
+        type: string
+      - description: as_of (RFC3339) of an earlier response; within the last 24 hours
+          and not in the future
+        in: query
+        name: as_of
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListRemindersResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List reminder drafts
+      tags:
+      - Collections
+      x-scope: read
+  /collections/reminders/{id}:
+    get:
+      description: Use when you need the reminder of one overdue invoice. The id is
+        the invoice id; 404 when the invoice is not open and overdue.
+      operationId: getReminderDraft
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/InvoiceReminderResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get reminder draft
+      tags:
+      - Collections
+      x-scope: read
+  /collections/reminders/bulk-update:
+    put:
+      consumes:
+      - application/json
+      description: 'Use when you want to apply one status (and optionally tone) change
+        to up to 200 invoices at once, with the same rules as updating one reminder.
+        Subject and body are not allowed. All or nothing: if any invoice cannot take
+        the change (unknown or not overdue, a change not legal for its status, someone
+        changed it meanwhile, or, where emails are on, an approval for a customer
+        without an email address), the request fails and no invoice changes. The error
+        details name the invoice. Approving queues each email for the dispatcher.'
+      operationId: bulkUpdateReminderDrafts
+      parameters:
+      - description: Invoice IDs and the change
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/BulkUpdateRemindersRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/BulkUpdateRemindersResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: An invoice was not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: An invoice cannot take the change or was changed meanwhile
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update reminders in bulk
+      tags:
+      - Collections
+      x-scope: write
+  /collections/reminders/update/{id}:
+    put:
+      consumes:
+      - application/json
+      description: 'Use when you need to approve, hold, skip or reopen (status pending)
+        a reminder, edit its tone, subject or body, or both at once. The request decides:
+        status is pending, approved, held or skipped (omit it to keep the current
+        one); status_reason is required for held and optional for skipped. A tone
+        change rewrites subject and body from that tone''s template, then a subject
+        or body in the same request is applied on top. Allowed moves: pending to approved,
+        held or skipped; held to pending, approved or skipped; approved or skipped
+        to pending. Mail can only be edited while pending or held. Where emails are
+        on for the environment, approving queues the email and fails with 400 when
+        the customer has no email address (customer_email is empty) or the tenant
+        has no reply-to email; where emails are off, approving only records the decision.'
+      operationId: updateReminderDraft
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target status and/or mail changes
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdateReminderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/InvoiceReminderResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Invoice is not open and overdue
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Not allowed in the reminder's status, or changed by someone
+            else
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update reminder
+      tags:
+      - Collections
+      x-scope: write
   /commitments:
     post:
       consumes:

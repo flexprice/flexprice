@@ -32,6 +32,11 @@ const paymentCheckoutMarker = "checkout"
 // attemptDetailsTimeout bounds the gateway lookup for an attempt's details; the attempt is saved without them on timeout.
 const attemptDetailsTimeout = 3 * time.Second
 
+const (
+	linkVoidReasonInvoiceVoided = "invoice_voided"
+	linkVoidReasonInvoicePaid   = "invoice_paid"
+)
+
 type PaymentService = interfaces.PaymentService
 
 type paymentService struct {
@@ -306,12 +311,7 @@ func (s *paymentService) validateInvoicePaymentEligibility(ctx context.Context, 
 
 	// invoice validations
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
-		return ierr.NewError("invoice is already paid").
-			WithHint("Cannot create payment for an already paid invoice").
-			WithReportableDetails(map[string]interface{}{
-				"invoice_id": p.DestinationID,
-			}).
-			Mark(ierr.ErrValidation)
+		return errInvoicePaid(invoice.ID)
 	}
 
 	if invoice.InvoiceStatus == types.InvoiceStatusVoided {
@@ -1476,43 +1476,60 @@ func errInvoiceVoided(invoiceID string) error {
 		Mark(ierr.ErrValidation)
 }
 
-// voidOpenPaymentLinks closes the unpaid payment links on a voided invoice and voids their payments.
-// A link that was paid or could not be closed keeps its payment for the gateway webhook; links owned by
-// a checkout session are left to that session.
-func (s *paymentService) voidOpenPaymentLinks(ctx context.Context, invoiceID string) error {
-	filter := types.NewNoLimitPaymentFilter()
-	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
-	filter.DestinationID = lo.ToPtr(invoiceID)
-	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
-	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
-	open, err := s.PaymentRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
+func errInvoicePaid(invoiceID string) error {
+	return ierr.NewError("invoice is already paid").
+		WithHint("Cannot create payment for an already paid invoice").
+		WithReportableDetails(map[string]interface{}{
+			"invoice_id": invoiceID,
+		}).
+		Mark(ierr.ErrValidation)
+}
 
-	checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
-	for _, p := range open {
-		session, err := checkoutSvc.GetByPaymentID(ctx, p.ID)
+// VoidOpenPaymentLinks closes the unpaid payment links on a voided or paid invoice and voids their
+// payments, once the caller's transaction commits. A link that was paid or could not be closed keeps its
+// payment for the gateway webhook; links owned by a checkout session are left to that session.
+func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID, reason string) {
+	runCtx := types.WithoutDBTransaction(ctx)
+	run := func() {
+		filter := types.NewNoLimitPaymentFilter()
+		filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+		filter.DestinationID = lo.ToPtr(invoiceID)
+		filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+		filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+		open, err := s.PaymentRepo.List(runCtx, filter)
 		if err != nil {
-			s.Logger.Error(ctx, "failed to look up checkout session for payment link on void",
-				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
-			continue
+			s.Logger.Error(runCtx, "failed to list payment links to close",
+				"error", err, "invoice_id", invoiceID, "reason", reason)
+			return
 		}
-		if session != nil {
-			continue
-		}
-		if !s.closeProviderLink(ctx, invoiceID, p) {
-			continue
-		}
-		if _, err := s.UpdatePayment(ctx, p.ID, dto.UpdatePaymentRequest{
-			PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
-			VoidedAt:      lo.ToPtr(clock.Now()),
-		}); err != nil {
-			s.Logger.Error(ctx, "failed to void payment link on invoice void",
-				"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
+
+		checkoutSvc := NewCheckoutSessionService(s.ServiceParams)
+		for _, p := range open {
+			session, err := checkoutSvc.GetByPaymentID(runCtx, p.ID)
+			if err != nil {
+				s.Logger.Error(runCtx, "failed to look up checkout session for payment link",
+					"error", err, "invoice_id", invoiceID, "payment_id", p.ID)
+				continue
+			}
+			if session != nil {
+				continue
+			}
+			if !s.closeProviderLink(runCtx, invoiceID, p) {
+				continue
+			}
+			if _, err := s.UpdatePayment(runCtx, p.ID, dto.UpdatePaymentRequest{
+				PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
+				VoidedAt:      lo.ToPtr(clock.Now()),
+				Metadata:      lo.ToPtr(lo.Assign(p.Metadata, types.Metadata{"void_reason": reason})),
+			}); err != nil {
+				s.Logger.Error(runCtx, "failed to void payment link",
+					"error", err, "invoice_id", invoiceID, "payment_id", p.ID, "reason", reason)
+			}
 		}
 	}
-	return nil
+	if !types.RegisterPostCommit(ctx, run) {
+		run()
+	}
 }
 
 // stripeInvoiceSyncEnabled reports whether the Stripe connection in scope pushes invoices to Stripe.

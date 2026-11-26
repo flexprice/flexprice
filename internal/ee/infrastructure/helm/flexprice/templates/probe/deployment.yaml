@@ -30,6 +30,10 @@ spec:
     metadata:
       labels:
         {{- include "flexprice.componentPodLabels" (dict "ctx" . "component" "e2eprobe") | nindent 8 }}
+      {{- with .Values.e2eprobe.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
