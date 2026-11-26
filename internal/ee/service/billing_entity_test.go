@@ -6,8 +6,10 @@ import (
 	"github.com/cockroachdb/errors"
 
 	"github.com/flexprice/flexprice/internal/domain/billingentity"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -247,6 +249,28 @@ func (s *BillingEntityServiceSuite) TestScopeToSubscription() {
 	}))
 
 	scoped, err := s.service.ScopeToSubscription(ctx, "sub_eu")
+	s.Require().NoError(err)
+	s.Equal("be_eu", types.GetBillingEntityID(scoped))
+}
+
+func (s *BillingEntityServiceSuite) TestScopeToPayment() {
+	env := types.GetEnvironmentID(s.GetContext())
+	s.ClearStores()
+	s.setMode(types.BillingEntityModeEnabled)
+	s.addEntity("be_default", env, "INV", true)
+	s.addEntity("be_eu", env, "EU", false)
+
+	ctx := s.GetContext()
+	s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+		ID:              "conn_rzp_eu",
+		Name:            "Razorpay EU",
+		ProviderType:    types.SecretProviderRazorpay,
+		EnvironmentID:   env,
+		BillingEntityID: lo.ToPtr("be_eu"),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}))
+
+	scoped, err := s.service.ScopeToPayment(ctx, &payment.Payment{ID: "pay_eu", ConnectionID: lo.ToPtr("conn_rzp_eu")})
 	s.Require().NoError(err)
 	s.Equal("be_eu", types.GetBillingEntityID(scoped))
 }

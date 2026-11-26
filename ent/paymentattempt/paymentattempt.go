@@ -38,6 +38,10 @@ const (
 	FieldGatewayAttemptID = "gateway_attempt_id"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
+	// FieldPaymentMethodDetails holds the string denoting the payment_method_details field in the database.
+	FieldPaymentMethodDetails = "payment_method_details"
+	// FieldErrorDetails holds the string denoting the error_details field in the database.
+	FieldErrorDetails = "error_details"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// EdgePayment holds the string denoting the payment edge name in mutations.
@@ -68,6 +72,8 @@ var Columns = []string{
 	FieldAttemptNumber,
 	FieldGatewayAttemptID,
 	FieldErrorMessage,
+	FieldPaymentMethodDetails,
+	FieldErrorDetails,
 	FieldMetadata,
 }
 

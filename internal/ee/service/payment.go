@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
@@ -27,6 +28,9 @@ import (
 // PaymentService defines the interface for payment operations
 // paymentCheckoutMarker is the GatewayMetadata key set on payments created for a checkout.
 const paymentCheckoutMarker = "checkout"
+
+// attemptDetailsTimeout bounds the gateway lookup for an attempt's details; the attempt is saved without them on timeout.
+const attemptDetailsTimeout = 3 * time.Second
 
 const (
 	linkVoidReasonInvoiceVoided = "invoice_voided"
@@ -670,6 +674,64 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	return dto.NewPaymentResponse(p), nil
 }
 
+// gatewayAttemptDetails asks the payment's gateway how the attempt was paid; it returns nil when the gateway can't say.
+func (s *paymentService) gatewayAttemptDetails(ctx context.Context, p *payment.Payment, gatewayAttemptID string) *types.PaymentAttemptDetails {
+	if gatewayAttemptID == "" || p.PaymentGateway == nil || s.IntegrationFactory == nil {
+		return nil
+	}
+	gatewayCtx, err := NewBillingEntityService(s.ServiceParams).ScopeToPayment(ctx, p)
+	if err != nil {
+		s.Logger.Error(ctx, "failed to scope payment for attempt details", "error", err, "payment_id", p.ID)
+		return nil
+	}
+	provider, err := s.IntegrationFactory.GetPaymentMethodProvider(gatewayCtx, types.PaymentGatewayType(*p.PaymentGateway), NewCustomerService(s.ServiceParams))
+	if err != nil {
+		if !ierr.IsNotImplemented(err) {
+			s.Logger.Error(ctx, "failed to get payment method provider for attempt details", "error", err, "payment_id", p.ID)
+		}
+		return nil
+	}
+	detailsCtx, cancel := context.WithTimeout(gatewayCtx, attemptDetailsTimeout)
+	defer cancel()
+	details, err := provider.GetAttemptDetails(detailsCtx, gatewayAttemptID)
+	if err != nil {
+		if !ierr.IsNotImplemented(err) {
+			s.Logger.Error(ctx, "failed to fetch attempt details from gateway", "error", err, "payment_id", p.ID, "gateway_attempt_id", gatewayAttemptID)
+		}
+		return nil
+	}
+	return details
+}
+
+// publishAttemptEvent sends payment.attempt.failed or payment.attempt.succeeded for an attempt.
+func (s *paymentService) publishAttemptEvent(ctx context.Context, paymentID, attemptID string, status types.PaymentStatus) {
+	if status != types.PaymentStatusFailed && status != types.PaymentStatusSucceeded {
+		return
+	}
+	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
+		PaymentID: paymentID,
+		TenantID:  types.GetTenantID(ctx),
+		AttemptID: attemptID,
+	})
+	if err != nil {
+		s.Logger.Error(ctx, "failed to marshal payment attempt webhook payload", "error", err, "payment_id", paymentID)
+		return
+	}
+	if err := s.WebhookPublisher.PublishWebhook(ctx, &types.WebhookEvent{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
+		EventName:     lo.Ternary(status == types.PaymentStatusFailed, types.WebhookEventPaymentAttemptFailed, types.WebhookEventPaymentAttemptSucceeded),
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+		Timestamp:     clock.Now(),
+		Payload:       json.RawMessage(webhookPayload),
+		EntityType:    types.SystemEntityTypePayment,
+		EntityID:      paymentID,
+	}); err != nil {
+		s.Logger.Error(ctx, "failed to publish payment attempt webhook", "error", err, "payment_id", paymentID)
+	}
+}
+
 // publishInvoicePaymentFailed sends invoice.payment.failed for a payment of an invoice that just failed.
 func (s *paymentService) publishInvoicePaymentFailed(ctx context.Context, p *payment.Payment) {
 	autoCharge := p.Metadata[types.MetadataKeyPaymentTrigger] == types.PaymentTriggerInvoiceAutoCharge
@@ -706,27 +768,50 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		return nil
 	}
 
-	latestAttempt, err := s.PaymentRepo.GetLatestAttempt(ctx, paymentID)
-	if err != nil && !ierr.IsNotFound(err) {
+	attempts, err := s.PaymentRepo.ListAttempts(ctx, paymentID)
+	if err != nil {
 		return err
 	}
 
-	attemptNumber := 1
-	if latestAttempt != nil {
-		attemptNumber = latestAttempt.AttemptNumber + 1
+	if existing, found := lo.Find(attempts, func(a *payment.PaymentAttempt) bool {
+		return req.GatewayAttemptID != "" && lo.FromPtr(a.GatewayAttemptID) == req.GatewayAttemptID
+	}); found {
+		if existing.PaymentStatus == req.PaymentStatus {
+			return nil
+		}
+		if existing.PaymentStatus == types.PaymentStatusSucceeded {
+			return ierr.NewError("a succeeded payment attempt cannot change status").
+				WithHintf("Attempt %s already succeeded at the gateway", req.GatewayAttemptID).
+				WithReportableDetails(map[string]any{"attempt_id": existing.ID, "requested_status": req.PaymentStatus}).
+				Mark(ierr.ErrValidation)
+		}
+		existing.PaymentStatus = req.PaymentStatus
+		existing.Metadata = lo.Assign(existing.Metadata, req.Metadata)
+		if details := lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details); details != nil {
+			existing.PaymentMethod, existing.Error = details.PaymentMethod, details.Error
+		}
+		if err := s.PaymentRepo.UpdateAttempt(ctx, existing); err != nil {
+			return err
+		}
+		s.publishAttemptEvent(ctx, paymentID, existing.ID, req.PaymentStatus)
+		return nil
 	}
 
-	metadata := req.Metadata
-	if metadata == nil {
-		metadata = types.Metadata{}
+	attemptNumber := 1
+	if len(attempts) > 0 {
+		attemptNumber = lo.MaxBy(attempts, func(a, b *payment.PaymentAttempt) bool { return a.AttemptNumber > b.AttemptNumber }).AttemptNumber + 1
 	}
+
+	details := lo.FromPtr(lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details))
 
 	attempt := &payment.PaymentAttempt{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
 		PaymentID:     paymentID,
 		AttemptNumber: attemptNumber,
 		PaymentStatus: req.PaymentStatus,
-		Metadata:      metadata,
+		PaymentMethod: details.PaymentMethod,
+		Error:         details.Error,
+		Metadata:      req.Metadata,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -753,33 +838,7 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		"gateway_attempt_id", req.GatewayAttemptID,
 	)
 
-	switch req.PaymentStatus {
-	case types.PaymentStatusFailed:
-		webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
-			PaymentID: paymentID,
-			TenantID:  types.GetTenantID(ctx),
-			AttemptID: attempt.ID,
-		})
-		if err != nil {
-			s.Logger.Error(ctx, "failed to marshal payment attempt webhook payload", "error", err, "payment_id", paymentID)
-			return nil
-		}
-
-		if err := s.WebhookPublisher.PublishWebhook(ctx, &types.WebhookEvent{
-			ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
-			EventName:     types.WebhookEventPaymentAttemptFailed,
-			TenantID:      types.GetTenantID(ctx),
-			EnvironmentID: types.GetEnvironmentID(ctx),
-			UserID:        types.GetUserID(ctx),
-			Timestamp:     clock.Now(),
-			Payload:       json.RawMessage(webhookPayload),
-			EntityType:    types.SystemEntityTypePayment,
-			EntityID:      paymentID,
-		}); err != nil {
-			s.Logger.Error(ctx, "failed to publish payment attempt webhook", "error", err, "payment_id", paymentID)
-		}
-	}
-
+	s.publishAttemptEvent(ctx, paymentID, attempt.ID, req.PaymentStatus)
 	return nil
 }
 
@@ -1066,6 +1125,18 @@ func (s *paymentService) applyGatewayPaymentStatus(ctx context.Context, p *payme
 		s.Logger.Error(ctx, "failed to update payment status from gateway sync",
 			"payment_id", p.ID, "new_status", newStatus, "error", err)
 		return p, err
+	}
+
+	attemptID := lo.CoalesceOrEmpty(backfillGatewayPaymentID, lo.FromPtr(p.GatewayPaymentID))
+	if attemptID != "" && (newStatus == types.PaymentStatusSucceeded || newStatus == types.PaymentStatusFailed) {
+		if err := s.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{
+			PaymentStatus:    newStatus,
+			ErrorMessage:     gatewayError,
+			GatewayAttemptID: attemptID,
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to record attempt from gateway sync",
+				"error", err, "payment_id", p.ID, "gateway_attempt_id", attemptID)
+		}
 	}
 
 	if newStatus == types.PaymentStatusSucceeded && p.DestinationType == types.PaymentDestinationTypeInvoice {

@@ -358,6 +358,27 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 	}
 
 	errorMsg := lo.CoalesceOrEmpty(payment.ErrorDescription, "Payment failed")
+	if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+		FlexpricePaymentID: flexpricePaymentID,
+		GatewayPaymentID:   payment.ID,
+		ErrorMessage:       errorMsg,
+		Metadata: lo.OmitByValues(types.Metadata{
+			"error_code":   payment.ErrorCode,
+			"error_reason": payment.ErrorReason,
+			"error_source": payment.ErrorSource,
+			"error_step":   payment.ErrorStep,
+			"method":       string(payment.Method),
+		}, []string{""}),
+		Details: &types.PaymentAttemptDetails{
+			PaymentMethod: razorpay.AttemptMethod(string(payment.Method)),
+			Error:         &types.PaymentAttemptError{Code: payment.ErrorCode, Source: payment.ErrorSource, Step: payment.ErrorStep, Reason: payment.ErrorReason},
+		},
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record failed attempt",
+			"error", err,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", payment.ID)
+	}
 
 	if paymentRecord.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 		session, err := h.findCheckoutSessionForPayment(ctx, flexpricePaymentID, services)
@@ -372,25 +393,6 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 		// A session that is no longer pending has already been cleaned up, so nothing
 		// can settle this payment now and the decline is final.
 		if session == nil || session.CheckoutStatus == types.CheckoutStatusPending {
-			metadata := lo.OmitByValues(types.Metadata{
-				"error_code":   payment.ErrorCode,
-				"error_reason": payment.ErrorReason,
-				"error_source": payment.ErrorSource,
-				"error_step":   payment.ErrorStep,
-				"method":       string(payment.Method),
-			}, []string{""})
-			if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
-				FlexpricePaymentID: flexpricePaymentID,
-				GatewayPaymentID:   payment.ID,
-				ErrorMessage:       errorMsg,
-				Metadata:           metadata,
-			}); err != nil {
-				h.logger.Error(ctx, "failed to record failed attempt for payment link",
-					"error", err,
-					"flexprice_payment_id", flexpricePaymentID,
-					"razorpay_payment_id", payment.ID)
-			}
-
 			// An auto-charge has no link to retry on, so its decline ends the session.
 			if session.IsAutoCharge() {
 				if err := services.CheckoutSessionService.CleanupCheckoutSession(ctx, session.ID, errors.New(errorMsg)); err != nil {

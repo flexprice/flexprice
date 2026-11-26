@@ -161,6 +161,10 @@
             "description": "Fired when a charge attempt fails and the payment stays open for retry"
         },
         {
+            "name": "payment.attempt.succeeded",
+            "description": "Fired when a charge attempt succeeds"
+        },
+        {
             "name": "payment.pending",
             "description": "Fired when a payment is awaiting processing"
         },

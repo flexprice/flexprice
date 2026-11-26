@@ -360,12 +360,18 @@ func (h *Handler) recordDeclinedAttempt(
 	}
 
 	var metadata types.Metadata
+	var details *types.PaymentAttemptDetails
 	if lastErr := paymentIntent.LastPaymentError; lastErr != nil {
 		metadata = lo.OmitByValues(types.Metadata{
 			"error_code":   string(lastErr.Code),
 			"decline_code": string(lastErr.DeclineCode),
 			"error_type":   string(lastErr.Type),
 		}, []string{""})
+		details = &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{
+			Code:   string(lastErr.Code),
+			Reason: string(lastErr.DeclineCode),
+			Source: string(lastErr.Type),
+		}}
 	}
 
 	if err := services.PaymentService.RecordAttempt(ctx, payment.ID, dto.RecordAttemptRequest{
@@ -373,6 +379,7 @@ func (h *Handler) recordDeclinedAttempt(
 		ErrorMessage:     errorMsg,
 		GatewayAttemptID: attemptID,
 		Metadata:         metadata,
+		Details:          details,
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record declined payment attempt",
 			"error", err,

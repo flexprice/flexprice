@@ -290,16 +290,16 @@ func TestCollectionsBoardRequest_DateRangeRules(t *testing.T) {
 	}
 
 	valid := map[string]dto.CollectionsBoardRequest{
-		"from only":          {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-08-01")}},
-		"to only":            {CollectionsDateFilter: dto.CollectionsDateFilter{To: day("2026-11-24")}},
-		"a single day":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-24"), To: day("2026-11-24")}},
-		"exactly five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-24"), To: day("2026-11-24")}},
-		"no range":           {},
+		"from only":            {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-08-01")}},
+		"to only":              {CollectionsDateFilter: dto.CollectionsDateFilter{To: day("2026-11-24")}},
+		"a single day":         {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-24"), To: day("2026-11-24")}},
+		"exactly 5 × 365 days": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-24"), To: day("2026-11-23")}},
+		"no range":             {},
 		"to earlier in the same day": {CollectionsDateFilter: dto.CollectionsDateFilter{
 			From: lo.ToPtr(time.Date(2026, 11, 24, 15, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)),
 		}},
-		"five years counted in days": {CollectionsDateFilter: dto.CollectionsDateFilter{
-			From: lo.ToPtr(time.Date(2021, 11, 24, 23, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 1, 0, 0, 0, time.UTC)),
+		"5 × 365 days counted in days": {CollectionsDateFilter: dto.CollectionsDateFilter{
+			From: lo.ToPtr(time.Date(2021, 11, 24, 23, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 23, 1, 0, 0, 0, time.UTC)),
 		}},
 	}
 	for name, req := range valid {
@@ -307,9 +307,11 @@ func TestCollectionsBoardRequest_DateRangeRules(t *testing.T) {
 	}
 
 	invalid := map[string]dto.CollectionsBoardRequest{
-		"from after to":       {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-25"), To: day("2026-11-24")}},
-		"over five years":     {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-23"), To: day("2026-11-24")}},
-		"far over five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2000-01-01"), To: day("2026-11-24")}},
+		"from after to":   {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2026-11-25"), To: day("2026-11-24")}},
+		"over five years": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-23"), To: day("2026-11-24")}},
+		// The limit is 5 × 365 days, so five calendar years that include a 29 February are one day over.
+		"five years with a leap day": {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2021-11-24"), To: day("2026-11-24")}},
+		"far over five years":        {CollectionsDateFilter: dto.CollectionsDateFilter{From: day("2000-01-01"), To: day("2026-11-24")}},
 		"to on the day before from": {CollectionsDateFilter: dto.CollectionsDateFilter{
 			From: lo.ToPtr(time.Date(2026, 11, 25, 1, 0, 0, 0, time.UTC)), To: lo.ToPtr(time.Date(2026, 11, 24, 23, 0, 0, 0, time.UTC)),
 		}},

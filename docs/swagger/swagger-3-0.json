@@ -2220,6 +2220,66 @@
         "x-codegen-request-body-name": "session"
       }
     },
+    "/checkout/sessions/search": {
+      "post": {
+        "tags": [
+          "Checkout"
+        ],
+        "summary": "Query checkout sessions",
+        "description": "Use when listing checkout sessions, e.g. a customer's sessions. Expand is not supported here; read one session with GET /checkout/sessions/{id}?expand=invoice,payment for its invoice, payment and attempts.",
+        "operationId": "queryCheckoutSession",
+        "requestBody": {
+          "description": "Filter",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/types.CheckoutSessionFilter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCheckoutSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "x-scope": "read",
+        "x-codegen-request-body-name": "filter"
+      }
+    },
     "/checkout/sessions/{id}": {
       "get": {
         "tags": [
@@ -2236,6 +2296,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expand",
+            "in": "query",
+            "description": "Comma-separated fields to expand: invoice, payment",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2245,6 +2313,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
                 }
               }
             }
@@ -22596,6 +22674,9 @@
           "checkout_invoice_id": {
             "type": "string"
           },
+          "checkout_payment": {
+            "$ref": "#/components/schemas/PaymentResponse"
+          },
           "checkout_payment_id": {
             "type": "string"
           },
@@ -22631,6 +22712,9 @@
           },
           "idempotency_key": {
             "type": "string"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceResponse"
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
@@ -22779,13 +22863,7 @@
             }
           },
           "range": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CollectionsRange"
-              }
-            ],
-            "description": "Range is the date range the board was read with (open columns by due date, paid by paid date); null when none\nwas given, then open columns are unbounded and paid is the last 7 days.",
-            "nullable": true
+            "$ref": "#/components/schemas/CollectionsRange"
           }
         }
       },
@@ -22811,12 +22889,7 @@
             "type": "integer"
           },
           "range": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CollectionsRange"
-              }
-            ],
-            "nullable": true
+            "$ref": "#/components/schemas/CollectionsRange"
           }
         }
       },
@@ -29023,6 +29096,20 @@
           }
         }
       },
+      "ListCheckoutSessionsResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckoutSessionResponse"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/types.PaginationResponse"
+          }
+        }
+      },
       "ListCostsheetResponse": {
         "type": "object",
         "properties": {
@@ -29158,13 +29245,7 @@
             "type": "integer"
           },
           "range": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CollectionsRange"
-              }
-            ],
-            "description": "Range is the due date range the list and summary were read with; null when none was given.",
-            "nullable": true
+            "$ref": "#/components/schemas/CollectionsRange"
           },
           "summary": {
             "$ref": "#/components/schemas/ReminderSummary"
@@ -29510,6 +29591,9 @@
           "created_by": {
             "type": "string"
           },
+          "error": {
+            "$ref": "#/components/schemas/types.PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -29519,11 +29603,14 @@
           "id": {
             "type": "string"
           },
-          "metadata": {
-            "$ref": "#/components/schemas/types.Metadata"
-          },
           "payment_id": {
             "type": "string"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/types.InstrumentDetails"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           },
           "tenant_id": {
             "type": "string"
@@ -41946,6 +42033,7 @@
           "payment.updated",
           "payment.failed",
           "payment.attempt.failed",
+          "payment.attempt.succeeded",
           "payment.success",
           "payment.pending",
           "refund.created",
@@ -42027,6 +42115,7 @@
           "WebhookEventPaymentUpdated",
           "WebhookEventPaymentFailed",
           "WebhookEventPaymentAttemptFailed",
+          "WebhookEventPaymentAttemptSucceeded",
           "WebhookEventPaymentSuccess",
           "WebhookEventPaymentPending",
           "WebhookEventRefundCreated",
@@ -43197,6 +43286,128 @@
           }
         }
       },
+      "types.BankDetails": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BankDetails"
+      },
+      "types.CardDetails": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "funding": {
+            "type": "string",
+            "description": "credit, debit or prepaid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CardDetails"
+      },
+      "types.CheckoutConfigurationFilter": {
+        "type": "object",
+        "properties": {
+          "subscription_id": {
+            "type": "string"
+          },
+          "wallet_id": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutConfigurationFilter"
+      },
+      "types.CheckoutSessionFilter": {
+        "type": "object",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutAction"
+            }
+          },
+          "checkout_invoice_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_payment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "checkout_statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutStatus"
+            }
+          },
+          "configuration": {
+            "$ref": "#/components/schemas/types.CheckoutConfigurationFilter"
+          },
+          "customer_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expand": {
+            "type": "string"
+          },
+          "expires_at_gt": {
+            "type": "string"
+          },
+          "expires_at_lt": {
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "order": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          },
+          "payment_providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/types.CheckoutPaymentProvider"
+            }
+          },
+          "sort": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/types.Status"
+          }
+        },
+        "x-speakeasy-name-override": "CheckoutSessionFilter"
+      },
       "types.CollectionsColumnKey": {
         "type": "string",
         "enum": [
@@ -43227,6 +43438,24 @@
         ],
         "x-speakeasy-name-override": "EmailType"
       },
+      "types.InstrumentDetails": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/types.BankDetails"
+          },
+          "card": {
+            "$ref": "#/components/schemas/types.CardDetails"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentAttemptMethod"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/types.WalletDetails"
+          }
+        },
+        "x-speakeasy-name-override": "InstrumentDetails"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -43248,6 +43477,49 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.PaymentAttemptError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAttemptError"
+      },
+      "types.PaymentAttemptMethod": {
+        "type": "string",
+        "enum": [
+          "CARD",
+          "UPI",
+          "NETBANKING",
+          "WALLET",
+          "EMI",
+          "PAYLATER",
+          "BANK_TRANSFER",
+          "OTHER"
+        ],
+        "x-enum-varnames": [
+          "PaymentAttemptMethodCard",
+          "PaymentAttemptMethodUPI",
+          "PaymentAttemptMethodNetBanking",
+          "PaymentAttemptMethodWallet",
+          "PaymentAttemptMethodEMI",
+          "PaymentAttemptMethodPayLater",
+          "PaymentAttemptMethodBankTransfer",
+          "PaymentAttemptMethodOther"
+        ],
+        "x-speakeasy-name-override": "PaymentAttemptMethod",
+        "x-speakeasy-unknown-values": "allow"
       },
       "types.PaymentTermsType": {
         "type": "string",
@@ -43295,6 +43567,15 @@
           "ReminderToneFinal"
         ],
         "x-speakeasy-name-override": "ReminderTone"
+      },
+      "types.WalletDetails": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "WalletDetails"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
@@ -44209,6 +44490,9 @@
             "type": "string",
             "format": "date-time"
           },
+          "error": {
+            "$ref": "#/components/schemas/types.PaymentAttemptError"
+          },
           "error_message": {
             "type": "string"
           },
@@ -44220,6 +44504,12 @@
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/types.InstrumentDetails"
+          },
+          "payment_status": {
+            "$ref": "#/components/schemas/types.PaymentStatus"
           }
         }
       },

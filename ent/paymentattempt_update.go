@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentAttemptUpdate is the builder for updating PaymentAttempt entities.
@@ -158,6 +159,30 @@ func (_u *PaymentAttemptUpdate) ClearErrorMessage() *PaymentAttemptUpdate {
 	return _u
 }
 
+// SetPaymentMethodDetails sets the "payment_method_details" field.
+func (_u *PaymentAttemptUpdate) SetPaymentMethodDetails(v *types.InstrumentDetails) *PaymentAttemptUpdate {
+	_u.mutation.SetPaymentMethodDetails(v)
+	return _u
+}
+
+// ClearPaymentMethodDetails clears the value of the "payment_method_details" field.
+func (_u *PaymentAttemptUpdate) ClearPaymentMethodDetails() *PaymentAttemptUpdate {
+	_u.mutation.ClearPaymentMethodDetails()
+	return _u
+}
+
+// SetErrorDetails sets the "error_details" field.
+func (_u *PaymentAttemptUpdate) SetErrorDetails(v *types.PaymentAttemptError) *PaymentAttemptUpdate {
+	_u.mutation.SetErrorDetails(v)
+	return _u
+}
+
+// ClearErrorDetails clears the value of the "error_details" field.
+func (_u *PaymentAttemptUpdate) ClearErrorDetails() *PaymentAttemptUpdate {
+	_u.mutation.ClearErrorDetails()
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *PaymentAttemptUpdate) SetMetadata(v map[string]string) *PaymentAttemptUpdate {
 	_u.mutation.SetMetadata(v)
@@ -295,6 +320,18 @@ func (_u *PaymentAttemptUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(paymentattempt.FieldErrorMessage, field.TypeString)
+	}
+	if value, ok := _u.mutation.PaymentMethodDetails(); ok {
+		_spec.SetField(paymentattempt.FieldPaymentMethodDetails, field.TypeJSON, value)
+	}
+	if _u.mutation.PaymentMethodDetailsCleared() {
+		_spec.ClearField(paymentattempt.FieldPaymentMethodDetails, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ErrorDetails(); ok {
+		_spec.SetField(paymentattempt.FieldErrorDetails, field.TypeJSON, value)
+	}
+	if _u.mutation.ErrorDetailsCleared() {
+		_spec.ClearField(paymentattempt.FieldErrorDetails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(paymentattempt.FieldMetadata, field.TypeJSON, value)
@@ -480,6 +517,30 @@ func (_u *PaymentAttemptUpdateOne) ClearErrorMessage() *PaymentAttemptUpdateOne 
 	return _u
 }
 
+// SetPaymentMethodDetails sets the "payment_method_details" field.
+func (_u *PaymentAttemptUpdateOne) SetPaymentMethodDetails(v *types.InstrumentDetails) *PaymentAttemptUpdateOne {
+	_u.mutation.SetPaymentMethodDetails(v)
+	return _u
+}
+
+// ClearPaymentMethodDetails clears the value of the "payment_method_details" field.
+func (_u *PaymentAttemptUpdateOne) ClearPaymentMethodDetails() *PaymentAttemptUpdateOne {
+	_u.mutation.ClearPaymentMethodDetails()
+	return _u
+}
+
+// SetErrorDetails sets the "error_details" field.
+func (_u *PaymentAttemptUpdateOne) SetErrorDetails(v *types.PaymentAttemptError) *PaymentAttemptUpdateOne {
+	_u.mutation.SetErrorDetails(v)
+	return _u
+}
+
+// ClearErrorDetails clears the value of the "error_details" field.
+func (_u *PaymentAttemptUpdateOne) ClearErrorDetails() *PaymentAttemptUpdateOne {
+	_u.mutation.ClearErrorDetails()
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *PaymentAttemptUpdateOne) SetMetadata(v map[string]string) *PaymentAttemptUpdateOne {
 	_u.mutation.SetMetadata(v)
@@ -647,6 +708,18 @@ func (_u *PaymentAttemptUpdateOne) sqlSave(ctx context.Context) (_node *PaymentA
 	}
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(paymentattempt.FieldErrorMessage, field.TypeString)
+	}
+	if value, ok := _u.mutation.PaymentMethodDetails(); ok {
+		_spec.SetField(paymentattempt.FieldPaymentMethodDetails, field.TypeJSON, value)
+	}
+	if _u.mutation.PaymentMethodDetailsCleared() {
+		_spec.ClearField(paymentattempt.FieldPaymentMethodDetails, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.ErrorDetails(); ok {
+		_spec.SetField(paymentattempt.FieldErrorDetails, field.TypeJSON, value)
+	}
+	if _u.mutation.ErrorDetailsCleared() {
+		_spec.ClearField(paymentattempt.FieldErrorDetails, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(paymentattempt.FieldMetadata, field.TypeJSON, value)

@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentAttemptCreate is the builder for creating a PaymentAttempt entity.
@@ -162,6 +163,18 @@ func (_c *PaymentAttemptCreate) SetNillableErrorMessage(v *string) *PaymentAttem
 	if v != nil {
 		_c.SetErrorMessage(*v)
 	}
+	return _c
+}
+
+// SetPaymentMethodDetails sets the "payment_method_details" field.
+func (_c *PaymentAttemptCreate) SetPaymentMethodDetails(v *types.InstrumentDetails) *PaymentAttemptCreate {
+	_c.mutation.SetPaymentMethodDetails(v)
+	return _c
+}
+
+// SetErrorDetails sets the "error_details" field.
+func (_c *PaymentAttemptCreate) SetErrorDetails(v *types.PaymentAttemptError) *PaymentAttemptCreate {
+	_c.mutation.SetErrorDetails(v)
 	return _c
 }
 
@@ -363,6 +376,14 @@ func (_c *PaymentAttemptCreate) createSpec() (*PaymentAttempt, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(paymentattempt.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = &value
+	}
+	if value, ok := _c.mutation.PaymentMethodDetails(); ok {
+		_spec.SetField(paymentattempt.FieldPaymentMethodDetails, field.TypeJSON, value)
+		_node.PaymentMethodDetails = value
+	}
+	if value, ok := _c.mutation.ErrorDetails(); ok {
+		_spec.SetField(paymentattempt.FieldErrorDetails, field.TypeJSON, value)
+		_node.ErrorDetails = value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(paymentattempt.FieldMetadata, field.TypeJSON, value)
