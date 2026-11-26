@@ -2711,14 +2711,6 @@ func subscriptionStatusPriority(sub *subscription.Subscription) int {
 // Cost calculation (copied from feature_usage_tracking.go to remove dependency)
 // ---------------------------------------------------------------------------
 
-// isRecurringPercentageCoupon reports whether a coupon can be applied to usage as it accrues: a valid
-// percentage coupon that recurs every period. Other coupons apply only when the invoice is built.
-func isRecurringPercentageCoupon(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
-	return c.Type == types.CouponTypePercentage &&
-		(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
-		c.IsValid()
-}
-
 // loadAnalyticsCoupons loads the applicable percentage-coupon associations for ANY analytics
 // endpoint and projects them into the applicator's line-item/subscription-keyed maps. Callers
 // thread the returned maps into toUsageAnalyticsResponseDTO, which applies discounts inline
@@ -2729,7 +2721,12 @@ func loadAnalyticsCoupons(ctx context.Context, sp ServiceParams, data *Analytics
 		return nil, nil
 	}
 
-	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, isRecurringPercentageCoupon)
+	filter := func(c *coupon.Coupon, _ *ca.CouponAssociation) bool {
+		return c.Type == types.CouponTypePercentage &&
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+			c.IsValid()
+	}
+	sel, err := selectSubscriptionCoupons(ctx, sp, data.Subscriptions, start, end, filter)
 	if err != nil {
 		sp.Logger.Info(ctx, "failed to load coupons for analytics discounts, skipping", "error", err)
 		return nil, nil

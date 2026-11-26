@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -970,6 +971,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 		name               string
 		coupon             coupon.Coupon
 		lineItemID         *string
+		applied            int // invoices that already applied the coupon
 		pending, available string
 	}{
 		{
@@ -989,6 +991,12 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(20)), Cadence: types.CouponCadenceForever},
 			lineItemID: &lineItemID,
 			pending:    "80", available: "20",
+		},
+		{
+			name:    "repeated coupon at its application limit gives no discount",
+			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(90)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(2)},
+			applied: 2,
+			pending: "80", available: "20",
 		},
 		{
 			name:    "repeated 50% subscription coupon compounds after the line coupon",
@@ -1013,6 +1021,17 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 			Coupon:                 &c,
 			BaseModel:              types.GetDefaultBaseModel(ctx),
 		}))
+		for i := 0; i < step.applied; i++ {
+			s.NoError(s.GetStores().CouponApplicationRepo.Create(ctx, &coupon_application.CouponApplication{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_APPLICATION),
+				CouponID:       c.ID,
+				InvoiceID:      fmt.Sprintf("inv_%s_%d", c.ID, i),
+				SubscriptionID: &sub.ID,
+				Currency:       sub.Currency,
+				EnvironmentID:  types.GetEnvironmentID(ctx),
+				BaseModel:      types.GetDefaultBaseModel(ctx),
+			}))
+		}
 
 		resp, err := s.walletService.GetWalletBalanceV2(ctx, s.wallet.ID)
 		s.Require().NoError(err, step.name)
@@ -1024,6 +1043,17 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 		s.Require().NoError(err)
 		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit the wallet")
 	}
+
+	// A commitment can split one item into normal and overage charges. The invoice puts the line
+	// coupon on the last one only: 60 gets the 50% subscription coupon (30 off), 40 gets 20% then
+	// 50% (24 off).
+	split := []dto.CreateInvoiceLineItemRequest{
+		{Amount: decimal.NewFromInt(60), SubscriptionLineItemID: &lineItemID},
+		{Amount: decimal.NewFromInt(40), SubscriptionLineItemID: &lineItemID},
+	}
+	discount, err := s.walletService.(*walletService).usageCouponDiscount(ctx, sub, split, start, end)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(54).Equal(discount), "split charge discount %s", discount)
 }
 
 func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageDoesNotRestoreExpiredCredits() {

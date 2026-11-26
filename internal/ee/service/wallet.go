@@ -16,6 +16,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -3447,20 +3449,49 @@ func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied 
 }
 
 // usageCouponDiscount is the discount the subscription's recurring percentage coupons give on its usage
-// charges: line coupons first, then subscription coupons, compounding, as usage analytics applies them.
+// charges. It mirrors invoice coupon application so the balance matches the coming invoice: the same
+// coupon validation, the same line grouping, and each line coupon on one charge per line item.
 func (s *walletService) usageCouponDiscount(ctx context.Context, sub *subscription.Subscription, charges []dto.CreateInvoiceLineItemRequest, periodStart, periodEnd time.Time) (decimal.Decimal, error) {
-	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, isRecurringPercentageCoupon)
+	if len(charges) == 0 {
+		return decimal.Zero, nil
+	}
+
+	validation := NewCouponValidationService(s.ServiceParams)
+	// Only percentage coupons that recur every period can be spread over usage; fixed and once
+	// coupons wait for the invoice. ValidateCoupon is the invoice's check: it also stops a
+	// repeated coupon once it reaches its application limit.
+	appliesToUsage := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return c.Type == types.CouponTypePercentage &&
+			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated) &&
+			validation.ValidateCoupon(ctx, *c, sub) == nil
+	}
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, appliesToUsage)
 	if err != nil {
 		return decimal.Zero, err
 	}
 	lineCoupons, subscriptionCoupons := projectAnalyticsCoupons(sel)
 
+	charges = applyLineItemGrouping(sub, &dto.BillingCalculationResult{UsageCharges: charges}).UsageCharges
+
+	// The invoice applies a line coupon to the last line for its line item (a commitment can split
+	// one item into normal and overage charges). Zero lines are skipped, as invoices drop them.
+	lineCouponTarget := make(map[string]int, len(charges))
+	for i, charge := range charges {
+		if id := lo.FromPtr(charge.SubscriptionLineItemID); id != "" && !charge.Amount.IsZero() {
+			lineCouponTarget[id] = i
+		}
+	}
+
 	discount := decimal.Zero
-	for _, charge := range charges {
+	for i, charge := range charges {
+		var line []*analyticsCoupon
+		if id := lo.FromPtr(charge.SubscriptionLineItemID); id != "" && lineCouponTarget[id] == i {
+			line = lineCoupons[id]
+		}
 		out := ApplyAnalyticsDiscounts(&discountInput{
 			Currency:    sub.Currency,
 			SubTotal:    charge.Amount,
-			LineCoupons: lineCoupons[lo.FromPtr(charge.SubscriptionLineItemID)],
+			LineCoupons: line,
 			SubCoupons:  subscriptionCoupons[sub.ID],
 			RangeStart:  periodStart,
 			RangeEnd:    periodEnd,
