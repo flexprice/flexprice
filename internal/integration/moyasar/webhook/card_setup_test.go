@@ -2,10 +2,12 @@ package webhook_test
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/paymentmethod"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -119,7 +121,6 @@ func (s *MoyasarCardSetupSuite) SetupTest() {
 		WebhookHandler:    moyasarwebhook.NewHandler(s.client, moyasarPaymentSvc, nil, s.pmRepo, lifecycle, s.GetLogger()),
 		Lifecycle:         lifecycle,
 		PaymentMethodRepo: s.pmRepo,
-		PaymentRepo:       stores.PaymentRepo,
 		Logger:            s.GetLogger(),
 	}
 	s.deps = &moyasarwebhook.ServiceDependencies{PaymentService: paymentSvc, InvoiceService: invoiceSvc}
@@ -182,10 +183,16 @@ func (s *MoyasarCardSetupSuite) customerPaymentCount() int {
 	return len(list)
 }
 
-func (s *MoyasarCardSetupSuite) TestSetupIntent_ReusesUntouchedPayment() {
-	first := s.initiateSetup()
-	s.Equal(first, s.initiateSetup())
-	s.Equal(1, s.customerPaymentCount())
+func (s *MoyasarCardSetupSuite) attemptStatuses(id string) []types.PaymentStatus {
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(s.GetContext(), id)
+	s.Require().NoError(err)
+	sort.Slice(attempts, func(i, j int) bool { return attempts[i].AttemptNumber < attempts[j].AttemptNumber })
+	return lo.Map(attempts, func(a *payment.PaymentAttempt, _ int) types.PaymentStatus { return a.PaymentStatus })
+}
+
+func (s *MoyasarCardSetupSuite) TestTwoSetupIntents_ReturnDifferentPayments() {
+	s.NotEqual(s.initiateSetup(), s.initiateSetup())
+	s.Equal(2, s.customerPaymentCount())
 }
 
 func (s *MoyasarCardSetupSuite) TestDecline_LeavesPaymentOpenWithFailedAttempt() {
@@ -209,6 +216,16 @@ func (s *MoyasarCardSetupSuite) TestApprovalAfterDecline_SavesCardAndVoidsCharge
 	s.Require().Len(s.pmRepo.methods, 1)
 	s.Equal("token_mp_approved", s.pmRepo.methods[0].GatewayMethodID)
 	s.Equal([]string{"mp_approved"}, s.client.voided)
+	s.Equal([]types.PaymentStatus{types.PaymentStatusFailed, types.PaymentStatusSucceeded}, s.attemptStatuses(id))
+}
+
+func (s *MoyasarCardSetupSuite) TestRedeliveredPaid_AddsNoSecondSucceededAttempt() {
+	id := s.initiateSetup()
+	s.approve(id, "mp_approved")
+	s.Require().NoError(s.deliver(moyasarwebhook.EventPaymentPaid, "mp_approved"))
+
+	s.Equal([]types.PaymentStatus{types.PaymentStatusSucceeded}, s.attemptStatuses(id))
+	s.Equal([]string{"mp_approved"}, s.client.voided)
 }
 
 func (s *MoyasarCardSetupSuite) TestApprovalOnDeclinedGatewayPayment_SavesCardAndVoidsCharge() {
@@ -227,7 +244,6 @@ func (s *MoyasarCardSetupSuite) TestSetupIntentAfterDecline_ReturnsNewPayment() 
 
 	next := s.initiateSetup()
 	s.NotEqual(id, next)
-	s.Equal(next, s.initiateSetup())
 }
 
 func (s *MoyasarCardSetupSuite) TestSetupIntentAfterCardSaved_ReturnsNewPayment() {
@@ -277,6 +293,8 @@ func (s *MoyasarCardSetupSuite) TestChargeOnLegacyFailedPayment_RecoveredOnRepla
 	s.Equal("mp_legacy_paid", lo.FromPtr(replacement.GatewayPaymentID))
 	s.Require().Len(s.pmRepo.methods, 1)
 	s.Equal([]string{"mp_legacy_paid"}, s.client.voided)
+	s.Equal([]types.PaymentStatus{types.PaymentStatusSucceeded}, s.attemptStatuses(replacement.ID))
+	s.NotContains(s.attemptStatuses(failedID), types.PaymentStatusSucceeded)
 }
 
 func (s *MoyasarCardSetupSuite) TestChargeOnLegacyFailedPayment_RedeliveryDoesNotDuplicate() {
@@ -287,6 +305,9 @@ func (s *MoyasarCardSetupSuite) TestChargeOnLegacyFailedPayment_RedeliveryDoesNo
 	s.Equal(2, s.customerPaymentCount())
 	s.Len(s.pmRepo.methods, 1)
 	s.Equal([]string{"mp_legacy_paid"}, s.client.voided)
+	keyed, err := s.GetStores().PaymentRepo.GetByIdempotencyKey(s.GetContext(), "mp_legacy_paid")
+	s.Require().NoError(err)
+	s.Equal([]types.PaymentStatus{types.PaymentStatusSucceeded}, s.attemptStatuses(keyed.ID))
 }
 
 func (s *MoyasarCardSetupSuite) TestInvoiceDecline_MarksPaymentFailed() {

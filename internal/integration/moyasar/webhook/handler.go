@@ -181,25 +181,10 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 	}
 
 	if h.isChargeOnFailedSetup(payment, flexpricePayment) {
-		replacementID, err := h.initiateReplacementSetupPayment(ctx, payment, flexpricePayment)
-		if err != nil {
-			return err
-		}
-		flexpricePaymentID = replacementID
+		return h.SettleChargeOnFailedSetup(ctx, payment, flexpricePayment, services.PaymentService)
 	}
 
-	now := clock.Now()
-
-	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
-		FlexpricePaymentID: flexpricePaymentID,
-		GatewayPaymentID:   payment.ID,
-		SucceededAt:        now,
-	}); err != nil {
-		h.logger.Error(ctx, "failed to record payment success",
-			"flexprice_payment_id", flexpricePaymentID,
-			"moyasar_payment_id", payment.ID,
-			"error", err,
-		)
+	if err := h.recordPaymentSuccess(ctx, payment, flexpricePayment); err != nil {
 		return nil
 	}
 
@@ -224,6 +209,70 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		)
 	}
 
+	return nil
+}
+
+// recordPaymentSuccess settles the payment, then records the succeeded attempt when this
+// call is the one that moved it to SUCCEEDED, so a redelivered event adds no attempt.
+func (h *Handler) recordPaymentSuccess(ctx context.Context, payment *moyasar.MoyasarPayment, flexpricePayment *dto.PaymentResponse) error {
+	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
+		FlexpricePaymentID: flexpricePayment.ID,
+		GatewayPaymentID:   payment.ID,
+		SucceededAt:        clock.Now(),
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record payment success",
+			"flexprice_payment_id", flexpricePayment.ID,
+			"moyasar_payment_id", payment.ID,
+			"error", err,
+		)
+		return err
+	}
+
+	if flexpricePayment.PaymentStatus == types.PaymentStatusSucceeded {
+		return nil
+	}
+
+	if err := h.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
+		FlexpricePaymentID: flexpricePayment.ID,
+		GatewayPaymentID:   payment.ID,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record succeeded attempt",
+			"flexprice_payment_id", flexpricePayment.ID,
+			"moyasar_payment_id", payment.ID,
+			"error", err,
+		)
+	}
+	return nil
+}
+
+// SettleChargeOnFailedSetup records a paid Moyasar charge that resolved to a FAILED
+// card-setup payment on a replacement payment keyed by the charge ID, saves the card and
+// voids or refunds the charge. The FAILED payment is left as history. Repeating it for the
+// same charge finds the same replacement and does nothing once the charge is returned.
+// Only a failure to create or read the replacement is returned; later steps are logged.
+func (h *Handler) SettleChargeOnFailedSetup(ctx context.Context, payment *moyasar.MoyasarPayment, failedPayment *dto.PaymentResponse, paymentService interfaces.PaymentService) error {
+	replacementID, err := h.initiateReplacementSetupPayment(ctx, payment, failedPayment)
+	if err != nil {
+		return err
+	}
+
+	replacement, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: replacementID})
+	if err != nil {
+		return err
+	}
+	if replacement.PaymentStatus == types.PaymentStatusVoided || replacement.PaymentStatus == types.PaymentStatusRefunded {
+		h.logger.Info(ctx, "charge on failed setup payment already settled, skipping",
+			"flexprice_payment_id", replacementID,
+			"moyasar_payment_id", payment.ID,
+		)
+		return nil
+	}
+
+	if err := h.recordPaymentSuccess(ctx, payment, replacement); err != nil {
+		return nil
+	}
+	h.activatePaymentMethod(ctx, payment, replacement.DestinationID)
+	h.voidOrRefundAuthPayment(ctx, replacementID, payment.ID)
 	return nil
 }
 
