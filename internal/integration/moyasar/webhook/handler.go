@@ -269,12 +269,13 @@ func (h *Handler) SettleChargeOnFailedSetup(ctx context.Context, payment *moyasa
 		return nil
 	}
 
-	if err := h.recordPaymentSuccess(ctx, payment, replacement); err != nil {
-		return nil
-	}
-	// Keep the charge until the card is saved, so a retry can still save it.
+	// Save the card before settling: until then the replacement is not SUCCEEDED, so the
+	// settlement cron cannot void the charge before a retry saves the card.
 	if err := h.activatePaymentMethod(ctx, payment, replacement.DestinationID); err != nil {
 		return err
+	}
+	if err := h.recordPaymentSuccess(ctx, payment, replacement); err != nil {
+		return nil
 	}
 	h.voidOrRefundAuthPayment(ctx, replacementID, payment.ID)
 	return nil
