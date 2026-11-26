@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -166,4 +167,37 @@ func TestPaymentTermsParts(t *testing.T) {
 	termsType, days = PaymentTerms("").Parts()
 	assert.Nil(t, termsType)
 	assert.Nil(t, days)
+}
+
+func TestInvoiceFilter_Validate_LimitWithLineItems(t *testing.T) {
+	tests := []struct {
+		name          string
+		limit         *int
+		skipLineItems bool
+		wantErr       bool
+	}{
+		{name: "line items at max limit", limit: lo.ToPtr(MaxInvoiceListLimitWithLineItems), wantErr: false},
+		{name: "line items above max limit", limit: lo.ToPtr(MaxInvoiceListLimitWithLineItems + 1), wantErr: true},
+		{name: "line items at general max 1000", limit: lo.ToPtr(1000), wantErr: true},
+		{name: "skip line items above line-item max", limit: lo.ToPtr(MaxInvoiceListLimitWithLineItems + 1), skipLineItems: true, wantErr: false},
+		{name: "skip line items at general max 1000", limit: lo.ToPtr(1000), skipLineItems: true, wantErr: false},
+		{name: "skip line items above general max", limit: lo.ToPtr(1001), skipLineItems: true, wantErr: true},
+		{name: "unlimited internal filter with line items", limit: nil, wantErr: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter := NewInvoiceFilter()
+			filter.Limit = tt.limit
+			filter.SkipLineItems = tt.skipLineItems
+
+			err := filter.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.True(t, ierr.IsValidation(err), "expected a validation error, got %v", err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
 }
