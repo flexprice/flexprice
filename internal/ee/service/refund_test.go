@@ -64,6 +64,8 @@ func (s *RefundServiceSuite) params() ServiceParams {
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+		// Gateway refunds resolve their provider.
+		IntegrationFactory: s.GetIntegrationFactory(),
 	}
 }
 
@@ -483,4 +485,86 @@ func (s *RefundServiceSuite) customerWalletBalance() decimal.Decimal {
 	s.NoError(err)
 	s.Len(wallets, 1)
 	return wallets[0].Balance
+}
+
+func (s *RefundServiceSuite) voidedLinkPayment(succeededAt *time.Time) {
+	p := s.createPayment("pay_link", decimal.NewFromInt(100), types.PaymentMethodTypePaymentLink, lo.ToPtr("stripe"), s.testData.now)
+	p.PaymentStatus = types.PaymentStatusVoided
+	p.GatewayPaymentID = nil
+	p.SucceededAt = succeededAt
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(s.GetContext(), p))
+}
+
+func (s *RefundServiceSuite) TestRefundVoidedPaymentCaptureRefundsOnce() {
+	ctx := s.GetContext()
+	s.voidedLinkPayment(nil)
+
+	handled, err := s.service.RefundVoidedPaymentCapture(ctx, "pay_link", "pi_late", decimal.NewFromInt(90))
+	s.Require().NoError(err)
+	s.True(handled)
+
+	// A redelivery finds the payment succeeded and leaves it to the normal path, which skips it.
+	handled, err = s.service.RefundVoidedPaymentCapture(ctx, "pay_link", "pi_late", decimal.NewFromInt(90))
+	s.Require().NoError(err)
+	s.False(handled)
+
+	captured, err := s.GetStores().PaymentRepo.Get(ctx, "pay_link")
+	s.Require().NoError(err)
+	s.Equal(types.PaymentStatusSucceeded, captured.PaymentStatus)
+	s.Equal("pi_late", lo.FromPtr(captured.GatewayPaymentID))
+	s.NotNil(captured.SucceededAt)
+
+	// No Stripe connection here, so the gateway refund fails over to the wallet.
+	rows, err := s.GetStores().RefundRepo.ListByInvoice(ctx, s.testData.invoice.ID)
+	s.Require().NoError(err)
+	s.Require().Len(rows, 2)
+	byDestination := lo.KeyBy(rows, func(r *refund.Refund) types.RefundDestination { return r.RefundDestination })
+	gateway, wallet := byDestination[types.RefundDestinationGateway], byDestination[types.RefundDestinationWallet]
+	s.Equal(types.RefundStatusFailed, gateway.RefundStatus)
+	s.Equal("pay_link-voided-capture-0", gateway.IdempotencyKey)
+	s.Equal("pay_link", lo.FromPtr(gateway.PaymentID))
+	s.True(gateway.Amount.Equal(decimal.NewFromInt(90)))
+	s.Equal(types.RefundStatusSucceeded, wallet.RefundStatus)
+	s.True(s.customerWalletBalance().Equal(decimal.NewFromInt(90)))
+
+	inv, err := s.GetStores().InvoiceRepo.Get(ctx, s.testData.invoice.ID)
+	s.Require().NoError(err)
+	s.True(inv.AmountPaid.Equal(s.testData.invoice.AmountPaid), "the capture is not reconciled into the invoice")
+}
+
+func (s *RefundServiceSuite) TestRefundVoidedPaymentCaptureLeavesOtherPayments() {
+	tests := []struct {
+		name        string
+		status      types.PaymentStatus
+		succeededAt *time.Time
+		amount      decimal.Decimal
+		wantHandled bool
+		wantStatus  types.PaymentStatus
+	}{
+		{name: "not voided settles as usual", status: types.PaymentStatusPending, amount: decimal.NewFromInt(100), wantStatus: types.PaymentStatusPending},
+		{name: "voided after it settled", status: types.PaymentStatusVoided, succeededAt: lo.ToPtr(s.testData.now), amount: decimal.NewFromInt(100), wantHandled: true, wantStatus: types.PaymentStatusVoided},
+		{name: "nothing captured", status: types.PaymentStatusVoided, amount: decimal.Zero, wantHandled: true, wantStatus: types.PaymentStatusVoided},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			s.voidedLinkPayment(tt.succeededAt)
+			p, err := s.GetStores().PaymentRepo.Get(ctx, "pay_link")
+			s.Require().NoError(err)
+			p.PaymentStatus = tt.status
+			s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+
+			handled, err := s.service.RefundVoidedPaymentCapture(ctx, "pay_link", "pi_late", tt.amount)
+			s.Require().NoError(err)
+			s.Equal(tt.wantHandled, handled)
+
+			after, err := s.GetStores().PaymentRepo.Get(ctx, "pay_link")
+			s.Require().NoError(err)
+			s.Equal(tt.wantStatus, after.PaymentStatus)
+			rows, err := s.GetStores().RefundRepo.ListByInvoice(ctx, s.testData.invoice.ID)
+			s.Require().NoError(err)
+			s.Empty(rows)
+		})
+	}
 }

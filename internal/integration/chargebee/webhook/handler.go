@@ -130,10 +130,13 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 		return nil
 	}
 
+	paymentAmount := decimal.NewFromInt(transaction.Amount).
+		Shift(-types.GetCurrencyPrecision(transaction.CurrencyCode))
+
 	// A payment link created for an existing invoice has no checkout session, and the
 	// hosted page invoices the charge on a Chargebee invoice of its own, so there is no
 	// mapping either — the note is the only thread back. Settle that payment directly.
-	if handled, err := h.settleLinkedPayment(ctx, flexpricePaymentID, transaction.ID, services); err != nil {
+	if handled, err := h.settleLinkedPayment(ctx, flexpricePaymentID, transaction.ID, paymentAmount, services); err != nil {
 		return nil // Already logged; don't fail webhook processing
 	} else if handled {
 		return nil
@@ -146,9 +149,6 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 			"event_id", event.ID)
 		return nil
 	}
-
-	paymentAmount := decimal.NewFromInt(transaction.Amount).
-		Shift(-types.GetCurrencyPrecision(transaction.CurrencyCode))
 
 	err = h.invoiceSvc.ProcessChargebeePaymentFromWebhook(ctx, chargebee.ChargebeeWebhookPaymentRequest{
 		FlexpriceInvoiceID:     flexpriceInvoiceID,
@@ -310,6 +310,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 func (h *Handler) settleLinkedPayment(
 	ctx context.Context,
 	flexpricePaymentID, chargebeeTransactionID string,
+	capturedAmount decimal.Decimal,
 	services *ServiceDependencies,
 ) (bool, error) {
 	if flexpricePaymentID == "" || services == nil ||
@@ -336,6 +337,10 @@ func (h *Handler) settleLinkedPayment(
 		return true, nil
 	}
 
+	if handled, err := services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, chargebeeTransactionID, capturedAmount); err != nil || handled {
+		return handled, err
+	}
+
 	// Settlement books the payment's own amount and does not check it against
 	// transaction.Amount: the hosted page charges exactly what the link was created
 	// for, so the two agree. A capture short of the payment amount — if Chargebee
@@ -349,6 +354,10 @@ func (h *Handler) settleLinkedPayment(
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"chargebee_transaction_id", chargebeeTransactionID)
+		// The payment may have been voided after RecordPaymentSuccess read it.
+		if handled, voidErr := services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, chargebeeTransactionID, capturedAmount); voidErr != nil || handled {
+			return handled, voidErr
+		}
 		return false, err
 	}
 

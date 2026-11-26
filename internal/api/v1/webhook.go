@@ -314,6 +314,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 		SubscriptionService:             h.subscriptionService,
 		EntityIntegrationMappingService: h.entityIntegrationMappingService,
 		CheckoutSessionService:          h.checkoutSessionService,
+		RefundService:                   h.refundService,
 		DB:                              h.db,
 	}
 

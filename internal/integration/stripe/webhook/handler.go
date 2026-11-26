@@ -1042,6 +1042,11 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return h.refundFailedPayment(ctx, flexpricePaymentID, piID, services)
 	}
 
+	capturedAmount := types.FromSmallestUnit(checkoutSession.AmountTotal, string(checkoutSession.Currency))
+	if handled, err := services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, piID, capturedAmount); err != nil || handled {
+		return err
+	}
+
 	// Get payment intent if it exists
 	var paymentIntent *stripeapi.PaymentIntent
 	if piID != "" {
@@ -1062,7 +1067,9 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"event_id", event.ID)
-		return nil
+		// The payment may have been voided after it was read above.
+		_, err = services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, piID, capturedAmount)
+		return err
 	}
 
 	return nil

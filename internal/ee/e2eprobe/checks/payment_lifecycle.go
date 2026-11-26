@@ -19,6 +19,7 @@ var paymentAddonPrice = decimal.NewFromInt(5)
 var gatewaysRefundingToSource = map[string]bool{
 	"chargebee": true,
 	"razorpay":  true,
+	"stripe":    true,
 }
 
 // modifySubscriptionAutoCharge raises the plan line item's quantity with

@@ -346,6 +346,10 @@ type RefundService interface {
 	GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error)
 	Settle(ctx context.Context, req *dto.SettleRefundRequest) error
 	Fail(ctx context.Context, refundID, reason string) error
+	// RefundVoidedPaymentCapture records money captured for a voided payment as a succeeded payment
+	// and refunds it in full, to the gateway when it can, otherwise to the wallet. It returns false
+	// when the payment is not voided, leaving the capture to settle as usual.
+	RefundVoidedPaymentCapture(ctx context.Context, paymentID, gatewayPaymentID string, amount decimal.Decimal) (bool, error)
 }
 
 type ServiceDependencies struct {

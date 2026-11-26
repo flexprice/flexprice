@@ -212,12 +212,16 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
+	// Convert amount from smallest currency unit (paise) to standard unit
+	amount := decimal.NewFromInt(payment.Amount).Div(decimal.NewFromInt(100))
+
+	if handled, err := services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, payment.ID, amount); err != nil || handled {
+		return err
+	}
+
 	// Standalone payment (no checkout session) — update status and reconcile directly.
 	paymentStatus := string(types.PaymentStatusSucceeded)
 	now := clock.Now()
-
-	// Convert amount from smallest currency unit (paise) to standard unit
-	amount := decimal.NewFromInt(payment.Amount).Div(decimal.NewFromInt(100))
 
 	// Determine payment method ID based on payment method type
 	paymentMethodID := getPaymentMethodID(payment)
@@ -256,6 +260,10 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
 			"razorpay_payment_id", payment.ID)
+		// The payment may have been voided after it was read above.
+		if handled, voidErr := services.RefundService.RefundVoidedPaymentCapture(ctx, flexpricePaymentID, payment.ID, amount); voidErr != nil || handled {
+			return voidErr
+		}
 		if ierr.IsValidation(err) {
 			return nil
 		}

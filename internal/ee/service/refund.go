@@ -40,6 +40,9 @@ type RefundService interface {
 	GetRefundByGatewayRefundID(ctx context.Context, gateway, gatewayRefundID string) (*dto.RefundResponse, error)
 	ListRefunds(ctx context.Context, filter *types.RefundFilter) (*dto.ListRefundsResponse, error)
 	RetryRefund(ctx context.Context, id string) (*dto.RefundResponse, error)
+
+	// RefundVoidedPaymentCapture must run outside a transaction.
+	RefundVoidedPaymentCapture(ctx context.Context, paymentID, gatewayPaymentID string, amount decimal.Decimal) (bool, error)
 }
 
 type refundService struct {
@@ -267,6 +270,80 @@ func refundReasonFromCreditNote(reason types.CreditNoteReason) types.RefundReaso
 	default:
 		return types.RefundReasonOther
 	}
+}
+
+func (s *refundService) RefundVoidedPaymentCapture(ctx context.Context, paymentID, gatewayPaymentID string, amount decimal.Decimal) (bool, error) {
+	p, err := s.PaymentRepo.Get(ctx, paymentID)
+	if err != nil {
+		return false, err
+	}
+	if p.PaymentStatus != types.PaymentStatusVoided || p.DestinationType != types.PaymentDestinationTypeInvoice {
+		return false, nil
+	}
+	// Voided after it settled, or nothing captured: there is no unrecorded money to give back.
+	if p.SucceededAt != nil || !amount.IsPositive() {
+		s.Logger.Info(ctx, "capture on voided payment has nothing to refund",
+			"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID, "amount", amount.String())
+		return true, nil
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
+	if err != nil {
+		return false, err
+	}
+
+	captured := *p
+	captured.PaymentStatus = types.PaymentStatusSucceeded
+	captured.SucceededAt = lo.ToPtr(clock.Now())
+	if gatewayPaymentID != "" {
+		captured.GatewayPaymentID = lo.ToPtr(gatewayPaymentID)
+	}
+
+	row := s.newRow(ctx, inv, amount, allocationContext{
+		reason:         types.RefundReasonOrderChange,
+		idempotencyKey: fmt.Sprintf("%s-voided-capture", p.ID),
+	}, 0)
+	row.PaymentID = lo.ToPtr(p.ID)
+	if isGatewayRefundable(&captured) {
+		row.RefundDestination = types.RefundDestinationGateway
+		row.PaymentGateway = p.PaymentGateway
+		row.GatewayIdempotencyToken = lo.ToPtr(row.IdempotencyKey)
+	}
+
+	// The payment leaves VOIDED only together with its refund row, so a redelivery or a
+	// parallel worker loses the status check and records nothing twice.
+	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+		paymentCtx := withPaymentStatusAction(tx, p.ID, p.PaymentStatus, captured.PaymentStatus)
+		if err := s.PaymentRepo.UpdateWithExpectedStatus(paymentCtx, &captured, types.PaymentStatusVoided); err != nil {
+			return err
+		}
+		_, err := s.persist(tx, []*refund.Refund{row})
+		return err
+	})
+	if ierr.IsVersionConflict(err) {
+		s.Logger.Info(ctx, "capture on voided payment already recorded",
+			"payment_id", p.ID, "gateway_payment_id", gatewayPaymentID)
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	s.Logger.Info(ctx, "payment captured after it was voided, refunding",
+		"payment_id", p.ID, "invoice_id", inv.ID, "gateway_payment_id", gatewayPaymentID,
+		"refund_id", row.ID, "amount", amount.String())
+
+	paymentSvc := NewPaymentService(s.ServiceParams).(*paymentService)
+	paymentSvc.recordPaymentTransition(ctx, &captured, p.PaymentStatus)
+	postPaymentJournal(ctx, s.ServiceParams, p.ID)
+	paymentSvc.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
+
+	// A dispatch failure leaves a PENDING row that RetryRefund can pick up.
+	if err := s.Dispatch(ctx, row.ID); err != nil {
+		s.Logger.Error(ctx, "failed to dispatch refund for capture on voided payment",
+			"error", err, "refund_id", row.ID, "payment_id", p.ID)
+	}
+	return true, nil
 }
 
 func (s *refundService) Dispatch(ctx context.Context, refundID string) error {
