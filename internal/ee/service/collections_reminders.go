@@ -397,7 +397,7 @@ func (s *reminderService) requireApprovable(c *customer.Customer) error {
 			Mark(ierr.ErrServiceUnavailable)
 	}
 
-	if strings.TrimSpace(lo.FromPtr(c).Email) == "" {
+	if c == nil || len(c.EmailRecipients(types.EmailTypePaymentReminder)) == 0 {
 		return ierr.NewError("customer has no email address").
 			WithHint("This customer has no email address. Add one before approving.").
 			Mark(ierr.ErrValidation)
@@ -438,7 +438,7 @@ func (s *reminderService) queueEmail(ctx context.Context, row collections.Invoic
 		InvoiceID:  row.InvoiceID,
 		CustomerID: row.CustomerID,
 		ReminderID: next.ID,
-		Recipient:  lo.FromPtr(c).Email,
+		Recipients: c.EmailRecipients(types.EmailTypePaymentReminder),
 		Subject:    next.Subject,
 		Body:       next.Body,
 		ApprovedAt: *next.ApprovedAt,

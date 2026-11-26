@@ -25,7 +25,7 @@ type ReminderEmail struct {
 	InvoiceID  string
 	CustomerID string
 	ReminderID string
-	Recipient  string
+	Recipients []string
 	Subject    string
 	Body       string
 	ApprovedAt time.Time
@@ -61,7 +61,7 @@ func (s *emailNotificationService) QueueReminderEmail(ctx context.Context, r Rem
 		templateKey:    types.EmailTemplateInvoicePaymentReminder,
 		trigger:        types.EmailTriggerManual,
 		subject:        r.Subject,
-		to:             lo.Compact([]string{r.Recipient}),
+		to:             r.Recipients,
 		senderName:     merchant.Name,
 		replyTo:        merchant.BillingDetails.ReplyToEmail(),
 		idempotencyKey: &key,
@@ -177,7 +177,7 @@ func (s *reminderService) reminderEmails(ctx context.Context, rows []collections
 	for _, e := range logs {
 		if e.TemplateKey == types.EmailTemplateInvoicePaymentReminder && lo.FromPtr(e.IdempotencyKey) == keys[e.EntityID] {
 			emails[e.EntityID] = &dto.ReminderEmailStatus{
-				Status: e.DeliveryStatus, To: lo.FirstOrEmpty(e.ToAddresses), SentAt: e.SentAt, StatusReason: lo.FromPtr(e.StatusReason),
+				Status: e.DeliveryStatus, To: e.ToAddresses, SentAt: e.SentAt, StatusReason: lo.FromPtr(e.StatusReason),
 			}
 		}
 	}

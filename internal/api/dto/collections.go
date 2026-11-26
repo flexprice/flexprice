@@ -272,7 +272,7 @@ type InvoiceReminderResponse struct {
 // ReminderEmailStatus is the latest email of an approved reminder; To is who it actually went to.
 type ReminderEmailStatus struct {
 	Status       types.EmailDeliveryStatus `json:"status"`
-	To           string                    `json:"to"`
+	To           []string                  `json:"to"`
 	SentAt       *time.Time                `json:"sent_at,omitempty"`
 	StatusReason string                    `json:"status_reason,omitempty"`
 }

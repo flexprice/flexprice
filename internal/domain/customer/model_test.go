@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -44,9 +45,10 @@ func TestValidatePersons(t *testing.T) {
 func TestEmailRecipients(t *testing.T) {
 	invoice := []types.EmailType{types.EmailTypeInvoice}
 	tests := []struct {
-		name     string
-		customer *Customer
-		want     []string
+		name      string
+		customer  *Customer
+		emailType types.EmailType
+		want      []string
 	}{
 		{name: "no contact persons uses customer email", customer: &Customer{Email: "owner@example.test"}, want: []string{"owner@example.test"}},
 		{name: "no email anywhere", customer: &Customer{}, want: nil},
@@ -74,10 +76,28 @@ func TestEmailRecipients(t *testing.T) {
 			}},
 			want: []string{"ap@example.test"},
 		},
+		{
+			name: "each type has its own contacts",
+			customer: &Customer{Email: "owner@example.test", ContactPersons: []*ContactPerson{
+				{FirstName: "AP", Email: "ap@example.test", EmailTypes: invoice},
+				{FirstName: "Collections", Email: "dues@example.test", EmailTypes: []types.EmailType{types.EmailTypePaymentReminder}},
+			}},
+			emailType: types.EmailTypePaymentReminder,
+			want:      []string{"dues@example.test"},
+		},
+		{
+			name: "type with no contacts uses customer email",
+			customer: &Customer{Email: "owner@example.test", ContactPersons: []*ContactPerson{
+				{FirstName: "AP", Email: "ap@example.test", EmailTypes: invoice},
+			}},
+			emailType: types.EmailTypePaymentReminder,
+			want:      []string{"owner@example.test"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.customer.EmailRecipients(types.EmailTypeInvoice))
+			emailType := lo.CoalesceOrEmpty(tt.emailType, types.EmailTypeInvoice)
+			assert.Equal(t, tt.want, tt.customer.EmailRecipients(emailType))
 		})
 	}
 }

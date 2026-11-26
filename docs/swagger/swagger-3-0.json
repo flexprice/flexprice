@@ -30507,7 +30507,10 @@
             "type": "string"
           },
           "to": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -43215,10 +43218,12 @@
       "types.EmailType": {
         "type": "string",
         "enum": [
-          "invoice"
+          "invoice",
+          "payment_reminder"
         ],
         "x-enum-varnames": [
-          "EmailTypeInvoice"
+          "EmailTypeInvoice",
+          "EmailTypePaymentReminder"
         ],
         "x-speakeasy-name-override": "EmailType"
       },

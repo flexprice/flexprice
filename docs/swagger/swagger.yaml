@@ -7943,7 +7943,9 @@ definitions:
       status_reason:
         type: string
       to:
-        type: string
+        items:
+          type: string
+        type: array
     type: object
   ReminderSummary:
     properties:
@@ -17461,9 +17463,11 @@ definitions:
   types.EmailType:
     enum:
     - invoice
+    - payment_reminder
     type: string
     x-enum-varnames:
     - EmailTypeInvoice
+    - EmailTypePaymentReminder
   types.ListResponse-dto_WalletResponse:
     properties:
       items:

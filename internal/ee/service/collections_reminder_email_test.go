@@ -90,7 +90,7 @@ func TestReminderEmail_ApproveOnlyQueuesTheFrozenText(t *testing.T) {
 	require.Equal(t, "Custom subject", e.Subject)
 	require.Equal(t, "Custom body", e.Metadata[emailMetaReminderBody])
 	require.Equal(t, reminderEmailKey("a1", f.reminders.All(ctx)[0].ID, *approved.ApprovedAt), lo.FromPtr(e.IdempotencyKey))
-	require.Equal(t, &dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusQueued, To: "ap@acme.test"}, approved.Email)
+	require.Equal(t, &dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusQueued, To: []string{"ap@acme.test"}}, approved.Email)
 
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrVersionConflict)

@@ -172,9 +172,10 @@ func ValidateExternalCustomerID(id string) error {
 type EmailType string
 
 const (
-	EmailTypeInvoice EmailType = "invoice"
+	EmailTypeInvoice         EmailType = "invoice"
+	EmailTypePaymentReminder EmailType = "payment_reminder"
 )
 
 func (t EmailType) Validate() error {
-	return validateEnum("email_types", t, []EmailType{EmailTypeInvoice})
+	return validateEnum("email_types", t, []EmailType{EmailTypeInvoice, EmailTypePaymentReminder})
 }

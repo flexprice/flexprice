@@ -29301,7 +29301,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "to": {
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -42195,10 +42198,12 @@ const docTemplate = `{
         "types.EmailType": {
             "type": "string",
             "enum": [
-                "invoice"
+                "invoice",
+                "payment_reminder"
             ],
             "x-enum-varnames": [
-                "EmailTypeInvoice"
+                "EmailTypeInvoice",
+                "EmailTypePaymentReminder"
             ]
         },
         "types.ListResponse-dto_WalletResponse": {
