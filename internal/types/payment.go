@@ -504,10 +504,12 @@ type CardDetails struct {
 	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
+// UPIDetails is the displayable part of a UPI handle.
 type UPIDetails struct {
 	VPA string `json:"vpa,omitempty"`
 }
 
+// BankDetails is the displayable part of a bank account or netbanking bank.
 type BankDetails struct {
 	Bank        string `json:"bank,omitempty"`
 	IFSC        string `json:"ifsc,omitempty"`
@@ -516,6 +518,7 @@ type BankDetails struct {
 	AuthType    string `json:"auth_type,omitempty"`
 }
 
+// WalletDetails is the wallet used on an attempt.
 type WalletDetails struct {
 	Provider string `json:"provider,omitempty"`
 }
