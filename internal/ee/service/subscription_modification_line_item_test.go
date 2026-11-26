@@ -973,22 +973,6 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		s.Require().Error(err)
 	})
 
-	s.Run("rejects_advance_item_starting_at_period_end", func() {
-		ctx := s.GetContext()
-		cust := s.createCustomer("lic-advance-starts-at-period-end")
-		sub := s.createActiveSub(cust.ID)
-		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
-		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
-		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
-			WithStartDate(sub.CurrentPeriodEnd).
-			Build()
-		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
-
-		newQty := decimal.NewFromInt(1)
-		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
-		s.Require().Error(err)
-	})
-
 	s.Run("longer_cadence_rejected_at_period_end", func() {
 		ctx := s.GetContext()
 		cust := s.createCustomer("lic-longer-cadence-period-end")

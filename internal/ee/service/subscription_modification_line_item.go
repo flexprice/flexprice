@@ -253,7 +253,10 @@ func (s *subscriptionModificationService) resolveLineItemChangeMod(
 		return nil, nil
 	}
 
-	newEndDate := successorEndDate(lineItem, effectiveDate)
+	var newEndDate time.Time
+	if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
+		newEndDate = lineItem.EndDate
+	}
 
 	return newLineItemChangeMod(
 		lineItemID, updatedQuantity, newPriceReq, change, effectiveDate, lineItem, oldPrice, newEndDate,
