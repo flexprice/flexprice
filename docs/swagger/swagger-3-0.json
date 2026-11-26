@@ -22012,9 +22012,6 @@
             "type": "string",
             "format": "date-time"
           },
-          "checkout_invoice": {
-            "$ref": "#/components/schemas/InvoiceResponse"
-          },
           "checkout_invoice_id": {
             "type": "string"
           },
@@ -22056,6 +22053,9 @@
           },
           "idempotency_key": {
             "type": "string"
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/InvoiceResponse"
           },
           "metadata": {
             "$ref": "#/components/schemas/types.Metadata"

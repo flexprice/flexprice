@@ -366,7 +366,7 @@ type CheckoutSessionResponse struct {
 	// Payment is the payment this session is waiting on, when one exists.
 	Payment *CheckoutPaymentBlock `json:"payment,omitempty"`
 	// CheckoutInvoice and CheckoutPayment are returned only when expanded.
-	CheckoutInvoice *InvoiceResponse `json:"checkout_invoice,omitempty"`
+	CheckoutInvoice *InvoiceResponse `json:"invoice,omitempty"`
 	CheckoutPayment *PaymentResponse `json:"checkout_payment,omitempty"`
 	// Describes the call that returned this session, not the session itself; never persisted.
 	EntityCreationResult *EntityCreationResult `json:"entity_creation_result,omitempty"`

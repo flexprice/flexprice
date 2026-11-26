@@ -20620,14 +20620,6 @@ const docTemplate = `{
                 "cancelled_at": {
                     "type": "string"
                 },
-                "checkout_invoice": {
-                    "description": "CheckoutInvoice and CheckoutPayment are returned only when expanded.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/InvoiceResponse"
-                        }
-                    ]
-                },
                 "checkout_invoice_id": {
                     "type": "string"
                 },
@@ -20671,6 +20663,14 @@ const docTemplate = `{
                 },
                 "idempotency_key": {
                     "type": "string"
+                },
+                "invoice": {
+                    "description": "CheckoutInvoice and CheckoutPayment are returned only when expanded.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InvoiceResponse"
+                        }
+                    ]
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"

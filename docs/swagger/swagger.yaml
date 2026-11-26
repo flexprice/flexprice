@@ -1907,10 +1907,6 @@ definitions:
         type: string
       cancelled_at:
         type: string
-      checkout_invoice:
-        allOf:
-        - $ref: '#/definitions/InvoiceResponse'
-        description: CheckoutInvoice and CheckoutPayment are returned only when expanded.
       checkout_invoice_id:
         type: string
       checkout_payment:
@@ -1940,6 +1936,10 @@ definitions:
         type: string
       idempotency_key:
         type: string
+      invoice:
+        allOf:
+        - $ref: '#/definitions/InvoiceResponse'
+        description: CheckoutInvoice and CheckoutPayment are returned only when expanded.
       metadata:
         $ref: '#/definitions/types.Metadata'
       next_poll_after_ms:
