@@ -956,6 +956,76 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageOn
 	}
 }
 
+// Recurring percentage coupons lower pending usage as it accrues; fixed and one-time coupons wait for the invoice.
+func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercentageCouponsReducePendingUsage() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	start, end := now.Add(-24*time.Hour), now.Add(24*time.Hour)
+	sub := s.usageSubscription("subs_wallet_coupons", start, start, end)
+	s.seedGrant("wtxn_wallet_coupons", decimal.NewFromInt(100), start, end.Add(24*time.Hour))
+	s.usage(sub, start.Add(time.Hour), 100)
+
+	lineItemID := "subs_line_" + sub.ID
+	for _, step := range []struct {
+		name               string
+		coupon             coupon.Coupon
+		lineItemID         *string
+		pending, available string
+	}{
+		{
+			name:       "fixed line coupon waits for the invoice",
+			coupon:     coupon.Coupon{Type: types.CouponTypeFixed, AmountOff: lo.ToPtr(decimal.NewFromInt(30)), Cadence: types.CouponCadenceForever},
+			lineItemID: &lineItemID,
+			pending:    "100", available: "0",
+		},
+		{
+			name:       "one-time percentage line coupon waits for the invoice",
+			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(90)), Cadence: types.CouponCadenceOnce},
+			lineItemID: &lineItemID,
+			pending:    "100", available: "0",
+		},
+		{
+			name:       "forever 20% line coupon",
+			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(20)), Cadence: types.CouponCadenceForever},
+			lineItemID: &lineItemID,
+			pending:    "80", available: "20",
+		},
+		{
+			name:    "repeated 50% subscription coupon compounds after the line coupon",
+			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(50)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(3)},
+			pending: "40", available: "60",
+		},
+	} {
+		c := step.coupon
+		c.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON)
+		c.Name = step.name
+		c.Currency = sub.Currency
+		c.EnvironmentID = types.GetEnvironmentID(ctx)
+		c.BaseModel = types.GetDefaultBaseModel(ctx)
+		s.NoError(s.GetStores().CouponRepo.Create(ctx, &c))
+		s.NoError(s.GetStores().CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+			CouponID:               c.ID,
+			SubscriptionID:         sub.ID,
+			SubscriptionLineItemID: step.lineItemID,
+			StartDate:              start,
+			EnvironmentID:          types.GetEnvironmentID(ctx),
+			Coupon:                 &c,
+			BaseModel:              types.GetDefaultBaseModel(ctx),
+		}))
+
+		resp, err := s.walletService.GetWalletBalanceV2(ctx, s.wallet.ID)
+		s.Require().NoError(err, step.name)
+		s.False(resp.IsCachedFallback, step.name)
+		s.True(decimal.RequireFromString(step.pending).Equal(lo.FromPtr(resp.CurrentPeriodUsage)), "%s: pending %s", step.name, lo.FromPtr(resp.CurrentPeriodUsage))
+		s.True(decimal.RequireFromString(step.available).Equal(lo.FromPtr(resp.RealTimeBalance)), "%s: balance %s", step.name, lo.FromPtr(resp.RealTimeBalance))
+		s.True(decimal.RequireFromString(step.available).Equal(lo.FromPtr(resp.RealTimeCreditBalance)), step.name)
+		stored, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit the wallet")
+	}
+}
+
 func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageDoesNotRestoreExpiredCredits() {
 	ctx := s.GetContext()
 	tx, start, end := s.midPeriodGrant(100)

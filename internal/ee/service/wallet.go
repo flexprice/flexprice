@@ -3446,6 +3446,30 @@ func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied 
 	return total
 }
 
+// usageCouponDiscount is the discount the subscription's recurring percentage coupons give on its usage
+// charges: line coupons first, then subscription coupons, compounding, as usage analytics applies them.
+func (s *walletService) usageCouponDiscount(ctx context.Context, sub *subscription.Subscription, charges []dto.CreateInvoiceLineItemRequest, periodStart, periodEnd time.Time) (decimal.Decimal, error) {
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, isRecurringPercentageCoupon)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	lineCoupons, subscriptionCoupons := projectAnalyticsCoupons(sel)
+
+	discount := decimal.Zero
+	for _, charge := range charges {
+		out := ApplyAnalyticsDiscounts(&discountInput{
+			Currency:    sub.Currency,
+			SubTotal:    charge.Amount,
+			LineCoupons: lineCoupons[lo.FromPtr(charge.SubscriptionLineItemID)],
+			SubCoupons:  subscriptionCoupons[sub.ID],
+			RangeStart:  periodStart,
+			RangeEnd:    periodEnd,
+		})
+		discount = discount.Add(out.TotalDiscount)
+	}
+	return discount, nil
+}
+
 // computeRealtimeBalanceDefault is the production implementation of the
 // realtime-balance computation. Defaulted into the computeRealtimeBalance
 // field by NewWalletService; tests may override the field to inject failures.
@@ -3518,12 +3542,18 @@ func (s *walletService) computeRealtimeBalanceDefault(ctx context.Context, w *wa
 				return nil, err
 			}
 
+			discount, err := s.usageCouponDiscount(ctx, sub, lineItems, periodStart, periodEnd)
+			if err != nil {
+				return nil, err
+			}
+
 			s.Logger.Debug(ctx, "subscription charges details",
 				"subscription_id", sub.ID,
 				"usage_total", totalAmount,
+				"coupon_discount", discount,
 				"num_usage_charges", len(lineItems))
 
-			usageBySubscription[sub.ID] = currentPeriodUsage{periodStart: sub.CurrentPeriodStart, amount: totalAmount}
+			usageBySubscription[sub.ID] = currentPeriodUsage{periodStart: sub.CurrentPeriodStart, amount: totalAmount.Sub(discount)}
 		}
 	}
 
