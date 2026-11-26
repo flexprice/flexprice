@@ -47,6 +47,17 @@ export type CallInfo = {
 /** How a call ended. */
 export type Outcome = "completed" | "max_tokens" | "refused" | "cut_short" | "error";
 
+/** What a reader found in one response, or in one stream. */
+export type ReadResult = {
+  usage: Usage;
+  /** The provider's own usage block. */
+  raw?: Record<string, unknown>;
+  /** The model that answered. */
+  model?: string;
+  responseId?: string;
+  outcome?: Outcome;
+};
+
 /** What a hook hands to the pipeline. */
 export type Observation = {
   labels: Labels;

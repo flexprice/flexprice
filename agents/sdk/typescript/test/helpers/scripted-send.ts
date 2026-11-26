@@ -53,6 +53,12 @@ export function scriptedSend(steps: Step[] = []): ScriptedSend {
   return { send, batches, sent };
 }
 
+/** The raw_ properties of a sent event, which carry the provider's usage block. */
+export function rawProperties(event: UsageEvent | undefined): Record<string, string> {
+  const properties = event?.properties ?? {};
+  return Object.fromEntries(Object.entries(properties).filter(([name]) => name.startsWith("raw_")));
+}
+
 /** A usage event with the given id. */
 export function makeEvent(id: string): UsageEvent {
   return {
