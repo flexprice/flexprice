@@ -70,8 +70,8 @@ type attemptTestPaymentService struct {
 
 func (s *attemptTestPaymentService) GetAttempt(_ context.Context, id string) (*dto.PaymentAttemptResponse, error) {
 	return &dto.PaymentAttemptResponse{ID: id, AttemptNumber: 2, TenantID: "tenant_01",
-		PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Last4: "1111"}},
-		Error:         &dto.PaymentAttemptError{Reason: "incorrect_card_details"}}, nil
+		PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "Visa", Last4: "1111"}},
+		Error:         &types.PaymentAttemptError{Reason: "incorrect_card_details"}}, nil
 }
 
 func (s *attemptTestPaymentService) GetPayment(_ context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error) {

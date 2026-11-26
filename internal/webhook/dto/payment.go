@@ -65,15 +65,15 @@ func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.Webh
 }
 
 type PaymentAttempt struct {
-	ID               string                    `json:"id"`
-	PaymentStatus    types.PaymentStatus       `json:"payment_status"`
-	AttemptNumber    int                       `json:"attempt_number"`
-	GatewayAttemptID *string                   `json:"gateway_attempt_id,omitempty"`
-	ErrorMessage     *string                   `json:"error_message,omitempty"`
-	Metadata         types.Metadata            `json:"metadata,omitempty"`
-	PaymentMethod    *dto.PaymentAttemptMethod `json:"payment_method,omitempty"`
-	Error            *dto.PaymentAttemptError  `json:"error,omitempty"`
-	CreatedAt        time.Time                 `json:"created_at"`
+	ID               string                     `json:"id"`
+	PaymentStatus    types.PaymentStatus        `json:"payment_status"`
+	AttemptNumber    int                        `json:"attempt_number"`
+	GatewayAttemptID *string                    `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string                    `json:"error_message,omitempty"`
+	Metadata         types.Metadata             `json:"metadata,omitempty"`
+	PaymentMethod    *types.InstrumentDetails   `json:"payment_method,omitempty"`
+	Error            *types.PaymentAttemptError `json:"error,omitempty"`
+	CreatedAt        time.Time                  `json:"created_at"`
 }
 
 func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {

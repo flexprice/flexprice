@@ -7,7 +7,6 @@ import (
 	"github.com/chargebee/chargebee-go/v3/enum"
 	paymentSourceModel "github.com/chargebee/chargebee-go/v3/models/paymentsource"
 	paymentSourceEnum "github.com/chargebee/chargebee-go/v3/models/paymentsource/enum"
-	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -213,6 +212,6 @@ func paymentMethodTypeFor(m enum.PaymentMethod) (types.PaymentMethodType, bool) 
 	}
 }
 
-func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*dto.PaymentAttemptDetails, error) {
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
 	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
 }

@@ -444,7 +444,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentFailed_PendingSession_Records
 		"error_code":   "BAD_REQUEST_ERROR",
 		"error_reason": "incorrect_card_details",
 	}, s.paymentSvc.failedAttempts()[0].Metadata)
-	s.Equal(&dto.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "incorrect_card_details"}, s.paymentSvc.failedAttempts()[0].Details.Error)
+	s.Equal(&types.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "incorrect_card_details"}, s.paymentSvc.failedAttempts()[0].Details.Error)
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"a decline on an open checkout session must not seal the payment")
 	s.Empty(s.checkoutSvc.cleanupCalls, "a link session stays open for the customer to retry")

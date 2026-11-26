@@ -78,6 +78,10 @@ type PaymentAttempt struct {
 	GatewayAttemptID *string `json:"gateway_attempt_id,omitempty"`
 	// The error_message field explains why this particular attempt failed (optional)
 	ErrorMessage *string `json:"error_message,omitempty"`
+	// PaymentMethod is the instrument the gateway charged on this attempt (optional)
+	PaymentMethod *types.InstrumentDetails `json:"payment_method,omitempty"`
+	// Error is the gateway's structured decline reason (optional)
+	Error *types.PaymentAttemptError `json:"error,omitempty"`
 	// The metadata field stores additional custom data for this attempt (optional)
 	Metadata types.Metadata `json:"metadata,omitempty"`
 	// The environment_id specifies which environment this attempt belongs to
@@ -263,6 +267,8 @@ func FromEntAttempt(a *ent.PaymentAttempt) *PaymentAttempt {
 		PaymentStatus:    types.PaymentStatus(a.PaymentStatus),
 		GatewayAttemptID: a.GatewayAttemptID,
 		ErrorMessage:     a.ErrorMessage,
+		PaymentMethod:    a.PaymentMethodDetails,
+		Error:            a.ErrorDetails,
 		Metadata:         metadata,
 		EnvironmentID:    a.EnvironmentID,
 		BaseModel: types.BaseModel{

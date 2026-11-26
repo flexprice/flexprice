@@ -880,6 +880,26 @@ func ErrorMessageContainsFold(v string) predicate.PaymentAttempt {
 	return predicate.PaymentAttempt(sql.FieldContainsFold(FieldErrorMessage, v))
 }
 
+// PaymentMethodDetailsIsNil applies the IsNil predicate on the "payment_method_details" field.
+func PaymentMethodDetailsIsNil() predicate.PaymentAttempt {
+	return predicate.PaymentAttempt(sql.FieldIsNull(FieldPaymentMethodDetails))
+}
+
+// PaymentMethodDetailsNotNil applies the NotNil predicate on the "payment_method_details" field.
+func PaymentMethodDetailsNotNil() predicate.PaymentAttempt {
+	return predicate.PaymentAttempt(sql.FieldNotNull(FieldPaymentMethodDetails))
+}
+
+// ErrorDetailsIsNil applies the IsNil predicate on the "error_details" field.
+func ErrorDetailsIsNil() predicate.PaymentAttempt {
+	return predicate.PaymentAttempt(sql.FieldIsNull(FieldErrorDetails))
+}
+
+// ErrorDetailsNotNil applies the NotNil predicate on the "error_details" field.
+func ErrorDetailsNotNil() predicate.PaymentAttempt {
+	return predicate.PaymentAttempt(sql.FieldNotNull(FieldErrorDetails))
+}
+
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.
 func MetadataIsNil() predicate.PaymentAttempt {
 	return predicate.PaymentAttempt(sql.FieldIsNull(FieldMetadata))

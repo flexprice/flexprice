@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	stripeapi "github.com/stripe/stripe-go/v82"
@@ -251,6 +250,6 @@ func paymentMethodUsable(pm *stripeapi.PaymentMethod, now time.Time) bool {
 	return pm.Card.ExpMonth >= month
 }
 
-func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*dto.PaymentAttemptDetails, error) {
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
 	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
 }

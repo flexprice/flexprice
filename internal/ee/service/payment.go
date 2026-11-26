@@ -675,7 +675,7 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 }
 
 // gatewayAttemptDetails asks the payment's gateway how the attempt was paid; it returns nil when the gateway can't say.
-func (s *paymentService) gatewayAttemptDetails(ctx context.Context, p *payment.Payment, gatewayAttemptID string) *dto.PaymentAttemptDetails {
+func (s *paymentService) gatewayAttemptDetails(ctx context.Context, p *payment.Payment, gatewayAttemptID string) *types.PaymentAttemptDetails {
 	if gatewayAttemptID == "" || p.PaymentGateway == nil || s.IntegrationFactory == nil {
 		return nil
 	}
@@ -786,8 +786,10 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 				Mark(ierr.ErrValidation)
 		}
 		existing.PaymentStatus = req.PaymentStatus
-		details := lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details)
-		existing.Metadata = lo.Assign(existing.Metadata, req.Metadata, details.ToMetadata())
+		existing.Metadata = lo.Assign(existing.Metadata, req.Metadata)
+		if details := lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details); details != nil {
+			existing.PaymentMethod, existing.Error = details.PaymentMethod, details.Error
+		}
 		if err := s.PaymentRepo.UpdateAttempt(ctx, existing); err != nil {
 			return err
 		}
@@ -800,15 +802,16 @@ func (s *paymentService) RecordAttempt(ctx context.Context, paymentID string, re
 		attemptNumber = lo.MaxBy(attempts, func(a, b *payment.PaymentAttempt) bool { return a.AttemptNumber > b.AttemptNumber }).AttemptNumber + 1
 	}
 
-	details := lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details)
-	metadata := lo.Assign(types.Metadata{}, req.Metadata, details.ToMetadata())
+	details := lo.FromPtr(lo.CoalesceOrEmpty(s.gatewayAttemptDetails(ctx, p, req.GatewayAttemptID), req.Details))
 
 	attempt := &payment.PaymentAttempt{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PAYMENT_ATTEMPT),
 		PaymentID:     paymentID,
 		AttemptNumber: attemptNumber,
 		PaymentStatus: req.PaymentStatus,
-		Metadata:      metadata,
+		PaymentMethod: details.PaymentMethod,
+		Error:         details.Error,
+		Metadata:      req.Metadata,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}

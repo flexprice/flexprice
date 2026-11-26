@@ -369,9 +369,9 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, event *RazorpayWebhoo
 			"error_step":   payment.ErrorStep,
 			"method":       string(payment.Method),
 		}, []string{""}),
-		Details: &dto.PaymentAttemptDetails{
-			PaymentMethod: &dto.PaymentAttemptMethod{Type: string(payment.Method)},
-			Error:         &dto.PaymentAttemptError{Code: payment.ErrorCode, Source: payment.ErrorSource, Step: payment.ErrorStep, Reason: payment.ErrorReason},
+		Details: &types.PaymentAttemptDetails{
+			PaymentMethod: razorpay.AttemptMethod(string(payment.Method)),
+			Error:         &types.PaymentAttemptError{Code: payment.ErrorCode, Source: payment.ErrorSource, Step: payment.ErrorStep, Reason: payment.ErrorReason},
 		},
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record failed attempt",

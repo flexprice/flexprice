@@ -360,14 +360,14 @@ func (h *Handler) recordDeclinedAttempt(
 	}
 
 	var metadata types.Metadata
-	var details *dto.PaymentAttemptDetails
+	var details *types.PaymentAttemptDetails
 	if lastErr := paymentIntent.LastPaymentError; lastErr != nil {
 		metadata = lo.OmitByValues(types.Metadata{
 			"error_code":   string(lastErr.Code),
 			"decline_code": string(lastErr.DeclineCode),
 			"error_type":   string(lastErr.Type),
 		}, []string{""})
-		details = &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{
+		details = &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{
 			Code:   string(lastErr.Code),
 			Reason: string(lastErr.DeclineCode),
 			Source: string(lastErr.Type),

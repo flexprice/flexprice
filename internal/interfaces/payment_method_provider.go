@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -24,7 +24,7 @@ type PaymentMethodProvider interface {
 	CreateSetupLink(ctx context.Context, req SetupLinkRequest) (*SetupLinkResponse, error)
 
 	// GetAttemptDetails returns how one gateway payment was paid (method, card, error).
-	GetAttemptDetails(ctx context.Context, gatewayPaymentID string) (*dto.PaymentAttemptDetails, error)
+	GetAttemptDetails(ctx context.Context, gatewayPaymentID string) (*types.PaymentAttemptDetails, error)
 }
 
 // SetupLinkRequest asks a provider for a hosted add-a-payment-method page.

@@ -7004,39 +7004,6 @@ definitions:
       subscription:
         $ref: '#/definitions/SubscriptionResponse'
     type: object
-  PaymentAttemptCard:
-    properties:
-      issuer:
-        type: string
-      last4:
-        type: string
-      network:
-        type: string
-      type:
-        type: string
-    type: object
-  PaymentAttemptError:
-    properties:
-      code:
-        type: string
-      reason:
-        type: string
-      source:
-        type: string
-      step:
-        type: string
-    type: object
-  PaymentAttemptMethod:
-    properties:
-      bank:
-        type: string
-      card:
-        $ref: '#/definitions/PaymentAttemptCard'
-      type:
-        type: string
-      wallet:
-        type: string
-    type: object
   PaymentAttemptResponse:
     properties:
       attempt_number:
@@ -7046,7 +7013,7 @@ definitions:
       created_by:
         type: string
       error:
-        $ref: '#/definitions/PaymentAttemptError'
+        $ref: '#/definitions/types.PaymentAttemptError'
       error_message:
         type: string
       gateway_attempt_id:
@@ -7056,7 +7023,7 @@ definitions:
       payment_id:
         type: string
       payment_method:
-        $ref: '#/definitions/PaymentAttemptMethod'
+        $ref: '#/definitions/types.InstrumentDetails'
       payment_status:
         $ref: '#/definitions/types.PaymentStatus'
       tenant_id:
@@ -17167,6 +17134,27 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.BankDetails:
+    properties:
+      bank:
+        type: string
+    type: object
+  types.CardDetails:
+    properties:
+      brand:
+        type: string
+      exp_month:
+        type: integer
+      exp_year:
+        type: integer
+      funding:
+        description: credit, debit or prepaid
+        type: string
+      issuer:
+        type: string
+      last4:
+        type: string
+    type: object
   types.CheckoutConfigurationFilter:
     properties:
       subscription_id:
@@ -17225,6 +17213,17 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.InstrumentDetails:
+    properties:
+      bank:
+        $ref: '#/definitions/types.BankDetails'
+      card:
+        $ref: '#/definitions/types.CardDetails'
+      type:
+        $ref: '#/definitions/types.PaymentAttemptMethod'
+      wallet:
+        $ref: '#/definitions/types.WalletDetails'
+    type: object
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -17237,6 +17236,42 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  types.PaymentAttemptError:
+    properties:
+      code:
+        type: string
+      reason:
+        type: string
+      source:
+        type: string
+      step:
+        type: string
+    type: object
+  types.PaymentAttemptMethod:
+    enum:
+    - CARD
+    - UPI
+    - NETBANKING
+    - WALLET
+    - EMI
+    - PAYLATER
+    - BANK_TRANSFER
+    - OTHER
+    type: string
+    x-enum-varnames:
+    - PaymentAttemptMethodCard
+    - PaymentAttemptMethodUPI
+    - PaymentAttemptMethodNetBanking
+    - PaymentAttemptMethodWallet
+    - PaymentAttemptMethodEMI
+    - PaymentAttemptMethodPayLater
+    - PaymentAttemptMethodBankTransfer
+    - PaymentAttemptMethodOther
+  types.WalletDetails:
+    properties:
+      provider:
+        type: string
     type: object
   webhookDto.AlertWebhookPayload:
     properties:
@@ -17819,7 +17854,7 @@ definitions:
       created_at:
         type: string
       error:
-        $ref: '#/definitions/PaymentAttemptError'
+        $ref: '#/definitions/types.PaymentAttemptError'
       error_message:
         type: string
       gateway_attempt_id:
@@ -17829,7 +17864,7 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       payment_method:
-        $ref: '#/definitions/PaymentAttemptMethod'
+        $ref: '#/definitions/types.InstrumentDetails'
       payment_status:
         $ref: '#/definitions/types.PaymentStatus'
     type: object

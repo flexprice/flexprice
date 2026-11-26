@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -344,14 +343,14 @@ func TestGetAttemptDetails(t *testing.T) {
 
 	tests := []struct {
 		id   string
-		want *dto.PaymentAttemptDetails
+		want *types.PaymentAttemptDetails
 	}{
-		{id: "pay_card", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Issuer: "ICIC", Last4: "1111", Type: "credit"}}}},
-		{id: "pay_upi", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "upi"}}},
-		{id: "pay_nb", want: &dto.PaymentAttemptDetails{PaymentMethod: &dto.PaymentAttemptMethod{Type: "netbanking", Bank: "HDFC"}}},
-		{id: "pay_failed", want: &dto.PaymentAttemptDetails{
-			PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "MasterCard", Issuer: "HDFC", Last4: "4444", Type: "debit"}},
-			Error:         &dto.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Source: "bank", Step: "payment_authorization", Reason: "card_declined"},
+		{id: "pay_card", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "Visa", Issuer: "ICIC", Last4: "1111", Funding: "credit"}}}},
+		{id: "pay_upi", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodUPI}}},
+		{id: "pay_nb", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodNetBanking, Bank: &types.BankDetails{Bank: "HDFC"}}}},
+		{id: "pay_failed", want: &types.PaymentAttemptDetails{
+			PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "MasterCard", Issuer: "HDFC", Last4: "4444", Funding: "debit"}},
+			Error:         &types.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Source: "bank", Step: "payment_authorization", Reason: "card_declined"},
 		}},
 	}
 	for _, tt := range tests {

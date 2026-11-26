@@ -63792,28 +63792,30 @@ func (m *PaymentMutation) ResetEdge(name string) error {
 // PaymentAttemptMutation represents an operation that mutates the PaymentAttempt nodes in the graph.
 type PaymentAttemptMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *string
-	tenant_id          *string
-	status             *string
-	created_at         *time.Time
-	updated_at         *time.Time
-	created_by         *string
-	updated_by         *string
-	environment_id     *string
-	payment_status     *string
-	attempt_number     *int
-	addattempt_number  *int
-	gateway_attempt_id *string
-	error_message      *string
-	metadata           *map[string]string
-	clearedFields      map[string]struct{}
-	payment            *string
-	clearedpayment     bool
-	done               bool
-	oldValue           func(context.Context) (*PaymentAttempt, error)
-	predicates         []predicate.PaymentAttempt
+	op                     Op
+	typ                    string
+	id                     *string
+	tenant_id              *string
+	status                 *string
+	created_at             *time.Time
+	updated_at             *time.Time
+	created_by             *string
+	updated_by             *string
+	environment_id         *string
+	payment_status         *string
+	attempt_number         *int
+	addattempt_number      *int
+	gateway_attempt_id     *string
+	error_message          *string
+	payment_method_details **types.InstrumentDetails
+	error_details          **types.PaymentAttemptError
+	metadata               *map[string]string
+	clearedFields          map[string]struct{}
+	payment                *string
+	clearedpayment         bool
+	done                   bool
+	oldValue               func(context.Context) (*PaymentAttempt, error)
+	predicates             []predicate.PaymentAttempt
 }
 
 var _ ent.Mutation = (*PaymentAttemptMutation)(nil)
@@ -64437,6 +64439,104 @@ func (m *PaymentAttemptMutation) ResetErrorMessage() {
 	delete(m.clearedFields, paymentattempt.FieldErrorMessage)
 }
 
+// SetPaymentMethodDetails sets the "payment_method_details" field.
+func (m *PaymentAttemptMutation) SetPaymentMethodDetails(td *types.InstrumentDetails) {
+	m.payment_method_details = &td
+}
+
+// PaymentMethodDetails returns the value of the "payment_method_details" field in the mutation.
+func (m *PaymentAttemptMutation) PaymentMethodDetails() (r *types.InstrumentDetails, exists bool) {
+	v := m.payment_method_details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentMethodDetails returns the old "payment_method_details" field's value of the PaymentAttempt entity.
+// If the PaymentAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentAttemptMutation) OldPaymentMethodDetails(ctx context.Context) (v *types.InstrumentDetails, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentMethodDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentMethodDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentMethodDetails: %w", err)
+	}
+	return oldValue.PaymentMethodDetails, nil
+}
+
+// ClearPaymentMethodDetails clears the value of the "payment_method_details" field.
+func (m *PaymentAttemptMutation) ClearPaymentMethodDetails() {
+	m.payment_method_details = nil
+	m.clearedFields[paymentattempt.FieldPaymentMethodDetails] = struct{}{}
+}
+
+// PaymentMethodDetailsCleared returns if the "payment_method_details" field was cleared in this mutation.
+func (m *PaymentAttemptMutation) PaymentMethodDetailsCleared() bool {
+	_, ok := m.clearedFields[paymentattempt.FieldPaymentMethodDetails]
+	return ok
+}
+
+// ResetPaymentMethodDetails resets all changes to the "payment_method_details" field.
+func (m *PaymentAttemptMutation) ResetPaymentMethodDetails() {
+	m.payment_method_details = nil
+	delete(m.clearedFields, paymentattempt.FieldPaymentMethodDetails)
+}
+
+// SetErrorDetails sets the "error_details" field.
+func (m *PaymentAttemptMutation) SetErrorDetails(tae *types.PaymentAttemptError) {
+	m.error_details = &tae
+}
+
+// ErrorDetails returns the value of the "error_details" field in the mutation.
+func (m *PaymentAttemptMutation) ErrorDetails() (r *types.PaymentAttemptError, exists bool) {
+	v := m.error_details
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorDetails returns the old "error_details" field's value of the PaymentAttempt entity.
+// If the PaymentAttempt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentAttemptMutation) OldErrorDetails(ctx context.Context) (v *types.PaymentAttemptError, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorDetails is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorDetails requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorDetails: %w", err)
+	}
+	return oldValue.ErrorDetails, nil
+}
+
+// ClearErrorDetails clears the value of the "error_details" field.
+func (m *PaymentAttemptMutation) ClearErrorDetails() {
+	m.error_details = nil
+	m.clearedFields[paymentattempt.FieldErrorDetails] = struct{}{}
+}
+
+// ErrorDetailsCleared returns if the "error_details" field was cleared in this mutation.
+func (m *PaymentAttemptMutation) ErrorDetailsCleared() bool {
+	_, ok := m.clearedFields[paymentattempt.FieldErrorDetails]
+	return ok
+}
+
+// ResetErrorDetails resets all changes to the "error_details" field.
+func (m *PaymentAttemptMutation) ResetErrorDetails() {
+	m.error_details = nil
+	delete(m.clearedFields, paymentattempt.FieldErrorDetails)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *PaymentAttemptMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -64547,7 +64647,7 @@ func (m *PaymentAttemptMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PaymentAttemptMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, paymentattempt.FieldTenantID)
 	}
@@ -64584,6 +64684,12 @@ func (m *PaymentAttemptMutation) Fields() []string {
 	if m.error_message != nil {
 		fields = append(fields, paymentattempt.FieldErrorMessage)
 	}
+	if m.payment_method_details != nil {
+		fields = append(fields, paymentattempt.FieldPaymentMethodDetails)
+	}
+	if m.error_details != nil {
+		fields = append(fields, paymentattempt.FieldErrorDetails)
+	}
 	if m.metadata != nil {
 		fields = append(fields, paymentattempt.FieldMetadata)
 	}
@@ -64619,6 +64725,10 @@ func (m *PaymentAttemptMutation) Field(name string) (ent.Value, bool) {
 		return m.GatewayAttemptID()
 	case paymentattempt.FieldErrorMessage:
 		return m.ErrorMessage()
+	case paymentattempt.FieldPaymentMethodDetails:
+		return m.PaymentMethodDetails()
+	case paymentattempt.FieldErrorDetails:
+		return m.ErrorDetails()
 	case paymentattempt.FieldMetadata:
 		return m.Metadata()
 	}
@@ -64654,6 +64764,10 @@ func (m *PaymentAttemptMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldGatewayAttemptID(ctx)
 	case paymentattempt.FieldErrorMessage:
 		return m.OldErrorMessage(ctx)
+	case paymentattempt.FieldPaymentMethodDetails:
+		return m.OldPaymentMethodDetails(ctx)
+	case paymentattempt.FieldErrorDetails:
+		return m.OldErrorDetails(ctx)
 	case paymentattempt.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -64749,6 +64863,20 @@ func (m *PaymentAttemptMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetErrorMessage(v)
 		return nil
+	case paymentattempt.FieldPaymentMethodDetails:
+		v, ok := value.(*types.InstrumentDetails)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentMethodDetails(v)
+		return nil
+	case paymentattempt.FieldErrorDetails:
+		v, ok := value.(*types.PaymentAttemptError)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorDetails(v)
+		return nil
 	case paymentattempt.FieldMetadata:
 		v, ok := value.(map[string]string)
 		if !ok {
@@ -64816,6 +64944,12 @@ func (m *PaymentAttemptMutation) ClearedFields() []string {
 	if m.FieldCleared(paymentattempt.FieldErrorMessage) {
 		fields = append(fields, paymentattempt.FieldErrorMessage)
 	}
+	if m.FieldCleared(paymentattempt.FieldPaymentMethodDetails) {
+		fields = append(fields, paymentattempt.FieldPaymentMethodDetails)
+	}
+	if m.FieldCleared(paymentattempt.FieldErrorDetails) {
+		fields = append(fields, paymentattempt.FieldErrorDetails)
+	}
 	if m.FieldCleared(paymentattempt.FieldMetadata) {
 		fields = append(fields, paymentattempt.FieldMetadata)
 	}
@@ -64847,6 +64981,12 @@ func (m *PaymentAttemptMutation) ClearField(name string) error {
 		return nil
 	case paymentattempt.FieldErrorMessage:
 		m.ClearErrorMessage()
+		return nil
+	case paymentattempt.FieldPaymentMethodDetails:
+		m.ClearPaymentMethodDetails()
+		return nil
+	case paymentattempt.FieldErrorDetails:
+		m.ClearErrorDetails()
 		return nil
 	case paymentattempt.FieldMetadata:
 		m.ClearMetadata()
@@ -64894,6 +65034,12 @@ func (m *PaymentAttemptMutation) ResetField(name string) error {
 		return nil
 	case paymentattempt.FieldErrorMessage:
 		m.ResetErrorMessage()
+		return nil
+	case paymentattempt.FieldPaymentMethodDetails:
+		m.ResetPaymentMethodDetails()
+		return nil
+	case paymentattempt.FieldErrorDetails:
+		m.ResetErrorDetails()
 		return nil
 	case paymentattempt.FieldMetadata:
 		m.ResetMetadata()

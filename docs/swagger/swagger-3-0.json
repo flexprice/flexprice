@@ -28635,57 +28635,6 @@
         },
         "description": "The paused subscription and its pause"
       },
-      "PaymentAttemptCard": {
-        "type": "object",
-        "properties": {
-          "issuer": {
-            "type": "string"
-          },
-          "last4": {
-            "type": "string"
-          },
-          "network": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
-      },
-      "PaymentAttemptError": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          },
-          "source": {
-            "type": "string"
-          },
-          "step": {
-            "type": "string"
-          }
-        }
-      },
-      "PaymentAttemptMethod": {
-        "type": "object",
-        "properties": {
-          "bank": {
-            "type": "string"
-          },
-          "card": {
-            "$ref": "#/components/schemas/PaymentAttemptCard"
-          },
-          "type": {
-            "type": "string"
-          },
-          "wallet": {
-            "type": "string"
-          }
-        }
-      },
       "PaymentAttemptResponse": {
         "type": "object",
         "properties": {
@@ -28700,7 +28649,7 @@
             "type": "string"
           },
           "error": {
-            "$ref": "#/components/schemas/PaymentAttemptError"
+            "$ref": "#/components/schemas/types.PaymentAttemptError"
           },
           "error_message": {
             "type": "string"
@@ -28715,7 +28664,7 @@
             "type": "string"
           },
           "payment_method": {
-            "$ref": "#/components/schemas/PaymentAttemptMethod"
+            "$ref": "#/components/schemas/types.InstrumentDetails"
           },
           "payment_status": {
             "$ref": "#/components/schemas/types.PaymentStatus"
@@ -42281,6 +42230,40 @@
           }
         }
       },
+      "types.BankDetails": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "BankDetails"
+      },
+      "types.CardDetails": {
+        "type": "object",
+        "properties": {
+          "brand": {
+            "type": "string"
+          },
+          "exp_month": {
+            "type": "integer"
+          },
+          "exp_year": {
+            "type": "integer"
+          },
+          "funding": {
+            "type": "string",
+            "description": "credit, debit or prepaid"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "last4": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "CardDetails"
+      },
       "types.CheckoutConfigurationFilter": {
         "type": "object",
         "properties": {
@@ -42369,6 +42352,24 @@
         },
         "x-speakeasy-name-override": "CheckoutSessionFilter"
       },
+      "types.InstrumentDetails": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "$ref": "#/components/schemas/types.BankDetails"
+          },
+          "card": {
+            "$ref": "#/components/schemas/types.CardDetails"
+          },
+          "type": {
+            "$ref": "#/components/schemas/types.PaymentAttemptMethod"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/types.WalletDetails"
+          }
+        },
+        "x-speakeasy-name-override": "InstrumentDetails"
+      },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
         "properties": {
@@ -42390,6 +42391,58 @@
           "type": "string"
         },
         "x-speakeasy-name-override": "Metadata"
+      },
+      "types.PaymentAttemptError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "PaymentAttemptError"
+      },
+      "types.PaymentAttemptMethod": {
+        "type": "string",
+        "enum": [
+          "CARD",
+          "UPI",
+          "NETBANKING",
+          "WALLET",
+          "EMI",
+          "PAYLATER",
+          "BANK_TRANSFER",
+          "OTHER"
+        ],
+        "x-enum-varnames": [
+          "PaymentAttemptMethodCard",
+          "PaymentAttemptMethodUPI",
+          "PaymentAttemptMethodNetBanking",
+          "PaymentAttemptMethodWallet",
+          "PaymentAttemptMethodEMI",
+          "PaymentAttemptMethodPayLater",
+          "PaymentAttemptMethodBankTransfer",
+          "PaymentAttemptMethodOther"
+        ],
+        "x-speakeasy-name-override": "PaymentAttemptMethod",
+        "x-speakeasy-unknown-values": "allow"
+      },
+      "types.WalletDetails": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "x-speakeasy-name-override": "WalletDetails"
       },
       "webhookDto.AlertWebhookPayload": {
         "type": "object",
@@ -43305,7 +43358,7 @@
             "format": "date-time"
           },
           "error": {
-            "$ref": "#/components/schemas/PaymentAttemptError"
+            "$ref": "#/components/schemas/types.PaymentAttemptError"
           },
           "error_message": {
             "type": "string"
@@ -43320,7 +43373,7 @@
             "$ref": "#/components/schemas/types.Metadata"
           },
           "payment_method": {
-            "$ref": "#/components/schemas/PaymentAttemptMethod"
+            "$ref": "#/components/schemas/types.InstrumentDetails"
           },
           "payment_status": {
             "$ref": "#/components/schemas/types.PaymentStatus"

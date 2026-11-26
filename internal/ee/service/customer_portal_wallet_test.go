@@ -309,7 +309,7 @@ func (s *PortalWalletSuite) TestTopUpUseSavedMethodValidation() {
 type stubPaymentMethodProvider struct {
 	methods        []interfaces.ProviderPaymentMethod
 	err            error
-	attemptDetails *dto.PaymentAttemptDetails
+	attemptDetails *types.PaymentAttemptDetails
 	hangDetails    bool
 }
 
@@ -329,7 +329,7 @@ func (p *stubPaymentMethodProvider) CreateSetupLink(_ context.Context, _ interfa
 	return nil, nil
 }
 
-func (p *stubPaymentMethodProvider) GetAttemptDetails(ctx context.Context, _ string) (*dto.PaymentAttemptDetails, error) {
+func (p *stubPaymentMethodProvider) GetAttemptDetails(ctx context.Context, _ string) (*types.PaymentAttemptDetails, error) {
 	if p.hangDetails {
 		<-ctx.Done()
 		return nil, ctx.Err()

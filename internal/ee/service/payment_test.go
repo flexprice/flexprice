@@ -1087,7 +1087,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
 		PaymentStatus:    types.PaymentStatusFailed,
 		ErrorMessage:     "card declined",
 		GatewayAttemptID: "pay_rzp_001",
-		Details:          &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "incorrect_card_details"}},
+		Details:          &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{Reason: "incorrect_card_details"}},
 	}
 	s.NoError(s.service.RecordAttempt(ctx, p.ID, req))
 
@@ -1103,7 +1103,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_FailedPublishesAttemptFailed() {
 	s.NoError(err)
 	s.Equal(1, stored.AttemptNumber)
 	s.Equal("pay_rzp_001", lo.FromPtr(stored.GatewayAttemptID))
-	s.Equal("incorrect_card_details", dto.NewPaymentAttemptDetails(stored.Metadata).Error.Reason)
+	s.Equal("incorrect_card_details", stored.Error.Reason)
 }
 
 func (s *PaymentServiceSuite) TestRecordAttempt_DedupesByGatewayAttemptID() {
@@ -1233,7 +1233,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_HungDetailsLookupStillRecords() 
 		PaymentStatus:    types.PaymentStatusFailed,
 		GatewayAttemptID: "pay_rzp_hung",
 		ErrorMessage:     "card declined",
-		Details:          &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "card_declined"}},
+		Details:          &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{Reason: "card_declined"}},
 	}))
 	s.Less(time.Since(start), attemptDetailsTimeout+time.Second)
 
@@ -1242,7 +1242,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_HungDetailsLookupStillRecords() 
 	s.Require().Len(attempts, 1)
 	resp := dto.NewPaymentAttemptResponse(attempts[0])
 	s.Equal("card declined", lo.FromPtr(resp.ErrorMessage))
-	s.Equal(&dto.PaymentAttemptError{Reason: "card_declined"}, resp.Error)
+	s.Equal(&types.PaymentAttemptError{Reason: "card_declined"}, resp.Error)
 	s.Nil(resp.PaymentMethod)
 }
 
@@ -1276,16 +1276,16 @@ func (s *PaymentServiceSuite) TestRecordAttempt_PublishesAttemptEventPerStatus()
 }
 
 func (s *PaymentServiceSuite) TestRecordAttempt_SavesAttemptDetails() {
-	gatewayDetails := &dto.PaymentAttemptDetails{
-		PaymentMethod: &dto.PaymentAttemptMethod{Type: "card", Card: &dto.PaymentAttemptCard{Network: "Visa", Last4: "1111"}},
-		Error:         &dto.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "from_gateway"},
+	gatewayDetails := &types.PaymentAttemptDetails{
+		PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "Visa", Last4: "1111"}},
+		Error:         &types.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Reason: "from_gateway"},
 	}
-	callerDetails := &dto.PaymentAttemptDetails{Error: &dto.PaymentAttemptError{Reason: "from_webhook"}}
+	callerDetails := &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{Reason: "from_webhook"}}
 
 	tests := []struct {
 		name    string
-		gateway *dto.PaymentAttemptDetails
-		want    *dto.PaymentAttemptDetails
+		gateway *types.PaymentAttemptDetails
+		want    *types.PaymentAttemptDetails
 	}{
 		{name: "gateway details win", gateway: gatewayDetails, want: gatewayDetails},
 		{name: "caller details when the gateway can't say", want: callerDetails},
@@ -1320,7 +1320,7 @@ func (s *PaymentServiceSuite) TestRecordAttempt_SavesAttemptDetails() {
 			attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
 			s.NoError(err)
 			s.Require().Len(attempts, 1)
-			s.Equal(tt.want, dto.NewPaymentAttemptDetails(attempts[0].Metadata))
+			s.Equal(tt.want, &types.PaymentAttemptDetails{PaymentMethod: attempts[0].PaymentMethod, Error: attempts[0].Error})
 			resp := dto.NewPaymentAttemptResponse(attempts[0])
 			s.Equal(tt.want.PaymentMethod, resp.PaymentMethod)
 			s.Equal(tt.want.Error, resp.Error)

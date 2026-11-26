@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -109,7 +109,7 @@ func errMandateManagedAtCheckout() error {
 		Mark(ierr.ErrValidation)
 }
 
-func (a *PaymentMethodAdapter) GetAttemptDetails(ctx context.Context, razorpayPaymentID string) (*dto.PaymentAttemptDetails, error) {
+func (a *PaymentMethodAdapter) GetAttemptDetails(ctx context.Context, razorpayPaymentID string) (*types.PaymentAttemptDetails, error) {
 	raw, err := a.client.FetchPayment(ctx, razorpayPaymentID)
 	if err != nil {
 		return nil, err

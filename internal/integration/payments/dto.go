@@ -3,7 +3,6 @@ package payments
 import (
 	"time"
 
-	apidto "github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -45,7 +44,7 @@ type RecordFailedAttemptParams struct {
 	GatewayPaymentID   string
 	ErrorMessage       string
 	Metadata           types.Metadata
-	Details            *apidto.PaymentAttemptDetails
+	Details            *types.PaymentAttemptDetails
 }
 
 // RecordPaymentFailureParams holds inputs for marking a payment FAILED.

@@ -27570,57 +27570,6 @@ const docTemplate = `{
                 }
             }
         },
-        "PaymentAttemptCard": {
-            "type": "object",
-            "properties": {
-                "issuer": {
-                    "type": "string"
-                },
-                "last4": {
-                    "type": "string"
-                },
-                "network": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "PaymentAttemptError": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "string"
-                },
-                "reason": {
-                    "type": "string"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "step": {
-                    "type": "string"
-                }
-            }
-        },
-        "PaymentAttemptMethod": {
-            "type": "object",
-            "properties": {
-                "bank": {
-                    "type": "string"
-                },
-                "card": {
-                    "$ref": "#/definitions/PaymentAttemptCard"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "wallet": {
-                    "type": "string"
-                }
-            }
-        },
         "PaymentAttemptResponse": {
             "type": "object",
             "properties": {
@@ -27634,7 +27583,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "error": {
-                    "$ref": "#/definitions/PaymentAttemptError"
+                    "$ref": "#/definitions/types.PaymentAttemptError"
                 },
                 "error_message": {
                     "type": "string"
@@ -27649,7 +27598,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/PaymentAttemptMethod"
+                    "$ref": "#/definitions/types.InstrumentDetails"
                 },
                 "payment_status": {
                     "$ref": "#/definitions/types.PaymentStatus"
@@ -41405,6 +41354,38 @@ const docTemplate = `{
                 }
             }
         },
+        "types.BankDetails": {
+            "type": "object",
+            "properties": {
+                "bank": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CardDetails": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "exp_month": {
+                    "type": "integer"
+                },
+                "exp_year": {
+                    "type": "integer"
+                },
+                "funding": {
+                    "description": "credit, debit or prepaid",
+                    "type": "string"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
         "types.CheckoutConfigurationFilter": {
             "type": "object",
             "properties": {
@@ -41491,6 +41472,23 @@ const docTemplate = `{
                 }
             }
         },
+        "types.InstrumentDetails": {
+            "type": "object",
+            "properties": {
+                "bank": {
+                    "$ref": "#/definitions/types.BankDetails"
+                },
+                "card": {
+                    "$ref": "#/definitions/types.CardDetails"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentAttemptMethod"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/types.WalletDetails"
+                }
+            }
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -41509,6 +41507,54 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.PaymentAttemptError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "step": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PaymentAttemptMethod": {
+            "type": "string",
+            "enum": [
+                "CARD",
+                "UPI",
+                "NETBANKING",
+                "WALLET",
+                "EMI",
+                "PAYLATER",
+                "BANK_TRANSFER",
+                "OTHER"
+            ],
+            "x-enum-varnames": [
+                "PaymentAttemptMethodCard",
+                "PaymentAttemptMethodUPI",
+                "PaymentAttemptMethodNetBanking",
+                "PaymentAttemptMethodWallet",
+                "PaymentAttemptMethodEMI",
+                "PaymentAttemptMethodPayLater",
+                "PaymentAttemptMethodBankTransfer",
+                "PaymentAttemptMethodOther"
+            ]
+        },
+        "types.WalletDetails": {
+            "type": "object",
+            "properties": {
+                "provider": {
+                    "type": "string"
+                }
             }
         },
         "webhookDto.AlertWebhookPayload": {
@@ -42397,7 +42443,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "error": {
-                    "$ref": "#/definitions/PaymentAttemptError"
+                    "$ref": "#/definitions/types.PaymentAttemptError"
                 },
                 "error_message": {
                     "type": "string"
@@ -42412,7 +42458,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/PaymentAttemptMethod"
+                    "$ref": "#/definitions/types.InstrumentDetails"
                 },
                 "payment_status": {
                     "$ref": "#/definitions/types.PaymentStatus"
