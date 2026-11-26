@@ -1003,7 +1003,7 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request or oversize event; others may be accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -1023,7 +1023,7 @@
             }
           },
           "503": {
-            "description": "May be partly accepted; retry only with event_id on every event",
+            "description": "May be partly accepted; retry reusing each event's original event_id",
             "content": {
               "application/json": {
                 "schema": {

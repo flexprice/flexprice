@@ -6347,7 +6347,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Invalid request or oversize event; others may be accepted",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6359,7 +6359,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "May be partly accepted; retry only with event_id on every event",
+                        "description": "May be partly accepted; retry reusing each event's original event_id",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }

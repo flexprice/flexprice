@@ -96,9 +96,9 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param event body dto.BulkIngestEventRequest true "Event data"
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request or oversize event; others may be accepted"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Failure 503 {object} ierr.ErrorResponse "May be partly accepted; retry only with event_id on every event"
+// @Failure 503 {object} ierr.ErrorResponse "May be partly accepted; retry reusing each event's original event_id"
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()

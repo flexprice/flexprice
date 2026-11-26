@@ -162,6 +162,12 @@ func TestIsMessageTooLarge_ThroughWatermillWrapping(t *testing.T) {
 	if IsMessageTooLarge(errors.Join(wrapped, context.DeadlineExceeded)) {
 		t.Fatal("mixed join must stay retryable")
 	}
+	if IsMessageTooLarge(fmt.Errorf("kafka: %w", errors.Join(wrapped, context.DeadlineExceeded))) {
+		t.Fatal("wrapped mixed join must stay retryable")
+	}
+	if !IsMessageTooLarge(fmt.Errorf("kafka: %w", errors.Join(wrapped, wrapped))) {
+		t.Fatal("wrapped all-oversize join must match")
+	}
 }
 
 func TestPublishBatch_SecondaryFailure_NotReturned(t *testing.T) {

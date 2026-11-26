@@ -89,6 +89,11 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 
 // IsMessageTooLarge: every joined failure is oversize.
 func IsMessageTooLarge(err error) bool {
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		if inner := wrapped.Unwrap(); inner != nil {
+			return IsMessageTooLarge(inner)
+		}
+	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		errs := joined.Unwrap()
 		for _, e := range errs {
