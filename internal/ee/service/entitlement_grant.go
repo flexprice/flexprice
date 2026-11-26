@@ -384,7 +384,6 @@ func (s *entitlementGrantService) OpenFeatureBasedEntitlementGrants(
 		if err != nil {
 			return nil, err
 		}
-		NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupCustomer, created.CustomerID)
 
 		s.Logger.Info(ctx, "opened entitlement grant segment",
 			"grant_id", created.ID,
@@ -853,7 +852,6 @@ func (s *entitlementGrantService) openOneGrant(
 
 	created, err := s.EntitlementGrantRepo.Create(ctx, newGrant)
 	if err == nil {
-		NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupCustomer, created.CustomerID)
 		return created, nil
 	}
 	if !ierr.IsAlreadyExists(err) {

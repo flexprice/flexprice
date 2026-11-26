@@ -44,8 +44,6 @@ func (noopRedisCache) ForceCacheGet(_ context.Context, _ string) (interface{}, b
 func (noopRedisCache) ForceCacheSet(_ context.Context, _ string, _ interface{}, _ time.Duration) {
 }
 func (noopRedisCache) ForceCacheDelete(_ context.Context, _ string) {}
-func (noopRedisCache) ForceCacheSetNX(_ context.Context, _ string, _ interface{}, _ time.Duration) {
-}
 func (noopRedisCache) ForceCacheGetWithTTL(_ context.Context, _ string) (interface{}, time.Duration, bool) {
 	return nil, 0, false
 }

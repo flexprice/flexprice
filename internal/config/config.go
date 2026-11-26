@@ -1030,7 +1030,7 @@ type UsageRollupConfig struct {
 	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
-	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds.
+	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds; 0 = off.
 	BalanceMaxLiveSeconds int64 `mapstructure:"balance_max_live_seconds" default:"5"`
 }
 

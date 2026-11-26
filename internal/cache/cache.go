@@ -52,10 +52,6 @@ type RedisCache interface {
 
 	ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool)
 
-	// ForceCacheSetNX sets the value only if the key is absent, without checking if the cache is enabled. A read
-	// filling a cache uses it, so it never overwrites a newer value a write set meanwhile.
-	ForceCacheSetNX(ctx context.Context, key string, value interface{}, expiration time.Duration)
-
 	// GetBulk retrieves many keys in one round trip, returning the values
 	// found (keyed by the original key) and the keys not found — callers
 	// fetch those from the DB and Set them back. A disabled cache reports
@@ -118,14 +114,14 @@ const (
 	PrefixCreditGrantApplyLock = "credit_grant:apply:"
 	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
 	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
-	PrefixCheckoutPollLock        = "checkout:poll:"
-	PrefixPublishedConnections    = "published_connections:"
-	PrefixMeterFeature            = "meter:feature:v1:"
-	PrefixReportResult            = "report_result:v1:"
-	PrefixUsageSnapshot           = "usage_snapshot:v2:"
-	PrefixUsageRollupEligibility  = "usage_rollup_eligibility:v1:"
-	PrefixUsageRollupEntityPrices = "usage_rollup_entity_prices:v2:"
-	PrefixUsageRollupSubscription = "usage_rollup_subscription:v1:"
+	PrefixCheckoutPollLock          = "checkout:poll:"
+	PrefixPublishedConnections      = "published_connections:"
+	PrefixMeterFeature              = "meter:feature:v1:"
+	PrefixReportResult              = "report_result:v1:"
+	PrefixUsageSnapshot             = "usage_snapshot:v1:"
+	PrefixUsageRollupEligibility    = "usage_rollup_eligibility:v1:"
+	PrefixUsageRollupEntityPrices   = "usage_rollup_entity_prices:v1:"
+	PrefixUsageRollupCustomerAddons = "usage_rollup_customer_addons:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

@@ -370,20 +370,6 @@ func (c *redisCacheImpl) ForceCacheSet(ctx context.Context, key string, value in
 	}
 }
 
-func (c *redisCacheImpl) ForceCacheSetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) {
-	if c == nil {
-		return
-	}
-	jsonBytes, err := json.Marshal(value)
-	if err != nil {
-		c.log.Error(ctx, "Failed to marshal cache value", "key", key, "error", err)
-		return
-	}
-	if err := c.client.SetNX(ctx, c.GetRedisKey(key), string(jsonBytes), expiration).Err(); err != nil {
-		c.log.Error(ctx, "Redis SETNX error", "key", key, "error", err)
-	}
-}
-
 func (c *redisCacheImpl) ForceCacheDelete(ctx context.Context, key string) {
 	if c == nil {
 		return

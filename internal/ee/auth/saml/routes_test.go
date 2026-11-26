@@ -247,11 +247,6 @@ func (f *fakeRedis) ForceCacheGet(ctx context.Context, key string) (interface{},
 func (f *fakeRedis) ForceCacheSet(ctx context.Context, key string, value interface{}, ttl time.Duration) {
 	f.Set(ctx, key, value, ttl)
 }
-func (f *fakeRedis) ForceCacheSetNX(ctx context.Context, key string, value interface{}, ttl time.Duration) {
-	if _, found := f.Get(ctx, key); !found {
-		f.Set(ctx, key, value, ttl)
-	}
-}
 
 // TestDashboardRedirectCarriesToken checks the browser hand-back: the token has
 // to reach the dashboard, and a missing configuration must not produce a

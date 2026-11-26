@@ -3430,6 +3430,10 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 			continue
 		}
 
+		if !matchesCurrency {
+			continue
+		}
+
 		// An uncomputed past draft has zero AmountRemaining and would be skipped, overstating the
 		// balance. Computed only here, after the skips above, so a read never computes a draft it drops.
 		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.LastComputedAt == nil {
@@ -3440,10 +3444,6 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 				continue
 			}
 			inv = dto.NewInvoiceResponse(computedInv)
-		}
-
-		if !matchesCurrency {
-			continue
 		}
 
 		if inv.AmountRemaining.IsZero() {

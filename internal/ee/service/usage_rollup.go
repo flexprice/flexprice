@@ -42,7 +42,6 @@ type UsageRollupService interface {
 type UsageRollupEntity string
 
 const (
-	UsageRollupCustomer     UsageRollupEntity = "customer"
 	UsageRollupSubscription UsageRollupEntity = "subscription"
 	UsageRollupPlan         UsageRollupEntity = "plan"
 	UsageRollupAddon        UsageRollupEntity = "addon"
@@ -77,34 +76,18 @@ const (
 	usageRollupReadError      = "error"
 )
 
-// usageRollupSubscription is what the usage rollup path reads about a subscription besides its prices, cached per
-// subscription and period. Exported fields: it is stored as JSON.
-type usageRollupSubscription struct {
+// customerAndAddons is the subscription's external customer ID and the addons active in its current period,
+// cached per subscription and period. Exported fields: it is stored as JSON.
+type customerAndAddons struct {
 	ExternalCustomerID string   `json:"external_customer_id"`
 	AddonIDs           []string `json:"addon_ids"`
 }
 
-// usageRollupEntityPrices is a plan's or addon's active usage prices with their meters by ID.
+// usageRollupEntityPrices is a plan's or addon's active usage prices with their meters by ID. Exported fields: it
+// is stored as JSON.
 type usageRollupEntityPrices struct {
-	Prices []*price.Price
-	Meters map[string]*meter.Meter
-}
-
-// usageRollupPrice is the part of a usage price and its meter that the read path prices with, cached per plan or
-// addon instead of the full records: a read decodes every price of the plan. Exported fields: it is stored as JSON.
-type usageRollupPrice struct {
-	ID                 string                       `json:"id"`
-	MeterID            string                       `json:"meter_id"`
-	Amount             decimal.Decimal              `json:"amount"`
-	Currency           string                       `json:"currency"`
-	BillingPeriod      types.BillingPeriod          `json:"billing_period"`
-	BillingPeriodCount int                          `json:"billing_period_count"`
-	BillingModel       types.BillingModel           `json:"billing_model"`
-	TierMode           types.BillingTier            `json:"tier_mode,omitempty"`
-	Tiers              price.JSONBTiers             `json:"tiers,omitempty"`
-	TransformQuantity  price.JSONBTransformQuantity `json:"transform_quantity"`
-	MeterName          string                       `json:"meter_name"`
-	AggregationType    types.AggregationType        `json:"aggregation_type"`
+	Prices []*price.Price          `json:"prices"`
+	Meters map[string]*meter.Meter `json:"meters"`
 }
 
 // usageSnapshot is a period's checkpoint: the time its totals run to and each meter's total. Exported fields: it is
@@ -139,11 +122,8 @@ func (s *usageRollupService) ClearEligibility(ctx context.Context, entity UsageR
 	if s.RedisCache == nil {
 		return
 	}
-	// Dropped after commit, so a read in between can't cache the old flag or prices again.
+	// Dropped after commit, so a read in between can't cache the old flag again.
 	dropCached := func() {
-		if entity == UsageRollupPlan || entity == UsageRollupAddon {
-			s.RedisCache.ForceCacheDelete(ctx, usageRollupEntityPricesKey(ctx, entityID))
-		}
 		for _, customerID := range customerIDs {
 			s.RedisCache.ForceCacheDelete(ctx, usageRollupEligibilityKey(ctx, customerID))
 		}
@@ -156,18 +136,28 @@ func (s *usageRollupService) ClearEligibility(ctx context.Context, entity UsageR
 // eligibilityCustomers returns the customers whose billing a write to the entity can change.
 func (s *usageRollupService) eligibilityCustomers(ctx context.Context, entity UsageRollupEntity, entityID string) ([]string, error) {
 	switch entity {
-	case UsageRollupCustomer:
-		return []string{entityID}, nil
 	case UsageRollupSubscription:
 		sub, err := s.SubRepo.Get(ctx, entityID)
 		if err != nil {
 			return nil, err
 		}
 		return []string{sub.CustomerID}, nil
-	case UsageRollupPlan, UsageRollupAddon:
+	case UsageRollupPlan:
+		subs, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+			QueryFilter:        types.NewNoLimitQueryFilter(),
+			PlanID:             entityID,
+			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return lo.Uniq(lo.Map(subs, func(sub *subscription.Subscription, _ int) string { return sub.CustomerID })), nil
+	case UsageRollupAddon:
+		// An addon has few prices, so its live line items are few per subscription and carry the customer.
 		filter := types.NewNoLimitSubscriptionLineItemFilter()
 		filter.EntityIDs = []string{entityID}
 		filter.ActiveFilter = true
+		filter.CurrentPeriodStart = lo.ToPtr(clock.Now())
 		lineItems, err := s.SubscriptionLineItemRepo.List(ctx, filter)
 		if err != nil {
 			return nil, err
@@ -187,8 +177,8 @@ func usageRollupEligibilityKey(ctx context.Context, customerID string) string {
 	return cache.GenerateKey(ctx, cache.PrefixUsageRollupEligibility, customerID)
 }
 
-func usageRollupSubscriptionKey(ctx context.Context, sub *subscription.Subscription) string {
-	return cache.GenerateKey(ctx, cache.PrefixUsageRollupSubscription, sub.ID, sub.CurrentPeriodStart.Unix())
+func customerAndAddonsKey(ctx context.Context, sub *subscription.Subscription) string {
+	return cache.GenerateKey(ctx, cache.PrefixUsageRollupCustomerAddons, sub.ID, sub.CurrentPeriodStart.Unix())
 }
 
 func usageRollupEntityPricesKey(ctx context.Context, entityID string) string {
@@ -447,48 +437,36 @@ func (s *usageRollupService) isEligible(ctx context.Context, customerID string) 
 }
 
 func (s *usageRollupService) UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error) {
-	cached, err := s.usageRollupSubscription(ctx, sub)
+	customerAndAddons, err := s.cachedCustomerAndAddons(ctx, sub)
 	if err != nil {
 		return nil, nil, err
 	}
 	pricesByMeter := make(map[string]*price.Price)
 	meters := make(map[string]*meter.Meter)
-	for _, entityID := range append([]string{sub.PlanID}, cached.AddonIDs...) {
+	for _, entityID := range append([]string{sub.PlanID}, customerAndAddons.AddonIDs...) {
 		entityPrices, err := s.cachedEntityUsagePrices(ctx, entityID)
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, cp := range entityPrices {
-			p := &price.Price{
-				ID:                 cp.ID,
-				MeterID:            cp.MeterID,
-				Type:               types.PRICE_TYPE_USAGE,
-				Amount:             cp.Amount,
-				Currency:           cp.Currency,
-				BillingPeriod:      cp.BillingPeriod,
-				BillingPeriodCount: cp.BillingPeriodCount,
-				BillingModel:       cp.BillingModel,
-				TierMode:           cp.TierMode,
-				Tiers:              cp.Tiers,
-				TransformQuantity:  cp.TransformQuantity,
-			}
-			if !p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
+		for _, p := range entityPrices.Prices {
+			m := entityPrices.Meters[p.MeterID]
+			if m == nil || !p.IsEligibleForSubscription(sub.Currency, sub.BillingPeriod, sub.BillingPeriodCount) {
 				continue
 			}
 			pricesByMeter[p.MeterID] = p
-			meters[p.MeterID] = &meter.Meter{ID: cp.MeterID, Name: cp.MeterName, Aggregation: meter.Aggregation{Type: cp.AggregationType}}
+			meters[p.MeterID] = m
 		}
 	}
 	return pricesByMeter, meters, nil
 }
 
-// usageRollupSubscription reads the subscription's external customer ID and active addons through the cache.
+// cachedCustomerAndAddons reads the subscription's external customer ID and active addons through the cache.
 // The key holds the period, so a rollover reads them afresh; within a period an addon change makes the
 // customer ineligible.
-func (s *usageRollupService) usageRollupSubscription(ctx context.Context, sub *subscription.Subscription) (*usageRollupSubscription, error) {
-	key := usageRollupSubscriptionKey(ctx, sub)
+func (s *usageRollupService) cachedCustomerAndAddons(ctx context.Context, sub *subscription.Subscription) (*customerAndAddons, error) {
+	key := customerAndAddonsKey(ctx, sub)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
-		if value, ok := cache.UnmarshalCacheValue[usageRollupSubscription](cached); ok {
+		if value, ok := cache.UnmarshalCacheValue[customerAndAddons](cached); ok {
 			return value, nil
 		}
 	}
@@ -500,46 +478,25 @@ func (s *usageRollupService) usageRollupSubscription(ctx context.Context, sub *s
 	if err != nil {
 		return nil, err
 	}
-	value := &usageRollupSubscription{ExternalCustomerID: cust.ExternalID, AddonIDs: addonIDs}
+	value := &customerAndAddons{ExternalCustomerID: cust.ExternalID, AddonIDs: addonIDs}
 	s.RedisCache.ForceCacheSet(ctx, key, value, usageRollupCacheTTL)
 	return value, nil
 }
 
-// cachedEntityUsagePrices reads the compact form of a plan's or addon's active usage prices through the cache.
-func (s *usageRollupService) cachedEntityUsagePrices(ctx context.Context, entityID string) ([]*usageRollupPrice, error) {
+// cachedEntityUsagePrices reads a plan's or addon's active usage prices and their meters through the cache.
+func (s *usageRollupService) cachedEntityUsagePrices(ctx context.Context, entityID string) (*usageRollupEntityPrices, error) {
 	key := usageRollupEntityPricesKey(ctx, entityID)
 	if cached, found := s.RedisCache.ForceCacheGet(ctx, key); found {
-		if entityPrices, ok := cache.UnmarshalCacheValue[[]*usageRollupPrice](cached); ok {
-			return *entityPrices, nil
+		if entityPrices, ok := cache.UnmarshalCacheValue[usageRollupEntityPrices](cached); ok {
+			return entityPrices, nil
 		}
 	}
 	entityPrices, err := s.entityUsagePrices(ctx, entityID)
 	if err != nil {
 		return nil, err
 	}
-	compact := make([]*usageRollupPrice, 0, len(entityPrices.Prices))
-	for _, p := range entityPrices.Prices {
-		m := entityPrices.Meters[p.MeterID]
-		if m == nil {
-			continue
-		}
-		compact = append(compact, &usageRollupPrice{
-			ID:                 p.ID,
-			MeterID:            p.MeterID,
-			Amount:             p.Amount,
-			Currency:           p.Currency,
-			BillingPeriod:      p.BillingPeriod,
-			BillingPeriodCount: p.BillingPeriodCount,
-			BillingModel:       p.BillingModel,
-			TierMode:           p.TierMode,
-			Tiers:              p.Tiers,
-			TransformQuantity:  p.TransformQuantity,
-			MeterName:          m.Name,
-			AggregationType:    m.Aggregation.Type,
-		})
-	}
-	s.RedisCache.ForceCacheSet(ctx, key, compact, usageRollupCacheTTL)
-	return compact, nil
+	s.RedisCache.ForceCacheSet(ctx, key, entityPrices, usageRollupCacheTTL)
+	return entityPrices, nil
 }
 
 // entityUsagePrices loads a plan's or addon's active usage prices and their meters from Postgres.
@@ -567,7 +524,7 @@ func (s *usageRollupService) entityUsagePrices(ctx context.Context, entityID str
 // PeriodQuantities reads the checkpoint total, then ClickHouse for any range neither the checkpoint nor
 // Redis holds, then Redis.
 func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscription.Subscription, meters map[string]*meter.Meter) (map[string]decimal.Decimal, error) {
-	cached, err := s.usageRollupSubscription(ctx, sub)
+	customerAndAddons, err := s.cachedCustomerAndAddons(ctx, sub)
 	if err != nil {
 		return nil, err
 	}
@@ -604,7 +561,7 @@ func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscrip
 		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
-			ExternalCustomerIDs: []string{cached.ExternalCustomerID},
+			ExternalCustomerIDs: []string{customerAndAddons.ExternalCustomerID},
 			StartTime:           window.start,
 			EndTime:             window.end,
 		})
@@ -615,7 +572,7 @@ func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscrip
 			addMeterTotal(quantities, meters, total)
 		}
 	}
-	hourlyUsage, err := s.HourlyUsageRepo.ListCustomerHourlyUsage(ctx, cached.ExternalCustomerID, hours)
+	hourlyUsage, err := s.HourlyUsageRepo.ListCustomerHourlyUsage(ctx, customerAndAddons.ExternalCustomerID, hours)
 	if err != nil {
 		return nil, err
 	}

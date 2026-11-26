@@ -171,22 +171,23 @@ func (s *UsageRollupSuite) TestUsagePricesIncludeActiveAddons() {
 func (s *UsageRollupSuite) TestCachedEntriesJSONRoundTrip() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	compact, err := s.svc.cachedEntityUsagePrices(ctx, "plan_rt")
+	entityPrices, err := s.svc.cachedEntityUsagePrices(ctx, "plan_rt")
 	s.Require().NoError(err)
-	compact[0].Tiers = price.JSONBTiers{{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(1)}}
-	raw, err := json.Marshal(compact)
+	entityPrices.Prices[0].Tiers = price.JSONBTiers{{UpTo: lo.ToPtr(uint64(10)), UnitAmount: decimal.NewFromInt(1)}}
+	raw, err := json.Marshal(entityPrices)
 	s.Require().NoError(err)
-	var decodedPrices []*usageRollupPrice
-	s.Require().NoError(json.Unmarshal(raw, &decodedPrices))
-	s.Require().Len(decodedPrices, 1)
-	got, want := decodedPrices[0], compact[0]
+	var decoded usageRollupEntityPrices
+	s.Require().NoError(json.Unmarshal(raw, &decoded))
+	s.Require().Len(decoded.Prices, 1)
+	got, want := decoded.Prices[0], entityPrices.Prices[0]
 	s.Equal(want.ID, got.ID)
 	s.Equal(want.Amount.String(), got.Amount.String())
 	s.Equal(want.BillingModel, got.BillingModel)
 	s.Equal(want.MeterID, got.MeterID)
 	s.Equal(want.Currency, got.Currency)
 	s.Equal(want.Tiers[0].UnitAmount.String(), got.Tiers[0].UnitAmount.String())
-	s.Equal(types.AggregationSum, got.AggregationType)
+	s.Require().Contains(decoded.Meters, "mtr_rt")
+	s.Equal(types.AggregationSum, decoded.Meters["mtr_rt"].Aggregation.Type)
 
 	snapshot := &usageSnapshot{AggregatedUntil: s.periodStart, Totals: map[string]decimal.Decimal{"mtr_rt": decimal.RequireFromString("12.5")}}
 	raw, err = json.Marshal(snapshot)
@@ -196,13 +197,13 @@ func (s *UsageRollupSuite) TestCachedEntriesJSONRoundTrip() {
 	s.True(s.periodStart.Equal(decodedSnapshot.AggregatedUntil))
 	s.Equal("12.5", decodedSnapshot.Totals["mtr_rt"].String())
 
-	cached, err := s.svc.usageRollupSubscription(ctx, sub)
+	fetched, err := s.svc.cachedCustomerAndAddons(ctx, sub)
 	s.Require().NoError(err)
-	raw, err = json.Marshal(cached)
+	raw, err = json.Marshal(fetched)
 	s.Require().NoError(err)
-	var decodedSubscription usageRollupSubscription
-	s.Require().NoError(json.Unmarshal(raw, &decodedSubscription))
-	s.Equal("ext_rt", decodedSubscription.ExternalCustomerID)
+	var decodedCustomerAndAddons customerAndAddons
+	s.Require().NoError(json.Unmarshal(raw, &decodedCustomerAndAddons))
+	s.Equal("ext_rt", decodedCustomerAndAddons.ExternalCustomerID)
 }
 
 func (s *UsageRollupSuite) TestIneligibleReasons() {
@@ -275,7 +276,7 @@ func (s *UsageRollupSuite) TestPlanPriceNotOnTheSubscription() {
 func (s *UsageRollupSuite) TestPlanEntitlementChangeClearsEligibility() {
 	ctx, st := s.GetContext(), s.GetStores()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 	s.Require().True(s.eligible(sub))
 	s.Require().NoError(st.FeatureRepo.Create(ctx, &feature.Feature{ID: "feat_rt", Name: "API calls", LookupKey: "api_calls",
 		MeterID: "mtr_rt", Type: types.FeatureTypeMetered, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}))
@@ -373,7 +374,7 @@ func (s *UsageRollupSuite) TestClearEligibilitySkipsTenantsWithoutUsageRollup() 
 	s.Require().NoError(customers.SetUsageRollupEligible(ctx, sub.CustomerID, false))
 	s.svc.Config.UsageRollup = config.UsageRollupConfig{}
 
-	s.svc.ClearEligibility(ctx, UsageRollupCustomer, sub.CustomerID)
+	s.svc.ClearEligibility(ctx, UsageRollupSubscription, sub.ID)
 	saved, err := customers.GetUsageRollupEligible(ctx, sub.CustomerID)
 	s.Require().NoError(err)
 	s.Equal(lo.ToPtr(false), saved)
@@ -393,7 +394,7 @@ func (s *UsageRollupSuite) eligible(sub *subscription.Subscription) bool {
 func (s *UsageRollupSuite) periodQuantitiesWithCheckpointAt(aggregatedUntil func(cutoff time.Time) time.Time) (first, cached decimal.Decimal) {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 
 	now := time.Now().UTC()
 	cutoff := usagerollup.Cutoff(now)
@@ -438,7 +439,7 @@ func (s *UsageRollupSuite) TestPeriodQuantitiesReadsClickHouseBeforeOldestRedisH
 func (s *UsageRollupSuite) TestIsUsageRollupEligible() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 
 	s.True(s.eligible(sub))
 	s.False(s.svc.IsUsageRollupEligible(ctx, sub, types.UsageSourceInvoiceCreation), "only wallet reads")
@@ -449,7 +450,7 @@ func (s *UsageRollupSuite) TestIsUsageRollupEligible() {
 	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
 	s.clearEligibility(UsageRollupPlan, "plan_rt")
 	s.False(s.eligible(sub), "clearing the plan finds the price change on the next read")
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 	s.False(s.eligible(sub), "a price change keeps the customer ineligible")
 }
 
@@ -458,7 +459,7 @@ func (s *UsageRollupSuite) TestIsUsageRollupEligible() {
 func (s *UsageRollupSuite) TestCalculateMeterUsageChargesOnTheUsageRollupPath() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 	p, err := s.GetStores().PriceRepo.Get(ctx, "price_rt")
 	s.Require().NoError(err)
 	usage := &dto.GetUsageBySubscriptionResponse{Charges: []*dto.SubscriptionUsageByMetersResponse{{
@@ -513,7 +514,7 @@ func TestPlanUsageReads(t *testing.T) {
 func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 	w := &wallet.Wallet{ID: "wallet_rt", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
 		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
 		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
@@ -561,7 +562,7 @@ func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 func (s *UsageRollupSuite) TestWalletBalanceReusesFreshBalance() {
 	ctx := s.GetContext()
 	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupCustomer, sub.CustomerID)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
 	w := &wallet.Wallet{ID: "wallet_fresh", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
 		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
 		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
