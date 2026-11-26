@@ -452,6 +452,23 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettle
 	s.Equal([]string{testFlexpriceInvoiceID}, invoiceSvc.reconciled)
 }
 
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FailedLinkPaymentIsRefundedAndStaysFailed() {
+	invoiceSvc := &fakeInvoiceService{}
+	s.services.InvoiceService = invoiceSvc
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+
+	event := s.event(EventPaymentSucceeded)
+	event.Content = s.contentForInvoice("cb_inv_unmapped")
+
+	s.Require().NoError(s.handler.handlePaymentSucceeded(s.ctx, event, s.services))
+
+	s.Equal([]int64{10000}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateReqs, 1)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a FAILED payment keeps its status")
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
+	s.Empty(invoiceSvc.reconciled)
+}
+
 // A tenant's own general notes land in the same array, so anything that is not one
 // of our payment ids must be left alone.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_UnknownPaymentIDIsIgnored() {

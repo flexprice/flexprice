@@ -110,6 +110,23 @@ func (s *PaymentService) RefundLateCapturedPayment(
 				}).
 				Mark(ierr.ErrInternal)
 		}
+	case types.PaymentStatusFailed:
+		// A FAILED payment can't move again, so only the refund is recorded.
+		if refundID == "" {
+			return nil
+		}
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{Metadata: &metadata}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Chargebee but failed to record it on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":               flexpricePaymentID,
+					"chargebee_transaction_id": chargebeeTransactionID,
+					"chargebee_refund_id":      refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		return nil
 	}
 
 	updateReq := dto.UpdatePaymentRequest{
