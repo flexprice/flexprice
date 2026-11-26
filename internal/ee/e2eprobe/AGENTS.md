@@ -13,7 +13,11 @@ Design and the reasoning behind every choice: `docs/design/2026-11-19-e2eprobe-r
 The probe is its own Go module (`go.mod` here): it imports the public SDK and
 nothing from the server, so the server's test, coverage and lint targets never
 touch it and its image builds from this directory alone. A server constant a
-scenario needs is copied, with its origin named in a comment.
+scenario needs is copied, with its origin named in a comment. Keep shared
+dependencies at the root module's versions or newer (`go get -C
+internal/ee/e2eprobe <module>@<version>` then `go mod tidy`): Trivy scans this
+`go.sum` too, and the module's own minimal versions can lag behind fixes the
+server already carries.
 
 | Package | Provides |
 | --- | --- |
