@@ -1,0 +1,12 @@
+{{define "subject"}}Final notice: Invoice {{.Number}} is past due: {{.Amount}}{{end}}
+{{define "body"}}Hi {{.Greeting}},
+
+This is a final notice. Invoice {{.Number}} has been overdue for a long time and we have not received payment:
+
+  - {{.Number}}: {{.Amount}} (due {{.Due}}, {{.Overdue}})
+
+Please pay by bank transfer using the details on the invoice, or reply today with a confirmed payment date. If we do not hear from you, we may have to pause service or take further collection steps.
+
+Thanks,
+{{.Tenant}} Billing
+{{end}}

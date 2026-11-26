@@ -441,3 +441,21 @@ type PendingProviderInvoice struct {
 	TenantID      string
 	EnvironmentID string
 }
+
+func IssueDateFor(reason types.InvoiceBillingReason, periodStart, periodEnd *time.Time) *time.Time {
+	switch reason {
+	case types.InvoiceBillingReasonSubscriptionCycle,
+		types.InvoiceBillingReasonProration,
+		types.InvoiceBillingReasonAutoInvoiceThreshold,
+		types.InvoiceBillingReasonSubscriptionPaused:
+		return periodEnd
+	case types.InvoiceBillingReasonSubscriptionCreate,
+		types.InvoiceBillingReasonSubscriptionTrialStart,
+		types.InvoiceBillingReasonSubscriptionTrialEnd,
+		types.InvoiceBillingReasonSubscriptionResume,
+		types.InvoiceBillingReasonSubscriptionUpdate:
+		return periodStart
+	default:
+		return nil
+	}
+}

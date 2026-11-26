@@ -1,11 +1,13 @@
 package service
 
 import (
+	"context"
 	"slices"
 	"sort"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -75,11 +77,17 @@ type windowPlacer struct {
 	plain    map[string][]decimal.Decimal         // usage left where none does
 	placed   map[string][]types.CommitmentInfo    // by line item ID, per display window
 	unplaced map[string]bool                      // lines with a charge that no window drew
+
+	// What unused, covered and plain bill per display window: amounts follow these, quantities the units.
+	unusedValue  map[string][]decimal.Decimal
+	coveredValue map[string][]decimal.Decimal
+	plainValue   map[string][]decimal.Decimal
 }
 
 // newWindowPlacer cuts the buckets of b's window stacks into display windows of window, coarsened to the bucket as
 // analytics points are. Buckets from period's end on, the rest of a projected open period, are set apart as beyond.
 func newWindowPlacer(
+	ctx context.Context,
 	l *commitmentLoader,
 	b *commitmentBilling,
 	window types.WindowSize,
@@ -97,6 +105,10 @@ func newWindowPlacer(
 		plain:    map[string][]decimal.Decimal{},
 		placed:   map[string][]types.CommitmentInfo{},
 		unplaced: map[string]bool{},
+
+		unusedValue:  map[string][]decimal.Decimal{},
+		coveredValue: map[string][]decimal.Decimal{},
+		plainValue:   map[string][]decimal.Decimal{},
 	}
 	keyOf := make([][]time.Time, len(b.stacks))
 	for si, stack := range b.stacks {
@@ -125,6 +137,16 @@ func newWindowPlacer(
 		index[start] = i
 	}
 
+	trueUps := map[string]decimal.Decimal{}
+	for _, line := range b.lines {
+		if types.CommitmentLineKind(line.Metadata[types.MetadataKeyCommitmentLineKind]) == types.CommitmentLineTrueUp {
+			trueUps[lo.FromPtr(line.CommitmentID)] = line.Amount
+		}
+	}
+
+	r := lineRenderer{cost: func(pr *price.Price, qty decimal.Decimal) decimal.Decimal {
+		return l.priceSvc.CalculateCost(ctx, pr, qty)
+	}}
 	for si, stack := range b.stacks {
 		if keyOf[si] == nil {
 			continue
@@ -145,6 +167,8 @@ func newWindowPlacer(
 					addWeight(p.unused, sc.ID, len(p.starts), at(w), got.PoolsLeft[pool])
 				}
 			}
+
+			p.unusedValue[sc.ID] = p.trueUpValue(l, sc, keyOf[si], trueUps[sc.ID])
 		}
 
 		for li, line := range stack.Lines {
@@ -153,17 +177,49 @@ func newWindowPlacer(
 					continue
 				}
 
-				target := p.plain
-				if stack.covers(line, w) {
-					target = p.covered
+				covered := stack.covers(line, w)
+				units, value := p.plain, p.plainValue
+				if covered {
+					units, value = p.covered, p.coveredValue
 				}
 
-				addWeight(target, line.Item.ID, len(p.starts), at(w), left)
+				// As overageLines bills it: each window of a quantity line priced per window at its own margin, an overage
+				// price once for all.
+				billed := left
+				if stack.Type == types.COMMITMENT_TYPE_QUANTITY && line.PerWindow && !(covered && line.OveragePrice != nil) {
+					billed = r.marginalCost(line.Price, line.Usage[w], left)
+				}
+
+				addWeight(units, line.Item.ID, len(p.starts), at(w), left)
+				addWeight(value, line.Item.ID, len(p.starts), at(w), billed)
 			}
 		}
 	}
 
 	return p
+}
+
+// trueUpValue weighs a commitment's true-up by its unused capacity, except that buckets past the range owe what their
+// capacity adds to the range's on the committed price, so tiers price the range's capacity first.
+func (p *windowPlacer) trueUpValue(l *commitmentLoader, sc *stackedCommitment, keys []time.Time, trueUp decimal.Decimal) []decimal.Decimal {
+	unused := p.unused[sc.ID]
+	inRange, past := decimal.Zero, decimal.Zero
+	for w, pool := range sc.PoolOf {
+		switch {
+		case pool == noPool:
+		case keys[w].Equal(p.end):
+			past = past.Add(sc.Pools[pool])
+		default:
+			inRange = inRange.Add(sc.Pools[pool])
+		}
+	}
+
+	if !past.IsPositive() {
+		return unused
+	}
+
+	beyond := accruedAmount(l.scopeByCommitment[sc.ID].amountOf, inRange, inRange.Add(past), sc.Currency)
+	return append(allocateCostByWeight(trueUp.Sub(beyond), unused[:len(unused)-1]), beyond)
 }
 
 // addWeight adds v to key's weight in display window at.
@@ -183,19 +239,21 @@ func (p *windowPlacer) utilized(commitmentID, lineID string, amount, quantity de
 }
 
 // overage places an overage or plain usage row on its line by the usage the waterfall left in each window it covers, or
-// in each window it does not.
+// in each window it does not, its amount by what that usage bills there.
 func (p *windowPlacer) overage(lineID string, kind types.CommitmentLineKind, amount, quantity decimal.Decimal) {
-	weights := p.covered[lineID]
+	units, value := p.covered[lineID], p.coveredValue[lineID]
 	if kind == types.CommitmentLinePlain {
-		weights = p.plain[lineID]
+		units, value = p.plain[lineID], p.plainValue[lineID]
 	}
 
-	p.place(lineID, weights, overageCharge, amount, quantity)
+	p.place(lineID, value, overageCharge, amount, decimal.Zero)
+	p.place(lineID, units, overageCharge, decimal.Zero, quantity)
 }
 
 // trueUp places a line's share of a commitment's true-up by the capacity the commitment left unused in each window.
 func (p *windowPlacer) trueUp(commitmentID, lineID string, amount, quantity decimal.Decimal) {
-	p.place(lineID, p.unused[commitmentID], trueUpCharge, amount, quantity)
+	p.place(lineID, p.unusedValue[commitmentID], trueUpCharge, amount, decimal.Zero)
+	p.place(lineID, p.unused[commitmentID], trueUpCharge, decimal.Zero, quantity)
 }
 
 // place shares one row of a line over the display windows by weights: amounts rounded to the currency, quantities not.

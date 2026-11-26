@@ -161,7 +161,8 @@ const (
 	WebhookEventPaymentCreated       WebhookEventName = "payment.created"
 	WebhookEventPaymentUpdated       WebhookEventName = "payment.updated"
 	WebhookEventPaymentFailed        WebhookEventName = "payment.failed"
-	WebhookEventPaymentAttemptFailed WebhookEventName = "payment.attempt.failed"
+	WebhookEventPaymentAttemptFailed    WebhookEventName = "payment.attempt.failed"
+	WebhookEventPaymentAttemptSucceeded WebhookEventName = "payment.attempt.succeeded"
 	WebhookEventPaymentSuccess       WebhookEventName = "payment.success"
 	WebhookEventPaymentPending       WebhookEventName = "payment.pending"
 )

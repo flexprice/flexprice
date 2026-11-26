@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -53,13 +54,58 @@ func (h *CheckoutSessionHandler) Create(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Checkout session ID"
+// @Param expand query string false "Comma-separated fields to expand: invoice, payment"
 // @Success 200 {object} dto.CheckoutSessionResponse
+// @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /checkout/sessions/{id} [get]
 func (h *CheckoutSessionHandler) Get(c *gin.Context) {
 	id := c.Param("id")
-	resp, err := h.service.GetAndReconcile(c.Request.Context(), id)
+	expand := types.NewExpand(c.Query("expand"))
+	if err := expand.Validate(types.CheckoutSessionExpandConfig); err != nil {
+		c.Error(err)
+		return
+	}
+	resp, err := h.service.GetAndReconcile(c.Request.Context(), id, expand)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// Query godoc
+// @Summary Query checkout sessions
+// @ID queryCheckoutSession
+// @Description Use when listing checkout sessions, e.g. a customer's sessions. Expand is not supported here; read one session with GET /checkout/sessions/{id}?expand=invoice,payment for its invoice, payment and attempts.
+// @Tags Checkout
+// @x-scope "read"
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.CheckoutSessionFilter true "Filter"
+// @Success 200 {object} dto.ListCheckoutSessionsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /checkout/sessions/search [post]
+func (h *CheckoutSessionHandler) Query(c *gin.Context) {
+	var filter types.CheckoutSessionFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+	if err := filter.GetExpand().Validate(types.ExpandConfig{}); err != nil {
+		c.Error(err)
+		return
+	}
+
+	resp, err := h.service.List(c.Request.Context(), &filter)
 	if err != nil {
 		c.Error(err)
 		return

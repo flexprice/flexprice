@@ -791,6 +791,7 @@ e2eprobe:
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {memory: 512Mi}
+  podAnnotations: {}
   nodeSelector: {}
   tolerations: []
 

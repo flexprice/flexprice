@@ -555,7 +555,7 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 		a.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	attempt, err := client.PaymentAttempt.Create().
+	create := client.PaymentAttempt.Create().
 		SetID(a.ID).
 		SetPaymentID(a.PaymentID).
 		SetAttemptNumber(a.AttemptNumber).
@@ -569,8 +569,14 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 		SetUpdatedAt(a.UpdatedAt).
 		SetCreatedBy(a.CreatedBy).
 		SetUpdatedBy(a.UpdatedBy).
-		SetEnvironmentID(a.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(a.EnvironmentID)
+	if a.PaymentMethod != nil {
+		create.SetPaymentMethodDetails(a.PaymentMethod)
+	}
+	if a.Error != nil {
+		create.SetErrorDetails(a.Error)
+	}
+	attempt, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -647,7 +653,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 		"payment_status", a.PaymentStatus,
 	)
 
-	_, err := client.PaymentAttempt.Update().
+	update := client.PaymentAttempt.Update().
 		Where(
 			paymentattempt.EnvironmentID(types.GetEnvironmentID(ctx)),
 			paymentattempt.ID(a.ID),
@@ -658,8 +664,14 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 		SetNillableGatewayAttemptID(a.GatewayAttemptID).
 		SetNillableErrorMessage(a.ErrorMessage).
 		SetMetadata(a.Metadata).
-		SetUpdatedAt(clock.Now()).
-		Save(ctx)
+		SetUpdatedAt(clock.Now())
+	if a.PaymentMethod != nil {
+		update.SetPaymentMethodDetails(a.PaymentMethod)
+	}
+	if a.Error != nil {
+		update.SetErrorDetails(a.Error)
+	}
+	_, err := update.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -680,7 +692,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.DeleteCache(ctx, a.ID)
+	r.DeleteCache(ctx, a.PaymentID)
 	return nil
 }
 

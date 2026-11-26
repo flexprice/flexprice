@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
 	domainInvoice "github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -69,4 +70,44 @@ func TestInvoiceRepository_Update_PersistsIsManuallyEdited(t *testing.T) {
 	reloaded, err := repo.Get(ctx, inv.ID)
 	require.NoError(t, err)
 	require.True(t, reloaded.IsManuallyEdited, "is_manually_edited should persist true after Update")
+}
+
+func TestInvoiceRepository_GetNextInvoiceNumber_PeriodFormats(t *testing.T) {
+	repo := newTestInvoiceRepository(t)
+	ctx := testInvoiceContext()
+	ctx = types.SetEnvironmentID(ctx, types.GenerateUUIDWithPrefix("env"))
+
+	tests := []struct {
+		name   string
+		format types.InvoiceNumberFormat
+		layout string
+	}{
+		{"YYYYMM", types.InvoiceNumberFormatYYYYMM, "200601"},
+		{"YYMMDD", types.InvoiceNumberFormatYYMMDD, "060102"},
+		{"YYYYMMDD", types.InvoiceNumberFormatYYYYMMDD, "20060102"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &types.InvoiceConfig{
+				InvoiceNumberFormat:        tt.format,
+				InvoiceNumberTimezone:      "UTC",
+				InvoiceNumberSeparator:     "-",
+				InvoiceNumberSuffixLength:  5,
+				InvoiceNumberStartSequence: 1,
+			}
+			prefix := "T" + tt.name
+
+			period := clock.Now().UTC().Format(tt.layout)
+			first, err := repo.GetNextInvoiceNumber(ctx, cfg, prefix)
+			require.NoError(t, err)
+			second, err := repo.GetNextInvoiceNumber(ctx, cfg, prefix)
+			require.NoError(t, err)
+			if period != clock.Now().UTC().Format(tt.layout) {
+				t.Skip("period rolled over mid-test")
+			}
+
+			require.Equal(t, prefix+"-"+period+"-00001", first)
+			require.Equal(t, prefix+"-"+period+"-00002", second)
+		})
+	}
 }

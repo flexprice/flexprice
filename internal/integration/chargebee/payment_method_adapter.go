@@ -211,3 +211,7 @@ func paymentMethodTypeFor(m enum.PaymentMethod) (types.PaymentMethodType, bool) 
 		return "", false
 	}
 }
+
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
+	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
+}

@@ -314,6 +314,7 @@ func (l *PaymentLifecycle) RecordFailedAttempt(ctx context.Context, params Recor
 		ErrorMessage:     params.ErrorMessage,
 		GatewayAttemptID: params.GatewayPaymentID,
 		Metadata:         params.Metadata,
+		Details:          params.Details,
 	}); err != nil {
 		l.logger.Error(ctx, "failed to record failed payment attempt",
 			"flexprice_payment_id", params.FlexpricePaymentID,

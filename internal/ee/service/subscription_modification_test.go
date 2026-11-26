@@ -649,6 +649,11 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Effecti
 		{
 			name:      "at_period_end",
 			buildDate: func(start, end time.Time) time.Time { return end },
+			wantError: false,
+		},
+		{
+			name:      "after_period_end",
+			buildDate: func(start, end time.Time) time.Time { return end.Add(time.Nanosecond) },
 			wantError: true,
 		},
 		{

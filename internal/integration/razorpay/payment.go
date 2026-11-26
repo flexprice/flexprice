@@ -58,6 +58,9 @@ type ChargeSavedTokenRequest struct {
 	TokenID            string                  // charge this mandate only; empty picks the newest usable one
 }
 
+// orderPaymentsTimeout bounds the order read that finds a link's declines; a slow or failed read returns none.
+const orderPaymentsTimeout = 3 * time.Second
+
 // PaymentLinkStatus captures the fields the FlexPrice sync path needs from a
 // Razorpay payment link fetch.
 type PaymentLinkStatus struct {
@@ -69,6 +72,8 @@ type PaymentLinkStatus struct {
 	// backfill gateway_payment_id and cut over to the direct payment-status path
 	// on subsequent syncs.
 	RazorpayPaymentID string
+	// OrderID is the order behind the link; its payments include the declines the link does not list.
+	OrderID string
 }
 
 // PaymentService handles Razorpay payment operations
@@ -668,6 +673,16 @@ func (s *PaymentService) createExternalPaymentRecord(
 		return err
 	}
 
+	if err := paymentService.RecordAttempt(ctx, paymentResp.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: razorpayPaymentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record external payment attempt",
+			"error", err,
+			"payment_id", paymentResp.ID,
+			"razorpay_payment_id", razorpayPaymentID)
+	}
+
 	s.logger.Info(ctx, "successfully created external payment record",
 		"payment_id", paymentResp.ID,
 		"razorpay_payment_id", razorpayPaymentID,
@@ -1004,6 +1019,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return nil
 	}
 
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: razorpayPaymentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID)
+	}
+
 	refundID, err := s.ensureRefunded(ctx, razorpayPaymentID, toPaise(existingPayment.Amount))
 	if err != nil {
 		return ierr.WithError(err).
@@ -1160,7 +1185,31 @@ func (s *PaymentService) GetPaymentLinkStatus(ctx context.Context, paymentLinkID
 			}
 		}
 	}
+	out.OrderID, _ = result["order_id"].(string)
 	return out, nil
+}
+
+// FailedOrderPaymentIDs returns the declined payments on a link's order. It never fails: a slow or
+// failed read returns none, since the caller only uses it to record attempts it may have missed.
+func (s *PaymentService) FailedOrderPaymentIDs(ctx context.Context, orderID string) []string {
+	if orderID == "" {
+		return nil
+	}
+
+	orderCtx, cancel := context.WithTimeout(ctx, orderPaymentsTimeout)
+	defer cancel()
+	orderPayments, err := s.client.FetchOrderPayments(orderCtx, orderID)
+	if err != nil {
+		return nil
+	}
+
+	var failed []string
+	for _, pm := range orderPayments {
+		if id, _ := pm["id"].(string); id != "" && pm["status"] == "failed" {
+			failed = append(failed, id)
+		}
+	}
+	return failed
 }
 
 // InvoiceStatus is the outcome of fetching a Razorpay invoice (inv_xxx), used on
@@ -1171,6 +1220,8 @@ type InvoiceStatus struct {
 	Status string
 	// RazorpayPaymentID is the pay_xxx recorded against the invoice, empty until paid.
 	RazorpayPaymentID string
+	// OrderID is the order behind the invoice; its payments include the declines.
+	OrderID string
 }
 
 // GetInvoiceStatus returns a Razorpay invoice's status plus the pay_xxx it carries.
@@ -1197,6 +1248,7 @@ func (s *PaymentService) GetInvoiceStatus(ctx context.Context, invoiceID string)
 	if paymentID, ok := result["payment_id"].(string); ok {
 		out.RazorpayPaymentID = paymentID
 	}
+	out.OrderID, _ = result["order_id"].(string)
 	return out, nil
 }
 

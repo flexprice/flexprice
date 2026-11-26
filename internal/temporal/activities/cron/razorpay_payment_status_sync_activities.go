@@ -29,6 +29,7 @@ func NewRazorpayPaymentStatusSyncActivities(paymentRepo domainPayment.Repository
 
 // SyncRazorpayInFlightPaymentsActivity runs the gateway sync GET /payments/:id does for every pending or
 // processing Razorpay saved-method debit, across all tenants and environments. Payment links are left to their webhooks.
+// TODO: declines on a standalone payment link (no checkout session) whose payment.failed webhook is lost are never backfilled; the checkout poll covers only session links.
 func (a *RazorpayPaymentStatusSyncActivities) SyncRazorpayInFlightPaymentsActivity(ctx context.Context) (*cronModels.RazorpayPaymentStatusSyncResult, error) {
 	result := &cronModels.RazorpayPaymentStatusSyncResult{}
 	for _, status := range []types.PaymentStatus{types.PaymentStatusPending, types.PaymentStatusProcessing} {

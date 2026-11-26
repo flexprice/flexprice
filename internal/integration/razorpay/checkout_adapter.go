@@ -93,7 +93,11 @@ func (a *CheckoutAdapter) FetchPaymentState(
 		if err != nil {
 			return nil, err
 		}
-		return &interfaces.PaymentState{Status: status, GatewayPaymentID: link.RazorpayPaymentID}, nil
+		return &interfaces.PaymentState{
+			Status:                  status,
+			GatewayPaymentID:        link.RazorpayPaymentID,
+			FailedGatewayPaymentIDs: a.Svc.FailedOrderPaymentIDs(ctx, link.OrderID),
+		}, nil
 
 	case strings.HasPrefix(handle, invoicePrefix):
 		inv, err := a.Svc.GetInvoiceStatus(ctx, handle)
@@ -104,7 +108,11 @@ func (a *CheckoutAdapter) FetchPaymentState(
 		if err != nil {
 			return nil, err
 		}
-		return &interfaces.PaymentState{Status: status, GatewayPaymentID: inv.RazorpayPaymentID}, nil
+		return &interfaces.PaymentState{
+			Status:                  status,
+			GatewayPaymentID:        inv.RazorpayPaymentID,
+			FailedGatewayPaymentIDs: a.Svc.FailedOrderPaymentIDs(ctx, inv.OrderID),
+		}, nil
 
 	case strings.HasPrefix(handle, orderPrefix):
 		order, err := a.Svc.GetOrderStatus(ctx, handle)

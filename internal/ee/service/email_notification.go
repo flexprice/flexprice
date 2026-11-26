@@ -51,6 +51,14 @@ type EmailNotificationService interface {
 	// Events for another region, events without tenant tags and events for unknown emails are dropped.
 	HandleDeliveryWebhook(ctx context.Context, provider types.EmailProvider, body []byte, header http.Header) error
 
+	// QueueReminderEmail queues the email of an approved payment reminder with its text frozen at approval.
+	// It fails when emails are off for the deployment or environment, or the tenant has no reply-to email.
+	QueueReminderEmail(ctx context.Context, reminder ReminderEmail) (*emaillog.EmailLog, error)
+
+	// CancelReminderEmail withdraws the email of a reminder approval being undone. An email that already went
+	// out cannot be withdrawn and returns a version conflict.
+	CancelReminderEmail(ctx context.Context, key string) error
+
 	// RegisterHandler registers the email-events consumer that auto-sends emails for finalized invoices.
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 }
@@ -79,6 +87,8 @@ type outgoingEmail struct {
 	idempotencyKey *string
 	// skipReason records the email as skipped instead of sending it.
 	skipReason string
+	// metadata is stored on the email log, for example the text a composer renders.
+	metadata types.Metadata
 }
 
 // composedEmail is an email type's rendered content for one email log.
@@ -117,9 +127,7 @@ func (s *emailNotificationService) SendInvoiceEmail(ctx context.Context, invoice
 		if err != nil {
 			return nil, err
 		}
-		if cust.Email != "" {
-			to = []string{cust.Email}
-		}
+		to = cust.EmailRecipients(types.EmailTypeInvoice)
 	}
 
 	merchant, err := invoiceMerchant(ctx, s.ServiceParams, inv)
@@ -215,7 +223,7 @@ func (s *emailNotificationService) SendAutoInvoiceEmail(ctx context.Context, inv
 		templateKey: types.EmailTemplateInvoiceFinalized,
 		trigger:     types.EmailTriggerAuto,
 		subject:     invoiceEmailSubject(inv, merchant.Name),
-		to:          lo.Compact([]string{cust.Email}),
+		to:          cust.EmailRecipients(types.EmailTypeInvoice),
 		senderName:  merchant.Name,
 		replyTo:     merchant.BillingDetails.ReplyToEmail(),
 	}
@@ -309,6 +317,9 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 			Mark(ierr.ErrInvalidOperation)
 	}
 
+	cc := normalizeRecipients(out.cc)
+	metadata := lo.Assign(types.Metadata{}, out.metadata)
+
 	e := &emaillog.EmailLog{
 		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_EMAIL_LOG),
 		EnvironmentID:  types.GetEnvironmentID(ctx),
@@ -320,12 +331,12 @@ func (s *emailNotificationService) queue(ctx context.Context, out outgoingEmail)
 		FromAddress:    senderAddress(s.Config.Email.SenderLocalPart, s.Config.Email.SenderDomain, t.ID, lo.CoalesceOrEmpty(out.senderName, t.Name)),
 		ReplyTo:        replyTo,
 		ToAddresses:    to,
-		CCAddresses:    normalizeRecipients(out.cc),
+		CCAddresses:    cc,
 		Subject:        out.subject,
 		Provider:       s.EmailProvider.Name(),
 		DeliveryStatus: types.EmailDeliveryStatusQueued,
 		IdempotencyKey: out.idempotencyKey,
-		Metadata:       types.Metadata{},
+		Metadata:       metadata,
 		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
 	if out.skipReason != "" {
@@ -359,47 +370,63 @@ func (s *emailNotificationService) DeliverEmail(ctx context.Context, emailLogID 
 		return s.failIfPermanent(ctx, e, err)
 	}
 
-	res, err := s.EmailProvider.Send(ctx, email.OutboundEmail{
-		IdempotencyKey: e.ID,
-		From:           e.FromAddress,
-		ReplyTo:        e.ReplyTo,
-		To:             e.ToAddresses,
-		CC:             e.CCAddresses,
-		Subject:        e.Subject,
-		HTML:           composed.content.HTML,
-		Text:           composed.content.Text,
-		Attachments:    composed.attachments,
-		Headers:        map[string]string{"Message-ID": fmt.Sprintf("<%s@%s>", e.ID, s.Config.Email.SenderDomain)},
-		Tags: map[string]string{
-			emailtypes.TagTenantID:      e.TenantID,
-			emailtypes.TagEnvironmentID: e.EnvironmentID,
-			emailtypes.TagEmailLogID:    e.ID,
-			emailtypes.TagRegion:        s.Config.Email.RegionTag,
-		},
-	})
-	if err != nil {
-		return s.failIfPermanent(ctx, e, err)
-	}
-
-	sentAt := clock.Now()
-	err = s.transition(ctx, e.ID, func(cur *emaillog.EmailLog) *emaillog.EmailLog {
+	// The row stays locked from the final status check until the status is recorded, so a cancel or skip cannot land
+	// between the provider accepting the email and the log saying so. If this process dies in between, nothing is
+	// committed: the email stays queued and the provider's idempotency key (the log id) stops a second send.
+	var sendErr error
+	sent := false
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		cur, err := s.EmailLogRepo.GetForUpdate(txCtx, e.ID)
+		if err != nil {
+			return err
+		}
+		if cur.DeliveryStatus != types.EmailDeliveryStatusQueued {
+			return nil
+		}
+		res, err := s.EmailProvider.Send(txCtx, email.OutboundEmail{
+			IdempotencyKey: e.ID,
+			From:           e.FromAddress,
+			ReplyTo:        e.ReplyTo,
+			To:             e.ToAddresses,
+			CC:             e.CCAddresses,
+			Subject:        e.Subject,
+			HTML:           composed.content.HTML,
+			Text:           composed.content.Text,
+			Attachments:    composed.attachments,
+			Headers:        map[string]string{"Message-ID": fmt.Sprintf("<%s@%s>", e.ID, s.Config.Email.SenderDomain)},
+			Tags: map[string]string{
+				emailtypes.TagTenantID:      e.TenantID,
+				emailtypes.TagEnvironmentID: e.EnvironmentID,
+				emailtypes.TagEmailLogID:    e.ID,
+				emailtypes.TagRegion:        s.Config.Email.RegionTag,
+			},
+		})
+		if err != nil {
+			sendErr = err
+			return nil
+		}
+		sent = true
 		b := emaillog.NewEmailLogBuilder(cur)
 		if cur.ProviderMessageID == nil && res.ProviderMessageID != "" {
 			b = b.WithProviderMessageID(res.ProviderMessageID)
 		}
 		if cur.SentAt == nil {
-			b = b.WithSentAt(sentAt)
+			b = b.WithSentAt(clock.Now())
 		}
-		if cur.DeliveryStatus.CanMoveTo(types.EmailDeliveryStatusSent) {
-			b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
-		}
+		b = b.WithDeliveryStatus(types.EmailDeliveryStatusSent)
 		for k, v := range composed.metadata {
 			b = b.WithMetadata(k, v)
 		}
-		return b.Build()
+		return s.EmailLogRepo.Update(txCtx, b.Build())
 	})
 	if err != nil {
 		return err
+	}
+	if sendErr != nil {
+		return s.failIfPermanent(ctx, e, sendErr)
+	}
+	if !sent {
+		return nil
 	}
 
 	s.Logger.Info(ctx, "email sent", "email_log_id", e.ID, "provider", e.Provider)
@@ -526,6 +553,8 @@ func (s *emailNotificationService) compose(ctx context.Context, e *emaillog.Emai
 	switch e.TemplateKey {
 	case types.EmailTemplateInvoiceFinalized:
 		return s.composeInvoiceEmail(ctx, e, allowMissingAttachments)
+	case types.EmailTemplateInvoicePaymentReminder:
+		return s.composeReminderEmail(ctx, e)
 	default:
 		return nil, ierr.NewErrorf("no composer for email template %s", e.TemplateKey).
 			WithHint("This email type cannot be sent").

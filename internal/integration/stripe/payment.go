@@ -2094,6 +2094,14 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 		"payment_id", payment.ID,
 		"new_status", paymentStatus)
 
+	attemptReq := dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded}
+	if paymentIntent != nil {
+		attemptReq.GatewayAttemptID = paymentIntent.ID
+	}
+	if err := paymentService.RecordAttempt(ctx, payment.ID, attemptReq); err != nil {
+		s.logger.Error(ctx, "failed to record succeeded attempt", "error", err, "payment_id", payment.ID)
+	}
+
 	if hasDiscount {
 		applyDiscountReq := dto.ApplyExternalInvoiceDiscountRequest{
 			DiscountAmount: discountAmount,

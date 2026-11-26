@@ -42,6 +42,8 @@ type Handlers struct {
 	Invoice                  *v1.InvoiceHandler
 	Feature                  *v1.FeatureHandler
 	Activity                 *v1.ActivityHandler
+	Collections              *v1.CollectionsHandler
+	Reminders                *v1.ReminderHandler
 	Entitlement              *v1.EntitlementHandler
 	CreditGrant              *v1.CreditGrantHandler
 	Payment                  *v1.PaymentHandler
@@ -564,9 +566,20 @@ func NewRouter(
 			}
 		}
 
+		collectionsRoutes := v1Private.Group("/collections")
+		{
+			collectionsRoutes.GET("/board", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoard)
+			collectionsRoutes.GET("/board/columns/:key", read(types.EntityCollections, types.ActionRead), handlers.Collections.GetBoardColumn)
+			collectionsRoutes.GET("/reminders", read(types.EntityCollections, types.ActionRead), handlers.Reminders.ListReminders)
+			collectionsRoutes.GET("/reminders/:id", read(types.EntityCollections, types.ActionRead), handlers.Reminders.GetReminder)
+			collectionsRoutes.PUT("/reminders/update/:id", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.UpdateReminder)
+			collectionsRoutes.PUT("/reminders/bulk-update", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.BulkUpdateReminders)
+		}
+
 		checkoutSessions := v1Private.Group("/checkout/sessions")
 		{
 			checkoutSessions.POST("", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Create)
+			checkoutSessions.POST("/search", observe(types.EntityCheckoutSession), handlers.CheckoutSession.Query)
 			checkoutSessions.GET("/:id", observe(types.EntityCheckoutSession), handlers.CheckoutSession.Get)
 			checkoutSessions.POST("/:id/cancel", write(types.EntityCheckoutSession, types.ActionWrite), handlers.CheckoutSession.Cancel)
 			checkoutSessions.DELETE("/:id", write("checkout_session", types.ActionWrite), handlers.CheckoutSession.Delete)

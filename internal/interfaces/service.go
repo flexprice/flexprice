@@ -67,6 +67,8 @@ type PaymentService interface {
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
 	ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error)
+	// VoidOpenPaymentLinks closes an invoice's unpaid payment links once the caller's transaction commits.
+	VoidOpenPaymentLinks(ctx context.Context, invoiceID, reason string)
 }
 
 // InvoiceService defines the interface for invoice operations
@@ -318,7 +320,7 @@ type CheckoutSessionService interface {
 	// GetAndReconcile is Get plus reconciliation against the payment provider. It
 	// contacts the gateway and can complete the session, so only callers acting for
 	// the customer should use it; internal readers use Get.
-	GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	GetAndReconcile(ctx context.Context, id string, expand types.Expand) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
 	Delete(ctx context.Context, id string) error
 	// Cancel terminates an in-flight session without archiving the row. Completed

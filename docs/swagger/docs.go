@@ -1956,6 +1956,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/checkout/sessions/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing checkout sessions, e.g. a customer's sessions. Expand is not supported here; read one session with GET /checkout/sessions/{id}?expand=invoice,payment for its invoice, payment and attempts.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Checkout"
+                ],
+                "summary": "Query checkout sessions",
+                "operationId": "queryCheckoutSession",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CheckoutSessionFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCheckoutSessionsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/checkout/sessions/{id}": {
             "get": {
                 "security": [
@@ -1978,6 +2031,12 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated fields to expand: invoice, payment",
+                        "name": "expand",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -1985,6 +2044,12 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/CheckoutSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
@@ -2093,6 +2158,477 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/collections/board": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need every open invoice by where it stands: sent but not due, overdue (one card per invoice, split by reminder status), and paid in the last 7 days. Counts and per-currency totals cover whole columns and follow the q and currency filters; by default no cards are returned (limit 0): each column carries count and totals, and has_more is true when the column has cards to fetch with GET /collections/board/columns/{key}. With limit above 0 the first page of cards is returned too, and has_more says more cards follow. available_currencies lists the currencies of open invoices and of the invoices the Paid column can show, before q and currency apply.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Get collections board",
+                "operationId": "getCollectionsBoard",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cards per column in this response (0-200, default 0 = counts and totals only)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keep receivables in this currency (case-insensitive)",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CollectionsBoardResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/board/columns/{key}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the cards of one board column, one page at a time, after the board call. Pages are numbered from 1 and ordered stably (not due by due date, overdue and held by remaining balance, chasing by newest approval first, paid by newest payment first); send the as_of of the board response, and the same from and to, with every page so the overdue boundary, the date range and the 7-day window do not move while you scroll. A row that changes between page requests can repeat or be skipped, so reset pages when the board changes. Page times limit may not exceed 5000.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Get a page of a collections board column",
+                "operationId": "getCollectionsBoardColumn",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Column key: not_due, overdue, chasing, held or paid_this_week",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number, from 1 (default 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "as_of (RFC3339) of the board response; within the last 24 hours and not in the future",
+                        "name": "as_of",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Cards per page (1-200, default 15)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the date range, YYYY-MM-DD (UTC, inclusive): open columns by due date, Paid by paid date. Without from and to, open columns are unbounded and Paid is the last 7 days",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keep receivables whose customer name, customer email or invoice number contains this text (case-insensitive, max 100 characters)",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keep receivables in this currency (case-insensitive)",
+                        "name": "currency",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CollectionsColumnPageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request, as_of or page too deep",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Unknown column",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/reminders": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the payment reminder of each overdue invoice with its tone, text and status. A reminder nobody acted on is rendered when read and stored nowhere; only edits and decisions are stored. The id of a reminder is its invoice id. The list is paged and nothing is sent. Order: status=approved lists the newest approval first (ties by invoice id); every other list puts the largest remaining balance first (ties by invoice id). Approvals made after as_of are left out of the list and the summary. from and to narrow the list and the summary by due date (invoices without a due date are left out when either is given); The summary (counts per status, totals per currency) follows from, to, currency and q like the board, and ignores status and customer_id so the status tabs count every status; available_currencies lists the currencies of open invoices and of invoices paid in the last 7 days, regardless of filters.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "List reminder drafts",
+                "operationId": "listReminderDrafts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "pending, approved, held or skipped",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Match customer name, email or invoice number",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Currency code",
+                        "name": "currency",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 15)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number, from 1 (default 1); page times limit may not exceed 5000",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start of the due date range, YYYY-MM-DD (UTC, inclusive); applies to the list and the summary",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End of the due date range, YYYY-MM-DD (UTC, inclusive); at most 5 years after from",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "as_of (RFC3339) of an earlier response; within the last 24 hours and not in the future",
+                        "name": "as_of",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListRemindersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/reminders/bulk-update": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you want to apply one status (and optionally tone) change to up to 200 invoices at once, with the same rules as updating one reminder. Subject and body are not allowed. All or nothing: if any invoice cannot take the change (unknown or not overdue, a change not legal for its status, someone changed it meanwhile, or, where emails are on, an approval for a customer without an email address), the request fails and no invoice changes. The error details name the invoice. Approving queues each email for the dispatcher.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Update reminders in bulk",
+                "operationId": "bulkUpdateReminderDrafts",
+                "parameters": [
+                    {
+                        "description": "Invoice IDs and the change",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/BulkUpdateRemindersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/BulkUpdateRemindersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "An invoice was not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "An invoice cannot take the change or was changed meanwhile",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/reminders/update/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty and no contact person lists invoice_payment_reminder in email_types) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Update reminder",
+                "operationId": "updateReminderDraft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target status and/or mail changes",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdateReminderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/InvoiceReminderResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Invoice is not open and overdue",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Not allowed in the reminder's status, or changed by someone else",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/reminders/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the reminder of one overdue invoice. The id is the invoice id; 404 when the invoice is not open and overdue.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Get reminder draft",
+                "operationId": "getReminderDraft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/InvoiceReminderResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
             }
         },
         "/commitments": {
@@ -16824,6 +17360,29 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhook-events/payment.attempt.succeeded": {
+            "post": {
+                "description": "Fired when one charge attempt succeeds. Doc-only for parsing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment and refund"
+                ],
+                "summary": "payment.attempt.succeeded",
+                "responses": {
+                    "200": {
+                        "description": "Webhook payload",
+                        "schema": {
+                            "$ref": "#/definitions/webhookDto.PaymentAttemptWebhookPayload"
+                        }
+                    }
+                }
+            }
+        },
         "/webhook-events/payment.created": {
             "post": {
                 "description": "Fired when a new payment is created. Doc-only for parsing.",
@@ -18934,6 +19493,14 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_types": {
+                    "description": "email_types are the emails this person receives in place of the customer email, e.g. [\"invoice\"]",
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/definitions/types.EmailType"
+                    }
+                },
                 "first_name": {
                     "type": "string",
                     "maxLength": 100
@@ -20094,6 +20661,50 @@ const docTemplate = `{
                 }
             }
         },
+        "BulkUpdateRemindersRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "expected_body": {
+                    "type": "string"
+                },
+                "expected_subject": {
+                    "description": "ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict\nwhen the text that would be approved now differs (the invoice changed since the preview). Optional, approval only.",
+                    "type": "string"
+                },
+                "invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/types.ReminderStatus"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "tone": {
+                    "type": "string"
+                }
+            }
+        },
+        "BulkUpdateRemindersResponse": {
+            "type": "object",
+            "properties": {
+                "drafts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InvoiceReminderResponse"
+                    }
+                }
+            }
+        },
         "CancelScheduleRequest": {
             "description": "Request to cancel a subscription schedule (supports two modes)",
             "type": "object",
@@ -20535,6 +21146,9 @@ const docTemplate = `{
                 "checkout_invoice_id": {
                     "type": "string"
                 },
+                "checkout_payment": {
+                    "$ref": "#/definitions/PaymentResponse"
+                },
                 "checkout_payment_id": {
                     "type": "string"
                 },
@@ -20572,6 +21186,14 @@ const docTemplate = `{
                 },
                 "idempotency_key": {
                     "type": "string"
+                },
+                "invoice": {
+                    "description": "CheckoutInvoice and CheckoutPayment are returned only when expanded.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/InvoiceResponse"
+                        }
+                    ]
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -20681,6 +21303,168 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "Name is required and must be different from the source plan's name",
+                    "type": "string"
+                }
+            }
+        },
+        "CollectionsBoardColumn": {
+            "type": "object",
+            "properties": {
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsItem"
+                    }
+                },
+                "count": {
+                    "description": "Count is the number of invoices in the whole column.",
+                    "type": "integer"
+                },
+                "has_more": {
+                    "description": "HasMore is true when the column has cards beyond the ones in this response.",
+                    "type": "boolean"
+                },
+                "hint": {
+                    "type": "string"
+                },
+                "key": {
+                    "$ref": "#/definitions/types.CollectionsColumnKey"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "totals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsCurrencyTotal"
+                    }
+                }
+            }
+        },
+        "CollectionsBoardResponse": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string"
+                },
+                "available_currencies": {
+                    "description": "AvailableCurrencies lists the currencies of all open and recently paid receivables, before q and currency apply.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "columns": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsBoardColumn"
+                    }
+                },
+                "range": {
+                    "description": "Range is the date range the board was read with (open columns by due date, paid by paid date); null when none\nwas given, then open columns are unbounded and paid is the last 7 days.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CollectionsRange"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "CollectionsColumnPageResponse": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string"
+                },
+                "cards": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsItem"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "key": {
+                    "$ref": "#/definitions/types.CollectionsColumnKey"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "range": {
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CollectionsRange"
+                        }
+                    ],
+                    "x-nullable": true
+                }
+            }
+        },
+        "CollectionsCurrencyTotal": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                }
+            }
+        },
+        "CollectionsItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "description": "Amount is the remaining balance (not_due, overdue, chasing, held) or the invoice total (paid_this_week).",
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "days_overdue": {
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "due_in_days": {
+                    "type": "integer"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_number": {
+                    "type": "string"
+                },
+                "paid_at": {
+                    "type": "string"
+                },
+                "reminder_status": {
+                    "$ref": "#/definitions/types.ReminderStatus"
+                },
+                "reminder_status_reason": {
+                    "type": "string"
+                },
+                "reminder_tone": {
+                    "$ref": "#/definitions/types.ReminderTone"
+                }
+            }
+        },
+        "CollectionsRange": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string"
+                },
+                "to": {
                     "type": "string"
                 }
             }
@@ -23328,7 +24112,26 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.PaymentBehavior"
                 },
                 "payment_terms": {
-                    "$ref": "#/definitions/types.PaymentTerms"
+                    "description": "Deprecated: use payment_terms_type and payment_terms_days, which override it when sent.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer",
+                    "maximum": 365,
+                    "minimum": 1
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due. Omit to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
+                        }
+                    ]
                 },
                 "phases": {
                     "type": "array",
@@ -26399,6 +27202,91 @@ const docTemplate = `{
                 }
             }
         },
+        "InvoiceReminderResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "approved_at": {
+                    "type": "string"
+                },
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "CreatedAt and UpdatedAt are omitted until a person acts on the reminder.",
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_email": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "days_overdue": {
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "edited": {
+                    "description": "Edited is true when the mail differs from what the system wrote; the Original fields then hold the system's version.",
+                    "type": "boolean"
+                },
+                "email": {
+                    "description": "Email is where the email of an approved reminder stands; absent until one was queued.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/ReminderEmailStatus"
+                        }
+                    ]
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_number": {
+                    "type": "string"
+                },
+                "original_body": {
+                    "type": "string"
+                },
+                "original_subject": {
+                    "type": "string"
+                },
+                "original_tone": {
+                    "$ref": "#/definitions/types.ReminderTone"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.ReminderStatus"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "tone": {
+                    "$ref": "#/definitions/types.ReminderTone"
+                },
+                "tone_reason": {
+                    "description": "ToneReason explains the tone shown: the invoice's age, \"Tone set to firm by you\", or \"Approved with a firm tone, kept as approved\". It says nothing about edits or status; use edited and status_reason.",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "InvoiceResponse": {
             "type": "object",
             "properties": {
@@ -27006,6 +27894,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListCheckoutSessionsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CheckoutSessionResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListCostsheetResponse": {
             "type": "object",
             "properties": {
@@ -27112,6 +28014,45 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListRemindersResponse": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string"
+                },
+                "available_currencies": {
+                    "description": "AvailableCurrencies lists the currencies of all open and recently paid invoices, before q, currency and range apply.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "drafts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/InvoiceReminderResponse"
+                    }
+                },
+                "has_more": {
+                    "type": "boolean"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "range": {
+                    "description": "Range is the due date range the list and summary were read with; null when none was given.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/CollectionsRange"
+                        }
+                    ],
+                    "x-nullable": true
+                },
+                "summary": {
+                    "$ref": "#/definitions/ReminderSummary"
                 }
             }
         },
@@ -27469,6 +28410,9 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "error": {
+                    "$ref": "#/definitions/types.PaymentAttemptError"
+                },
                 "error_message": {
                     "type": "string"
                 },
@@ -27478,11 +28422,14 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
                 "payment_id": {
                     "type": "string"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/types.InstrumentDetails"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
                 },
                 "tenant_id": {
                     "type": "string"
@@ -28457,6 +29404,55 @@ const docTemplate = `{
                 },
                 "subscription_mapping_id": {
                     "type": "string"
+                }
+            }
+        },
+        "ReminderEmailStatus": {
+            "type": "object",
+            "properties": {
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.EmailDeliveryStatus"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "ReminderSummary": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "integer"
+                },
+                "customer_count": {
+                    "type": "integer"
+                },
+                "held": {
+                    "type": "integer"
+                },
+                "invoice_count": {
+                    "type": "integer"
+                },
+                "overdue_totals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsCurrencyTotal"
+                    }
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "to_review": {
+                    "type": "integer"
                 }
             }
         },
@@ -31002,10 +31998,22 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer"
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
                         }
                     ]
                 },
@@ -31263,10 +32271,22 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "payment_terms": {
-                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "description": "Deprecated: use PaymentTermsType and PaymentTermsDays; it is derived from them.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer"
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due; nil uses the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
                         }
                     ]
                 },
@@ -32739,6 +33759,33 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdateReminderRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "expected_body": {
+                    "type": "string"
+                },
+                "expected_subject": {
+                    "description": "ExpectedSubject and ExpectedBody are the text the reviewer saw. On an approval, the request fails with a conflict\nwhen the text that would be approved now differs (the invoice changed since the preview). Optional, approval only.",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.ReminderStatus"
+                },
+                "status_reason": {
+                    "type": "string"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "tone": {
+                    "type": "string"
+                }
+            }
+        },
         "UpdateScheduledTaskRequest": {
             "type": "object",
             "required": [
@@ -32915,6 +33962,20 @@ const docTemplate = `{
                 "parent_subscription_id": {
                     "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
                     "type": "string"
+                },
+                "payment_terms_days": {
+                    "description": "PaymentTermsDays is the days after the issue date an invoice falls due; only with DAYS.",
+                    "type": "integer",
+                    "maximum": 365,
+                    "minimum": 1
+                },
+                "payment_terms_type": {
+                    "description": "PaymentTermsType sets when invoices fall due. Omit to leave unchanged; send \"\" to use the tenant's.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTermsType"
+                        }
+                    ]
                 },
                 "proration_behavior": {
                     "description": "ProrationBehavior updates the stored behavior. Omit to leave it unchanged.",
@@ -36033,7 +37094,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                3600000000000
+                3600000000000,
+                604800000000000
             ],
             "properties": {
                 "unit": {
@@ -36044,7 +37106,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "EntitlementGrantMinDuration"
+                "EntitlementGrantMinDuration",
+                "CollectionsPaidWindow"
             ]
         },
         "types.DurationUnit": {
@@ -36164,10 +37227,12 @@ const docTemplate = `{
         "types.EmailTemplateKey": {
             "type": "string",
             "enum": [
-                "invoice_finalized"
+                "invoice_finalized",
+                "invoice_payment_reminder"
             ],
             "x-enum-varnames": [
-                "EmailTemplateInvoiceFinalized"
+                "EmailTemplateInvoiceFinalized",
+                "EmailTemplateInvoicePaymentReminder"
             ]
         },
         "types.EmailTrigger": {
@@ -37529,8 +38594,6 @@ const docTemplate = `{
                 "credit_consumption",
                 "credit_topups",
                 "net_billing",
-                "invoice_total_issued",
-                "net_billing_issued",
                 "active_customers"
             ],
             "x-enum-varnames": [
@@ -37546,8 +38609,6 @@ const docTemplate = `{
                 "MetricCreditConsumption",
                 "MetricCreditTopups",
                 "MetricNetBilling",
-                "MetricInvoiceTotalIssued",
-                "MetricNetBillingIssued",
                 "MetricActiveCustomers"
             ]
         },
@@ -37814,6 +38875,7 @@ const docTemplate = `{
             ]
         },
         "types.PaymentTerms": {
+            "description": "Deprecated: use payment_terms_type and payment_terms_days. \"\u003cdays\u003e NET\" (days 1–365), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
             "type": "string",
             "enum": [
                 "15 NET",
@@ -37822,6 +38884,7 @@ const docTemplate = `{
                 "60 NET",
                 "75 NET",
                 "90 NET",
+                "DUE_ON_RECEIPT",
                 "END_OF_MONTH",
                 "END_OF_NEXT_MONTH"
             ],
@@ -37832,6 +38895,7 @@ const docTemplate = `{
                 "PaymentTerms60Net",
                 "PaymentTerms75Net",
                 "PaymentTerms90Net",
+                "PaymentTermsDueOnReceipt",
                 "PaymentTermsEndOfMonth",
                 "PaymentTermsEndOfNextMonth"
             ]
@@ -39961,6 +41025,7 @@ const docTemplate = `{
                 "payment.updated",
                 "payment.failed",
                 "payment.attempt.failed",
+                "payment.attempt.succeeded",
                 "payment.success",
                 "payment.pending",
                 "refund.created",
@@ -40042,6 +41107,7 @@ const docTemplate = `{
                 "WebhookEventPaymentUpdated",
                 "WebhookEventPaymentFailed",
                 "WebhookEventPaymentAttemptFailed",
+                "WebhookEventPaymentAttemptSucceeded",
                 "WebhookEventPaymentSuccess",
                 "WebhookEventPaymentPending",
                 "WebhookEventRefundCreated",
@@ -41233,6 +42299,169 @@ const docTemplate = `{
                 }
             }
         },
+        "types.BankDetails": {
+            "type": "object",
+            "properties": {
+                "bank": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CardDetails": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string"
+                },
+                "exp_month": {
+                    "type": "integer"
+                },
+                "exp_year": {
+                    "type": "integer"
+                },
+                "funding": {
+                    "description": "credit, debit or prepaid",
+                    "type": "string"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "last4": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CheckoutConfigurationFilter": {
+            "type": "object",
+            "properties": {
+                "subscription_id": {
+                    "type": "string"
+                },
+                "wallet_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.CheckoutSessionFilter": {
+            "type": "object",
+            "properties": {
+                "actions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutAction"
+                    }
+                },
+                "checkout_invoice_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_payment_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "checkout_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutStatus"
+                    }
+                },
+                "configuration": {
+                    "$ref": "#/definitions/types.CheckoutConfigurationFilter"
+                },
+                "customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "expires_at_gt": {
+                    "type": "string"
+                },
+                "expires_at_lt": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "payment_providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.CheckoutPaymentProvider"
+                    }
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
+        "types.CollectionsColumnKey": {
+            "type": "string",
+            "enum": [
+                "not_due",
+                "overdue",
+                "chasing",
+                "held",
+                "paid_this_week"
+            ],
+            "x-enum-varnames": [
+                "CollectionsColumnNotDue",
+                "CollectionsColumnOverdue",
+                "CollectionsColumnChasing",
+                "CollectionsColumnHeld",
+                "CollectionsColumnPaidThisWeek"
+            ]
+        },
+        "types.EmailType": {
+            "type": "string",
+            "enum": [
+                "invoice",
+                "invoice_payment_reminder"
+            ],
+            "x-enum-varnames": [
+                "EmailTypeInvoice",
+                "EmailTypeInvoicePaymentReminder"
+            ]
+        },
+        "types.InstrumentDetails": {
+            "type": "object",
+            "properties": {
+                "bank": {
+                    "$ref": "#/definitions/types.BankDetails"
+                },
+                "card": {
+                    "$ref": "#/definitions/types.CardDetails"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PaymentAttemptMethod"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/types.WalletDetails"
+                }
+            }
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -41251,6 +42480,98 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.PaymentAttemptError": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "step": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PaymentAttemptMethod": {
+            "type": "string",
+            "enum": [
+                "CARD",
+                "UPI",
+                "NETBANKING",
+                "WALLET",
+                "EMI",
+                "PAYLATER",
+                "BANK_TRANSFER",
+                "OTHER"
+            ],
+            "x-enum-varnames": [
+                "PaymentAttemptMethodCard",
+                "PaymentAttemptMethodUPI",
+                "PaymentAttemptMethodNetBanking",
+                "PaymentAttemptMethodWallet",
+                "PaymentAttemptMethodEMI",
+                "PaymentAttemptMethodPayLater",
+                "PaymentAttemptMethodBankTransfer",
+                "PaymentAttemptMethodOther"
+            ]
+        },
+        "types.PaymentTermsType": {
+            "description": "DAYS (due payment_terms_days after the issue date), DUE_ON_RECEIPT, END_OF_MONTH or END_OF_NEXT_MONTH.",
+            "type": "string",
+            "enum": [
+                "DAYS",
+                "DUE_ON_RECEIPT",
+                "END_OF_MONTH",
+                "END_OF_NEXT_MONTH"
+            ],
+            "x-enum-varnames": [
+                "PaymentTermsTypeDays",
+                "PaymentTermsTypeDueOnReceipt",
+                "PaymentTermsTypeEndOfMonth",
+                "PaymentTermsTypeEndOfNextMonth"
+            ]
+        },
+        "types.ReminderStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "approved",
+                "held",
+                "skipped"
+            ],
+            "x-enum-varnames": [
+                "ReminderStatusPending",
+                "ReminderStatusApproved",
+                "ReminderStatusHeld",
+                "ReminderStatusSkipped"
+            ]
+        },
+        "types.ReminderTone": {
+            "type": "string",
+            "enum": [
+                "friendly",
+                "firm",
+                "final"
+            ],
+            "x-enum-varnames": [
+                "ReminderToneFriendly",
+                "ReminderToneFirm",
+                "ReminderToneFinal"
+            ]
+        },
+        "types.WalletDetails": {
+            "type": "object",
+            "properties": {
+                "provider": {
+                    "type": "string"
+                }
             }
         },
         "webhookDto.AlertWebhookPayload": {
@@ -42138,6 +43459,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "error": {
+                    "$ref": "#/definitions/types.PaymentAttemptError"
+                },
                 "error_message": {
                     "type": "string"
                 },
@@ -42149,6 +43473,12 @@ const docTemplate = `{
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
+                },
+                "payment_method": {
+                    "$ref": "#/definitions/types.InstrumentDetails"
+                },
+                "payment_status": {
+                    "$ref": "#/definitions/types.PaymentStatus"
                 }
             }
         },
