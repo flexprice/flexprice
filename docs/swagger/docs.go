@@ -2512,7 +2512,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
+                "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty and no contact person lists invoice_payment_reminder in email_types) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
                 "consumes": [
                     "application/json"
                 ],
@@ -19493,6 +19493,14 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_types": {
+                    "description": "email_types are the emails this person receives in place of the customer email, e.g. [\"invoice\"]",
+                    "type": "array",
+                    "maxItems": 10,
+                    "items": {
+                        "$ref": "#/definitions/types.EmailType"
+                    }
+                },
                 "first_name": {
                     "type": "string",
                     "maxLength": 100
@@ -29412,7 +29420,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "to": {
-                    "type": "string"
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -42421,6 +42432,17 @@ const docTemplate = `{
                 "CollectionsColumnChasing",
                 "CollectionsColumnHeld",
                 "CollectionsColumnPaidThisWeek"
+            ]
+        },
+        "types.EmailType": {
+            "type": "string",
+            "enum": [
+                "invoice",
+                "invoice_payment_reminder"
+            ],
+            "x-enum-varnames": [
+                "EmailTypeInvoice",
+                "EmailTypeInvoicePaymentReminder"
             ]
         },
         "types.InstrumentDetails": {

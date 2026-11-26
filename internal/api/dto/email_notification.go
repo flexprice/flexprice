@@ -6,7 +6,8 @@ import (
 	"github.com/flexprice/flexprice/internal/validator"
 )
 
-// SendInvoiceEmailRequest overrides who receives an invoice email; empty To sends to the customer's email.
+// SendInvoiceEmailRequest overrides who receives an invoice email; empty To sends to the customer's
+// invoice contact persons, else the customer's email.
 // A repeated IdempotencyKey returns the email first sent with it.
 type SendInvoiceEmailRequest struct {
 	To             []string `json:"to,omitempty" validate:"omitempty,max=50,dive,email"`

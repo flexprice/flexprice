@@ -11,6 +11,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/emaillog"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -90,7 +91,7 @@ func TestReminderEmail_ApproveOnlyQueuesTheFrozenText(t *testing.T) {
 	require.Equal(t, "Custom subject", e.Subject)
 	require.Equal(t, "Custom body", e.Metadata[emailMetaReminderBody])
 	require.Equal(t, reminderEmailKey("a1", f.reminders.All(ctx)[0].ID, *approved.ApprovedAt), lo.FromPtr(e.IdempotencyKey))
-	require.Equal(t, &dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusQueued, To: "ap@acme.test"}, approved.Email)
+	require.Equal(t, &dto.ReminderEmailStatus{Status: types.EmailDeliveryStatusQueued, To: []string{"ap@acme.test"}}, approved.Email)
 
 	_, err = f.svc.UpdateReminder(ctx, "a1", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrVersionConflict)
@@ -187,7 +188,7 @@ func TestReminderEmail_CustomerWithoutAddressCannotBeApproved(t *testing.T) {
 
 	_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrValidation)
-	require.Equal(t, "This customer has no email address. Add one before approving.", errors.FlattenHints(err))
+	require.Equal(t, "This customer has no email address. Add one, or a contact person receiving invoice_payment_reminder emails, before approving.", errors.FlattenHints(err))
 
 	got, err := f.svc.Get(ctx, "a2")
 	require.NoError(t, err)
@@ -399,4 +400,28 @@ func TestReminderEmail_ReopenBetweenTheReadAndTheSendIsNotEmailed(t *testing.T) 
 	logs := f.emails(t, ctx, "a1")
 	require.Len(t, logs, 1)
 	require.Equal(t, types.EmailDeliveryStatusSkipped, logs[0].DeliveryStatus, "and the log says why it was not sent")
+}
+
+func TestReminderEmail_ApproveSendsToReminderContactsWithoutCustomerEmail(t *testing.T) {
+	f, ctx := emailFixture(t, emailsOn)
+	reminderTypes := []types.EmailType{types.EmailTypeInvoicePaymentReminder}
+	require.NoError(t, f.customers.Create(ctx, &customer.Customer{
+		ID: "cust_contacts", Name: "Contacts", BaseModel: types.GetDefaultBaseModel(ctx),
+		ContactPersons: []*customer.ContactPerson{
+			{ID: "p1", Email: "ar@acme.test", EmailTypes: reminderTypes},
+			{ID: "p2", Email: "cfo@acme.test", EmailTypes: reminderTypes},
+			{ID: "p3", Email: "invoices@acme.test", EmailTypes: []types.EmailType{types.EmailTypeInvoice}},
+		},
+	}))
+	f.overdue(t, ctx, "a2", "cust_contacts", 100, 5)
+
+	approved, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
+	require.NoError(t, err)
+	want := []string{"ar@acme.test", "cfo@acme.test"}
+	require.Equal(t, want, approved.Email.To)
+
+	f.dispatch(t, ctx)
+	sent := f.sent.all()
+	require.Len(t, sent, 1)
+	require.Equal(t, want, sent[0].To)
 }

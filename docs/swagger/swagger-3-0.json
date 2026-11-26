@@ -2924,7 +2924,7 @@
           "Collections"
         ],
         "summary": "Update reminder",
-        "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
+        "description": "Use when you need to approve, hold, skip or reopen (status pending) a reminder, edit its tone, subject or body, or both at once. The request decides: status is pending, approved, held or skipped (omit it to keep the current one); status_reason is required for held and optional for skipped. A tone change rewrites subject and body from that tone's template, then a subject or body in the same request is applied on top. Allowed moves: pending to approved, held or skipped; held to pending, approved or skipped; approved or skipped to pending. Mail can only be edited while pending or held. Where emails are on for the environment, approving queues the email and fails with 400 when the customer has no email address (customer_email is empty and no contact person lists invoice_payment_reminder in email_types) or the tenant has no reply-to email; where emails are off, approving only records the decision.",
         "operationId": "updateReminderDraft",
         "parameters": [
           {
@@ -21098,6 +21098,14 @@
           "email": {
             "type": "string"
           },
+          "email_types": {
+            "maxItems": 10,
+            "type": "array",
+            "description": "email_types are the emails this person receives in place of the customer email, e.g. [\"invoice\"]",
+            "items": {
+              "$ref": "#/components/schemas/types.EmailType"
+            }
+          },
           "first_name": {
             "maxLength": 100,
             "type": "string"
@@ -30586,7 +30594,10 @@
             "type": "string"
           },
           "to": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -43414,6 +43425,18 @@
           "CollectionsColumnPaidThisWeek"
         ],
         "x-speakeasy-name-override": "CollectionsColumnKey"
+      },
+      "types.EmailType": {
+        "type": "string",
+        "enum": [
+          "invoice",
+          "invoice_payment_reminder"
+        ],
+        "x-enum-varnames": [
+          "EmailTypeInvoice",
+          "EmailTypeInvoicePaymentReminder"
+        ],
+        "x-speakeasy-name-override": "EmailType"
       },
       "types.InstrumentDetails": {
         "type": "object",
