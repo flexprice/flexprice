@@ -184,7 +184,7 @@ func (s *checkoutSessionService) GetByPaymentID(ctx context.Context, paymentID s
 	return dto.ToCheckoutSessionResponse(session), nil
 }
 
-func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error) {
+func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string, expand types.Expand) (*dto.CheckoutSessionResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("id is required").
 			WithHint("checkout session ID cannot be empty").
@@ -206,7 +206,28 @@ func (s *checkoutSessionService) GetAndReconcile(ctx context.Context, id string)
 		}
 	}
 
-	return s.toPollableResponse(ctx, session, reconciled.stale), nil
+	resp := s.toPollableResponse(ctx, session, reconciled.stale)
+	if err := s.expandCheckoutSession(ctx, resp, expand); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// expandCheckoutSession attaches the session's invoice and payment when asked for. Reads by id
+// also return a finished session's archived payment and deleted draft invoice.
+func (s *checkoutSessionService) expandCheckoutSession(ctx context.Context, resp *dto.CheckoutSessionResponse, expand types.Expand) error {
+	var err error
+	if expand.Has(types.ExpandInvoice) && resp.CheckoutInvoiceID != nil {
+		if resp.CheckoutInvoice, err = NewInvoiceService(s.ServiceParams).GetInvoice(ctx, *resp.CheckoutInvoiceID); err != nil {
+			return err
+		}
+	}
+	if expand.Has(types.ExpandPayment) && resp.CheckoutPaymentID != nil {
+		if resp.CheckoutPayment, err = NewPaymentService(s.ServiceParams).GetPayment(ctx, dto.GetPaymentRequest{ID: *resp.CheckoutPaymentID, SkipGatewaySync: true}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // toPollableResponse adds the fields a client needs to poll: whether the session is

@@ -42,6 +42,7 @@ const (
 	ExpandPriceSyncStatus           ExpandableField = "price_sync_status"
 	ExpandCommitments               ExpandableField = "commitments"
 	ExpandInstalments               ExpandableField = "instalments"
+	ExpandPayment                   ExpandableField = "payment"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -135,6 +136,15 @@ var (
 		AllowedFields: []ExpandableField{ExpandTaxRate},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandTaxRate: {},
+		},
+	}
+
+	// CheckoutSessionExpandConfig defines what can be expanded on a checkout session
+	CheckoutSessionExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandInvoice, ExpandPayment},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandInvoice: {},
+			ExpandPayment: {},
 		},
 	}
 
