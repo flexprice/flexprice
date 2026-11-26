@@ -1615,7 +1615,6 @@ func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems 
 		return nil
 	}
 
-	// By ID, not List: past periods bill at prices that have since ended.
 	prices, err := s.PriceRepo.ListByIDs(ctx, priceIDs)
 	if err != nil {
 		return err

@@ -231,14 +231,11 @@ func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
 
 // ListAll returns all prices without pagination
 func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
-	// Create an unlimited filter
-	unlimitedFilter := &types.PriceFilter{
-		QueryFilter:     types.NewNoLimitQueryFilter(),
-		TimeRangeFilter: filter.TimeRangeFilter,
-		EntityIDs:       filter.EntityIDs,
-	}
+	// Like the ent repository, keep every filter field and only lift the limit
+	unlimitedFilter := *filter
+	unlimitedFilter.QueryFilter = types.NewNoLimitQueryFilter()
 
-	return s.List(ctx, unlimitedFilter)
+	return s.List(ctx, &unlimitedFilter)
 }
 
 // CreateBulk creates multiple prices in bulk
