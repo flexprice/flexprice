@@ -17463,11 +17463,11 @@ definitions:
   types.EmailType:
     enum:
     - invoice
-    - payment_reminder
+    - invoice_payment_reminder
     type: string
     x-enum-varnames:
     - EmailTypeInvoice
-    - EmailTypePaymentReminder
+    - EmailTypeInvoicePaymentReminder
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -20278,8 +20278,9 @@ paths:
         held or skipped; held to pending, approved or skipped; approved or skipped
         to pending. Mail can only be edited while pending or held. Where emails are
         on for the environment, approving queues the email and fails with 400 when
-        the customer has no email address (customer_email is empty) or the tenant
-        has no reply-to email; where emails are off, approving only records the decision.'
+        the customer has no email address (customer_email is empty and no contact
+        person lists invoice_payment_reminder in email_types) or the tenant has no
+        reply-to email; where emails are off, approving only records the decision.'
       operationId: updateReminderDraft
       parameters:
       - description: Invoice ID

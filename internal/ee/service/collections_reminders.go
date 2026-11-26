@@ -389,7 +389,7 @@ func (s *reminderService) save(ctx context.Context, row collections.InvoiceWithR
 }
 
 // requireApprovable refuses an approval that cannot send its email: this deployment has no email provider, or the
-// customer has no address. Emails being on for the environment is guaranteed by Collections being enabled.
+// customer has no reminder recipient. Emails being on for the environment is guaranteed by Collections being enabled.
 func (s *reminderService) requireApprovable(c *customer.Customer) error {
 	if !s.Config.Email.IsProviderConfigured() {
 		return ierr.NewError("emails are not available").
@@ -397,9 +397,9 @@ func (s *reminderService) requireApprovable(c *customer.Customer) error {
 			Mark(ierr.ErrServiceUnavailable)
 	}
 
-	if c == nil || len(c.EmailRecipients(types.EmailTypePaymentReminder)) == 0 {
+	if c == nil || len(c.EmailRecipients(types.EmailTypeInvoicePaymentReminder)) == 0 {
 		return ierr.NewError("customer has no email address").
-			WithHint("This customer has no email address. Add one before approving.").
+			WithHint("This customer has no email address. Add one, or a contact person receiving invoice_payment_reminder emails, before approving.").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -438,7 +438,7 @@ func (s *reminderService) queueEmail(ctx context.Context, row collections.Invoic
 		InvoiceID:  row.InvoiceID,
 		CustomerID: row.CustomerID,
 		ReminderID: next.ID,
-		Recipients: c.EmailRecipients(types.EmailTypePaymentReminder),
+		Recipients: c.EmailRecipients(types.EmailTypeInvoicePaymentReminder),
 		Subject:    next.Subject,
 		Body:       next.Body,
 		ApprovedAt: *next.ApprovedAt,

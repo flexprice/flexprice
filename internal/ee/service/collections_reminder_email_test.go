@@ -187,7 +187,7 @@ func TestReminderEmail_CustomerWithoutAddressCannotBeApproved(t *testing.T) {
 
 	_, err := f.svc.UpdateReminder(ctx, "a2", setStatus(types.ReminderStatusApproved, ""))
 	requireKind(t, err, ierr.ErrValidation)
-	require.Equal(t, "This customer has no email address. Add one before approving.", errors.FlattenHints(err))
+	require.Equal(t, "This customer has no email address. Add one, or a contact person receiving invoice_payment_reminder emails, before approving.", errors.FlattenHints(err))
 
 	got, err := f.svc.Get(ctx, "a2")
 	require.NoError(t, err)

@@ -80,9 +80,9 @@ func TestEmailRecipients(t *testing.T) {
 			name: "each type has its own contacts",
 			customer: &Customer{Email: "owner@example.test", ContactPersons: []*ContactPerson{
 				{FirstName: "AP", Email: "ap@example.test", EmailTypes: invoice},
-				{FirstName: "Collections", Email: "dues@example.test", EmailTypes: []types.EmailType{types.EmailTypePaymentReminder}},
+				{FirstName: "Collections", Email: "dues@example.test", EmailTypes: []types.EmailType{types.EmailTypeInvoicePaymentReminder}},
 			}},
-			emailType: types.EmailTypePaymentReminder,
+			emailType: types.EmailTypeInvoicePaymentReminder,
 			want:      []string{"dues@example.test"},
 		},
 		{
@@ -90,7 +90,7 @@ func TestEmailRecipients(t *testing.T) {
 			customer: &Customer{Email: "owner@example.test", ContactPersons: []*ContactPerson{
 				{FirstName: "AP", Email: "ap@example.test", EmailTypes: invoice},
 			}},
-			emailType: types.EmailTypePaymentReminder,
+			emailType: types.EmailTypeInvoicePaymentReminder,
 			want:      []string{"owner@example.test"},
 		},
 	}
