@@ -1003,6 +1003,55 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() 
 		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
 		s.Require().Error(err)
 	})
+
+	s.Run("cancellation_before_period_end_does_not_credit_future_successor", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-cancel-before-period-end")
+		sub := s.createActiveSub(cust.ID)
+		periodStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+		sub.StartDate = periodStart
+		sub.BillingAnchor = periodStart
+		sub.CurrentPeriodStart = periodStart
+		sub.CurrentPeriodEnd = periodEnd
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
+			WithStartDate(periodStart).
+			Build()
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(5)
+		execResp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+		s.Require().NoError(err)
+		s.Require().Len(execResp.ChangedResources.LineItems, 2)
+
+		successor := s.mustGetLineItem(execResp.ChangedResources.LineItems[1].ID)
+		s.True(successor.StartDate.Equal(periodEnd))
+
+		sp := s.service.(*subscriptionModificationService).serviceParams
+		prorationSvc := NewLineItemProrationService(sp)
+		price, err := s.GetStores().PriceRepo.Get(ctx, p.ID)
+		s.Require().NoError(err)
+
+		summary, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
+			Subscription:  sub,
+			EffectiveDate: time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC),
+			Behavior:      types.ProrationBehaviorCreateProrations,
+			Entries: []LineItemProrationEntry{
+				{
+					LineItem:        successor,
+					Action:          types.ProrationActionCancellation,
+					CurrentPrice:    price,
+					CurrentQuantity: successor.Quantity,
+				},
+			},
+		})
+		s.Require().NoError(err)
+		s.True(summary.TotalCreditAmount.IsZero(), "future-starting successor should not be credited on mid-period cancellation, got %s", summary.TotalCreditAmount)
+	})
 }
 
 func (s *SubscriptionModificationServiceSuite) mustGetLineItem(id string) *subscription.SubscriptionLineItem {
