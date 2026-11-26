@@ -232,6 +232,7 @@ func MoyasarBackfillCardSetup() error {
 		ConnectionRepo:               connectionRepo,
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		SettingsRepo:                 settingsRepo,
+		BillingEntityRepo:            entRepo.NewBillingEntityRepository(client, appLogger),
 		WebhookPublisher:             noopWebhookPublisher{},
 		Client:                       httpclient.NewDefaultClient(),
 		IntegrationFactory:           integrationFactory,
