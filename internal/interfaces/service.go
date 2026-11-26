@@ -67,6 +67,8 @@ type PaymentService interface {
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
 	ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error)
+	// VoidOpenPaymentLinks closes an invoice's unpaid payment links once the caller's transaction commits.
+	VoidOpenPaymentLinks(ctx context.Context, invoiceID, reason string)
 }
 
 // InvoiceService defines the interface for invoice operations
