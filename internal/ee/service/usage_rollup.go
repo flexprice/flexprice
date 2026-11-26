@@ -698,8 +698,9 @@ func (s *usageRollupService) periodSnapshot(ctx context.Context, customerID stri
 		return nil, err
 	}
 	snapshot := &usageSnapshot{}
-	// A watermark from before this period means nothing of it is counted yet: totals start at the period start.
-	if len(watermarks) == 1 {
+	// At most one row (unique per customer); none means never checkpointed. A watermark from before this period
+	// means nothing of it is counted yet: totals start at the period start.
+	if len(watermarks) > 0 {
 		snapshot.AggregatedUntil = types.LatestOf(watermarks[0].AggregatedUntil, periodStart)
 	}
 	rows, err := s.MeterUsageCheckpointRepo.ListPeriodTotals(ctx, customerID, periodStart)
