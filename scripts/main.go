@@ -139,6 +139,11 @@ var commands = []Command{
 		Description: "Replay events from a CSV via POST /v1/events/bulk in batches of -batch-size (preserves event_id, timestamp, event_name, source, properties)",
 		Run:         internal.ReplayEventsFromCSV,
 	},
+	{
+		Name:        "moyasar-backfill-card-setup",
+		Description: "Save the card and void the 1 SAR charge for Moyasar card setups paid after a decline marked the payment FAILED (dry run unless -dry-run=false)",
+		Run:         internal.MoyasarBackfillCardSetup,
+	},
 }
 
 func main() {
@@ -202,7 +207,7 @@ func main() {
 	flag.StringVar(&startTime, "start-time", "", "Start time for reprocessing (ISO-8601 format)")
 	flag.StringVar(&endTime, "end-time", "", "End time for reprocessing (ISO-8601 format)")
 	flag.StringVar(&batchSize, "batch-size", "100", "Batch size for reprocessing and event replay (max 1000)")
-	flag.StringVar(&dryRun, "dry-run", "false", "Dry run mode (true/false)")
+	flag.StringVar(&dryRun, "dry-run", "", "Dry run mode (true/false); off when unset, except moyasar-backfill-card-setup which runs dry unless -dry-run=false")
 	flag.StringVar(&addonID, "addon-id", "", "Addon ID for operations")
 	flag.StringVar(&workerCount, "worker-count", "", "Concurrent workers (sets WORKER_COUNT when non-empty; migrate-calendar-billing-csv defaults to 3 if unset)")
 	flag.StringVar(&effectiveDate, "effective-date", "", "Effective date for calendar billing migration (RFC3339 or YYYY-MM-DD)")

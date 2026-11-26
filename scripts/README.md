@@ -162,6 +162,27 @@ Optional: `-api-base-url "http://localhost:8080/v1"` for local API. If `-worker-
 
 **Environment variables (alternative to flags):** `SCRIPT_FLEXPRICE_API_KEY` or `FLEXPRICE_API_KEY`, `API_BASE_URL`, `FILE_PATH`, `EFFECTIVE_DATE`, `ENVIRONMENT_ID`, `SUCCESS_OUTPUT_PATH`, `FAILED_OUTPUT_PATH`, `DRY_RUN`, `WORKER_COUNT`.
 
+### moyasar-backfill-card-setup
+
+One-time backfill for Moyasar card setups paid before the FLE-1909 fix. A declined card-setup attempt used to mark the Flexprice payment FAILED; when the customer then paid on the same link, Moyasar took 1 SAR but Flexprice ignored the success, so the card was never saved and the charge never returned. Moyasar will not redeliver those webhooks.
+
+For each CUSTOMER / `moyasar` / CARD payment in `FAILED` status, the script reads the Moyasar charge ID from `gateway_payment_id` (falling back to the setup intent's `given_id`, `uuid.NewSHA1(uuid.NameSpaceOID, payment_id)`), scopes to the payment's billing entity, and fetches the charge:
+
+- `paid` / `captured`: settles the charge the same way the webhook does. It creates a replacement payment for the customer keyed by the Moyasar charge ID, marks it SUCCEEDED with a succeeded attempt, saves the card from `source.token`, then voids or refunds the charge. The FAILED payment is left as is.
+- `failed` / `initiated` (no money taken) and `voided` / `refunded` (already returned): skipped.
+
+Runs as a dry run unless `-dry-run=false`; a dry run only logs each payment ID, customer ID, Moyasar charge ID, Moyasar status and action. Safe to re-run: a returned charge reads `voided` / `refunded` and is skipped, and a charge whose earlier void failed resolves to the same replacement payment and card. Prints a summary of scanned, settled, skipped per Moyasar status, and errors. Outbound payment webhooks are not sent for the replacement payments.
+
+```bash
+# Dry run
+go run scripts/main.go -cmd moyasar-backfill-card-setup -tenant-id <tenant_id> -environment-id <environment_id>
+
+# Apply
+go run scripts/main.go -cmd moyasar-backfill-card-setup -tenant-id <tenant_id> -environment-id <environment_id> -dry-run=false
+```
+
+Only the charge ID stored on the FAILED payment is checked. If a paid retry got a different Moyasar charge ID than the decline, it reads `failed` and the customer is skipped.
+
 ## Development
 
 When adding new scripts:
