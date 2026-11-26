@@ -10,8 +10,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/commitment"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/entitlementgrant"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -293,8 +295,95 @@ func (s *UsageRollupSuite) TestPlanEntitlementChangeClearsEligibility() {
 	s.True(s.eligible(sub), "with the entitlement gone the customer is eligible again")
 }
 
-// Entitlements on the plan, addons or subscription decide eligibility without reading grants: a grant
-// opens only from a grant-config entitlement, which this check already rejects.
+// A commitment in the current period keeps the customer ineligible, including one terminated mid-period: billing
+// applies it up to its termination.
+func (s *UsageRollupSuite) TestCommitmentsInThePeriodDecideEligibility() {
+	tests := []struct {
+		name   string
+		change func(c *commitment.Commitment)
+		want   usageRollupIneligibleReason
+	}{
+		{name: "active", want: usageRollupIneligibleCommitment},
+		{name: "terminated mid-period", change: func(c *commitment.Commitment) {
+			c.CommitmentStatus, c.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(s.periodStart.AddDate(0, 0, 5))
+		}, want: usageRollupIneligibleCommitment},
+		{name: "terminated before the period", change: func(c *commitment.Commitment) {
+			c.CommitmentStatus, c.TerminatedAt = types.CommitmentStatusTerminated, lo.ToPtr(s.periodStart.AddDate(0, 0, -1))
+		}},
+		{name: "ended before the period", change: func(c *commitment.Commitment) {
+			c.EndDate = lo.ToPtr(s.periodStart.AddDate(0, 0, -1))
+		}},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+			sub := s.seed(nil)
+			c := &commitment.Commitment{ID: "cmt_rt", SubscriptionID: sub.ID, CustomerID: sub.CustomerID,
+				StartDate: s.periodStart.AddDate(0, -1, 0), CommitmentStatus: types.CommitmentStatusActive,
+				EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}
+			if tt.change != nil {
+				tt.change(c)
+			}
+			_, err := s.GetStores().CommitmentRepo.Create(ctx, c)
+			s.Require().NoError(err)
+			s.Equal(tt.want, s.reason(sub))
+		})
+	}
+}
+
+// Grants billing applies to the current period keep the customer ineligible after their entitlement is disabled
+// or deleted mid-period.
+func (s *UsageRollupSuite) TestPeriodGrantsDecideEligibility() {
+	tests := []struct {
+		name       string
+		scope      types.EntitlementGrantScopeEntityType
+		featureID  string
+		validTo    func() time.Time
+		noEntitled bool
+		want       usageRollupIneligibleReason
+	}{
+		{name: "feature grant on the charged meter, entitlement disabled", scope: types.EntitlementGrantScopeFeature,
+			featureID: "feat_rt", want: usageRollupIneligibleEntitlement},
+		{name: "subscription grant, entitlement disabled", scope: types.EntitlementGrantScopeSubscription,
+			want: usageRollupIneligibleEntitlement},
+		{name: "feature grant whose entitlement was deleted", scope: types.EntitlementGrantScopeFeature,
+			featureID: "feat_rt", noEntitled: true, want: usageRollupIneligibleEntitlement},
+		{name: "feature grant on a meter the plan doesn't charge", scope: types.EntitlementGrantScopeFeature,
+			featureID: "feat_other"},
+		{name: "grant that ended before the period", scope: types.EntitlementGrantScopeFeature, featureID: "feat_rt",
+			validTo: func() time.Time { return s.periodStart.AddDate(0, 0, -1) }},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx, st := s.GetContext(), s.GetStores()
+			sub := s.seed(nil)
+			for id, meterID := range map[string]string{"feat_rt": "mtr_rt", "feat_other": "mtr_other"} {
+				s.Require().NoError(st.FeatureRepo.Create(ctx, &feature.Feature{ID: id, Name: id, LookupKey: id, MeterID: meterID,
+					Type: types.FeatureTypeMetered, EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)}))
+			}
+			if !tt.noEntitled {
+				_, err := st.EntitlementRepo.Create(ctx, &entitlement.Entitlement{ID: "ent_grant", EntityType: types.ENTITLEMENT_ENTITY_TYPE_PLAN,
+					EntityID: "plan_rt", FeatureID: tt.featureID, FeatureType: types.FeatureTypeMetered, GrantScope: tt.scope,
+					EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)})
+				s.Require().NoError(err)
+			}
+			validTo := s.periodEnd
+			if tt.validTo != nil {
+				validTo = tt.validTo()
+			}
+			_, err := st.EntitlementGrantRepo.Create(ctx, &entitlementgrant.EntitlementGrant{ID: "grant_rt", EntitlementConfigID: "ent_grant",
+				CustomerID: sub.CustomerID, SubscriptionID: sub.ID, ScopeEntityType: tt.scope,
+				ValidFrom: s.periodStart.AddDate(0, -1, 0), ValidTo: validTo,
+				EnvironmentID: types.GetEnvironmentID(ctx), BaseModel: types.GetDefaultBaseModel(ctx)})
+			s.Require().NoError(err)
+			s.Equal(tt.want, s.reason(sub))
+		})
+	}
+}
+
+// Enabled entitlements on the plan, addons or subscription decide eligibility before any grant exists.
 func (s *UsageRollupSuite) TestEntitlementsDecideEligibility() {
 	tests := []struct {
 		name        string
