@@ -2562,11 +2562,18 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	result = applyLineItemGrouping(sub, result)
 
 	// Apply Coupons if any - both subscription level and line item level.
-	validCoupons, validLineItemCoupons, err := selectInvoiceCoupons(ctx, s.ServiceParams, sub, periodStart, periodEnd,
-		append(result.FixedCharges, result.UsageCharges...), nil)
+	// Selection mechanics (fetch active associations + split sub/line + price mapping) are shared
+	// with the analytics path via selectSubscriptionCoupons; billing supplies its own validation
+	// predicate (ValidateCoupon over the eager-loaded coupon).
+	couponValidationService := NewCouponValidationService(s.ServiceParams)
+	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return couponValidationService.ValidateCoupon(ctx, *c, sub) == nil
+	}
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
 	if err != nil {
 		return nil, err
 	}
+	validCoupons, validLineItemCoupons := invoiceCouponsFromSelection(sel, append(result.FixedCharges, result.UsageCharges...))
 
 	// Resolve tax rates for invoice level (invoice-level only per scope)
 	// Prepare minimal request for tax resolution using subscription context
@@ -3701,25 +3708,12 @@ func (s *billingService) applyCouponPreview(ctx context.Context, req *dto.Create
 	return nil
 }
 
-// selectInvoiceCoupons returns the subscription-level and line-item coupons an invoice with these
-// line items gets: active associations that pass ValidateCoupon (and keep, when set), with line
-// coupons only for line items whose price is on the invoice. The wallet's real-time balance uses
-// it too, so its discount matches the invoice.
-func selectInvoiceCoupons(
-	ctx context.Context, sp ServiceParams, sub *subscription.Subscription,
-	periodStart, periodEnd time.Time,
-	lineItems []dto.CreateInvoiceLineItemRequest,
-	keep func(*coupon.Coupon) bool,
-) ([]dto.InvoiceCoupon, []dto.InvoiceLineItemCoupon, error) {
-	validation := NewCouponValidationService(sp)
-	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
-		return (keep == nil || keep(c)) && validation.ValidateCoupon(ctx, *c, sub) == nil
-	}
-	sel, err := selectSubscriptionCoupons(ctx, sp, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
-	if err != nil {
-		return nil, nil, err
-	}
-
+// invoiceCouponsFromSelection turns selected coupon associations into an invoice's subscription-level
+// and line-item coupons. Line coupons are kept only for line items whose price is on the invoice. The
+// wallet's real-time balance uses it too, so its discount matches the invoice.
+func invoiceCouponsFromSelection(
+	sel *subscriptionCouponSelection, lineItems []dto.CreateInvoiceLineItemRequest,
+) ([]dto.InvoiceCoupon, []dto.InvoiceLineItemCoupon) {
 	invoicePriceIDs := make(map[string]bool)
 	for _, lineItem := range lineItems {
 		if lineItem.PriceID != nil {
@@ -3752,7 +3746,7 @@ func selectInvoiceCoupons(
 			})
 		}
 	}
-	return subscriptionCoupons, lineItemCoupons, nil
+	return subscriptionCoupons, lineItemCoupons
 }
 
 // listActiveLineItems returns published line items of subscriptionID not ended before from.

@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/checkout"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -3447,9 +3448,9 @@ func usageNetOfDraftCredits(usage map[string]currentPeriodUsage, creditsApplied 
 	return total
 }
 
-// usageCouponDiscount is the discount the subscription's recurring percentage coupons give on its usage
-// charges. It runs the invoice's own coupon selection and calculation on a draft of these charges, so
-// the balance matches the coming invoice. Fixed and once coupons wait for the invoice.
+// usageCouponDiscount is the discount the subscription's percentage coupons give on its usage charges.
+// It runs the invoice's own coupon selection and calculation on a draft of these charges, so the
+// balance matches the coming invoice. Fixed-amount coupons wait for the invoice.
 func (s *walletService) usageCouponDiscount(ctx context.Context, sub *subscription.Subscription, charges []dto.CreateInvoiceLineItemRequest, periodStart, periodEnd time.Time) (decimal.Decimal, error) {
 	// Shape the charges as the invoice does: zero lines dropped, then line grouping.
 	charges = lo.Filter(charges, func(c dto.CreateInvoiceLineItemRequest, _ int) bool {
@@ -3460,14 +3461,17 @@ func (s *walletService) usageCouponDiscount(ctx context.Context, sub *subscripti
 	}
 	charges = applyLineItemGrouping(sub, &dto.BillingCalculationResult{UsageCharges: charges}).UsageCharges
 
-	recurringPercentage := func(c *coupon.Coupon) bool {
-		return c.Type == types.CouponTypePercentage &&
-			(c.Cadence == types.CouponCadenceForever || c.Cadence == types.CouponCadenceRepeated)
+	// Same coupons the invoice picks (ValidateCoupon), minus fixed amounts: the wallet sees only usage,
+	// and a percentage gives usage the same share it gets on the full invoice, a fixed amount doesn't.
+	validation := NewCouponValidationService(s.ServiceParams)
+	filter := func(c *coupon.Coupon, _ *coupon_association.CouponAssociation) bool {
+		return c.Type == types.CouponTypePercentage && validation.ValidateCoupon(ctx, *c, sub) == nil
 	}
-	subscriptionCoupons, lineItemCoupons, err := selectInvoiceCoupons(ctx, s.ServiceParams, sub, periodStart, periodEnd, charges, recurringPercentage)
+	sel, err := selectSubscriptionCoupons(ctx, s.ServiceParams, []*subscription.Subscription{sub}, periodStart, periodEnd, filter)
 	if err != nil {
 		return decimal.Zero, err
 	}
+	subscriptionCoupons, lineItemCoupons := invoiceCouponsFromSelection(sel, charges)
 	if len(subscriptionCoupons) == 0 && len(lineItemCoupons) == 0 {
 		return decimal.Zero, nil
 	}

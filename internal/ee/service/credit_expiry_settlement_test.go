@@ -958,7 +958,7 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageOn
 }
 
 // Recurring percentage coupons lower pending usage as it accrues; fixed and one-time coupons wait for the invoice.
-func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercentageCouponsReducePendingUsage() {
+func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_PercentageCouponsReducePendingUsage() {
 	ctx := s.GetContext()
 	now := time.Now().UTC()
 	start, end := now.Add(-24*time.Hour), now.Add(24*time.Hour)
@@ -981,27 +981,27 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 			pending:    "100", available: "0",
 		},
 		{
-			name:       "one-time percentage line coupon waits for the invoice",
-			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(90)), Cadence: types.CouponCadenceOnce},
+			name:       "one-time 50% line coupon the invoice will apply",
+			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(50)), Cadence: types.CouponCadenceOnce},
 			lineItemID: &lineItemID,
-			pending:    "100", available: "0",
+			pending:    "50", available: "50",
 		},
 		{
-			name:       "forever 20% line coupon",
+			name:       "forever 20% line coupon also comes off the original amount, as on the invoice",
 			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(20)), Cadence: types.CouponCadenceForever},
 			lineItemID: &lineItemID,
-			pending:    "80", available: "20",
+			pending:    "30", available: "70",
 		},
 		{
 			name:    "repeated coupon at its application limit gives no discount",
 			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(90)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(2)},
 			applied: 2,
-			pending: "80", available: "20",
+			pending: "30", available: "70",
 		},
 		{
-			name:    "repeated 50% subscription coupon compounds after the line coupon",
+			name:    "repeated 50% subscription coupon compounds after the line coupons",
 			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(50)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(3)},
-			pending: "40", available: "60",
+			pending: "15", available: "85",
 		},
 	} {
 		c := step.coupon
@@ -1044,16 +1044,16 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_RecurringPercen
 		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit the wallet")
 	}
 
-	// A commitment can split one item into normal and overage charges. The invoice puts the line
-	// coupon on the last one only: 60 gets the 50% subscription coupon (30 off), 40 gets 20% then
-	// 50% (24 off).
+	// A commitment can split one item into normal and overage charges. The invoice puts line coupons
+	// on the last one only: 60 gets the 50% subscription coupon (30 off); 40 gets the 50% and 20% line
+	// coupons (28 off), then 50% of the remaining 12 (6 off).
 	split := []dto.CreateInvoiceLineItemRequest{
 		{Amount: decimal.NewFromInt(60), Quantity: decimal.NewFromInt(60), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
 		{Amount: decimal.NewFromInt(40), Quantity: decimal.NewFromInt(40), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
 	}
 	discount, err := s.walletService.(*walletService).usageCouponDiscount(ctx, sub, split, start, end)
 	s.Require().NoError(err)
-	s.True(decimal.NewFromInt(54).Equal(discount), "split charge discount %s", discount)
+	s.True(decimal.NewFromInt(64).Equal(discount), "split charge discount %s", discount)
 }
 
 func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageDoesNotRestoreExpiredCredits() {
