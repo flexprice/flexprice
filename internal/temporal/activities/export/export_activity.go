@@ -2,6 +2,7 @@ package export
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -40,6 +41,7 @@ type ExportActivity struct {
 	eventRepo                events.Repository
 	subscriptionLineItemRepo subscription.LineItemRepository
 	revenueFactRepo          revenuefact.Repository
+	reportRunner             syncExport.ReportRunner
 }
 
 // NewExportActivity creates a new export activity
@@ -59,6 +61,7 @@ func NewExportActivity(
 	eventRepo events.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
 	revenueFactRepo revenuefact.Repository,
+	reportRunner syncExport.ReportRunner,
 ) *ExportActivity {
 	return &ExportActivity{
 		meterUsageRepo:           meterUsageRepo,
@@ -76,6 +79,7 @@ func NewExportActivity(
 		eventRepo:                eventRepo,
 		subscriptionLineItemRepo: subscriptionLineItemRepo,
 		revenueFactRepo:          revenueFactRepo,
+		reportRunner:             reportRunner,
 	}
 }
 
@@ -91,6 +95,7 @@ type ExportDataInput struct {
 	CustomerExternalIDs []string
 	ManagedCopy         bool
 	TaskID              string
+	SourceConfig        *types.ExportSourceConfig
 }
 
 // ExportDataOutput represents output from export
@@ -98,6 +103,23 @@ type ExportDataOutput struct {
 	FileURL       string
 	RecordCount   int
 	FileSizeBytes int64
+	Metadata      map[string]string
+}
+
+// ErrTypeViewDeleted tags failures whose saved view is gone.
+const ErrTypeViewDeleted = "ViewDeleted"
+
+// Deterministic failures skip Temporal retries.
+func exportFailure(err error) error {
+	switch {
+	case errors.Is(err, syncExport.ErrViewDeleted):
+		return temporal.NewNonRetryableApplicationError(syncExport.ViewDeletedMessage, ErrTypeViewDeleted, err)
+	case ierr.IsValidation(err):
+		return temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
+	case ierr.IsNotFound(err):
+		return temporal.NewNonRetryableApplicationError(err.Error(), "NotFound", err)
+	}
+	return err
 }
 
 // ExportData performs the complete export: prepare data, generate CSV, upload to provider
@@ -125,17 +147,15 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 		CustomerExternalIDs: input.CustomerExternalIDs,
 		ManagedCopy:         input.ManagedCopy,
 		TaskID:              input.TaskID,
+		SourceConfig:        input.SourceConfig,
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo)
+	exportService := syncExport.NewExportServiceWithWallet(a.meterUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.storageResolver, a.config, a.logger, a.usageAnalyticsGetter, a.eventRepo, a.subscriptionLineItemRepo, a.revenueFactRepo, a.reportRunner)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Error(ctx, "export failed", "error", err, "entity_type", input.EntityType)
-		if ierr.IsValidation(err) {
-			return nil, temporal.NewNonRetryableApplicationError(err.Error(), "ValidationError", err)
-		}
-		return nil, err
+		return nil, exportFailure(err)
 	}
 
 	a.logger.Info(ctx, "export completed successfully",
@@ -148,5 +168,6 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 		FileURL:       response.FileURL,
 		RecordCount:   response.RecordCount,
 		FileSizeBytes: response.FileSizeBytes,
+		Metadata:      response.Metadata,
 	}, nil
 }

@@ -26,7 +26,13 @@ type AnalyticsService interface {
 	GetView(ctx context.Context, id string) (*analytics.View, error)
 	UpdateView(ctx context.Context, v *analytics.View) error
 	DeleteView(ctx context.Context, id string) error
+	ValidateReportSource(ctx context.Context, key string, params *types.ReportParams, windowDays int) error
+	ValidateViewSource(ctx context.Context, viewID string, windowDays int) (types.Grain, error)
+	RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error)
+	RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error)
 }
+
+const maxExportRows = 1_000_000
 
 type analyticsService struct {
 	ServiceParams
@@ -591,4 +597,174 @@ func addChangePct(res *dto.AnalyticsQueryResult, key string) {
 		}
 		res.Rows[i] = append(row, pct)
 	}
+}
+
+func reportRequestFromParams(params *types.ReportParams, rng string) *dto.ReportQueryRequest {
+	req := &dto.ReportQueryRequest{Range: rng}
+	if params == nil {
+		return req
+	}
+	req.Shape, req.Dimensions, req.Grain, req.Currency = params.Shape, params.Dimensions, params.Grain, params.Currency
+	for _, f := range params.Filters {
+		req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: f.Op, Value: f.Value})
+	}
+	return req
+}
+
+// ValidateReportSource checks params and the longest run window.
+func (s *analyticsService) ValidateReportSource(_ context.Context, key string, params *types.ReportParams, windowDays int) error {
+	if err := s.requireReports(); err != nil {
+		return err
+	}
+	if _, err := reportRequestFromParams(params, "").ValidateForReport(key, s.ReportsRepo.MaxRows()); err != nil {
+		return err
+	}
+	return checkReportRange(key, windowDays)
+}
+
+// ValidateViewSource checks the view and returns its timeseries grain.
+func (s *analyticsService) ValidateViewSource(ctx context.Context, viewID string, windowDays int) (types.Grain, error) {
+	v, err := s.views.Get(ctx, viewID)
+	if err != nil {
+		return "", err
+	}
+	if v.Definition == nil {
+		return "", ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
+	}
+	def := exportDefinition(*v.Definition, "2026-01-01..2026-01-02")
+	if err := rejectUsageView(def); err != nil {
+		return "", err
+	}
+	grain := viewGrain(def)
+	if def.Family == types.FamilyReport {
+		if err := s.requireReports(); err != nil {
+			return "", err
+		}
+		if _, err := analytics.ResolveVariables(def, nil); err != nil {
+			return "", err
+		}
+		return grain, checkReportRange(string(def.Metrics[0]), windowDays)
+	}
+	rv, err := analytics.ResolveVariables(def, nil)
+	if err != nil {
+		return "", err
+	}
+	if rv.Family == types.FamilyBilling && len(rv.Metrics) == 1 {
+		if bm, ok := analytics.LookupBillingMetric(rv.Metrics[0]); ok && bm.MaxRangeDays > 0 && windowDays > bm.MaxRangeDays {
+			return "", ierr.NewErrorf("view covers at most %d days", bm.MaxRangeDays).
+				WithHintf("This view covers at most %d days; choose a shorter interval", bm.MaxRangeDays).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return grain, nil
+}
+
+// Usage views need one customer to return rows.
+func rejectUsageView(def *analytics.ViewDefinition) error {
+	if def.Family != "" && def.Family != types.FamilyUsage {
+		return nil
+	}
+	return ierr.NewError("usage views cannot be exported").
+		WithHint("Usage views need a single customer and would export no rows; export a billing or report view instead").
+		Mark(ierr.ErrValidation)
+}
+
+func viewGrain(def *analytics.ViewDefinition) types.Grain {
+	if def.Shape != types.ShapeTimeseries {
+		return ""
+	}
+	grain := def.Time.Grain
+	if grain != "" || def.Family != types.FamilyReport || len(def.Metrics) == 0 {
+		return grain
+	}
+	if entry, ok := analytics.LookupReport(string(def.Metrics[0])); ok && len(entry.Grains) > 0 {
+		return entry.Grains[0]
+	}
+	return ""
+}
+
+// exportDefinition pins the range and drops its variable.
+func exportDefinition(def analytics.ViewDefinition, rng string) *analytics.ViewDefinition {
+	placeholder := def.Time.Range
+	def.Time.Range = rng
+	if !strings.HasPrefix(placeholder, "{{") || !strings.HasSuffix(placeholder, "}}") {
+		return &def
+	}
+	for _, f := range def.Filters {
+		if f != nil && slices.Contains(f.Value, placeholder) {
+			return &def
+		}
+	}
+	name := placeholder[2 : len(placeholder)-2]
+	vars := make([]*analytics.Variable, 0, len(def.Variables))
+	for _, va := range def.Variables {
+		if va == nil || va.Name != name {
+			vars = append(vars, va)
+		}
+	}
+	def.Variables = vars
+	return &def
+}
+
+func (s *analyticsService) RunReportForExport(ctx context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
+	return s.RunReport(ctx, key, reportRequestFromParams(params, rng))
+}
+
+func (s *analyticsService) RunViewForExport(ctx context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error) {
+	v, err := s.views.Get(ctx, viewID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if v.Definition == nil {
+		return nil, time.Time{}, ierr.NewError("view has no definition").Mark(ierr.ErrValidation)
+	}
+	def := exportDefinition(*v.Definition, rng)
+	if err := rejectUsageView(def); err != nil {
+		return nil, time.Time{}, err
+	}
+
+	if def.Family == types.FamilyReport {
+		res, err := s.runReportView(ctx, def)
+		return res, v.UpdatedAt, err
+	}
+	res, err := s.ExecuteView(ctx, def, nil)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	if len(res.Rows) > maxExportRows {
+		return nil, time.Time{}, ierr.NewErrorf("export exceeds %d rows", maxExportRows).
+			WithHint("Narrow the view or shorten the export window").
+			Mark(ierr.ErrValidation)
+	}
+	return res, v.UpdatedAt, nil
+}
+
+func (s *analyticsService) runReportView(ctx context.Context, def *analytics.ViewDefinition) (*dto.AnalyticsQueryResult, error) {
+	if len(def.Metrics) == 0 {
+		return nil, ierr.NewError("report view has no report key").Mark(ierr.ErrValidation)
+	}
+	rv, err := analytics.ResolveVariables(def, nil)
+	if err != nil {
+		return nil, err
+	}
+	req := &dto.ReportQueryRequest{
+		Shape: string(def.Shape), Dimensions: def.Dimensions, Range: def.Time.Range,
+		Grain: string(def.Time.Grain), Currency: def.Currency, Compare: def.Compare, Limit: def.Limit,
+	}
+	for _, f := range rv.Filters {
+		if f == nil {
+			continue
+		}
+		if f.Op != types.EQUAL && f.Op != types.IN {
+			return nil, ierr.NewErrorf("unsupported filter op %q", f.Op).Mark(ierr.ErrValidation)
+		}
+		req.Filters = append(req.Filters, dto.ReportFilter{Field: f.Field, Op: string(f.Op), Value: f.Value})
+	}
+	for _, so := range def.Sort {
+		if so == nil {
+			continue
+		}
+		req.Sort = append(req.Sort, dto.ReportSort{Field: so.Field, Dir: string(so.Dir)})
+	}
+	return s.RunReport(ctx, string(def.Metrics[0]), req)
 }
