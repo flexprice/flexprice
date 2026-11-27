@@ -3412,7 +3412,13 @@ func (s *walletService) compareUsageRollupBalance(ctx context.Context, w *wallet
 
 	rollupCtx := withUsageRollupShadowRead(ctx)
 	// The usage rollup path only runs for eligible customers; for others the compute would read ClickHouse again.
-	if !NewUsageRollupService(s.ServiceParams).IsCustomerEligible(rollupCtx, w.CustomerID) {
+	eligible, err := (&usageRollupService{ServiceParams: s.ServiceParams}).isEligible(rollupCtx, w.CustomerID)
+	if err != nil {
+		outcome = usageRollupShadowError
+		s.Logger.Error(ctx, "usage rollup shadow eligibility failed", "error", err, "wallet_id", w.ID)
+		return outcome
+	}
+	if !eligible {
 		outcome = usageRollupShadowIneligible
 		return outcome
 	}

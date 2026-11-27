@@ -32,8 +32,6 @@ type UsageRollupService interface {
 	// IsUsageRollupEligible reports whether this read of sub is on the usage rollup path: a wallet read, for a tenant
 	// with the usage rollup enabled, and a customer whose flag is set.
 	IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool
-	// IsCustomerEligible reports whether the customer's flag is set, evaluating it when a write has cleared it.
-	IsCustomerEligible(ctx context.Context, customerID string) bool
 	// UsagePrices returns the usage prices of sub's plan and addons that match its currency and billing
 	// period, and their meters, both by meter ID. Call it only for a subscription on the usage rollup path.
 	UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error)
@@ -463,13 +461,9 @@ func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *sub
 	if source != types.UsageSourceWallet || !readsUsageRollup(ctx, s.Config) {
 		return false
 	}
-	return s.IsCustomerEligible(ctx, sub.CustomerID)
-}
-
-func (s *usageRollupService) IsCustomerEligible(ctx context.Context, customerID string) bool {
-	eligible, err := s.isEligible(ctx, customerID)
+	eligible, err := s.isEligible(ctx, sub.CustomerID)
 	if err != nil {
-		s.Logger.Error(ctx, "usage rollup: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", customerID)
+		s.Logger.Error(ctx, "usage rollup: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", sub.CustomerID)
 		return false
 	}
 	return eligible
