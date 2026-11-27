@@ -22889,7 +22889,8 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "503":
-          description: Event could not be accepted, retry
+          description: May be accepted; assign event_id before the first request and
+            reuse it on retry
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
@@ -22968,8 +22969,8 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
         "503":
-          description: May be partly accepted; retry reusing each event's original
-            event_id
+          description: May be partly accepted; assign event_id to every event before
+            the first request and reuse those IDs on retry
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
