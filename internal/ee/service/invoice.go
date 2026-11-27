@@ -1770,6 +1770,19 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		return false, nil
 	}
 
+	// Cheap check before the gate queries.
+	if invoiceConfig.FinalizationDelaySeconds > 0 {
+		// Cycle delay counts from period close.
+		anchor := *inv.LastComputedAt
+		if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) && inv.PeriodEnd != nil {
+			anchor = lo.Latest(inv.CreatedAt, *inv.PeriodEnd)
+		}
+		dueAt := anchor.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
+		if !clock.Now().After(dueAt) {
+			return false, nil
+		}
+	}
+
 	// A draft under an open checkout is the customer's to pay, not the cron's to finalize.
 	// Completion finalizes it; expiry voids it.
 	gatedSession, _, err := s.isInvoiceGatedOnCheckout(ctx, inv, "")
@@ -1805,17 +1818,7 @@ func (s *invoiceService) IsInvoiceFinalizationDue(ctx context.Context, inv *invo
 		}
 	}
 
-	if invoiceConfig.FinalizationDelaySeconds == 0 {
-		return true, nil
-	}
-
-	// Cycle drafts are recomputed daily, so their delay counts from period close instead of the last compute.
-	anchor := *inv.LastComputedAt
-	if inv.BillingReason == string(types.InvoiceBillingReasonSubscriptionCycle) && inv.PeriodEnd != nil {
-		anchor = lo.Latest(inv.CreatedAt, *inv.PeriodEnd)
-	}
-	dueAt := anchor.Add(time.Duration(invoiceConfig.FinalizationDelaySeconds) * time.Second)
-	return clock.Now().After(dueAt), nil
+	return true, nil
 }
 
 // ListFinalizationCandidates pages computed drafts across all tenants by id for the finalization cron.
