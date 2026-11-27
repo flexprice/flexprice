@@ -62,10 +62,28 @@ production trigger. On main and `v*` runs,
 `retag-k8s-preprod` copies `:<sha>` to that tag after migrations, before either
 approval gate. Point the preprod cluster's Argo CD Image Updater at it (digest
 strategy). Both gates wait for this job, and treat it as skipped when the
-variable is unset. CI only publishes the tag: before approving, confirm the
-rollout itself in Argo CD or its notifications. Also confirm that the digest
-running in preprod matches the `:<sha>` digest of the run you are approving. A
-`main` run and a `v*` run can overlap and move the tag out of order.
+variable is unset. A `main` run and a `v*` run can overlap and move the tag out
+of order.
+
+To make both gates also wait for the rollout, the same way they wait for the
+ECS preprod deploy, set the variable `K8S_PREPROD_CHECK` and the secret
+`K8S_PREPROD_CLUSTER`. `wait-k8s-preprod` polls the preprod Deployment until it
+runs this run's build digest, at least one replica exists and all replicas are
+Ready, for up to 20 minutes. It fails otherwise, and the gates are not offered.
+It runs only when `K8S_PREPROD_TAG` is also set.
+
+    K8S_PREPROD_CHECK   (variable) {"region": "...", "namespace": "...", "deployment": "..."}
+    K8S_PREPROD_CLUSTER (secret)   {"cluster": "...", "endpoint": "https://...", "ca": "<base64 cluster CA>"}
+
+The cluster details are a secret so they stay masked in logs.
+
+Without `K8S_PREPROD_CHECK`, nothing waits for Kubernetes. Before approving,
+confirm in Argo CD that the preprod Deployment runs the digest of this run's
+`:<sha>` and is Ready.
+
+The `github-cicd` role needs a cluster access entry whose group can get
+Deployments in that namespace. It needs no `eks:*` IAM permission: the token
+comes from `aws eks get-token`, which only signs an STS request.
 
 ### 3. Verify with a dry run
 
