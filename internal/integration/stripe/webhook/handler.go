@@ -218,7 +218,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 		}
 
 		if payment.PaymentStatus == types.PaymentStatusFailed {
-			return h.refundFailedPayment(ctx, flexpricePaymentID, paymentIntent.ID, services)
+			return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, paymentIntent.ID, services.PaymentService)
 		}
 
 		// Skip card payments - they're handled synchronously by charge API
@@ -1050,7 +1050,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		if checkoutSession.PaymentStatus != stripeapi.CheckoutSessionPaymentStatusPaid {
 			return nil
 		}
-		return h.refundFailedPayment(ctx, flexpricePaymentID, piID, services)
+		return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, piID, services.PaymentService)
 	}
 
 	// Get payment intent if it exists
@@ -1105,30 +1105,6 @@ func (h *Handler) refundLateCapturedPayment(
 			"flexprice_payment_id", flexpricePaymentID,
 			"stripe_payment_intent_id", stripePaymentIntentID)
 	}
-}
-
-// refundFailedPayment refunds a capture on a payment we already gave up on, rather than applying it.
-func (h *Handler) refundFailedPayment(
-	ctx context.Context,
-	flexpricePaymentID string,
-	stripePaymentIntentID string,
-	services *ServiceDependencies,
-) error {
-	if stripePaymentIntentID == "" {
-		h.logger.Error(ctx, "late-captured payment has no stripe payment intent to refund — manual reconciliation required",
-			"error", "missing stripe payment intent id",
-			"flexprice_payment_id", flexpricePaymentID)
-		return nil
-	}
-
-	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, stripePaymentIntentID, services.PaymentService); err != nil {
-		h.logger.Error(ctx, "failed to refund payment captured after it failed",
-			"error", err,
-			"flexprice_payment_id", flexpricePaymentID,
-			"stripe_payment_intent_id", stripePaymentIntentID)
-		return err
-	}
-	return nil
 }
 
 // handleCheckoutSessionForPayment completes pending checkout sessions and refunds

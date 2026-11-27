@@ -319,13 +319,13 @@ func (h *Handler) settleLinkedPayment(
 
 	// A tenant's own notes land in the same array, so anything that is not one of our
 	// payment ids simply is not ours to settle.
-	existing, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return false, nil
 	}
 
 	// We already gave up on this payment, so the late capture is refunded rather than applied.
-	if existing.PaymentStatus == types.PaymentStatusFailed {
+	if payment.PaymentStatus == types.PaymentStatusFailed {
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, chargebeeTransactionID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund payment captured after it failed",
 				"error", err,
