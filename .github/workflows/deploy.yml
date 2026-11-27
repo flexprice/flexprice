@@ -514,6 +514,9 @@ jobs:
           trap 'rm -rf "$WORK"' EXIT
           cfg() { python3 -c 'import json,os,sys; print(json.loads(os.environ[sys.argv[1]])[sys.argv[2]])' "$1" "$2"; }
           CLUSTER="$(cfg CLUSTER_JSON cluster)"; ENDPOINT="$(cfg CLUSTER_JSON endpoint)"
+          echo "::add-mask::${CLUSTER}"
+          echo "::add-mask::${ENDPOINT}"
+          echo "::add-mask::${ENDPOINT#https://}"
           NS="$(cfg CHECK namespace)"; DEPLOY="$(cfg CHECK deployment)"
           cfg CLUSTER_JSON ca | base64 -d > "$WORK/ca.crt"
 
@@ -640,14 +643,18 @@ jobs:
         env:
           GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
           GITHUB_SHA: ${{ github.sha }}
+          DIGEST: ${{ needs.build.outputs.digest }}
         run: |
           # imagetools uses Docker's OWN auth (the docker/login-action step above) — the
           # exact path the build job uses to push to GHCR, so no anonymous/DENIED issue.
           # It COPIES the multi-arch manifest that passed the preprod canary from :<sha>
           # to :main — no rebuild, and :main lands on the identical digest that was tested.
+          # Promote the digest preprod verified.
+          SRC="${GHCR_IMAGE}:${GITHUB_SHA}"
+          if [ -n "${DIGEST}" ]; then SRC="${GHCR_IMAGE}@${DIGEST}"; fi
           docker buildx imagetools create \
             --tag "${GHCR_IMAGE}:main" \
-            "${GHCR_IMAGE}:${GITHUB_SHA}"
+            "${SRC}"
 
   # api, consumer, worker in one CodePipeline run.
   deploy-backend-codepipeline:
