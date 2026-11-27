@@ -460,6 +460,92 @@ jobs:
             --tag "${GHCR_IMAGE}:${TARGET_TAG}" \
             "${GHCR_IMAGE}:${GITHUB_SHA}"
 
+  # Gate waits for Kubernetes preprod rollout.
+  wait-k8s-preprod:
+    name: Wait for Kubernetes preprod rollout
+    needs: [retag-k8s-preprod]
+    if: >-
+      ${{ always() &&
+          needs.retag-k8s-preprod.result == 'success' &&
+          vars.K8S_PREPROD_CHECK != '' }}
+    runs-on: self-hosted
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ fromJson(vars.K8S_PREPROD_CHECK).region }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      - name: Wait until preprod runs this image
+        env:
+          CHECK: ${{ vars.K8S_PREPROD_CHECK }}
+          IMAGE: ${{ env.GHCR_IMAGE }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          trap 'rm -rf "$WORK"' EXIT
+          cfg() { python3 -c 'import json,os,sys; print(json.loads(os.environ["CHECK"])[sys.argv[1]])' "$1"; }
+          CLUSTER="$(cfg cluster)"; ENDPOINT="$(cfg endpoint)"
+          NS="$(cfg namespace)"; DEPLOY="$(cfg deployment)"
+          echo "::add-mask::${CLUSTER}"
+          echo "::add-mask::${ENDPOINT}"
+          cfg ca | base64 -d > "$WORK/ca.crt"
+
+          # Index and per-platform digests all count.
+          docker buildx imagetools inspect --raw "$IMAGE" > "$WORK/manifest.json"
+          DIGESTS="$(python3 - "$WORK/manifest.json" <<'EOF'
+          import hashlib, json, sys
+          raw = open(sys.argv[1], 'rb').read()
+          out = ["sha256:" + hashlib.sha256(raw).hexdigest()]
+          out += [m["digest"] for m in json.loads(raw).get("manifests", [])]
+          print(" ".join(out))
+          EOF
+          )"
+
+          deadline=$(( $(date +%s) + 20*60 ))
+          while :; do
+            TOKEN="$(aws eks get-token --cluster-name "$CLUSTER" --query status.token --output text)"
+            if curl -fsS --cacert "$WORK/ca.crt" -H "Authorization: Bearer $TOKEN" \
+                "$ENDPOINT/apis/apps/v1/namespaces/$NS/deployments/$DEPLOY" -o "$WORK/deploy.json"; then
+              if python3 - "$WORK/deploy.json" "$DIGESTS" "$GITHUB_SHA" <<'EOF'
+          import json, sys
+          d = json.load(open(sys.argv[1]))
+          digests = sys.argv[2].split()
+          image = d["spec"]["template"]["spec"]["containers"][0]["image"]
+          st, want = d.get("status", {}), d["spec"].get("replicas", 1)
+          sha = sys.argv[3]
+          matched = any(x in image for x in digests) or image.endswith(":" + sha)
+          done = (st.get("observedGeneration", 0) >= d["metadata"]["generation"]
+                  and st.get("updatedReplicas", 0) == want
+                  and st.get("readyReplicas", 0) == want
+                  and st.get("replicas", 0) == want)
+          print(f"image_matches={matched} rollout_complete={done}")
+          sys.exit(0 if matched and done else 1)
+          EOF
+              then
+                echo "Preprod is running ${GITHUB_SHA} and is Ready."
+                exit 0
+              fi
+            fi
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Preprod did not roll out ${GITHUB_SHA} within 20 minutes"
+              exit 1
+            fi
+            sleep 20
+          done
+
   # ──────────────────────────────────────────────────────────────────────────
   # Job 4: Manual approval gate (production only).
   # Bound to the GitHub Environment `prod-approval` whose required-reviewers
@@ -472,14 +558,15 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   approval-gate:
     name: Approve production rollout
-    needs: [resolve-config, deploy-preprod, retag-k8s-preprod]
+    needs: [resolve-config, deploy-preprod, retag-k8s-preprod, wait-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
           (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
-          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') &&
+          (needs.wait-k8s-preprod.result == 'success' || needs.wait-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: prod-approval
 
@@ -505,7 +592,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   promote-main-ghcr:
     name: Approve & promote :main to GHCR (GCP prod)
-    needs: [build, resolve-config, deploy-preprod, retag-k8s-preprod]
+    needs: [build, resolve-config, deploy-preprod, retag-k8s-preprod, wait-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.build.result == 'success' &&
@@ -513,7 +600,8 @@ jobs:
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
           (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
-          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') &&
+          (needs.wait-k8s-preprod.result == 'success' || needs.wait-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: gcp-prod-approval
     permissions:
