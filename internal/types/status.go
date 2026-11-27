@@ -18,4 +18,37 @@ const (
 	// This is typically used for data that is no longer in use but we want to keep for historical purposes
 	// These rows might be returned in queries and might be visible to users in some cases only
 	StatusArchived Status = "archived"
+
+	// Erasure requested; never readable, reversible
+	StatusSuppressed Status = "suppressed"
 )
+
+// Unset status behaves as published
+func CustomerStatusOrDefault(status Status) string {
+	if status == "" {
+		return string(StatusPublished)
+	}
+	return string(status)
+}
+
+// Single source for production and test doubles
+func IsCustomerStatusReadable(status Status) bool {
+	switch CustomerStatusOrDefault(status) {
+	case string(StatusPublished), string(StatusArchived):
+		return true
+	default:
+		return false
+	}
+}
+
+// Derived from the switch so the two cannot drift
+func ReadableCustomerStatuses() []string {
+	all := []Status{StatusPublished, StatusArchived, StatusDeleted, StatusSuppressed}
+	readable := make([]string, 0, len(all))
+	for _, s := range all {
+		if IsCustomerStatusReadable(s) {
+			readable = append(readable, string(s))
+		}
+	}
+	return readable
+}
