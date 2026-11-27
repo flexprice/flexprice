@@ -410,6 +410,56 @@ jobs:
           image: ${{ needs.build.outputs.image || format('{0}:{1}', env.GHCR_IMAGE, github.sha) }}
           dry_run: ${{ needs.resolve-config.outputs.dry_run }}
 
+  # Pre-gate tag for Kubernetes preprod.
+  retag-k8s-preprod:
+    name: Retag image for Kubernetes preprod
+    needs: [build, resolve-config, migrate]
+    if: >-
+      ${{ always() &&
+          (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
+          vars.K8S_PREPROD_TAG != '' &&
+          needs.build.result == 'success' &&
+          needs.resolve-config.result == 'success' &&
+          needs.resolve-config.outputs.environment == 'production' &&
+          needs.resolve-config.outputs.dry_run != 'true' &&
+          (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ vars.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_PUBLISH_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          cache-binary: false
+
+      - name: Retag :<sha> (manifest copy, no rebuild)
+        env:
+          GHCR_IMAGE: ${{ env.GHCR_IMAGE }}
+          GITHUB_SHA: ${{ github.sha }}
+          TARGET_TAG: ${{ vars.K8S_PREPROD_TAG }}
+        run: |
+          # Never move a production trigger tag.
+          case "${TARGET_TAG}" in
+            main|latest|develop|v*)
+              echo "::error::K8S_PREPROD_TAG '${TARGET_TAG}' is reserved; use a dedicated preprod tag"
+              exit 1 ;;
+          esac
+          if ! echo "${TARGET_TAG}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+            echo "::error::Invalid K8S_PREPROD_TAG format"
+            exit 1
+          fi
+          docker buildx imagetools create \
+            --tag "${GHCR_IMAGE}:${TARGET_TAG}" \
+            "${GHCR_IMAGE}:${GITHUB_SHA}"
+
   # ──────────────────────────────────────────────────────────────────────────
   # Job 4: Manual approval gate (production only).
   # Bound to the GitHub Environment `prod-approval` whose required-reviewers
@@ -422,13 +472,14 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   approval-gate:
     name: Approve production rollout
-    needs: [resolve-config, deploy-preprod]
+    needs: [resolve-config, deploy-preprod, retag-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
-          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: prod-approval
 
@@ -454,14 +505,15 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   promote-main-ghcr:
     name: Approve & promote :main to GHCR (GCP prod)
-    needs: [build, resolve-config, deploy-preprod]
+    needs: [build, resolve-config, deploy-preprod, retag-k8s-preprod]
     if: >-
       ${{ always() &&
           needs.build.result == 'success' &&
           needs.resolve-config.result == 'success' &&
           needs.resolve-config.outputs.environment == 'production' &&
           needs.resolve-config.outputs.dry_run != 'true' &&
-          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') }}
+          (needs.deploy-preprod.result == 'success' || needs.deploy-preprod.result == 'skipped') &&
+          (needs.retag-k8s-preprod.result == 'success' || needs.retag-k8s-preprod.result == 'skipped') }}
     runs-on: self-hosted
     environment: gcp-prod-approval
     permissions:
