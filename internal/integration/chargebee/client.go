@@ -438,9 +438,6 @@ func (c *Client) CreateItemPrice(ctx context.Context, params *itemprice.CreateRe
 
 	result, err := itemPriceAction.Create(params).Contexts(ctx).RequestWithEnv(env)
 	if err != nil {
-		c.logger.Error(ctx, "failed to create item price in Chargebee API",
-			"item_price_id", params.Id,
-			"error", err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create item price in Chargebee").
 			Mark(ierr.ErrValidation)

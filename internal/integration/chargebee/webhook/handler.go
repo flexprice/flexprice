@@ -102,7 +102,7 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	flexpriceInvoiceID, err := h.invoiceSvc.GetFlexPriceInvoiceIDByChargebeeInvoiceID(ctx, invoice.ID)
 	if err != nil {
 		if flexpricePaymentID == "" {
-			h.logger.Error(ctx, "failed to get FlexPrice invoice ID for Chargebee invoice and neither payment ID",
+			h.logger.Info(ctx, "Chargebee invoice has no FlexPrice invoice or payment, skipping event",
 				"error", err,
 				"chargebee_invoice_id", invoice.ID,
 				"event_id", event.ID)

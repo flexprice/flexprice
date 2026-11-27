@@ -302,7 +302,6 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 	wallet, err := h.walletService.TopUpWallet(c.Request.Context(), walletID, &req)
 	if err != nil {
-		h.logger.Error(c.Request.Context(), "Failed to top up wallet", "error", err)
 		c.Error(err)
 		return
 	}

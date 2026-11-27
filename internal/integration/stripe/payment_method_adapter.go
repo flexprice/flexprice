@@ -65,8 +65,6 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 	out := make([]interfaces.ProviderPaymentMethod, 0)
 	for pm, err := range stripeClient.V1PaymentMethods.List(ctx, params) {
 		if err != nil {
-			a.Logger.Error(ctx, "failed listing stripe payment methods",
-				"customer_id", flexCustomerID, "error", err)
 			return nil, err
 		}
 		if pm == nil {

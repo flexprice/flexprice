@@ -88,7 +88,7 @@ func (a *CreditNoteSyncActivities) SyncCreditNoteToZoho(ctx context.Context, inp
 			"invoice_id", cn.InvoiceID,
 			"tenant_id", input.TenantID,
 			"environment_id", input.EnvironmentID)
-		if zoho.IsZohoRequestRejected(err) {
+		if zoho.IsZohoRequestRejected(err) || ierr.IsValidation(err) {
 			return temporal.NewNonRetryableApplicationError("Zoho Books rejected the credit note sync", "ZohoRequestRejected", err)
 		}
 	}

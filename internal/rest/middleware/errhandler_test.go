@@ -50,3 +50,25 @@ func TestErrorHandler_RecordsErrorCode(t *testing.T) {
 		})
 	}
 }
+
+func TestErrorHandler_ClientClosedRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		ctx, cancel := context.WithCancel(c.Request.Context())
+		cancel()
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	})
+	router.Use(ErrorHandler())
+	router.GET("/fail", func(c *gin.Context) {
+		_ = c.Error(ierr.NewError("pq: canceling statement due to user request").Mark(ierr.ErrDatabase))
+	})
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/fail", nil))
+
+	require.Equal(t, statusClientClosedRequest, recorder.Code)
+	require.Empty(t, recorder.Body.String())
+}

@@ -209,6 +209,14 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 
 		payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 		if err != nil {
+			// A Stripe account shared by several environments delivers every event to each of them.
+			if ierr.IsNotFound(err) {
+				h.logger.Info(ctx, "FlexPrice payment not in this environment, skipping event",
+					"flexprice_payment_id", flexpricePaymentID,
+					"payment_intent_id", paymentIntent.ID,
+					"event_id", event.ID)
+				return nil
+			}
 			h.logger.Error(ctx, "failed to get FlexPrice payment, skipping event",
 				"error", err,
 				"flexprice_payment_id", flexpricePaymentID,
@@ -244,6 +252,13 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 	// No flexprice_payment_id - this is an external Stripe payment
 	err = h.paymentSvc.HandleExternalStripePaymentFromWebhook(ctx, paymentIntent, event.Data.Raw, services.PaymentService, services.InvoiceService)
 	if err != nil {
+		if ierr.IsNotFound(err) || ierr.IsInvalidOperation(err) {
+			h.logger.Info(ctx, "external Stripe payment is not for an invoice of this environment, skipping event",
+				"error", err,
+				"payment_intent_id", paymentIntent.ID,
+				"event_id", event.ID)
+			return nil
+		}
 		h.logger.Error(ctx, "failed to handle external Stripe payment from webhook, skipping event",
 			"error", err,
 			"payment_intent_id", paymentIntent.ID,
@@ -288,6 +303,13 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 	// Get payment record by flexprice_payment_id
 	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "FlexPrice payment not in this environment, skipping event",
+				"flexprice_payment_id", flexpricePaymentID,
+				"payment_intent_id", paymentIntentID,
+				"event_id", event.ID)
+			return nil
+		}
 		h.logger.Error(ctx, "failed to get payment record, skipping event",
 			"error", err,
 			"flexprice_payment_id", flexpricePaymentID,
@@ -590,14 +612,19 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 		"stripe_invoice_id", stripeInvoiceID)
 
 	if err := h.paymentSvc.ProcessExternalStripePayment(ctx, paymentIntent, stripeInvoiceID, services.PaymentService, services.InvoiceService); err != nil {
+		if ierr.IsInvalidOperation(err) || ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "external Stripe payment is not for an invoice of this environment, skipping event",
+				"error", err,
+				"payment_intent_id", paymentIntentID,
+				"stripe_invoice_id", stripeInvoiceID,
+				"event_id", event.ID)
+			return nil
+		}
 		h.logger.Error(ctx, "failed to process external Stripe payment, skipping event",
 			"error", err,
 			"payment_intent_id", paymentIntentID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"event_id", event.ID)
-		if ierr.IsInvalidOperation(err) || ierr.IsNotFound(err) {
-			return nil
-		}
 		return err
 	}
 

@@ -333,6 +333,12 @@ func (s *CustomerService) createCustomerMapping(ctx context.Context, customer *c
 	}
 	mapping.TenantID = customer.TenantID
 	if err := s.mappingRepo.Create(ctx, mapping); err != nil {
+		if ierr.IsAlreadyExists(err) {
+			s.logger.Info(ctx, "Zoho customer mapping already exists",
+				"customer_id", customer.ID,
+				"zoho_contact_id", contact.ContactID)
+			return nil
+		}
 		s.logger.Error(ctx, "failed to create Zoho customer mapping",
 			"customer_id", customer.ID,
 			"zoho_contact_id", contact.ContactID,

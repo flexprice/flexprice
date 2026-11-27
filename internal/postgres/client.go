@@ -263,7 +263,7 @@ func (c *Client) withTx(ctx context.Context, fn func(ctx context.Context) error)
 			err = fmt.Errorf("rolling back transaction: %v (original error: %w)", rerr, err)
 		}
 		types.DiscardPostCommitHooks(txCtx)
-		c.logger.Error(ctx, "rolling back transaction due to error",
+		c.logger.Debug(ctx, "rolling back transaction due to error",
 			"error", err,
 		)
 		return err

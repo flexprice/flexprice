@@ -188,7 +188,8 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		ConnectionID: lo.ToPtr(conn.ID),
 	}
 
-	if err := s.MappingRepo.Create(ctx, mapping); err != nil {
+	// A concurrent sync of the same price may have saved the mapping first.
+	if err := s.MappingRepo.Create(ctx, mapping); err != nil && !ierr.IsAlreadyExists(err) {
 		return "", ierr.WithError(err).
 			WithHint("Item created in Zoho but mapping failed to save").
 			WithReportableDetails(map[string]interface{}{

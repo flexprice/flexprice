@@ -369,6 +369,13 @@ func (s *invoiceService) CreateEmptyDraftInvoice(ctx context.Context, req dto.Cr
 	})
 
 	if err != nil {
+		if ierr.IsAlreadyExists(err) {
+			s.Logger.Info(ctx, "invoice already exists, skipping create",
+				"error", err,
+				"customer_id", req.CustomerID,
+				"subscription_id", req.SubscriptionID)
+			return nil, err
+		}
 		s.Logger.Error(ctx, "failed to create invoice",
 			"error", err,
 			"customer_id", req.CustomerID,

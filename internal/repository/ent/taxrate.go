@@ -79,7 +79,6 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 
 	if err != nil {
 		SetSpanError(span, err)
-		r.log.Error(ctx, "error creating taxrate", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {

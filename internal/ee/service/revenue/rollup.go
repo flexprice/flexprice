@@ -27,11 +27,18 @@ import (
 	"github.com/flexprice/flexprice/internal/utils"
 )
 
-// Skip reasons logged by RollupSubscription. Multi-period commitments are
-// skipped whole rather than written wrong.
+// Skip reasons logged by RollupSubscription. Multi-period commitments and
+// commitments-v2 lines are skipped whole rather than written wrong.
 const (
 	revenueRollupSkipMultiPeriodCommitment = "multi_period_commitment"
+	revenueRollupSkipCommitmentLines       = "commitment_lines"
 )
+
+// isCommitmentLine reports a commitments-v2 utilized, overage or true-up line. These carry
+// no stable price id and no decomposition yet, so revenue_facts leaves their invoices alone.
+func isCommitmentLine(metadata types.Metadata) bool {
+	return metadata[types.MetadataKeyCommitmentLineKind] != ""
+}
 
 // Service is the revenue_facts service: a shadow write-path that re-runs the
 // billing preview, never mutates billing state, and logs reconciliation
@@ -148,6 +155,13 @@ func (s *revenueService) rollupSubscriptionForPeriod(ctx context.Context, sub *s
 	// Daily curves for overage lines, produced while their normal sibling
 	// decomposes; a nil entry means the pair fell back to whole-period rows.
 	overageCurves := map[string][]dayCharge{}
+
+	if lo.SomeBy(invReq.LineItems, func(li dto.CreateInvoiceLineItemRequest) bool { return isCommitmentLine(li.Metadata) }) {
+		s.Logger.Info(ctx, "revenue_rollup_skipped",
+			"reason", revenueRollupSkipCommitmentLines,
+			"subscription_id", subscriptionID)
+		return true, nil
+	}
 
 	inputs, err := s.loadRollupInputs(ctx, sub, periodStart, periodEnd, invReq.LineItems)
 	if err != nil {
@@ -1237,6 +1251,12 @@ func (s *revenueService) FinalizeSubscriptionPeriod(ctx context.Context, invoice
 func (s *revenueService) flipInvoiceLineItems(ctx context.Context, inv *invoice.Invoice) (int, map[string]finalizePeriodGroup, error) {
 	flipped := 0
 	groupSeen := make(map[string]finalizePeriodGroup)
+	if lo.SomeBy(inv.LineItems, func(li *invoice.InvoiceLineItem) bool { return isCommitmentLine(li.Metadata) }) {
+		s.Logger.Info(ctx, "revenue_facts_flip_skipped",
+			"reason", revenueRollupSkipCommitmentLines,
+			"invoice_id", inv.ID)
+		return flipped, groupSeen, nil
+	}
 	subLocations := map[string]*time.Location{}
 
 	for _, li := range inv.LineItems {

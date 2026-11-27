@@ -333,7 +333,7 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 
 		claims, err := validate(c.Request.Context(), tokenString)
 		if err != nil {
-			logger.Error(c.Request.Context(), "failed to validate token", "error", err)
+			logger.Debug(c.Request.Context(), "failed to validate token", "error", err)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return

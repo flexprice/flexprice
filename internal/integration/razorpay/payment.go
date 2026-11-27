@@ -1127,9 +1127,6 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, razorpayPaymentID
 	}
 	result, err := s.client.FetchPayment(ctx, razorpayPaymentID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to fetch Razorpay payment status",
-			"razorpay_payment_id", razorpayPaymentID,
-			"error", err)
 		return "", "", err
 	}
 	status, ok := result["status"].(string)

@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -226,9 +227,14 @@ func (s *InvoiceSyncService) createDraftInvoiceInStripe(ctx context.Context, fle
 	// Create the invoice
 	stripeInvoice, err := stripeClient.V1Invoices.Create(ctx, params)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create draft invoice in Stripe",
-			"error", err,
-			"invoice_id", flexInvoice.ID)
+		// Stripe rejected the request itself; the same invoice cannot succeed on a retry.
+		var stripeErr *stripe.Error
+		if errors.As(err, &stripeErr) && stripeErr.Type == stripe.ErrorTypeInvalidRequest {
+			return "", ierr.NewError("failed to create Stripe invoice: " + stripeErr.Msg).
+				WithHint(stripeErr.Msg).
+				WithReportableDetails(map[string]interface{}{"invoice_id": flexInvoice.ID}).
+				Mark(ierr.ErrValidation)
+		}
 		return "", ierr.NewError("failed to create Stripe invoice").
 			WithHint("Unable to create draft invoice in Stripe").
 			WithReportableDetails(map[string]interface{}{
@@ -276,7 +282,6 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 
 	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get Stripe customer ID", "error", err, "customer_id", flexInvoice.CustomerID, "invoice_id", flexInvoice.ID)
 		return ierr.NewError("failed to get Stripe customer ID").
 			WithHint("Unable to find Stripe customer mapping").
 			WithReportableDetails(map[string]interface{}{"customer_id": flexInvoice.CustomerID, "invoice_id": flexInvoice.ID, "error": err.Error()}).
@@ -599,15 +604,16 @@ func (s *InvoiceSyncService) SyncPaymentToStripe(ctx context.Context, invoiceID 
 	return nil
 }
 
-// getStripeCustomerID gets the Stripe customer ID for a FlexPrice customer
+// getStripeCustomerID resolves the invoice customer's Stripe id, creating the Stripe customer on demand as
+// the other providers do, so an invoice never fails to sync only because the customer was not pushed first.
 func (s *InvoiceSyncService) getStripeCustomerID(ctx context.Context, customerID string, customerService interfaces.CustomerService) (string, error) {
-	customerResp, err := customerService.GetCustomer(ctx, customerID)
+	customerResp, err := s.customerSvc.EnsureCustomerSyncedToStripe(ctx, customerID, customerService)
 	if err != nil {
 		return "", err
 	}
 
-	stripeCustomerID, exists := customerResp.Customer.Metadata["stripe_customer_id"]
-	if !exists || stripeCustomerID == "" {
+	stripeCustomerID := customerResp.Customer.Metadata[stripeCustomerIDMetadataKey]
+	if stripeCustomerID == "" {
 		return "", ierr.NewError("customer not synced to Stripe").
 			WithHint("Customer must be synced to Stripe before invoice sync").
 			WithReportableDetails(map[string]interface{}{

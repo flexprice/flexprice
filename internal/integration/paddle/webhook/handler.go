@@ -7,6 +7,7 @@ import (
 	paddlesdk "github.com/PaddleHQ/paddle-go-sdk/v4"
 	"github.com/PaddleHQ/paddle-go-sdk/v4/pkg/paddlenotification"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/paddle"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -80,6 +81,12 @@ func (h *Handler) handleTransactionCompleted(ctx context.Context, payload []byte
 	}
 	err := h.syncSvc.ProcessTransactionCompletedWebhook(ctx, event.Data.ID, services.PaymentService, services.InvoiceService)
 	if err != nil {
+		// A Paddle account shared by several environments delivers every transaction to each of them.
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "transaction.completed is not for an invoice of this environment, skipping",
+				"error", err, "paddle_transaction_id", event.Data.ID)
+			return nil
+		}
 		h.logger.Error(ctx, "failed to process transaction.completed webhook",
 			"error", err, "paddle_transaction_id", event.Data.ID)
 		return err
@@ -103,6 +110,11 @@ func (h *Handler) isSubscriptionBootstrapTransaction(ctx context.Context, custom
 
 	sub, err := h.subscriptionRepo.Get(ctx, subID)
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "subscription from transaction.completed custom_data is not in this environment",
+				"subscription_id", subID, "paddle_transaction_id", paddleTransactionID)
+			return false
+		}
 		h.logger.Error(ctx, "failed to lookup subscription for transaction.completed webhook",
 			"error", err, "subscription_id", subID, "paddle_transaction_id", paddleTransactionID)
 		return false

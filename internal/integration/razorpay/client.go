@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -406,13 +407,7 @@ func (c *Client) CreateInvoice(ctx context.Context, invoiceData map[string]inter
 
 	razorpayInvoice, err := razorpayClient.Invoice.Create(invoiceData, nil)
 	if err != nil {
-		c.logger.Error(ctx, "failed to create invoice in Razorpay", "error", err)
-		return nil, ierr.NewError("failed to create invoice in Razorpay").
-			WithHint("Unable to create invoice in Razorpay").
-			WithReportableDetails(map[string]interface{}{
-				"error": err.Error(),
-			}).
-			Mark(ierr.ErrInternal)
+		return nil, requestError(err, "failed to create invoice in Razorpay", "Unable to create invoice in Razorpay")
 	}
 
 	c.logger.Info(ctx, "successfully created invoice in Razorpay",
@@ -473,7 +468,6 @@ func (c *Client) GetCustomerTokens(ctx context.Context, razorpayCustomerID strin
 
 	result, err := rc.Token.All(razorpayCustomerID, nil, nil)
 	if err != nil {
-		c.logger.Error(ctx, "failed to list Razorpay customer tokens", "error", err, "customer_id", razorpayCustomerID)
 		return nil, ierr.NewError("failed to list Razorpay customer tokens").
 			WithHint("Unable to list tokens from Razorpay").
 			WithReportableDetails(map[string]interface{}{"customer_id": razorpayCustomerID, "error": err.Error()}).
@@ -564,14 +558,22 @@ func (c *Client) CreateOrder(ctx context.Context, orderData map[string]interface
 	return result, nil
 }
 
-// requestError keeps Razorpay's reason on a described 4xx and marks it a validation error;
-// anything else, including an undescribed 4xx that may be an unparsed 5xx, is internal.
+// rateLimitMessage is how Razorpay describes a 429, which the SDK files under BadRequestError.
+const rateLimitMessage = "Too many requests"
+
+// requestError keeps Razorpay's reason on a described 4xx and marks it a validation error, except a
+// rate limit, which is worth retrying; anything else, including an undescribed 4xx that may be an
+// unparsed 5xx, is internal.
 func requestError(err error, msg, hint string) error {
 	var badRequest *rzperrors.BadRequestError
 	if errors.As(err, &badRequest) && badRequest.Message != "" {
+		mark := ierr.ErrValidation
+		if strings.EqualFold(badRequest.Message, rateLimitMessage) {
+			mark = ierr.ErrTooManyRequests
+		}
 		return ierr.NewError(msg + ": " + badRequest.Message).
 			WithHint(badRequest.Message).
-			Mark(ierr.ErrValidation)
+			Mark(mark)
 	}
 	return ierr.NewError(msg).
 		WithHint(hint).
@@ -690,7 +692,6 @@ func (c *Client) FetchPayment(ctx context.Context, paymentID string) (map[string
 
 	result, err := rc.Payment.Fetch(paymentID, nil, nil)
 	if err != nil {
-		c.logger.Error(ctx, "failed to fetch Razorpay payment", "error", err, "payment_id", paymentID)
 		return nil, ierr.NewError("failed to fetch Razorpay payment").
 			WithHint("Unable to retrieve the payment from Razorpay").
 			WithReportableDetails(map[string]interface{}{

@@ -85,6 +85,11 @@ func (s *revenueService) reconcileBookedInvoicesForEnvironment(ctx context.Conte
 // repairs it. Errors are logged, never propagated — one bad invoice must not
 // abort the run.
 func (s *revenueService) reconcileOneInvoice(ctx context.Context, inv *invoice.Invoice) (wasDrifted, wasCorrected bool) {
+	// Nothing was booked for a commitments-v2 invoice, so there is nothing to reconcile yet.
+	if lo.SomeBy(inv.LineItems, func(li *invoice.InvoiceLineItem) bool { return isCommitmentLine(li.Metadata) }) {
+		return false, false
+	}
+
 	rows, err := s.RevenueFactRepo.ListByInvoiceID(ctx, inv.ID)
 	if err != nil {
 		s.Logger.Error(ctx, "drift sweep failed to list facts for invoice",

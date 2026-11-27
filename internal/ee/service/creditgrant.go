@@ -1102,7 +1102,6 @@ func (s *creditGrantService) processScheduledApplication(
 	case StateActionApply:
 		nextCGA, err := s.applyCreditGrantToWallet(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
 		if err != nil {
-			s.Logger.Error(ctx, "Failed to apply credit grant transaction", "application_id", cga.ID, "error", err)
 			return nil, err
 		}
 		return nextCGA, nil
