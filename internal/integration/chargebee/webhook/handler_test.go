@@ -319,6 +319,20 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionIsRef
 	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[1].Metadata)["chargebee_refund_id"])
 }
 
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionVoidedPaymentIsRefundedAndStaysVoided() {
+	s.seedSession(types.CheckoutStatusExpired)
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusVoided
+
+	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
+
+	s.Require().NoError(err)
+	s.True(handled)
+	s.Equal([]int64{10000}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateReqs, 1)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a VOIDED payment keeps its status")
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
+}
+
 // A redelivered webhook must not refund twice.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_AlreadyRefundedPaymentIsNotRefundedAgain() {
 	s.seedSession(types.CheckoutStatusFailed)
@@ -450,6 +464,23 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettle
 	s.Equal(string(types.PaymentStatusSucceeded), *s.paymentSvc.updateReqs[0].PaymentStatus)
 	s.Equal(testChargebeeTxnID, *s.paymentSvc.updateReqs[0].GatewayPaymentID)
 	s.Equal([]string{testFlexpriceInvoiceID}, invoiceSvc.reconciled)
+}
+
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FailedLinkPaymentIsRefundedAndStaysFailed() {
+	invoiceSvc := &fakeInvoiceService{}
+	s.services.InvoiceService = invoiceSvc
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+
+	event := s.event(EventPaymentSucceeded)
+	event.Content = s.contentForInvoice("cb_inv_unmapped")
+
+	s.Require().NoError(s.handler.handlePaymentSucceeded(s.ctx, event, s.services))
+
+	s.Equal([]int64{10000}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateReqs, 1)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a FAILED payment keeps its status")
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
+	s.Empty(invoiceSvc.reconciled)
 }
 
 // A tenant's own general notes land in the same array, so anything that is not one

@@ -97,6 +97,11 @@ func TestRefundLateCapturedPayment(t *testing.T) {
 			status:     types.PaymentStatusFailed,
 			wantStatus: types.PaymentStatusFailed,
 		},
+		{
+			name:       "voided payment is refunded and stays voided",
+			status:     types.PaymentStatusVoided,
+			wantStatus: types.PaymentStatusVoided,
+		},
 	}
 
 	for _, tt := range tests {

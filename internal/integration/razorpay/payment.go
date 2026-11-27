@@ -1040,8 +1040,8 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
-	// A FAILED payment can't move again, so only the refund is recorded.
-	if existingPayment.PaymentStatus == types.PaymentStatusFailed {
+	// A FAILED or VOIDED payment can't move again, so only the refund is recorded.
+	if existingPayment.PaymentStatus == types.PaymentStatusFailed || existingPayment.PaymentStatus == types.PaymentStatusVoided {
 		if refundID == "" {
 			return nil
 		}
