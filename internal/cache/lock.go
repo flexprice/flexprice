@@ -90,7 +90,18 @@ func ReleaseLocks(ctx context.Context, locks []Lock) error {
 		releaseScript.Eval(ctx, pipe, []string{rl.key}, rl.token)
 	}
 	if pipe != nil {
-		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
+		done := make(chan error, 1)
+		go func() {
+			_, err := pipe.Exec(ctx)
+			done <- err
+		}()
+		var err error
+		select {
+		case err = <-done:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -226,7 +237,18 @@ func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.
 			tokens = append(tokens, token)
 			cmds = append(cmds, acquireScript.Eval(ctx, pipe, []string{key}, token, ms))
 		}
-		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
+		done := make(chan error, 1)
+		go func() {
+			_, err := pipe.Exec(ctx)
+			done <- err
+		}()
+		var err error
+		select {
+		case err = <-done:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 		for i, cmd := range cmds {

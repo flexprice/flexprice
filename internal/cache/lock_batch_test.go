@@ -417,7 +417,7 @@ func TestReleaseLocksOneDeadlineDuringOutage(t *testing.T) {
 	releaseTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { releaseTimeout = prev })
 
-	client := redis.NewClient(&redis.Options{Addr: ln.Addr().String(), MaxRetries: -1, ReadTimeout: time.Minute, ContextTimeoutEnabled: true})
+	client := redis.NewClient(&redis.Options{Addr: ln.Addr().String(), MaxRetries: -1, ReadTimeout: time.Minute})
 	t.Cleanup(func() { _ = client.Close() })
 	locks := make([]Lock, 50)
 	for i := range locks {
