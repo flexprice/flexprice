@@ -319,6 +319,20 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionIsRef
 	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[1].Metadata)["chargebee_refund_id"])
 }
 
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionVoidedPaymentIsRefundedAndStaysVoided() {
+	s.seedSession(types.CheckoutStatusExpired)
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusVoided
+
+	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
+
+	s.Require().NoError(err)
+	s.True(handled)
+	s.Equal([]int64{10000}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateReqs, 1)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a VOIDED payment keeps its status")
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
+}
+
 // A redelivered webhook must not refund twice.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_AlreadyRefundedPaymentIsNotRefundedAgain() {
 	s.seedSession(types.CheckoutStatusFailed)

@@ -110,8 +110,8 @@ func (s *PaymentService) RefundLateCapturedPayment(
 				}).
 				Mark(ierr.ErrInternal)
 		}
-	case types.PaymentStatusFailed:
-		// A FAILED payment can't move again, so only the refund is recorded.
+	case types.PaymentStatusFailed, types.PaymentStatusVoided:
+		// A FAILED or VOIDED payment can't move again, so only the refund is recorded.
 		if refundID == "" {
 			return nil
 		}

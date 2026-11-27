@@ -1045,7 +1045,11 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
+	// A delayed method completes the session before the capture; payment_intent.succeeded refunds it then.
 	if payment.PaymentStatus == types.PaymentStatusFailed {
+		if checkoutSession.PaymentStatus != stripeapi.CheckoutSessionPaymentStatusPaid {
+			return nil
+		}
 		return h.refundFailedPayment(ctx, flexpricePaymentID, piID, services)
 	}
 
