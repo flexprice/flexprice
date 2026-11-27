@@ -94,10 +94,6 @@ func (s *fakeCheckoutSessionService) CompleteCheckoutSession(_ context.Context, 
 	return s.completeErr
 }
 
-func (s *fakeCheckoutSessionService) Get(_ context.Context, _ string) (*dto.CheckoutSessionResponse, error) {
-	return s.session, nil
-}
-
 func (s *fakeCheckoutSessionService) CleanupCheckoutSession(_ context.Context, sessionID string, reason error) error {
 	s.cleanupCalls = append(s.cleanupCalls, sessionID)
 	s.cleanupReasons = append(s.cleanupReasons, reason)

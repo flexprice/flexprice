@@ -237,14 +237,16 @@ func (h *Handler) handleCheckoutSessionForPayment(
 		return false, nil
 	}
 
-	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
+	switch session.CheckoutStatus {
+	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
 		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: chargebeeTransactionID,
 			ProviderMetadata: map[string]string{
 				"chargebee_transaction_id": chargebeeTransactionID,
 			},
 		})
-		if err == nil {
+		switch {
+		case err == nil:
 			h.logger.Info(ctx, "completed checkout session from chargebee webhook",
 				"session_id", session.ID,
 				"flexprice_invoice_id", flexpriceInvoiceID,
@@ -261,23 +263,19 @@ func (h *Handler) handleCheckoutSessionForPayment(
 						"chargebee_invoice_id", chargebeeInvoiceID)
 				}
 			}
-			return true, nil
-		}
-		if !ierr.IsAlreadyExists(err) {
+		case ierr.IsAlreadyExists(err):
+			// At-least-once delivery: another delivery or a reconciler got there first.
+			h.logger.Info(ctx, "checkout session already completed",
+				"session_id", session.ID,
+				"chargebee_transaction_id", chargebeeTransactionID)
+		default:
 			h.logger.Error(ctx, "failed to complete checkout session",
 				"error", err,
 				"session_id", session.ID,
 				"flexprice_invoice_id", flexpriceInvoiceID,
 				"chargebee_transaction_id", chargebeeTransactionID)
-			return true, nil
 		}
-		// The session ended instead, e.g. it was past expiry: a capture it missed is refunded below.
-		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
-			return false, err
-		}
-	}
 
-	switch session.CheckoutStatus {
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
 		// The hosted page outlives the session, so the customer paid after we gave up.
 		// The invoice and payment are archived by then and nothing can be delivered

@@ -34,10 +34,6 @@ func (s *fakeCheckoutSessionServiceForStripe) CompleteCheckoutSession(_ context.
 	return s.completeErr
 }
 
-func (s *fakeCheckoutSessionServiceForStripe) Get(_ context.Context, _ string) (*dto.CheckoutSessionResponse, error) {
-	return s.session, nil
-}
-
 func TestHandler_HandleCheckoutSessionForPayment_CompletesPendingSession(t *testing.T) {
 	ctx := context.Background()
 	log := logger.NewNoopLogger()
