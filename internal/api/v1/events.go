@@ -111,9 +111,9 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	}
 
 	var req dto.BulkIngestEventRequest
-	_, bindSpan := tracing.StartSpan(ctx, "events.bulk.bind_json")
+	bindCtx, _ := tracing.StartSpan(ctx, "events.bulk.bind_json")
 	bindErr := middleware.BindJSONWithLimit(c, &req)
-	tracing.EndSpan(bindSpan, bindErr)
+	tracing.EndSpan(bindCtx, bindErr)
 	if bindErr != nil {
 		if isRequestBodyTooLarge(bindErr) {
 			c.Error(errRequestBodyTooLarge())
@@ -127,9 +127,9 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	}
 	serverSpan.SetAttributes(attribute.Int("events.count", len(req.Events)))
 
-	_, validateSpan := tracing.StartSpan(ctx, "events.bulk.validate")
+	validateCtx, _ := tracing.StartSpan(ctx, "events.bulk.validate")
 	validateErr := req.Validate()
-	tracing.EndSpan(validateSpan, validateErr)
+	tracing.EndSpan(validateCtx, validateErr)
 	if validateErr != nil {
 		c.Error(validateErr)
 		return

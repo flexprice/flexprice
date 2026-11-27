@@ -151,7 +151,7 @@ func determineTopic(kc *config.KafkaConfig, event *events.Event) string {
 // placement is left to sarama's default partitioner, since the producer sets no Kafka key.
 func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event) (err error) {
 	ctx, span := tracing.StartSpan(ctx, "kafka.publish_batch", trace.WithAttributes(attribute.Int("events.count", len(evts))))
-	defer func() { tracing.EndSpan(span, err) }()
+	defer func() { tracing.EndSpan(ctx, err) }()
 
 	if len(evts) == 0 {
 		return nil
@@ -285,12 +285,12 @@ func (p *EventPublisher) publishBatchMessage(ctx context.Context, payload []byte
 }
 
 func (p *EventPublisher) publishTraced(ctx context.Context, cluster string, pub messagePublisher, topic string, msg *message.Message, count int) error {
-	_, span := tracing.StartSpan(ctx, "kafka.publish_batch_message", trace.WithAttributes(
+	spanCtx, _ := tracing.StartSpan(ctx, "kafka.publish_batch_message", trace.WithAttributes(
 		attribute.String("cluster", cluster),
 		attribute.Int("events.count", count),
 	))
 	err := pub.Publish(topic, msg)
-	tracing.EndSpan(span, err)
+	tracing.EndSpan(spanCtx, err)
 	return err
 }
 

@@ -120,12 +120,12 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 	}
 
 	bulkPublish := s.config != nil && s.config.Event.BulkPublishEnabled
-	ctx, span := tracing.StartSpan(ctx, "events.bulk.create", trace.WithAttributes(
+	spanCtx, _ := tracing.StartSpan(ctx, "events.bulk.create", trace.WithAttributes(
 		attribute.Int("events.count", len(events.Events)),
 		attribute.Bool("events.bulk_publish", bulkPublish),
 	))
-	err := s.bulkCreateEvents(ctx, events, bulkPublish)
-	tracing.EndSpan(span, err)
+	err := s.bulkCreateEvents(spanCtx, events, bulkPublish)
+	tracing.EndSpan(spanCtx, err)
 	return err
 }
 
@@ -180,21 +180,21 @@ func publishFailure(err error, retryHint string) error {
 // instead of poisoning a batch the consumer would retry whole.
 func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.BulkIngestEventRequest) error {
 	domainEvents := make([]*events.Event, 0, len(req.Events))
-	checkCtx, checkSpan := tracing.StartSpan(ctx, "events.bulk.deletion_check")
+	checkCtx, _ := tracing.StartSpan(ctx, "events.bulk.deletion_check")
 	for _, createEventRequest := range req.Events {
 		if err := createEventRequest.Validate(); err != nil {
-			tracing.EndSpan(checkSpan, err)
+			tracing.EndSpan(checkCtx, err)
 			return err
 		}
 		event := createEventRequest.ToEvent(checkCtx)
 		if err := s.refuseDuringDeletion(checkCtx, event); err != nil {
-			tracing.EndSpan(checkSpan, err)
+			tracing.EndSpan(checkCtx, err)
 			return err
 		}
 		createEventRequest.EventID = event.ID
 		domainEvents = append(domainEvents, event)
 	}
-	tracing.EndSpan(checkSpan, nil)
+	tracing.EndSpan(checkCtx, nil)
 
 	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
 		s.logger.Error(ctx, "failed to publish event batch", "event_count", len(domainEvents), "error", err)
