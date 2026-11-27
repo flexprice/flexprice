@@ -3660,7 +3660,17 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalize() {
 			s.Require().NoError(err)
 			inv.CreatedAt = computedAt
 			inv.LastComputedAt = &computedAt
+			if !tt.autoFinalize {
+				inv.SourceType = types.InvoiceSourceTypeCheckout
+			}
 			s.Require().NoError(s.invoiceRepo.Update(ctx, inv))
+
+			if !tt.autoFinalize {
+				svc := s.service.(*invoiceService)
+				orig := svc.CheckoutSessionRepo
+				svc.CheckoutSessionRepo = nil
+				defer func() { svc.CheckoutSessionRepo = orig }()
+			}
 
 			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
 			s.Require().NoError(err)
