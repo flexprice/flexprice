@@ -33,6 +33,81 @@ type Lock interface {
 	Release(ctx context.Context) error
 }
 
+// BatchLocker acquires locks in bulk.
+type BatchLocker interface {
+	// Result aligns with keys.
+	AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error)
+}
+
+// AcquireLocks batches when locker supports it.
+func AcquireLocks(ctx context.Context, locker Locker, keys []string, ttl time.Duration) ([]Lock, error) {
+	if bl, ok := locker.(BatchLocker); ok {
+		return bl.AcquireLocks(ctx, keys, ttl)
+	}
+	return AcquireLocksEach(ctx, locker, keys, ttl)
+}
+
+// AcquireLocksEach locks keys sequentially.
+func AcquireLocksEach(ctx context.Context, locker Locker, keys []string, ttl time.Duration) ([]Lock, error) {
+	locks := make([]Lock, len(keys))
+	var firstErr error
+	for i, key := range keys {
+		lock, err := locker.AcquireLock(ctx, key, ttl)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		locks[i] = lock
+	}
+	return locks, firstErr
+}
+
+// releaseTimeout bounds one release call.
+var releaseTimeout = 5 * time.Second
+
+// ReleaseLocks pipelines releases, one deadline.
+func ReleaseLocks(ctx context.Context, locks []Lock) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+	defer cancel()
+	var firstErr error
+	var pipe redis.Pipeliner
+	for _, lock := range locks {
+		if lock == nil {
+			continue
+		}
+		rl, ok := lock.(*redisLock)
+		if !ok {
+			if err := lock.Release(ctx); err != nil && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if pipe == nil {
+			pipe = rl.client.Pipeline()
+		}
+		releaseScript.Eval(ctx, pipe, []string{rl.key}, rl.token)
+	}
+	if pipe != nil {
+		done := make(chan error, 1)
+		go func() {
+			_, err := pipe.Exec(ctx)
+			done <- err
+		}()
+		var err error
+		select {
+		case err = <-done:
+		case <-ctx.Done():
+			err = ctx.Err()
+		}
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // It returns a nil Lock when locker is nil, and a Lock reporting AcquiredSuccessfully() ==
 // false when every attempt was exhausted; a non-nil error means the locker itself failed.
 // Callers decide whether to skip the work or proceed unserialized.
@@ -113,10 +188,25 @@ else
 end
 `)
 
+// acquireScript: SET NX, token-idempotent.
+var acquireScript = redis.NewScript(`
+if redis.call("SET", KEYS[1], ARGV[1], "NX", "PX", ARGV[2]) then
+	return 1
+end
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+	return 1
+end
+return 0
+`)
+
+func ttlMillis(ttl time.Duration) int64 {
+	return max(ttl.Milliseconds(), 1)
+}
+
 func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Duration) (Lock, error) {
 	token := uuid.NewString()
 
-	ok, err := l.client.SetNX(ctx, key, token, ttl).Result()
+	ok, err := acquireScript.Run(ctx, l.client, []string{key}, token, ttlMillis(ttl)).Bool()
 	if err != nil {
 		return nil, err
 	}
@@ -129,13 +219,45 @@ func (l *redisLocker) AcquireLock(ctx context.Context, key string, ttl time.Dura
 	}, nil
 }
 
+// batchLockChunk bounds one pipeline.
+const batchLockChunk = 1000
+
+// Unread replies count as held.
+func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.Duration) ([]Lock, error) {
+	locks := make([]Lock, len(keys))
+	var firstErr error
+	ms := ttlMillis(ttl)
+	for start := 0; start < len(keys); start += batchLockChunk {
+		end := min(start+batchLockChunk, len(keys))
+		pipe := l.client.Pipeline()
+		cmds := make([]*redis.Cmd, 0, end-start)
+		tokens := make([]string, 0, end-start)
+		for _, key := range keys[start:end] {
+			token := uuid.NewString()
+			tokens = append(tokens, token)
+			cmds = append(cmds, acquireScript.Eval(ctx, pipe, []string{key}, token, ms))
+		}
+		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		for i, cmd := range cmds {
+			ok, err := cmd.Bool()
+			if err != nil {
+				ok = true
+			}
+			locks[start+i] = &redisLock{client: l.client, key: keys[start+i], token: tokens[i], success: ok}
+		}
+	}
+	return locks, firstErr
+}
+
 func (l *redisLock) AcquiredSuccessfully() bool {
 	return l.success
 }
 
 // Release detaches from ctx cancellation so a deferred release still runs after the caller's deadline.
 func (l *redisLock) Release(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
 	defer cancel()
 
 	_, err := releaseScript.Run(

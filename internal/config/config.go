@@ -1140,6 +1140,10 @@ type BulkMeterUsageTrackingConfig struct {
 	TopicDLQ                     string `mapstructure:"topic_dlq" default:""`
 	RedisDeduplicationEnabled    bool   `mapstructure:"redis_deduplication_enabled" default:"true"`
 	PostInsertSideEffectsEnabled bool   `mapstructure:"post_insert_side_effects_enabled" default:"true"`
+	// One Redis round trip.
+	BatchDedupLocks bool `mapstructure:"batch_dedup_locks" default:"false"`
+	// Rows per meter_usage insert statement.
+	InsertChunkSize int `mapstructure:"insert_chunk_size" default:"100"`
 }
 
 type OnboardingEventsConfig struct {
