@@ -647,37 +647,6 @@ func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 	s.Equal("8", s.lineItemUsage(sub.ID, types.UsageSourceWallet).String())
 }
 
-// Within the freshness window a real-time read reuses the last computed balance; with the window off it recomputes.
-func (s *UsageRollupSuite) TestWalletBalanceReusesFreshBalance() {
-	ctx := s.GetContext()
-	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupSubscription, sub.ID)
-	w := &wallet.Wallet{ID: "wallet_fresh", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
-		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
-		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
-	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
-	wallets := NewWalletService(s.svc.ServiceParams)
-	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 5
-
-	first, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("1000", lo.FromPtr(first.RealTimeBalance).String())
-	s.False(first.IsCachedFallback)
-
-	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
-	usageRollup.hourly[time.Now().UTC().Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(3)}}
-	reused, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("1000", lo.FromPtr(reused.RealTimeBalance).String(), "the balance computed within the window")
-	s.True(reused.IsCachedFallback)
-
-	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 0
-	recomputed, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("994", lo.FromPtr(recomputed.RealTimeBalance).String(), "1000 - 3 units at 2")
-	s.False(recomputed.IsCachedFallback)
-}
-
 // lineItemUsage returns the seeded line item's current-period usage as read for source.
 func (s *UsageRollupSuite) lineItemUsage(subscriptionID string, source types.UsageSource) decimal.Decimal {
 	ctx := s.GetContext()

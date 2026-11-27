@@ -565,7 +565,6 @@ meter_usage_tracking_lazy:
 usage_rollup:
   enabled: false # master switch; when true, runs only for enabled_tenants
   enabled_tenants: [] # tenant IDs with usage rollup
-  balance_max_live_seconds: 5 # real-time balance reads reuse a balance cached within this window
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
 # per-customer Temporal workflow (spend + entitlement grants + wallet alerts).
