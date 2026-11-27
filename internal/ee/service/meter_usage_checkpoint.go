@@ -382,7 +382,7 @@ func (s *usageCheckpointService) addWindowUsage(
 	}
 	var rows []windowRow
 	for window, externalCustomerIDs := range customersByWindow {
-		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
+		totals, err := s.MeterUsageRepo.GetUsageByCustomerAndMeter(ctx, &events.MeterUsageQueryParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
 			ExternalCustomerIDs: externalCustomerIDs,
