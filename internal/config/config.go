@@ -1033,8 +1033,6 @@ type UsageRollupConfig struct {
 	// ShadowTenants keep the usage rollup current; their wallet reads are served from the old path and also
 	// computed on the usage rollup path to record whether the two match.
 	ShadowTenants []string `mapstructure:"shadow_tenants"`
-	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds; 0 = off.
-	BalanceMaxLiveSeconds int64 `mapstructure:"balance_max_live_seconds" default:"5"`
 }
 
 // IsEnabledForTenant reports whether the usage rollup is kept current for tenantID: ingestion, checkpoints and
@@ -1359,7 +1357,6 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
-	v.SetDefault("usage_rollup.balance_max_live_seconds", 5)
 	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
 	v.SetDefault("email.sender_domain", "mail.flexprice.io")
 	v.SetDefault("email.sender_local_part", "invoices")

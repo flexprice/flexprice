@@ -647,37 +647,6 @@ func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 	s.Equal("8", s.lineItemUsage(sub.ID, types.UsageSourceWallet).String())
 }
 
-// Within the freshness window a real-time read reuses the last computed balance; with the window off it recomputes.
-func (s *UsageRollupSuite) TestWalletBalanceReusesFreshBalance() {
-	ctx := s.GetContext()
-	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupSubscription, sub.ID)
-	w := &wallet.Wallet{ID: "wallet_fresh", CustomerID: sub.CustomerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
-		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
-		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
-	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
-	wallets := NewWalletService(s.svc.ServiceParams)
-	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 5
-
-	first, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("1000", lo.FromPtr(first.RealTimeBalance).String())
-	s.False(first.IsCachedFallback)
-
-	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
-	usageRollup.hourly[time.Now().UTC().Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(3)}}
-	reused, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("1000", lo.FromPtr(reused.RealTimeBalance).String(), "the balance computed within the window")
-	s.True(reused.IsCachedFallback)
-
-	s.svc.Config.UsageRollup.BalanceMaxLiveSeconds = 0
-	recomputed, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("994", lo.FromPtr(recomputed.RealTimeBalance).String(), "1000 - 3 units at 2")
-	s.False(recomputed.IsCachedFallback)
-}
-
 // A shadow tenant's balance is served from the old path; the usage rollup balance is only compared.
 func (s *UsageRollupSuite) TestShadowTenantServesOldPathAndCompares() {
 	ctx := s.GetContext()
@@ -717,30 +686,6 @@ func (s *UsageRollupSuite) TestShadowTenantServesOldPathAndCompares() {
 
 	s.svc.Config.UsageRollup.ShadowTenants = nil
 	s.Empty(wallets.compareUsageRollupBalance(ctx, w, served), "not a shadow tenant")
-}
-
-// A shadow tenant never reuses a balance cached within the max-live window.
-func (s *UsageRollupSuite) TestShadowTenantSkipsBalanceReuse() {
-	ctx := s.GetContext()
-	sub := s.seed(nil)
-	s.clearEligibility(UsageRollupSubscription, sub.ID)
-	s.svc.Config.UsageRollup = config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{types.DefaultTenantID}, BalanceMaxLiveSeconds: 5}
-	w := s.prepaidWallet("wallet_shadow_reuse", sub.CustomerID)
-	wallets := NewWalletService(s.svc.ServiceParams)
-
-	first, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("1000", lo.FromPtr(first.RealTimeBalance).String())
-
-	s.Require().NoError(s.svc.MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
-		Event: events.Event{ID: "evt_shadow_reuse", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
-			ExternalCustomerID: "ext_rt", Timestamp: time.Now().UTC().Add(-time.Hour)},
-		MeterID: "mtr_rt", QtyTotal: decimal.NewFromInt(3),
-	}}))
-	second, err := wallets.GetWalletBalanceV2(ctx, w.ID)
-	s.Require().NoError(err)
-	s.Equal("994", lo.FromPtr(second.RealTimeBalance).String(), "recomputed within the window")
-	s.False(second.IsCachedFallback)
 }
 
 func (s *UsageRollupSuite) prepaidWallet(id, customerID string) *wallet.Wallet {
