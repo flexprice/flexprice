@@ -259,9 +259,9 @@ type MeterUsageRepository interface {
 	// analytics-only concern.
 	GetSourcesForBucketedMeter(ctx context.Context, params *MeterUsageQueryParams) ([]string, error)
 
-	// GetMeterTotals returns, per customer and meter, SUM(qty_total), COUNT(DISTINCT id) and
+	// GetUsageByCustomerAndMeter returns, per customer and meter, SUM(qty_total), COUNT(DISTINCT id) and
 	// MAX(qty_total) for the params' ExternalCustomerIDs and window, read with FINAL.
-	GetMeterTotals(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterTotals, error)
+	GetUsageByCustomerAndMeter(ctx context.Context, params *MeterUsageQueryParams) ([]*MeterTotals, error)
 
 	// GetDistinctMeterIDs returns the set of meter_ids that have data in the meter_usage table
 	// for the given customer(s) and time range. Used to skip meters with zero usage.

@@ -651,12 +651,12 @@ func (r *MeterUsageRepository) fetchBucketedComboPoints(
 	return pts, nil
 }
 
-func (r *MeterUsageRepository) GetMeterTotals(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+func (r *MeterUsageRepository) GetUsageByCustomerAndMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
 	if params == nil || len(params.ExternalCustomerIDs) == 0 || params.StartTime.IsZero() || params.EndTime.IsZero() {
 		return nil, ierr.NewError("external customer ids and a start and end time are required").Mark(ierr.ErrValidation)
 	}
 
-	span := StartRepositorySpan(ctx, "meter_usage", "get_meter_totals", map[string]interface{}{
+	span := StartRepositorySpan(ctx, "meter_usage", "get_usage_by_customer_and_meter", map[string]interface{}{
 		"external_customer_ids": len(params.ExternalCustomerIDs),
 	})
 	defer FinishSpan(span)
