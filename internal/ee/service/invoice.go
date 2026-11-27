@@ -2101,8 +2101,8 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return nil
 	}
 
-	// Without auto finalization an unpaid subscription invoice stays a draft for the user to finalize.
-	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.PaymentStatus != types.PaymentStatusSucceeded {
+	// Without auto finalization a subscription invoice stays a draft for the user to finalize.
+	if inv.InvoiceType == types.InvoiceTypeSubscription {
 		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 		invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
 		if err != nil {
