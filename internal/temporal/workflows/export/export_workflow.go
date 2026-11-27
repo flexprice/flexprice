@@ -13,6 +13,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+const completeFailedMessage = "The file was delivered but the run status could not be saved"
+
 var temporalScheduledStartTimeKey = temporal.NewSearchAttributeKeyTime("TemporalScheduledStartTime")
 
 // ExecuteExportWorkflowInput represents input for the export workflow
@@ -57,11 +59,25 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		},
 	}
 
-	// Activity options for heavy operations (data export)
+	// 2 x 30m + 30s backoff = 60.5m.
 	heavyActivityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 6 * time.Hour,
+		StartToCloseTimeout: 30 * time.Minute,
+		HeartbeatTimeout:    2 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 3,
+			InitialInterval:    30 * time.Second,
+			BackoffCoefficient: 1.0,
+			MaximumAttempts:    2,
+		},
+	}
+
+	// 5 x 1m + 15s backoff = 5.25m per terminal write.
+	terminalActivityOptions := workflow.ActivityOptions{
+		StartToCloseTimeout: 1 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    1 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    30 * time.Second,
+			MaximumAttempts:    5,
 		},
 	}
 
@@ -204,8 +220,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 	if err != nil {
 		logger.Error("Export failed", "error", err)
 
-		// Mark task as failed
-		ctx = workflow.WithActivityOptions(ctx, lightweightActivityOptions)
+		ctx = workflow.WithActivityOptions(ctx, terminalActivityOptions)
 		failInput := export.UpdateTaskStatusInput{
 			TaskID:   taskID,
 			TenantID: taskDetails.TenantID,
@@ -228,7 +243,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		// STEP 6: Complete Task
 		// ================================================================================
 		logger.Info("Step 6: Completing task")
-		ctx = workflow.WithActivityOptions(ctx, lightweightActivityOptions)
+		ctx = workflow.WithActivityOptions(ctx, terminalActivityOptions)
 
 		completeInput := export.CompleteTaskInput{
 			TaskID:      taskID,
@@ -244,7 +259,26 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		err = workflow.ExecuteActivity(ctx, taskActivity.CompleteTask, completeInput).Get(ctx, nil)
 		if err != nil {
 			logger.Error("Failed to complete task", "error", err)
-			// Continue anyway - export succeeded
+			if workflow.GetVersion(ctx, "export-terminal-status", workflow.DefaultVersion, 1) == 1 {
+				runErr := errors.New(completeFailedMessage)
+				failInput := export.UpdateTaskStatusInput{
+					TaskID:   taskID,
+					TenantID: taskDetails.TenantID,
+					EnvID:    taskDetails.EnvID,
+					UserID:   input.UserID,
+					Status:   types.TaskStatusFailed,
+					Error:    completeFailedMessage,
+				}
+				statusErr := workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
+				var appErr *temporal.ApplicationError
+				alreadyCompleted := errors.As(statusErr, &appErr) && appErr.Type() == export.TaskAlreadyCompletedErrType
+				if !alreadyCompleted {
+					// File landed; only the status write failed.
+					deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, exportOutput.RecordCount, nil)
+					return &ExecuteExportWorkflowOutput{TaskID: taskID}, runErr
+				}
+				logger.Info("Task already completed; delivering as completed", "task_id", taskID)
+			}
 		}
 
 		success = true
@@ -307,6 +341,7 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 			WindowStart:     details.StartTime,
 			WindowEnd:       details.EndTime,
 			RecordCount:     recordCount,
+			FileDelivered:   runErr == nil,
 		}).Get(emailCtx, &out)
 		if err != nil {
 			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)
@@ -336,22 +371,7 @@ func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, task
 }
 
 func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, runErr error) types.ExportDelivery {
-	d := types.ExportDelivery{
-		Type:   types.ExportDeliveryTypeFlexprice,
-		Target: "Flexprice",
-		Status: types.ExportDeliveryStatusDelivered,
-		At:     workflow.Now(ctx),
-	}
-	if details.ConnectionID != "" {
-		d.Type = types.ExportDeliveryTypeS3
-		d.Target = "s3"
-		if cfg := details.JobConfig; cfg != nil {
-			d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
-			if cfg.Provider == types.SecretProviderGCS {
-				d.Type = types.ExportDeliveryTypeGCS
-			}
-		}
-	}
+	d := types.NewFileDelivery(details.ConnectionID, details.JobConfig, workflow.Now(ctx))
 	if runErr != nil {
 		d.Status = types.ExportDeliveryStatusFailed
 		d.Detail = runFailureMessage(runErr)

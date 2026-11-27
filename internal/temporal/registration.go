@@ -76,6 +76,7 @@ type cronActivityBundle struct {
 	selfBillingHourly            *cronActivities.SelfBillingHourlyActivities
 	commitment                   *cronActivities.CommitmentCronActivities
 	emailDispatch                *cronActivities.EmailDispatchActivities
+	staleExportSweep             *cronActivities.StaleExportSweepActivities
 }
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
@@ -367,6 +368,7 @@ func RegisterWorkflowsAndActivities(
 		selfBillingHourly:            cronActivities.NewSelfBillingHourlyActivities(selfbilling.New(params), params.Logger),
 		commitment:                   cronActivities.NewCommitmentCronActivities(service.NewCommitmentService(params), params.Logger),
 		emailDispatch:                cronActivities.NewEmailDispatchActivities(service.NewEmailNotificationService(params), params.Logger),
+		staleExportSweep:             cronActivities.NewStaleExportSweepActivities(params.TaskRepo, params.ScheduledTaskRepo, params.Logger),
 	}
 
 	// Get all task queues and register workflows/activities for each
@@ -630,6 +632,7 @@ func buildWorkerConfig(
 			cronWorkflows.SelfBillingHourlyWorkflow,
 			cronWorkflows.BillingInstalmentsDueWorkflow,
 			cronWorkflows.EmailDispatchWorkflow,
+			cronWorkflows.StaleExportSweepWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			cron.creditGrant.ProcessScheduledCreditGrantApplicationsActivity,
@@ -657,6 +660,7 @@ func buildWorkerConfig(
 			cron.selfBillingHourly.SelfBillingHourlyActivity,
 			cron.commitment.BillDueInstalmentsActivity,
 			cron.emailDispatch.DispatchEmailsActivity,
+			cron.staleExportSweep.SweepStaleExportRunsActivity,
 		)
 
 	case types.TemporalTaskQueueBilling:

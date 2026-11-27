@@ -169,3 +169,8 @@ type EmailDispatchWorkflowResult struct {
 	Skipped  int `json:"skipped"`
 	Deferred int `json:"deferred"`
 }
+
+// ===================== Stale Export Sweep =====================
+
+// StaleExportSweepWorkflowInput is the input for StaleExportSweepWorkflow.
+type StaleExportSweepWorkflowInput struct{}

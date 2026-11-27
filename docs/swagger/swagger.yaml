@@ -13543,8 +13543,9 @@ definitions:
     - DebugTrackerStatusAttributed
   types.Duration:
     enum:
-    - 3600000000000
     - 604800000000000
+    - 3600000000000
+    - 5400000000000
     properties:
       unit:
         $ref: '#/definitions/types.DurationUnit'
@@ -13552,8 +13553,9 @@ definitions:
         type: integer
     type: object
     x-enum-varnames:
-    - EntitlementGrantMinDuration
     - CollectionsPaidWindow
+    - EntitlementGrantMinDuration
+    - ExportWorkflowTimeout
   types.DurationUnit:
     enum:
     - second

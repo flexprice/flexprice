@@ -80,6 +80,8 @@ type SendExportEmailsInput struct {
 	WindowStart     time.Time
 	WindowEnd       time.Time
 	RecordCount     int
+	// FileDelivered is true when the file was written.
+	FileDelivered bool
 }
 
 // SendExportEmailsOutput holds one delivery per recipient.
@@ -193,9 +195,13 @@ func (a *DeliveryActivity) admit(ctx context.Context, in SendExportEmailsInput, 
 
 func (a *DeliveryActivity) compose(in SendExportEmailsInput) (subject, body string) {
 	completed := in.RunStatus == types.TaskStatusCompleted
+	delivered := completed || in.FileDelivered
 	subject, status := "Flexprice export failed", "Failed"
-	if completed {
+	switch {
+	case completed:
 		subject, status = "Flexprice export completed", "Completed"
+	case delivered:
+		subject, status = "Flexprice export delivered", "File delivered, but the run status could not be saved"
 	}
 	link := fmt.Sprintf("%s/exports/%s/runs/%s?env=%s",
 		strings.TrimRight(a.cfg.Exports.ConsoleBaseURL, "/"), in.ScheduledTaskID, url.PathEscape(in.TaskID), in.EnvID)
@@ -205,7 +211,7 @@ func (a *DeliveryActivity) compose(in SendExportEmailsInput) (subject, body stri
 		"Export: " + exportLabel(in),
 		fmt.Sprintf("Data: %s to %s (UTC)", in.WindowStart.UTC().Format(layout), in.WindowEnd.UTC().Format(layout)),
 	}
-	if completed {
+	if delivered {
 		lines = append(lines, fmt.Sprintf("Rows: %d", in.RecordCount))
 	}
 	lines = append(lines, "Status: "+status, "", "View the run: "+link)

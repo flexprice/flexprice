@@ -49,4 +49,7 @@ type ListFilters struct {
 	ExcludeOrigin types.ExportOrigin
 	Limit         int
 	Offset        int
+	// KeysetByID orders by id ascending and returns rows after AfterID.
+	KeysetByID bool
+	AfterID    string
 }

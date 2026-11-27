@@ -3,10 +3,12 @@ package ent
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/task"
 	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -192,24 +194,57 @@ func (r *taskRepository) Count(ctx context.Context, filter *types.TaskFilter) (i
 }
 
 func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
-	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "task", "update", map[string]interface{}{
 		"task_id": t.ID,
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Writer(ctx)
+	n, err := r.writeTask(ctx, t)
+	if err != nil {
+		SetSpanError(span, err)
+		return err
+	}
+	if n == 0 {
+		err := ierr.NewError("task not found").
+			WithHint("The task may not exist or may have been deleted").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": t.ID,
+			}).
+			Mark(ierr.ErrNotFound)
+		SetSpanError(span, err)
+		return err
+	}
 
-	// Use predicate-based update for optimistic locking
-	query := client.Task.Update().
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *taskRepository) UpdateUnlessCompleted(ctx context.Context, t *domainTask.Task) (bool, error) {
+	span := StartRepositorySpan(ctx, "task", "update_unless_completed", map[string]interface{}{
+		"task_id": t.ID,
+	})
+	defer FinishSpan(span)
+
+	n, err := r.writeTask(ctx, t, task.TaskStatusNEQ(string(types.TaskStatusCompleted)))
+	if err != nil {
+		SetSpanError(span, err)
+		return false, err
+	}
+
+	SetSpanSuccess(span)
+	return n > 0, nil
+}
+
+func (r *taskRepository) writeTask(ctx context.Context, t *domainTask.Task, extra ...predicate.Task) (int, error) {
+	query := r.client.Writer(ctx).Task.Update().
 		Where(
 			task.ID(t.ID),
 			task.TenantID(types.GetTenantID(ctx)),
 			task.EnvironmentID(types.GetEnvironmentID(ctx)),
 			task.Status(string(types.StatusPublished)),
-		)
+		).
+		Where(extra...)
 
-	// Set all fields
 	query.
 		SetTaskType(string(t.TaskType)).
 		SetEntityType(string(t.EntityType)).
@@ -230,30 +265,16 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 
-	// Execute update
 	n, err := query.Save(ctx)
 	if err != nil {
-		SetSpanError(span, err)
-		return ierr.WithError(err).
+		return 0, ierr.WithError(err).
 			WithHint("Failed to update task").
 			WithReportableDetails(map[string]interface{}{
 				"task_id": t.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	if n == 0 {
-		err := ierr.NewError("task not found").
-			WithHint("The task may not exist or may have been deleted").
-			WithReportableDetails(map[string]interface{}{
-				"task_id": t.ID,
-			}).
-			Mark(ierr.ErrNotFound)
-		SetSpanError(span, err)
-		return err
-	}
-
-	SetSpanSuccess(span)
-	return nil
+	return n, nil
 }
 
 func (r *taskRepository) SetTaskMetadataKey(ctx context.Context, id, key string, value any) error {
@@ -298,6 +319,70 @@ func (r *taskRepository) SetTaskMetadataKey(ctx context.Context, id, key string,
 
 	SetSpanSuccess(span)
 	return nil
+}
+
+// Cross-tenant read; writes stay scoped per row.
+func (r *taskRepository) ListStaleExportTasks(ctx context.Context, olderThan time.Time, limit int) ([]domainTask.StaleRef, error) {
+	span := StartRepositorySpan(ctx, "task", "list_stale_export", nil)
+	defer FinishSpan(span)
+
+	rows, err := r.client.Writer(ctx).Task.Query().
+		Where(
+			task.TaskType(string(types.TaskTypeExport)),
+			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
+			task.Status(string(types.StatusPublished)),
+			task.CreatedAtLT(olderThan),
+		).
+		Order(ent.Asc(task.FieldCreatedAt)).
+		Limit(limit).
+		Select(task.FieldID, task.FieldTenantID, task.FieldEnvironmentID).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list stale export tasks").
+			Mark(ierr.ErrDatabase)
+	}
+
+	refs := make([]domainTask.StaleRef, len(rows))
+	for i, row := range rows {
+		refs[i] = domainTask.StaleRef{ID: row.ID, TenantID: row.TenantID, EnvironmentID: row.EnvironmentID}
+	}
+	SetSpanSuccess(span)
+	return refs, nil
+}
+
+func (r *taskRepository) FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error) {
+	span := StartRepositorySpan(ctx, "task", "fail_stale_export", map[string]interface{}{"task_id": id})
+	defer FinishSpan(span)
+
+	now := clock.Now()
+	n, err := r.client.Writer(ctx).Task.Update().
+		Where(
+			task.ID(id),
+			task.TenantID(types.GetTenantID(ctx)),
+			task.EnvironmentID(types.GetEnvironmentID(ctx)),
+			task.Status(string(types.StatusPublished)),
+			task.TaskType(string(types.TaskTypeExport)),
+			task.CreatedAtLT(olderThan),
+			task.TaskStatusIn(string(types.TaskStatusProcessing), string(types.TaskStatusPending)),
+		).
+		SetTaskStatus(string(types.TaskStatusFailed)).
+		SetErrorSummary(reason).
+		SetFailedAt(now).
+		SetUpdatedAt(now).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).
+			WithHint("Failed to fail stale export task").
+			WithReportableDetails(map[string]interface{}{"task_id": id}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return n > 0, nil
 }
 
 func (r *taskRepository) Delete(ctx context.Context, id string) error {

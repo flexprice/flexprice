@@ -2,11 +2,13 @@ package testutil
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type InMemoryTenantStore struct {
@@ -70,6 +72,20 @@ func (s *InMemoryTenantStore) List(ctx context.Context) ([]*tenant.Tenant, error
 		tenants = append(tenants, t)
 	}
 	return tenants, nil
+}
+
+func (s *InMemoryTenantStore) ListIDs(ctx context.Context) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := make([]string, 0, len(s.tenants))
+	for id, t := range s.tenants {
+		if t.Status == types.StatusPublished {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 
 func (s *InMemoryTenantStore) Update(ctx context.Context, t *tenant.Tenant) error {

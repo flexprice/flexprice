@@ -2,7 +2,10 @@ package testutil
 
 import (
 	"context"
+	"sort"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -85,6 +88,18 @@ func (s *InMemoryTaskStore) Update(ctx context.Context, t *task.Task) error {
 	return s.InMemoryStore.Update(ctx, t.ID, copyTask(t))
 }
 
+func (s *InMemoryTaskStore) UpdateUnlessCompleted(ctx context.Context, t *task.Task) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	stored, ok := s.items[t.ID]
+	if !ok || stored.TaskStatus == types.TaskStatusCompleted {
+		return false, nil
+	}
+	s.items[t.ID] = copyTask(t)
+	return true, nil
+}
+
 func (s *InMemoryTaskStore) Delete(ctx context.Context, id string) error {
 	return s.InMemoryStore.Delete(ctx, id)
 }
@@ -109,6 +124,51 @@ func (s *InMemoryTaskStore) List(ctx context.Context, filter *types.TaskFilter) 
 
 func (s *InMemoryTaskStore) Count(ctx context.Context, filter *types.TaskFilter) (int, error) {
 	return s.InMemoryStore.Count(ctx, filter, taskFilterFn)
+}
+
+func isUnfinished(t *task.Task) bool {
+	return t.TaskStatus == types.TaskStatusPending || t.TaskStatus == types.TaskStatusProcessing
+}
+
+func (s *InMemoryTaskStore) ListStaleExportTasks(_ context.Context, olderThan time.Time, limit int) ([]task.StaleRef, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var stale []*task.Task
+	for _, t := range s.items {
+		if t.TaskType == types.TaskTypeExport && isUnfinished(t) &&
+			t.Status == types.StatusPublished && t.CreatedAt.Before(olderThan) {
+			stale = append(stale, t)
+		}
+	}
+	sort.Slice(stale, func(i, j int) bool { return stale[i].CreatedAt.Before(stale[j].CreatedAt) })
+	if len(stale) > limit {
+		stale = stale[:limit]
+	}
+	refs := make([]task.StaleRef, len(stale))
+	for i, t := range stale {
+		refs[i] = task.StaleRef{ID: t.ID, TenantID: t.TenantID, EnvironmentID: t.EnvironmentID}
+	}
+	return refs, nil
+}
+
+func (s *InMemoryTaskStore) FailStaleExportTask(ctx context.Context, id string, olderThan time.Time, reason string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	t, ok := s.items[id]
+	if !ok || t.TenantID != types.GetTenantID(ctx) || t.EnvironmentID != types.GetEnvironmentID(ctx) ||
+		t.Status != types.StatusPublished || !isUnfinished(t) ||
+		t.TaskType != types.TaskTypeExport || !t.CreatedAt.Before(olderThan) {
+		return false, nil
+	}
+	now := clock.Now()
+	t.TaskStatus = types.TaskStatusFailed
+	t.ErrorSummary = &reason
+	t.FailedAt = &now
+	t.UpdatedAt = now
+	t.UpdatedBy = types.GetUserID(ctx)
+	return true, nil
 }
 
 // GetLastExportTask gets the last export task for a scheduled job (regardless of status)

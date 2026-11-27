@@ -199,6 +199,14 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Input:     models.EmailDispatchWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
+		{
+			ID:        types.ScheduleIDStaleExportSweep,
+			Interval:  1 * time.Hour,
+			Offset:    40 * time.Minute,
+			Workflow:  cronWorkflows.StaleExportSweepWorkflow,
+			Input:     models.StaleExportSweepWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
 	}
 }
 
