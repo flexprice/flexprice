@@ -17,11 +17,18 @@ type ScheduledTask struct {
 	Enabled            bool
 	JobConfig          *types.S3JobConfig
 	TemporalScheduleID string // Temporal schedule ID
+	Name               string
+	Schedule           *types.ExportSchedule
 	Status             types.Status
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 	CreatedBy          string
 	UpdatedBy          string
+}
+
+// IsManagedCopy reports whether the export writes to the Flexprice-managed bucket.
+func (j *ScheduledTask) IsManagedCopy() bool {
+	return j != nil && j.ConnectionID == ""
 }
 
 // IsEnabled returns whether the task is enabled

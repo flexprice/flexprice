@@ -105,6 +105,21 @@ func NewPublicOnlyClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// NewPublicOnlyUploadClient is NewPublicOnlyClient for long streamed uploads.
+// It has no whole-request timeout; dial, TLS and response-header waits stay bounded.
+func NewPublicOnlyUploadClient(responseHeaderTimeout time.Duration) *http.Client {
+	return &http.Client{
+		Transport:     OtelTransport(newUploadTransport(responseHeaderTimeout)),
+		CheckRedirect: RejectRedirects,
+	}
+}
+
+func newUploadTransport(responseHeaderTimeout time.Duration) *http.Transport {
+	transport := newGuardedTransport()
+	transport.ResponseHeaderTimeout = responseHeaderTimeout
+	return transport
+}
+
 // NewPublicOnlySendClient is NewPublicOnlyClient behind the Client interface,
 // for callers that go through Send rather than holding an *http.Client.
 func NewPublicOnlySendClient(timeout time.Duration) Client {

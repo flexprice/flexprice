@@ -83,6 +83,12 @@ func (_u *ScheduledTaskUpdate) SetNillableConnectionID(v *string) *ScheduledTask
 	return _u
 }
 
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *ScheduledTaskUpdate) ClearConnectionID() *ScheduledTaskUpdate {
+	_u.mutation.ClearConnectionID()
+	return _u
+}
+
 // SetEntityType sets the "entity_type" field.
 func (_u *ScheduledTaskUpdate) SetEntityType(v types.ScheduledTaskEntityType) *ScheduledTaskUpdate {
 	_u.mutation.SetEntityType(v)
@@ -157,6 +163,38 @@ func (_u *ScheduledTaskUpdate) ClearTemporalScheduleID() *ScheduledTaskUpdate {
 	return _u
 }
 
+// SetName sets the "name" field.
+func (_u *ScheduledTaskUpdate) SetName(v string) *ScheduledTaskUpdate {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *ScheduledTaskUpdate) SetNillableName(v *string) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// ClearName clears the value of the "name" field.
+func (_u *ScheduledTaskUpdate) ClearName() *ScheduledTaskUpdate {
+	_u.mutation.ClearName()
+	return _u
+}
+
+// SetSchedule sets the "schedule" field.
+func (_u *ScheduledTaskUpdate) SetSchedule(v *types.ExportSchedule) *ScheduledTaskUpdate {
+	_u.mutation.SetSchedule(v)
+	return _u
+}
+
+// ClearSchedule clears the value of the "schedule" field.
+func (_u *ScheduledTaskUpdate) ClearSchedule() *ScheduledTaskUpdate {
+	_u.mutation.ClearSchedule()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -200,11 +238,6 @@ func (_u *ScheduledTaskUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ScheduledTaskUpdate) check() error {
-	if v, ok := _u.mutation.ConnectionID(); ok {
-		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
-			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.EntityType(); ok {
 		if err := scheduledtask.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.entity_type": %w`, err)}
@@ -256,6 +289,9 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	if value, ok := _u.mutation.ConnectionID(); ok {
 		_spec.SetField(scheduledtask.FieldConnectionID, field.TypeString, value)
 	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(scheduledtask.FieldConnectionID, field.TypeString)
+	}
 	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(scheduledtask.FieldEntityType, field.TypeString, value)
 	}
@@ -276,6 +312,18 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.TemporalScheduleIDCleared() {
 		_spec.ClearField(scheduledtask.FieldTemporalScheduleID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(scheduledtask.FieldName, field.TypeString, value)
+	}
+	if _u.mutation.NameCleared() {
+		_spec.ClearField(scheduledtask.FieldName, field.TypeString)
+	}
+	if value, ok := _u.mutation.Schedule(); ok {
+		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)
+	}
+	if _u.mutation.ScheduleCleared() {
+		_spec.ClearField(scheduledtask.FieldSchedule, field.TypeJSON)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -348,6 +396,12 @@ func (_u *ScheduledTaskUpdateOne) SetNillableConnectionID(v *string) *ScheduledT
 	if v != nil {
 		_u.SetConnectionID(*v)
 	}
+	return _u
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *ScheduledTaskUpdateOne) ClearConnectionID() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearConnectionID()
 	return _u
 }
 
@@ -425,6 +479,38 @@ func (_u *ScheduledTaskUpdateOne) ClearTemporalScheduleID() *ScheduledTaskUpdate
 	return _u
 }
 
+// SetName sets the "name" field.
+func (_u *ScheduledTaskUpdateOne) SetName(v string) *ScheduledTaskUpdateOne {
+	_u.mutation.SetName(v)
+	return _u
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_u *ScheduledTaskUpdateOne) SetNillableName(v *string) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetName(*v)
+	}
+	return _u
+}
+
+// ClearName clears the value of the "name" field.
+func (_u *ScheduledTaskUpdateOne) ClearName() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearName()
+	return _u
+}
+
+// SetSchedule sets the "schedule" field.
+func (_u *ScheduledTaskUpdateOne) SetSchedule(v *types.ExportSchedule) *ScheduledTaskUpdateOne {
+	_u.mutation.SetSchedule(v)
+	return _u
+}
+
+// ClearSchedule clears the value of the "schedule" field.
+func (_u *ScheduledTaskUpdateOne) ClearSchedule() *ScheduledTaskUpdateOne {
+	_u.mutation.ClearSchedule()
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -481,11 +567,6 @@ func (_u *ScheduledTaskUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *ScheduledTaskUpdateOne) check() error {
-	if v, ok := _u.mutation.ConnectionID(); ok {
-		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
-			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.EntityType(); ok {
 		if err := scheduledtask.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.entity_type": %w`, err)}
@@ -554,6 +635,9 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	if value, ok := _u.mutation.ConnectionID(); ok {
 		_spec.SetField(scheduledtask.FieldConnectionID, field.TypeString, value)
 	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(scheduledtask.FieldConnectionID, field.TypeString)
+	}
 	if value, ok := _u.mutation.EntityType(); ok {
 		_spec.SetField(scheduledtask.FieldEntityType, field.TypeString, value)
 	}
@@ -574,6 +658,18 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	}
 	if _u.mutation.TemporalScheduleIDCleared() {
 		_spec.ClearField(scheduledtask.FieldTemporalScheduleID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Name(); ok {
+		_spec.SetField(scheduledtask.FieldName, field.TypeString, value)
+	}
+	if _u.mutation.NameCleared() {
+		_spec.ClearField(scheduledtask.FieldName, field.TypeString)
+	}
+	if value, ok := _u.mutation.Schedule(); ok {
+		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)
+	}
+	if _u.mutation.ScheduleCleared() {
+		_spec.ClearField(scheduledtask.FieldSchedule, field.TypeJSON)
 	}
 	_node = &ScheduledTask{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -117,6 +117,14 @@ func (_c *ScheduledTaskCreate) SetConnectionID(v string) *ScheduledTaskCreate {
 	return _c
 }
 
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_c *ScheduledTaskCreate) SetNillableConnectionID(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetConnectionID(*v)
+	}
+	return _c
+}
+
 // SetEntityType sets the "entity_type" field.
 func (_c *ScheduledTaskCreate) SetEntityType(v types.ScheduledTaskEntityType) *ScheduledTaskCreate {
 	_c.mutation.SetEntityType(v)
@@ -160,6 +168,26 @@ func (_c *ScheduledTaskCreate) SetNillableTemporalScheduleID(v *string) *Schedul
 	if v != nil {
 		_c.SetTemporalScheduleID(*v)
 	}
+	return _c
+}
+
+// SetName sets the "name" field.
+func (_c *ScheduledTaskCreate) SetName(v string) *ScheduledTaskCreate {
+	_c.mutation.SetName(v)
+	return _c
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (_c *ScheduledTaskCreate) SetNillableName(v *string) *ScheduledTaskCreate {
+	if v != nil {
+		_c.SetName(*v)
+	}
+	return _c
+}
+
+// SetSchedule sets the "schedule" field.
+func (_c *ScheduledTaskCreate) SetSchedule(v *types.ExportSchedule) *ScheduledTaskCreate {
+	_c.mutation.SetSchedule(v)
 	return _c
 }
 
@@ -220,6 +248,10 @@ func (_c *ScheduledTaskCreate) defaults() {
 		v := scheduledtask.DefaultEnvironmentID
 		_c.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := _c.mutation.ConnectionID(); !ok {
+		v := scheduledtask.DefaultConnectionID
+		_c.mutation.SetConnectionID(v)
+	}
 	if _, ok := _c.mutation.Enabled(); !ok {
 		v := scheduledtask.DefaultEnabled
 		_c.mutation.SetEnabled(v)
@@ -244,14 +276,6 @@ func (_c *ScheduledTaskCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "ScheduledTask.updated_at"`)}
-	}
-	if _, ok := _c.mutation.ConnectionID(); !ok {
-		return &ValidationError{Name: "connection_id", err: errors.New(`ent: missing required field "ScheduledTask.connection_id"`)}
-	}
-	if v, ok := _c.mutation.ConnectionID(); ok {
-		if err := scheduledtask.ConnectionIDValidator(v); err != nil {
-			return &ValidationError{Name: "connection_id", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.connection_id": %w`, err)}
-		}
 	}
 	if _, ok := _c.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "ScheduledTask.entity_type"`)}
@@ -363,6 +387,14 @@ func (_c *ScheduledTaskCreate) createSpec() (*ScheduledTask, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.TemporalScheduleID(); ok {
 		_spec.SetField(scheduledtask.FieldTemporalScheduleID, field.TypeString, value)
 		_node.TemporalScheduleID = value
+	}
+	if value, ok := _c.mutation.Name(); ok {
+		_spec.SetField(scheduledtask.FieldName, field.TypeString, value)
+		_node.Name = &value
+	}
+	if value, ok := _c.mutation.Schedule(); ok {
+		_spec.SetField(scheduledtask.FieldSchedule, field.TypeJSON, value)
+		_node.Schedule = value
 	}
 	return _node, _spec
 }

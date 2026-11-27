@@ -4,12 +4,14 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/scheduledtask"
 	domainst "github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // ScheduledTaskRepository implements the scheduled task repository using ent
@@ -45,6 +47,12 @@ func (r *ScheduledTaskRepository) Create(ctx context.Context, task *domainst.Sch
 		SetCreatedBy(task.CreatedBy).
 		SetUpdatedBy(task.UpdatedBy)
 
+	if task.Name != "" {
+		create = create.SetName(task.Name)
+	}
+	if task.Schedule != nil {
+		create = create.SetSchedule(task.Schedule)
+	}
 	if task.JobConfig != nil {
 		create = create.SetJobConfig(task.JobConfig)
 	}
@@ -141,6 +149,58 @@ func (r *ScheduledTaskRepository) Update(ctx context.Context, task *domainst.Sch
 			Mark(ierr.ErrNotFound)
 	}
 
+	return nil
+}
+
+// UpdateSettings writes settings if updated_at unchanged.
+func (r *ScheduledTaskRepository) UpdateSettings(ctx context.Context, task *domainst.ScheduledTask) error {
+	scope := []predicate.ScheduledTask{
+		scheduledtask.TenantID(types.GetTenantID(ctx)),
+		scheduledtask.EnvironmentID(types.GetEnvironmentID(ctx)),
+	}
+	update := r.client.Writer(ctx).ScheduledTask.
+		UpdateOneID(task.ID).
+		Where(scope...).
+		Where(scheduledtask.UpdatedAt(task.UpdatedAt)).
+		SetUpdatedBy(task.UpdatedBy)
+
+	if task.Name != "" {
+		update = update.SetName(task.Name)
+	} else {
+		update = update.ClearName()
+	}
+	if task.Schedule != nil {
+		update = update.SetSchedule(task.Schedule)
+	} else {
+		update = update.ClearSchedule()
+	}
+
+	saved, err := update.Save(ctx)
+	if err != nil {
+		if !ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHint("Failed to update scheduled task settings").
+				Mark(ierr.ErrDatabase)
+		}
+		exists, existErr := r.client.Writer(ctx).ScheduledTask.Query().
+			Where(scope...).
+			Where(scheduledtask.ID(task.ID)).
+			Exist(ctx)
+		if existErr != nil {
+			return ierr.WithError(existErr).
+				WithHint("Failed to verify scheduled task").
+				Mark(ierr.ErrDatabase)
+		}
+		if exists {
+			return ierr.NewErrorf("scheduled task %s changed concurrently", task.ID).
+				WithHint("The export was modified by someone else; reload and retry").
+				Mark(ierr.ErrVersionConflict)
+		}
+		return ierr.NewError("scheduled task not found").
+			WithHint("No rows matched ID + tenant + environment").
+			Mark(ierr.ErrNotFound)
+	}
+	task.UpdatedAt = saved.UpdatedAt
 	return nil
 }
 
@@ -262,6 +322,8 @@ func (r *ScheduledTaskRepository) entToModel(entTask *ent.ScheduledTask) *domain
 		Enabled:            entTask.Enabled,
 		JobConfig:          entTask.JobConfig,
 		TemporalScheduleID: entTask.TemporalScheduleID,
+		Name:               lo.FromPtr(entTask.Name),
+		Schedule:           entTask.Schedule,
 		Status:             types.Status(entTask.Status),
 		CreatedAt:          entTask.CreatedAt,
 		UpdatedAt:          entTask.UpdatedAt,
