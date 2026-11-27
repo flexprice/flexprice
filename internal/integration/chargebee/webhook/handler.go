@@ -325,7 +325,7 @@ func (h *Handler) settleLinkedPayment(
 	}
 
 	// We already gave up on this payment, so the late capture is refunded rather than applied.
-	if payment.PaymentStatus == types.PaymentStatusFailed {
+	if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, chargebeeTransactionID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund payment captured after it failed",
 				"error", err,

@@ -217,7 +217,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			return nil
 		}
 
-		if payment.PaymentStatus == types.PaymentStatusFailed {
+		if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
 			return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, paymentIntent.ID, services.PaymentService)
 		}
 
@@ -1046,7 +1046,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	}
 
 	// A delayed method completes the session before the capture; payment_intent.succeeded refunds it then.
-	if payment.PaymentStatus == types.PaymentStatusFailed {
+	if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
 		if checkoutSession.PaymentStatus != stripeapi.CheckoutSessionPaymentStatusPaid {
 			return nil
 		}
