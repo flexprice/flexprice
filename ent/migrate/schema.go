@@ -2161,6 +2161,9 @@ var (
 				Name:    "meterusagecheckpoint_customer_meter_aggregated_until",
 				Unique:  true,
 				Columns: []*schema.Column{MeterUsageCheckpointsColumns[1], MeterUsageCheckpointsColumns[7], MeterUsageCheckpointsColumns[8], MeterUsageCheckpointsColumns[9], MeterUsageCheckpointsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(period_start IS NULL)",
+				},
 			},
 			{
 				Name:    "meterusagecheckpoint_period_total",
