@@ -1182,8 +1182,8 @@ func (s *subscriptionService) outgoingPeriodInvoiceRequest(
 }
 
 // billOutgoingPeriod raises the cut-short period's invoice the way an immediate cancel does: its open
-// draft, which may hold credits applied at expiry, becomes that invoice. It is finalized here and
-// paid after commit with the change's other invoices.
+// draft, which may hold credits applied at expiry, becomes that invoice. It is finalized here, unless
+// auto finalization is off, and paid after commit with the change's other invoices.
 func (s *subscriptionService) billOutgoingPeriod(ctx context.Context, r *planChangeRequest) (*dto.InvoiceResponse, error) {
 	invoiceSvc := NewInvoiceService(s.ServiceParams)
 	draft, err := invoiceSvc.MoveCycleDraft(ctx, r.currentSub, r.effectiveAt, types.InvoiceBillingReasonProration)
@@ -1206,14 +1206,23 @@ func (s *subscriptionService) billOutgoingPeriod(ctx context.Context, r *planCha
 	if _, skipped, err := invoiceSvc.ComputeInvoice(ctx, created.ID, nil); err != nil || skipped {
 		return nil, err
 	}
-	if err := invoiceSvc.FinalizeInvoice(ctx, created.ID, dto.FinalizeInvoiceRequest{}); err != nil {
-		return nil, err
-	}
-	finalized, err := s.InvoiceRepo.Get(ctx, created.ID)
+
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
 	if err != nil {
 		return nil, err
 	}
-	return dto.NewInvoiceResponse(finalized), nil
+	if invoiceConfig.AutoFinalize {
+		if err := invoiceSvc.FinalizeInvoice(ctx, created.ID, dto.FinalizeInvoiceRequest{}); err != nil {
+			return nil, err
+		}
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, created.ID)
+	if err != nil {
+		return nil, err
+	}
+	return dto.NewInvoiceResponse(inv), nil
 }
 
 // settlePlanChange raises the settlement resolved for this change: the outgoing plan's

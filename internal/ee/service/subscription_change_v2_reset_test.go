@@ -619,37 +619,58 @@ func (s *SubscriptionChangeV2Suite) TestExecute_ResetInvoicesUsageEvenWhenTheNet
 }
 
 // The period the reset cuts short is billed like an immediate cancel: its open draft, holding credits
-// applied at expiry, becomes that invoice instead of being left behind next to a second one.
+// applied at expiry, becomes that invoice instead of being left behind next to a second one. With
+// auto_finalize off that invoice stays a draft for the user to finalize.
 func (s *SubscriptionChangeV2Suite) TestExecute_ResetBillsTheCutShortPeriodOnItsOpenDraft() {
-	ctx := s.GetContext()
-
-	usagePrice := s.seedOutgoingUsage(40, 2)
-	s.recordBilled(s.td.baseLine.ID, s.td.starterBase.Amount)
-
-	draft, _, err := NewInvoiceService(s.serviceParams()).GetOrComputeCurrentPeriodDraft(ctx, s.currentSub())
-	s.Require().NoError(err)
-	s.Require().NotNil(draft)
-	draft.TotalPrepaidCreditsApplied = decimal.NewFromInt(30) // as applied at expiry
-	s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, draft))
-
-	resp, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID, s.resetRequest(s.td.pro.ID), time.Now().UTC())
-	s.Require().NoError(err)
-
-	var usageInvoices []*dto.InvoiceResponse
-	for _, changed := range resp.ChangedResources.Invoices {
-		if changed.Invoice != nil && lo.SomeBy(changed.Invoice.LineItems, func(li *dto.InvoiceLineItemResponse) bool {
-			return lo.FromPtr(li.PriceID) == usagePrice.ID
-		}) {
-			usageInvoices = append(usageInvoices, changed.Invoice)
-		}
+	tests := []struct {
+		name         string
+		autoFinalize bool
+		wantStatus   types.InvoiceStatus
+	}{
+		{name: "auto finalize on", autoFinalize: true, wantStatus: types.InvoiceStatusFinalized},
+		{name: "auto finalize off", autoFinalize: false, wantStatus: types.InvoiceStatusDraft},
 	}
-	s.Require().Len(usageInvoices, 1, "the cut-short period is billed once")
-	inv := usageInvoices[0]
 
-	s.Equal(draft.ID, inv.ID, "the open draft is the cut-short period's invoice")
-	s.Equal(types.InvoiceTypeSubscription, inv.InvoiceType)
-	s.Equal(string(types.InvoiceBillingReasonProration), string(inv.BillingReason))
-	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
-	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "credits applied at expiry kept, got %s", inv.TotalPrepaidCreditsApplied)
-	s.Equal("50", inv.AmountDue.String(), "80 of usage less the 30 already applied")
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+
+			settingsSvc := NewSettingsService(s.serviceParams()).(*settingsService)
+			cfg, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+			s.Require().NoError(err)
+			cfg.AutoFinalize = tt.autoFinalize
+			s.Require().NoError(UpdateSetting(settingsSvc, ctx, types.SettingKeyInvoiceConfig, cfg))
+
+			usagePrice := s.seedOutgoingUsage(40, 2)
+			s.recordBilled(s.td.baseLine.ID, s.td.starterBase.Amount)
+
+			draft, _, err := NewInvoiceService(s.serviceParams()).GetOrComputeCurrentPeriodDraft(ctx, s.currentSub())
+			s.Require().NoError(err)
+			s.Require().NotNil(draft)
+			draft.TotalPrepaidCreditsApplied = decimal.NewFromInt(30) // as applied at expiry
+			s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, draft))
+
+			resp, err := s.svc.ExecutePlanChange(ctx, s.td.sub.ID, s.resetRequest(s.td.pro.ID), time.Now().UTC())
+			s.Require().NoError(err)
+
+			var usageInvoices []*dto.InvoiceResponse
+			for _, changed := range resp.ChangedResources.Invoices {
+				if changed.Invoice != nil && lo.SomeBy(changed.Invoice.LineItems, func(li *dto.InvoiceLineItemResponse) bool {
+					return lo.FromPtr(li.PriceID) == usagePrice.ID
+				}) {
+					usageInvoices = append(usageInvoices, changed.Invoice)
+				}
+			}
+			s.Require().Len(usageInvoices, 1, "the cut-short period is billed once")
+			inv := usageInvoices[0]
+
+			s.Equal(draft.ID, inv.ID, "the open draft is the cut-short period's invoice")
+			s.Equal(types.InvoiceTypeSubscription, inv.InvoiceType)
+			s.Equal(string(types.InvoiceBillingReasonProration), string(inv.BillingReason))
+			s.Equal(tt.wantStatus, inv.InvoiceStatus)
+			s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "credits applied at expiry kept, got %s", inv.TotalPrepaidCreditsApplied)
+			s.Equal("50", inv.AmountDue.String(), "80 of usage less the 30 already applied")
+		})
+	}
 }
