@@ -33080,6 +33080,7 @@ type CustomerMutation struct {
 	appendcontact_persons []*schema.ContactPerson
 	billing_entity_id     *string
 	settings              **types.SettingsOverride
+	usage_rollup_eligible *bool
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Customer, error)
@@ -34291,6 +34292,55 @@ func (m *CustomerMutation) ResetSettings() {
 	delete(m.clearedFields, customer.FieldSettings)
 }
 
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (m *CustomerMutation) SetUsageRollupEligible(b bool) {
+	m.usage_rollup_eligible = &b
+}
+
+// UsageRollupEligible returns the value of the "usage_rollup_eligible" field in the mutation.
+func (m *CustomerMutation) UsageRollupEligible() (r bool, exists bool) {
+	v := m.usage_rollup_eligible
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageRollupEligible returns the old "usage_rollup_eligible" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldUsageRollupEligible(ctx context.Context) (v *bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageRollupEligible is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageRollupEligible requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageRollupEligible: %w", err)
+	}
+	return oldValue.UsageRollupEligible, nil
+}
+
+// ClearUsageRollupEligible clears the value of the "usage_rollup_eligible" field.
+func (m *CustomerMutation) ClearUsageRollupEligible() {
+	m.usage_rollup_eligible = nil
+	m.clearedFields[customer.FieldUsageRollupEligible] = struct{}{}
+}
+
+// UsageRollupEligibleCleared returns if the "usage_rollup_eligible" field was cleared in this mutation.
+func (m *CustomerMutation) UsageRollupEligibleCleared() bool {
+	_, ok := m.clearedFields[customer.FieldUsageRollupEligible]
+	return ok
+}
+
+// ResetUsageRollupEligible resets all changes to the "usage_rollup_eligible" field.
+func (m *CustomerMutation) ResetUsageRollupEligible() {
+	m.usage_rollup_eligible = nil
+	delete(m.clearedFields, customer.FieldUsageRollupEligible)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -34325,7 +34375,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -34398,6 +34448,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.settings != nil {
 		fields = append(fields, customer.FieldSettings)
 	}
+	if m.usage_rollup_eligible != nil {
+		fields = append(fields, customer.FieldUsageRollupEligible)
+	}
 	return fields
 }
 
@@ -34454,6 +34507,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingEntityID()
 	case customer.FieldSettings:
 		return m.Settings()
+	case customer.FieldUsageRollupEligible:
+		return m.UsageRollupEligible()
 	}
 	return nil, false
 }
@@ -34511,6 +34566,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingEntityID(ctx)
 	case customer.FieldSettings:
 		return m.OldSettings(ctx)
+	case customer.FieldUsageRollupEligible:
+		return m.OldUsageRollupEligible(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -34688,6 +34745,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSettings(v)
 		return nil
+	case customer.FieldUsageRollupEligible:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageRollupEligible(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -34769,6 +34833,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldSettings) {
 		fields = append(fields, customer.FieldSettings)
 	}
+	if m.FieldCleared(customer.FieldUsageRollupEligible) {
+		fields = append(fields, customer.FieldUsageRollupEligible)
+	}
 	return fields
 }
 
@@ -34833,6 +34900,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldSettings:
 		m.ClearSettings()
+		return nil
+	case customer.FieldUsageRollupEligible:
+		m.ClearUsageRollupEligible()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -34913,6 +34983,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldSettings:
 		m.ResetSettings()
+		return nil
+	case customer.FieldUsageRollupEligible:
+		m.ResetUsageRollupEligible()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)

@@ -4927,6 +4927,7 @@ func (s *subscriptionService) publishSystemEvent(ctx context.Context, eventName 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
+	NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupSubscription, subscriptionID)
 }
 
 func (s *subscriptionService) PublishCancellationEvents(ctx context.Context, sub *subscription.Subscription) {
@@ -6693,6 +6694,7 @@ func toSubscriptionMeterUsageRequest(req *dto.GetUsageBySubscriptionRequest) *Ge
 		LifetimeUsage:   req.LifetimeUsage,
 		UseFinal:        req.Source == string(types.UsageSourceInvoiceCreation),
 		IncludeFeatures: false,
+		Source:          types.UsageSource(req.Source),
 		// Billing for a Parent subscription must roll up every inherited
 		// child's usage — that is the consolidated-invoice contract.
 		IncludeChildren: true,

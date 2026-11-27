@@ -67,8 +67,10 @@ type Customer struct {
 	// BillingEntityID holds the value of the "billing_entity_id" field.
 	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 	// Settings holds the value of the "settings" field.
-	Settings     *types.SettingsOverride `json:"settings,omitempty"`
-	selectValues sql.SelectValues
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+	// UsageRollupEligible holds the value of the "usage_rollup_eligible" field.
+	UsageRollupEligible *bool `json:"usage_rollup_eligible,omitempty"`
+	selectValues        sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -78,6 +80,8 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customer.FieldMetadata, customer.FieldContactPersons, customer.FieldSettings:
 			values[i] = new([]byte)
+		case customer.FieldUsageRollupEligible:
+			values[i] = new(sql.NullBool)
 		case customer.FieldID, customer.FieldTenantID, customer.FieldStatus, customer.FieldCreatedBy, customer.FieldUpdatedBy, customer.FieldEnvironmentID, customer.FieldExternalID, customer.FieldName, customer.FieldEmail, customer.FieldContact, customer.FieldBillingCurrency, customer.FieldAddressLine1, customer.FieldAddressLine2, customer.FieldAddressCity, customer.FieldAddressState, customer.FieldAddressPostalCode, customer.FieldAddressCountry, customer.FieldTimezone, customer.FieldTaxTreatment, customer.FieldBillingEntityID:
 			values[i] = new(sql.NullString)
 		case customer.FieldCreatedAt, customer.FieldUpdatedAt:
@@ -256,6 +260,13 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field settings: %w", err)
 				}
 			}
+		case customer.FieldUsageRollupEligible:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field usage_rollup_eligible", values[i])
+			} else if value.Valid {
+				_m.UsageRollupEligible = new(bool)
+				*_m.UsageRollupEligible = value.Bool
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -369,6 +380,11 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("settings=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Settings))
+	builder.WriteString(", ")
+	if v := _m.UsageRollupEligible; v != nil {
+		builder.WriteString("usage_rollup_eligible=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

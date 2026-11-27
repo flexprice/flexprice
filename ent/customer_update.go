@@ -375,6 +375,26 @@ func (_u *CustomerUpdate) ClearSettings() *CustomerUpdate {
 	return _u
 }
 
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (_u *CustomerUpdate) SetUsageRollupEligible(v bool) *CustomerUpdate {
+	_u.mutation.SetUsageRollupEligible(v)
+	return _u
+}
+
+// SetNillableUsageRollupEligible sets the "usage_rollup_eligible" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableUsageRollupEligible(v *bool) *CustomerUpdate {
+	if v != nil {
+		_u.SetUsageRollupEligible(*v)
+	}
+	return _u
+}
+
+// ClearUsageRollupEligible clears the value of the "usage_rollup_eligible" field.
+func (_u *CustomerUpdate) ClearUsageRollupEligible() *CustomerUpdate {
+	_u.mutation.ClearUsageRollupEligible()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdate) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -563,6 +583,12 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.UsageRollupEligible(); ok {
+		_spec.SetField(customer.FieldUsageRollupEligible, field.TypeBool, value)
+	}
+	if _u.mutation.UsageRollupEligibleCleared() {
+		_spec.ClearField(customer.FieldUsageRollupEligible, field.TypeBool)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -928,6 +954,26 @@ func (_u *CustomerUpdateOne) ClearSettings() *CustomerUpdateOne {
 	return _u
 }
 
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (_u *CustomerUpdateOne) SetUsageRollupEligible(v bool) *CustomerUpdateOne {
+	_u.mutation.SetUsageRollupEligible(v)
+	return _u
+}
+
+// SetNillableUsageRollupEligible sets the "usage_rollup_eligible" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableUsageRollupEligible(v *bool) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetUsageRollupEligible(*v)
+	}
+	return _u
+}
+
+// ClearUsageRollupEligible clears the value of the "usage_rollup_eligible" field.
+func (_u *CustomerUpdateOne) ClearUsageRollupEligible() *CustomerUpdateOne {
+	_u.mutation.ClearUsageRollupEligible()
+	return _u
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (_u *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return _u.mutation
@@ -1146,6 +1192,12 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if _u.mutation.SettingsCleared() {
 		_spec.ClearField(customer.FieldSettings, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.UsageRollupEligible(); ok {
+		_spec.SetField(customer.FieldUsageRollupEligible, field.TypeBool, value)
+	}
+	if _u.mutation.UsageRollupEligibleCleared() {
+		_spec.ClearField(customer.FieldUsageRollupEligible, field.TypeBool)
 	}
 	_node = &Customer{config: _u.config}
 	_spec.Assign = _node.assignValues

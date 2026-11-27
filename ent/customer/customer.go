@@ -62,6 +62,8 @@ const (
 	FieldBillingEntityID = "billing_entity_id"
 	// FieldSettings holds the string denoting the settings field in the database.
 	FieldSettings = "settings"
+	// FieldUsageRollupEligible holds the string denoting the usage_rollup_eligible field in the database.
+	FieldUsageRollupEligible = "usage_rollup_eligible"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -93,6 +95,7 @@ var Columns = []string{
 	FieldContactPersons,
 	FieldBillingEntityID,
 	FieldSettings,
+	FieldUsageRollupEligible,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -241,4 +244,9 @@ func ByTaxTreatment(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingEntityID orders the results by the billing_entity_id field.
 func ByBillingEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingEntityID, opts...).ToFunc()
+}
+
+// ByUsageRollupEligible orders the results by the usage_rollup_eligible field.
+func ByUsageRollupEligible(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUsageRollupEligible, opts...).ToFunc()
 }

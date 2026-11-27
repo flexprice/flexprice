@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"context"
+	"github.com/redis/go-redis/v9"
 	"testing"
 	"time"
 
@@ -160,4 +162,37 @@ func TestMergeHourlyUsage(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestHourlyUsageRepositoryRoundTrip writes usage and reads them back from a real Redis on localhost:6379.
+func TestHourlyUsageRepositoryRoundTrip(t *testing.T) {
+	client := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	defer client.Close()
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		t.Skipf("skipping: Redis not reachable at localhost:6379 (%v)", err)
+	}
+	store := &hourlyUsageRepository{client: client, keyPrefix: "roundtrip_" + types.GenerateUUID()}
+	ctx := types.SetEnvironmentID(context.WithValue(context.Background(), types.CtxTenantID, "tenant_rt"), "env_rt")
+	hour := time.Now().UTC().Truncate(time.Hour)
+	usage := func(meterID string, aggregation types.AggregationType, qty string) usagerollup.HourlyUsage {
+		return usagerollup.HourlyUsage{ExternalCustomerID: "cust_rt", Hour: hour, MeterID: meterID, Aggregation: aggregation, Quantity: decimal.RequireFromString(qty)}
+	}
+	require.NoError(t, store.Increment(ctx, []usagerollup.HourlyUsage{
+		usage("m_sum", types.AggregationSum, "0.1"), usage("m_count", types.AggregationCount, "3"), usage("m_max", types.AggregationMax, "-2"),
+	}))
+	require.NoError(t, store.Increment(ctx, []usagerollup.HourlyUsage{
+		usage("m_sum", types.AggregationSum, "0.2"), usage("m_max", types.AggregationMax, "-5"),
+	}))
+
+	got, err := store.ListCustomerHourlyUsage(ctx, "cust_rt", []time.Time{hour, hour.Add(time.Hour)})
+	require.NoError(t, err)
+	byMeter := map[string]usagerollup.HourlyUsage{}
+	for _, b := range got {
+		byMeter[b.MeterID] = b
+	}
+	require.Len(t, byMeter, 3)
+	require.Equal(t, "0.3", byMeter["m_sum"].Quantity.String(), "float drift is rounded off on read")
+	require.Equal(t, types.AggregationCount, byMeter["m_count"].Aggregation)
+	require.Equal(t, "3", byMeter["m_count"].Quantity.String())
+	require.Equal(t, "-2", byMeter["m_max"].Quantity.String())
 }

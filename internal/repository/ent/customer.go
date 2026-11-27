@@ -622,6 +622,70 @@ func (r *customerRepository) DeleteCache(ctx context.Context, customer *domainCu
 	r.redisCache.Delete(ctx, cacheKey)
 }
 
+func (r *customerRepository) GetUsageRollupEligible(ctx context.Context, id string) (*bool, error) {
+	span := StartRepositorySpan(ctx, "customer", "get_usage_rollup_eligible", map[string]interface{}{"customer_id": id})
+	defer FinishSpan(span)
+
+	// The writer: a read just after a write clears the flag must not see the replica's old flag and cache it.
+	c, err := r.client.Writer(ctx).Customer.Query().
+		Where(
+			customer.ID(id),
+			customer.TenantID(types.GetTenantID(ctx)),
+			customer.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		Select(customer.FieldUsageRollupEligible).
+		Only(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).WithHintf("Customer with ID %s was not found", id).Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).WithHint("Failed to read the customer's usage rollup flag").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return c.UsageRollupEligible, nil
+}
+
+func (r *customerRepository) SetUsageRollupEligible(ctx context.Context, id string, eligible bool) error {
+	span := StartRepositorySpan(ctx, "customer", "set_usage_rollup_eligible", map[string]interface{}{
+		"customer_id": id,
+		"eligible":    eligible,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		UPDATE customers
+		SET usage_rollup_eligible = $3
+		WHERE tenant_id = $1 AND environment_id = $2 AND id = $4`
+	if _, err := r.client.Writer(ctx).ExecContext(ctx, query, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), eligible, id); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("Failed to save the customer's usage rollup flag").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return nil
+}
+
+func (r *customerRepository) ClearUsageRollupEligible(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	span := StartRepositorySpan(ctx, "customer", "clear_usage_rollup_eligible", map[string]interface{}{
+		"customer_count": len(ids),
+	})
+	defer FinishSpan(span)
+
+	query := `
+		UPDATE customers
+		SET usage_rollup_eligible = NULL
+		WHERE tenant_id = $1 AND environment_id = $2 AND id = ANY($3) AND usage_rollup_eligible IS NOT NULL`
+	if _, err := r.client.Writer(ctx).ExecContext(ctx, query, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), pq.Array(ids)); err != nil {
+		SetSpanError(span, err)
+		return ierr.WithError(err).WithHint("Failed to clear the customers' usage rollup flag").Mark(ierr.ErrDatabase)
+	}
+	SetSpanSuccess(span)
+	return nil
+}
+
 func (r *customerRepository) AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)

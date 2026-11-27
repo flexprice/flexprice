@@ -19,4 +19,12 @@ type Repository interface {
 	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's customers
 	// without an entity to its default entity, bypassing the activity log.
 	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
+	// GetUsageRollupEligible reads whether the customer's wallet balance can be served from the usage rollup;
+	// nil means it has not been evaluated since it was last cleared.
+	GetUsageRollupEligible(ctx context.Context, id string) (*bool, error)
+	// SetUsageRollupEligible saves the customer's evaluated flag. It and ClearUsageRollupEligible bypass the
+	// activity log: the flag is internal bookkeeping.
+	SetUsageRollupEligible(ctx context.Context, id string, eligible bool) error
+	// ClearUsageRollupEligible sets the customers' flag to not evaluated.
+	ClearUsageRollupEligible(ctx context.Context, ids []string) error
 }

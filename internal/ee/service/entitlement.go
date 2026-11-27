@@ -941,6 +941,7 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 }
 
 func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, entitlementID string) {
+	s.markEntitlementSourceChanged(ctx, entitlementID)
 	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
 		EntitlementID: entitlementID,
 		TenantID:      types.GetTenantID(ctx),
@@ -963,6 +964,31 @@ func (s *entitlementService) publishSystemEvent(ctx context.Context, eventName t
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
 		s.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
+	}
+}
+
+// markEntitlementSourceChanged clears the usage rollup eligibility of the customers an entitlement change
+// affects: everyone on its plan or addon, or its subscription's customer.
+func (s *entitlementService) markEntitlementSourceChanged(ctx context.Context, entitlementID string) {
+	if s.Config == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return
+	}
+	ent, err := s.EntitlementRepo.Get(ctx, entitlementID)
+	if ierr.IsNotFound(err) {
+		return // deleted: losing an entitlement can't make a usage rollup price wrong
+	}
+	if err != nil {
+		s.Logger.Error(ctx, "usage rollup: failed to load changed entitlement", "error", err, "entitlement_id", entitlementID)
+		return
+	}
+	usageRollup := NewUsageRollupService(s.ServiceParams)
+	switch ent.EntityType {
+	case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+		usageRollup.ClearEligibility(ctx, UsageRollupPlan, ent.EntityID)
+	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+		usageRollup.ClearEligibility(ctx, UsageRollupAddon, ent.EntityID)
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		usageRollup.ClearEligibility(ctx, UsageRollupSubscription, ent.EntityID)
 	}
 }
 

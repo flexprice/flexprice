@@ -310,6 +310,20 @@ func (_c *CustomerCreate) SetSettings(v *types.SettingsOverride) *CustomerCreate
 	return _c
 }
 
+// SetUsageRollupEligible sets the "usage_rollup_eligible" field.
+func (_c *CustomerCreate) SetUsageRollupEligible(v bool) *CustomerCreate {
+	_c.mutation.SetUsageRollupEligible(v)
+	return _c
+}
+
+// SetNillableUsageRollupEligible sets the "usage_rollup_eligible" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableUsageRollupEligible(v *bool) *CustomerCreate {
+	if v != nil {
+		_c.SetUsageRollupEligible(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *CustomerCreate) SetID(v string) *CustomerCreate {
 	_c.mutation.SetID(v)
@@ -550,6 +564,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Settings(); ok {
 		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
 		_node.Settings = value
+	}
+	if value, ok := _c.mutation.UsageRollupEligible(); ok {
+		_spec.SetField(customer.FieldUsageRollupEligible, field.TypeBool, value)
+		_node.UsageRollupEligible = &value
 	}
 	return _node, _spec
 }

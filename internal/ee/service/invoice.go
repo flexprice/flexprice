@@ -3406,18 +3406,6 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 	for _, record := range invoices {
 		inv := dto.NewInvoiceResponse(record)
-		// For uncomputed subscription drafts, compute inline to get accurate amounts.
-		// Without this, uncomputed drafts have zero AmountRemaining and would be skipped,
-		// understating pending charges and overstating available wallet balance.
-		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.LastComputedAt == nil {
-			computedInv, _, computeErr := s.ComputeInvoice(ctx, inv.ID, nil)
-			if computeErr != nil {
-				s.Logger.Error(ctx, "failed to compute draft invoice for wallet balance",
-					"invoice_id", inv.ID, "error", computeErr)
-				continue
-			}
-			inv = dto.NewInvoiceResponse(computedInv)
-		}
 
 		// A custom-currency invoice also matches a wallet in that custom currency.
 		inCustomCurrency := inv.CustomCurrency != nil && types.IsMatchingCurrency(inv.CustomCurrency.Code, req.Currency)
@@ -3444,6 +3432,18 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 		if !matchesCurrency {
 			continue
+		}
+
+		// An uncomputed past draft has zero AmountRemaining and would be skipped, overstating the
+		// balance. Computed only here, after the skips above, so a read never computes a draft it drops.
+		if inv.InvoiceStatus == types.InvoiceStatusDraft && inv.LastComputedAt == nil {
+			computedInv, _, computeErr := s.ComputeInvoice(ctx, inv.ID, nil)
+			if computeErr != nil {
+				s.Logger.Error(ctx, "failed to compute draft invoice for wallet balance",
+					"invoice_id", inv.ID, "error", computeErr)
+				continue
+			}
+			inv = dto.NewInvoiceResponse(computedInv)
 		}
 
 		if inv.AmountRemaining.IsZero() {

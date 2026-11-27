@@ -34,6 +34,8 @@ const (
 	UsageRollupRows    Name = "usage_rollup.rows"
 
 	UsageCheckpointCustomers Name = "usage_checkpoint.customers"
+	UsageRollupReads         Name = "usage_rollup.reads"
+	UsageRollupGapQueries    Name = "usage_rollup.gap_queries"
 
 	ActivityDropped            Name = "activity.dropped"
 	ActivityUncaptured         Name = "activity.uncaptured"
@@ -62,6 +64,8 @@ var catalog = map[Name]definition{
 	UsageRollupRows:    {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
 
 	UsageCheckpointCustomers: {"Customer billing periods handled by the usage checkpoint job, by outcome", "{period}"},
+	UsageRollupReads:         {"Wallet usage reads: fast (from the usage rollup) or why they read ClickHouse instead", "{read}"},
+	UsageRollupGapQueries:    {"ClickHouse queries a fast wallet read made for usage not in the checkpoint or Redis", "{query}"},
 
 	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
 	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},

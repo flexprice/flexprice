@@ -114,10 +114,14 @@ const (
 	PrefixCreditGrantApplyLock = "credit_grant:apply:"
 	// PrefixCheckoutPollLock debounces gateway reconciliation on the checkout read
 	// (used with the payment ID). Acquired and never released — TTL expiry is the window.
-	PrefixCheckoutPollLock     = "checkout:poll:"
-	PrefixPublishedConnections = "published_connections:"
-	PrefixMeterFeature         = "meter:feature:v1:"
-	PrefixReportResult         = "report_result:v1:"
+	PrefixCheckoutPollLock          = "checkout:poll:"
+	PrefixPublishedConnections      = "published_connections:"
+	PrefixMeterFeature              = "meter:feature:v1:"
+	PrefixReportResult              = "report_result:v1:"
+	PrefixUsageSnapshot             = "usage_snapshot:v1:"
+	PrefixUsageRollupEligibility    = "usage_rollup_eligibility:v1:"
+	PrefixUsageRollupEntityPrices   = "usage_rollup_entity_prices:v1:"
+	PrefixUsageRollupCustomerAddons = "usage_rollup_customer_addons:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

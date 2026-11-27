@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -10,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -106,6 +108,51 @@ func (s *hourlyUsageRepository) Increment(ctx context.Context, usage []usageroll
 	return nil
 }
 
+func (s *hourlyUsageRepository) ListCustomerHourlyUsage(ctx context.Context, externalCustomerID string, hours []time.Time) ([]usagerollup.HourlyUsage, error) {
+	if len(hours) == 0 {
+		return nil, nil
+	}
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" {
+		return nil, fmt.Errorf("usage rollup hourly quantities: tenant and environment are required")
+	}
+
+	// Every key carries the customer's hash tag, so the pipeline is one slot and one round trip.
+	pipe := s.client.Pipeline()
+	quantities := make([]*redis.MapStringStringCmd, len(hours))
+	maxima := make([]*redis.ZSliceCmd, len(hours))
+	for i, hour := range hours {
+		keys := newUsageRollupKeys(s.keyPrefix, tenantID, environmentID, usagerollup.HourlyUsage{ExternalCustomerID: externalCustomerID, Hour: hour})
+		quantities[i] = pipe.HGetAll(ctx, keys.qty)
+		maxima[i] = pipe.ZRangeWithScores(ctx, keys.max, 0, -1)
+	}
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return nil, fmt.Errorf("usage rollup hourly quantities: %w", err)
+	}
+
+	var usage []usagerollup.HourlyUsage
+	for i, hour := range hours {
+		for field, value := range quantities[i].Val() {
+			aggregation, meterID, ok := parseUsageRollupField(field)
+			if !ok {
+				return nil, fmt.Errorf("usage rollup hourly quantities: unknown field %q in %s", field, hour.Format(usageRollupHourLayout))
+			}
+			quantity, err := decimal.NewFromString(value)
+			if err != nil {
+				return nil, fmt.Errorf("usage rollup hourly quantities: field %q: %w", field, err)
+			}
+			usage = append(usage, usagerollup.HourlyUsage{ExternalCustomerID: externalCustomerID, Hour: hour, MeterID: meterID,
+				Aggregation: aggregation, Quantity: quantity})
+		}
+		for _, z := range maxima[i].Val() {
+			meterID, _ := z.Member.(string)
+			usage = append(usage, usagerollup.HourlyUsage{ExternalCustomerID: externalCustomerID, Hour: hour, MeterID: meterID,
+				Aggregation: types.AggregationMax, Quantity: decimal.NewFromFloat(z.Score)})
+		}
+	}
+	return usage, nil
+}
+
 // hourlyUsageKey identifies one Redis field: a customer's meter in one hour.
 type hourlyUsageKey struct {
 	externalCustomerID string
@@ -148,4 +195,16 @@ func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour ti
 		return nil, fmt.Errorf("usage rollup active customers: %w", err)
 	}
 	return customers, nil
+}
+
+// parseUsageRollupField reverses usageRollupField.
+func parseUsageRollupField(field string) (types.AggregationType, string, bool) {
+	switch {
+	case strings.HasPrefix(field, "count:"):
+		return types.AggregationCount, strings.TrimPrefix(field, "count:"), true
+	case strings.HasPrefix(field, "sum:"):
+		return types.AggregationSum, strings.TrimPrefix(field, "sum:"), true
+	default:
+		return "", "", false
+	}
 }

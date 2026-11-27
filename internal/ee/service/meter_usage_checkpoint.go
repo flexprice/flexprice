@@ -362,6 +362,17 @@ func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, 
 	if err != nil {
 		return err
 	}
+	// Reads cache each period's totals and watermark; drop them so the next read picks up the new ones.
+	if s.RedisCache != nil {
+		for _, cust := range customers {
+			if _, ok := updates[cust.ExternalID]; !ok {
+				continue
+			}
+			for _, sub := range subsByCustomer[cust.ID] {
+				s.RedisCache.ForceCacheDelete(ctx, usageSnapshotKey(ctx, cust.ID, sub.CurrentPeriodStart.UTC()))
+			}
+		}
+	}
 	result.record(ctx, usageCheckpointUpdated, applied)
 	result.record(ctx, usageCheckpointConflict, len(updates)-applied)
 	return nil

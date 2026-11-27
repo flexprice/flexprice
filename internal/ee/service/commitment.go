@@ -624,6 +624,7 @@ func (s *commitmentService) publishSystemEvent(ctx context.Context, eventName ty
 	}
 
 	publishAfterCommit(ctx, s.ServiceParams, event)
+	NewUsageRollupService(s.ServiceParams).ClearEligibility(ctx, UsageRollupSubscription, c.SubscriptionID)
 }
 
 // recomputeDrafts recomputes the drafts and skipped period invoices billing the subscription's periods that end after

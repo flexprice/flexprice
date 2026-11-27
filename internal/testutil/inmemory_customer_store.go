@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,7 @@ import (
 // InMemoryCustomerStore implements customer.Repository
 type InMemoryCustomerStore struct {
 	*InMemoryStore[*customer.Customer]
+	realtimeEligible sync.Map // customer ID -> bool
 }
 
 // NewInMemoryCustomerStore creates a new in-memory customer store
@@ -253,6 +255,32 @@ func (s *InMemoryCustomerStore) ListByFilter(ctx context.Context, filter *types.
 // CountByFilter counts customers based on filter
 func (s *InMemoryCustomerStore) CountByFilter(ctx context.Context, filter *types.CustomerFilter) (int, error) {
 	return s.Count(ctx, filter)
+}
+
+func (s *InMemoryCustomerStore) GetUsageRollupEligible(ctx context.Context, id string) (*bool, error) {
+	if _, err := s.InMemoryStore.Get(ctx, id); err != nil {
+		return nil, err
+	}
+	eligible, ok := s.realtimeEligible.Load(id)
+	if !ok {
+		return nil, nil
+	}
+	return lo.ToPtr(eligible.(bool)), nil
+}
+
+func (s *InMemoryCustomerStore) SetUsageRollupEligible(ctx context.Context, id string, eligible bool) error {
+	if _, err := s.InMemoryStore.Get(ctx, id); err != nil {
+		return nil
+	}
+	s.realtimeEligible.Store(id, eligible)
+	return nil
+}
+
+func (s *InMemoryCustomerStore) ClearUsageRollupEligible(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		s.realtimeEligible.Delete(id)
+	}
+	return nil
 }
 
 // AssignDefaultBillingEntities needs the raw SQL join; it is covered by e2e only.

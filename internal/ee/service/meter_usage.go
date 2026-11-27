@@ -33,6 +33,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -275,6 +276,8 @@ type GetSubscriptionMeterUsageRequest struct {
 	BillingAnchor   *time.Time
 	UseFinal        bool // true for invoice creation
 	IncludeFeatures bool // true for analytics (resolve meter → feature)
+	// Source is the caller; wallet reads of an eligible customer's current period come from the usage rollup.
+	Source types.UsageSource
 
 	// Analytics-only filters. These are forwarded to the windowed
 	// GetDetailedAnalytics call inside GetSubscriptionMeterUsage. They have no
@@ -489,6 +492,66 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 	return s.GetSubscriptionMeterUsageWithSub(ctx, sub, req)
 }
 
+// usageRollupMeterUsage serves a wallet read of a customer on the usage rollup path: one usage per charged meter,
+// with its plan or addon price and its quantity from the usage rollup. served is false off that path; a
+// usage rollup failure is logged and the caller reads Postgres and ClickHouse instead.
+func (s *meterUsageService) usageRollupMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
+	if !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return nil, false
+	}
+	usageRollup := NewUsageRollupService(s.ServiceParams)
+	if !usageRollup.IsUsageRollupEligible(ctx, sub, types.UsageSourceWallet) {
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadIneligible))
+		return nil, false
+	}
+	prices, meters, err := usageRollup.UsagePrices(ctx, sub)
+	var quantities map[string]decimal.Decimal
+	if err == nil {
+		quantities, err = usageRollup.PeriodQuantities(ctx, sub, meters)
+	}
+	if err != nil {
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadError))
+		s.logger.Error(ctx, "usage rollup read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
+		return nil, false
+	}
+	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadServed))
+	return usageRollupSubscriptionMeterUsage(sub, prices, meters, quantities), true
+}
+
+// usageRollupSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or
+// addon price over the current period.
+func usageRollupSubscriptionMeterUsage(
+	sub *subscription.Subscription,
+	pricesByMeter map[string]*price.Price,
+	meters map[string]*meter.Meter,
+	quantities map[string]decimal.Decimal,
+) *SubscriptionMeterUsage {
+	result := &SubscriptionMeterUsage{
+		Subscription:   sub,
+		LineItemUsages: make([]*LineItemMeterUsage, 0, len(quantities)),
+		MeterMap:       meters,
+		PriceMap:       make(map[string]*price.Price, len(pricesByMeter)),
+		FeatureMap:     make(map[string]*feature.Feature),
+		MeterToFeature: make(map[string]*feature.Feature),
+	}
+	for meterID, p := range pricesByMeter {
+		result.PriceMap[p.ID] = p
+		quantity, hasUsage := quantities[meterID]
+		if !hasUsage {
+			continue
+		}
+		result.LineItemUsages = append(result.LineItemUsages, &LineItemMeterUsage{
+			MeterID:     meterID,
+			Meter:       meters[meterID],
+			Price:       p,
+			PeriodStart: sub.CurrentPeriodStart,
+			PeriodEnd:   sub.CurrentPeriodEnd,
+			Usage:       quantity,
+		})
+	}
+	return result
+}
+
 // GetSubscriptionMeterUsageWithSub is the data-fed variant of
 // GetSubscriptionMeterUsage: the caller supplies the subscription so no extra
 // DB fetch happens for it. Line items are (re)loaded scoped to the usage window
@@ -500,6 +563,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 ) (*SubscriptionMeterUsage, error) {
 	if req == nil || sub == nil {
 		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
+	}
+
+	if req.Source == types.UsageSourceWallet && !req.LifetimeUsage &&
+		req.StartTime.Equal(sub.CurrentPeriodStart) && req.EndTime.Equal(sub.CurrentPeriodEnd) {
+		if result, served := s.usageRollupMeterUsage(ctx, sub); served {
+			return result, nil
+		}
 	}
 
 	// 2. Resolve external customer IDs for meter_usage queries.
@@ -2540,7 +2610,7 @@ func (s *meterUsageService) ConvertToBillingCharges(
 		totalCost = totalCost.Add(cost)
 
 		charge := &dto.SubscriptionUsageByMetersResponse{
-			SubscriptionLineItemID: lu.LineItem.ID,
+			SubscriptionLineItemID: lo.FromPtr(lu.LineItem).ID,
 			Currency:               lu.Price.Currency,
 			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, lu.Price.Currency),
 			FilterValues:           make(price.JSONBFilters),

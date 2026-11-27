@@ -22,6 +22,15 @@ type fakeHourlyUsageRepository struct {
 	usage  []usagerollup.HourlyUsage
 	err    error
 	active map[time.Time][]string
+	hourly map[time.Time][]usagerollup.HourlyUsage
+}
+
+func (f *fakeHourlyUsageRepository) ListCustomerHourlyUsage(_ context.Context, _ string, hours []time.Time) ([]usagerollup.HourlyUsage, error) {
+	var usage []usagerollup.HourlyUsage
+	for _, hour := range hours {
+		usage = append(usage, f.hourly[hour]...)
+	}
+	return usage, f.err
 }
 
 func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]string, error) {

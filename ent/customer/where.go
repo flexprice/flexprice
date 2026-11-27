@@ -171,6 +171,11 @@ func BillingEntityID(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldBillingEntityID, v))
 }
 
+// UsageRollupEligible applies equality check predicate on the "usage_rollup_eligible" field. It's identical to UsageRollupEligibleEQ.
+func UsageRollupEligible(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldUsageRollupEligible, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldTenantID, v))
@@ -1673,6 +1678,26 @@ func SettingsIsNil() predicate.Customer {
 // SettingsNotNil applies the NotNil predicate on the "settings" field.
 func SettingsNotNil() predicate.Customer {
 	return predicate.Customer(sql.FieldNotNull(FieldSettings))
+}
+
+// UsageRollupEligibleEQ applies the EQ predicate on the "usage_rollup_eligible" field.
+func UsageRollupEligibleEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldUsageRollupEligible, v))
+}
+
+// UsageRollupEligibleNEQ applies the NEQ predicate on the "usage_rollup_eligible" field.
+func UsageRollupEligibleNEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldUsageRollupEligible, v))
+}
+
+// UsageRollupEligibleIsNil applies the IsNil predicate on the "usage_rollup_eligible" field.
+func UsageRollupEligibleIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldUsageRollupEligible))
+}
+
+// UsageRollupEligibleNotNil applies the NotNil predicate on the "usage_rollup_eligible" field.
+func UsageRollupEligibleNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldUsageRollupEligible))
 }
 
 // And groups predicates with the AND operator between them.
