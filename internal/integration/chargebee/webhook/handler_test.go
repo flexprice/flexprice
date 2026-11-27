@@ -110,11 +110,11 @@ func (c *connectionClient) GetConnection(_ context.Context) (*connection.Connect
 
 type fakePaymentService struct {
 	interfaces.PaymentService
-	payment        *dto.PaymentResponse
-	getErr         error
-	updateReqs     []dto.UpdatePaymentRequest
-	lateCaptures   []dto.SettleLateCaptureRequest
-	lateCaptureErr error
+	payment    *dto.PaymentResponse
+	getErr     error
+	updateReqs []dto.UpdatePaymentRequest
+	settles    []dto.SettleLateCaptureRequest
+	settleErr  error
 }
 
 func (s *fakePaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
@@ -130,8 +130,8 @@ func (s *fakePaymentService) UpdatePayment(_ context.Context, _ string, req dto.
 }
 
 func (s *fakePaymentService) SettleLateCapture(_ context.Context, req *dto.SettleLateCaptureRequest) error {
-	s.lateCaptures = append(s.lateCaptures, *req)
-	return s.lateCaptureErr
+	s.settles = append(s.settles, *req)
+	return s.settleErr
 }
 
 // ── suite ────────────────────────────────────────────────────────────────────
@@ -266,14 +266,14 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionSettl
 	s.Require().NoError(err)
 	s.True(handled, "must still not fall through: reconciling would credit an archived invoice")
 	s.Empty(s.checkoutSvc.completeCalls)
-	s.Equal([]dto.SettleLateCaptureRequest{{PaymentID: testFlexpricePaymentID, GatewayPaymentID: testChargebeeTxnID}}, s.paymentSvc.lateCaptures)
+	s.Equal([]dto.SettleLateCaptureRequest{{PaymentID: testFlexpricePaymentID, GatewayPaymentID: testChargebeeTxnID}}, s.paymentSvc.settles)
 	s.Empty(s.paymentSvc.updateReqs)
 }
 
 // A late capture that fails to settle is returned, not swallowed.
 func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LateCaptureErrorIsReturned() {
 	s.seedSession(types.CheckoutStatusFailed)
-	s.paymentSvc.lateCaptureErr = ierr.NewError("db down").Mark(ierr.ErrDatabase)
+	s.paymentSvc.settleErr = ierr.NewError("db down").Mark(ierr.ErrDatabase)
 
 	s.Require().Error(s.handler.handlePaymentSucceeded(s.ctx, s.event(EventPaymentSucceeded), s.services))
 }
