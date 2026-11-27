@@ -89,9 +89,12 @@ func (s *fakeCheckoutSessionService) List(_ context.Context, filter *types.Check
 	return &dto.ListCheckoutSessionsResponse{Items: []*dto.CheckoutSessionResponse{s.session}}, nil
 }
 
-func (s *fakeCheckoutSessionService) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
+func (s *fakeCheckoutSessionService) CompleteOrGetCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) (*dto.CheckoutSessionResponse, bool, error) {
 	s.completeCalls = append(s.completeCalls, sessionID)
-	return s.completeErr
+	if s.completeErr != nil && !ierr.IsAlreadyExists(s.completeErr) {
+		return nil, false, s.completeErr
+	}
+	return s.session, s.completeErr == nil, nil
 }
 
 func (s *fakeCheckoutSessionService) CleanupCheckoutSession(_ context.Context, sessionID string, reason error) error {

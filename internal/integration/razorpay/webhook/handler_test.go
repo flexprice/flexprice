@@ -166,7 +166,7 @@ type webhookTestCheckoutSessionService struct {
 	interfaces.CheckoutSessionService
 	session       *dto.CheckoutSessionResponse // returned by List, matched by session.ID (see note on suite below)
 	listErr       error
-	completeErr   error // returned by CompleteCheckoutSession; on ErrAlreadyExists the session is expired first
+	completeErr   error // returned by CompleteOrGetCheckoutSession; on ErrAlreadyExists the session is expired first
 	completeCalls []string
 	cleanupCalls  []string
 }
@@ -181,16 +181,16 @@ func (s *webhookTestCheckoutSessionService) List(_ context.Context, filter *type
 	return &dto.ListCheckoutSessionsResponse{Items: []*dto.CheckoutSessionResponse{s.session}}, nil
 }
 
-func (s *webhookTestCheckoutSessionService) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
+func (s *webhookTestCheckoutSessionService) CompleteOrGetCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) (*dto.CheckoutSessionResponse, bool, error) {
 	s.completeCalls = append(s.completeCalls, sessionID)
-	if ierr.IsAlreadyExists(s.completeErr) {
-		s.session.CheckoutStatus = types.CheckoutStatusExpired
+	if s.completeErr == nil {
+		return s.session, true, nil
 	}
-	return s.completeErr
-}
-
-func (s *webhookTestCheckoutSessionService) Get(_ context.Context, _ string) (*dto.CheckoutSessionResponse, error) {
-	return s.session, nil
+	if !ierr.IsAlreadyExists(s.completeErr) {
+		return nil, false, s.completeErr
+	}
+	s.session.CheckoutStatus = types.CheckoutStatusExpired
+	return s.session, false, nil
 }
 
 func (s *webhookTestCheckoutSessionService) CleanupCheckoutSession(_ context.Context, sessionID string, _ error) error {

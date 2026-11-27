@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -237,16 +236,22 @@ func (h *Handler) handleCheckoutSessionForPayment(
 		return false, nil
 	}
 
-	switch session.CheckoutStatus {
-	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
-		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
+		final, completed, err := services.CheckoutSessionService.CompleteOrGetCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: chargebeeTransactionID,
 			ProviderMetadata: map[string]string{
 				"chargebee_transaction_id": chargebeeTransactionID,
 			},
 		})
-		switch {
-		case err == nil:
+		if err != nil {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_invoice_id", flexpriceInvoiceID,
+				"chargebee_transaction_id", chargebeeTransactionID)
+			return true, nil
+		}
+		if completed {
 			h.logger.Info(ctx, "completed checkout session from chargebee webhook",
 				"session_id", session.ID,
 				"flexprice_invoice_id", flexpriceInvoiceID,
@@ -263,19 +268,12 @@ func (h *Handler) handleCheckoutSessionForPayment(
 						"chargebee_invoice_id", chargebeeInvoiceID)
 				}
 			}
-		case ierr.IsAlreadyExists(err):
-			// At-least-once delivery: another delivery or a reconciler got there first.
-			h.logger.Info(ctx, "checkout session already completed",
-				"session_id", session.ID,
-				"chargebee_transaction_id", chargebeeTransactionID)
-		default:
-			h.logger.Error(ctx, "failed to complete checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_invoice_id", flexpriceInvoiceID,
-				"chargebee_transaction_id", chargebeeTransactionID)
+			return true, nil
 		}
+		session = final
+	}
 
+	switch session.CheckoutStatus {
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
 		// The hosted page outlives the session, so the customer paid after we gave up.
 		// The invoice and payment are archived by then and nothing can be delivered

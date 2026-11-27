@@ -1120,8 +1120,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 		return false, nil
 	}
 
-	switch session.CheckoutStatus {
-	case types.CheckoutStatusInitiated, types.CheckoutStatusPending:
+	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
 		providerResult := &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: stripePaymentIntentID,
 		}
@@ -1130,27 +1129,28 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"stripe_payment_intent_id": stripePaymentIntentID,
 			}
 		}
-		if err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, providerResult); err != nil {
-			if ierr.IsAlreadyExists(err) {
-				h.logger.Info(ctx, "checkout session already completed",
-					"session_id", session.ID,
-					"stripe_payment_intent_id", stripePaymentIntentID)
-			} else {
-				h.logger.Error(ctx, "failed to complete checkout session",
-					"error", err,
-					"session_id", session.ID,
-					"flexprice_payment_id", flexpricePaymentID,
-					"stripe_payment_intent_id", stripePaymentIntentID,
-				)
-				// The session is still pending, so fail the webhook and let Stripe redeliver.
-				return false, err
-			}
-		} else {
+		final, completed, err := services.CheckoutSessionService.CompleteOrGetCheckoutSession(ctx, session.ID, providerResult)
+		if err != nil {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"stripe_payment_intent_id", stripePaymentIntentID,
+			)
+			// Fail the webhook so Stripe redelivers.
+			return false, err
+		}
+		if completed {
 			h.logger.Info(ctx, "completed checkout session from stripe webhook",
 				"session_id", session.ID,
 				"flexprice_payment_id", flexpricePaymentID,
 				"stripe_payment_intent_id", stripePaymentIntentID)
+			return true, nil
 		}
+		session = final
+	}
+
+	switch session.CheckoutStatus {
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
 		h.refundLateCapturedPayment(ctx, session, flexpricePaymentID, stripePaymentIntentID, services)
 	default:

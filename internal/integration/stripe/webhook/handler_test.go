@@ -29,9 +29,12 @@ func (s *fakeCheckoutSessionServiceForStripe) GetByPaymentID(_ context.Context, 
 	return s.session, nil
 }
 
-func (s *fakeCheckoutSessionServiceForStripe) CompleteCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) error {
+func (s *fakeCheckoutSessionServiceForStripe) CompleteOrGetCheckoutSession(_ context.Context, sessionID string, _ *types.CheckoutProviderResult) (*dto.CheckoutSessionResponse, bool, error) {
 	s.completeCalls = append(s.completeCalls, sessionID)
-	return s.completeErr
+	if s.completeErr != nil && !ierr.IsAlreadyExists(s.completeErr) {
+		return nil, false, s.completeErr
+	}
+	return s.session, s.completeErr == nil, nil
 }
 
 func TestHandler_HandleCheckoutSessionForPayment_CompletesPendingSession(t *testing.T) {
