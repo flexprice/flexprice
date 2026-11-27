@@ -2,13 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/Shopify/sarama"
+	pkgerrors "github.com/pkg/errors"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -127,6 +133,8 @@ func (s *EventServiceSuite) TestCreateEvent() {
 		name          string
 		input         *dto.IngestEventRequest
 		expectedError bool
+		publishErr    error
+		checkErr      func(error) bool
 		verify        func(input *dto.IngestEventRequest)
 	}{
 		{
@@ -184,16 +192,39 @@ func (s *EventServiceSuite) TestCreateEvent() {
 				s.False(s.eventRepo.HasEvent("test-2"), "Event should not be stored")
 			},
 		},
+		{
+			name:          "publish_failure_is_service_unavailable",
+			input:         publishFailureRequest("test-fail"),
+			expectedError: true,
+			publishErr:    errors.New("not the leader"),
+			checkErr:      ierr.IsServiceUnavailable,
+			verify:        func(*dto.IngestEventRequest) {},
+		},
+		{
+			name:          "oversized_message_is_validation_error",
+			input:         publishFailureRequest("test-big"),
+			expectedError: true,
+			publishErr:    pkgerrors.Wrap(sarama.ErrMessageSizeTooLarge, "cannot produce message"),
+			checkErr:      ierr.IsValidation,
+			verify:        func(*dto.IngestEventRequest) {},
+		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			err := s.service.CreateEvent(s.ctx, tc.input)
+			svc := s.service
+			if tc.publishErr != nil {
+				svc = NewEventService(s.eventRepo, nil, failingPublisher{tc.publishErr}, s.logger, s.config, nil, nil)
+			}
+			err := svc.CreateEvent(s.ctx, tc.input)
 
 			if tc.expectedError {
 				s.Error(err)
 			} else {
 				s.NoError(err)
+			}
+			if tc.checkErr != nil {
+				s.True(tc.checkErr(err), "unexpected error class: %v", err)
 			}
 
 			tc.verify(tc.input)
@@ -705,5 +736,86 @@ func (s *EventServiceSuite) TestGetEvents() {
 		s.NotNil(result)
 		s.Len(result.Events, 1)
 		s.Equal("evt-5", result.Events[0].ID) // Only the new event
+	})
+}
+
+type failingPublisher struct{ err error }
+
+func (f failingPublisher) Publish(context.Context, *events.Event) error { return f.err }
+
+func (f failingPublisher) PublishBatch(context.Context, []*events.Event) error { return f.err }
+
+func publishFailureRequest(id string) *dto.IngestEventRequest {
+	return &dto.IngestEventRequest{
+		EventID:            id,
+		ExternalCustomerID: "customer-1",
+		EventName:          "api_request",
+		Timestamp:          time.Now(),
+	}
+}
+
+// failOnIDPublisher fails listed IDs, records rest.
+type failOnIDPublisher struct {
+	failIDs   map[string]error
+	published []string
+}
+
+func (f *failOnIDPublisher) Publish(_ context.Context, e *events.Event) error {
+	if err, ok := f.failIDs[e.ID]; ok {
+		return err
+	}
+	f.published = append(f.published, e.ID)
+	return nil
+}
+
+func (f *failOnIDPublisher) PublishBatch(context.Context, []*events.Event) error { return nil }
+
+func (s *EventServiceSuite) TestBulkCreateEvents_PublishFailures() {
+	unavailable := errors.New("not the leader")
+	tooLarge := pkgerrors.Wrap(sarama.ErrMessageSizeTooLarge, "cannot produce message")
+
+	for _, bulkEnabled := range []bool{false, true} {
+		cfg := *s.config
+		cfg.Event.BulkPublishEnabled = bulkEnabled
+
+		s.Run(fmt.Sprintf("batched_%v_unavailable", bulkEnabled), func() {
+			svc := NewEventService(s.eventRepo, nil, failingPublisher{unavailable}, s.logger, &cfg, nil, nil)
+			err := svc.BulkCreateEvents(s.ctx, &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{publishFailureRequest("a")}})
+			s.Require().Error(err)
+			s.True(ierr.IsServiceUnavailable(err))
+		})
+
+		s.Run(fmt.Sprintf("batched_%v_oversized", bulkEnabled), func() {
+			svc := NewEventService(s.eventRepo, nil, failingPublisher{tooLarge}, s.logger, &cfg, nil, nil)
+			err := svc.BulkCreateEvents(s.ctx, &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{publishFailureRequest("a")}})
+			s.Require().Error(err)
+			s.True(ierr.IsValidation(err))
+		})
+	}
+
+	cfg := *s.config
+	cfg.Event.BulkPublishEnabled = false
+	reqs := func() *dto.BulkIngestEventRequest {
+		return &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{
+			publishFailureRequest("ok-1"), publishFailureRequest("bad"), publishFailureRequest("ok-2"),
+		}}
+	}
+
+	s.Run("per_event_continues_after_failure", func() {
+		pub := &failOnIDPublisher{failIDs: map[string]error{"bad": unavailable}}
+		svc := NewEventService(s.eventRepo, nil, pub, s.logger, &cfg, nil, nil)
+		err := svc.BulkCreateEvents(s.ctx, reqs())
+		s.Require().Error(err)
+		s.True(ierr.IsServiceUnavailable(err))
+		s.Equal([]string{"ok-1", "ok-2"}, pub.published)
+	})
+
+	s.Run("per_event_all_oversized_is_validation", func() {
+		pub := &failOnIDPublisher{failIDs: map[string]error{"bad": tooLarge}}
+		svc := NewEventService(s.eventRepo, nil, pub, s.logger, &cfg, nil, nil)
+		err := svc.BulkCreateEvents(s.ctx, reqs())
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err))
+		s.Equal([]string{"ok-1", "ok-2"}, pub.published)
 	})
 }

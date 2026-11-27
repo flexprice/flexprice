@@ -6244,6 +6244,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
+                    },
+                    "503": {
+                        "description": "May be accepted; assign event_id before the first request and reuse it on retry",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -6341,13 +6347,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request",
+                        "description": "Invalid request or oversize event; others may be accepted",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
                         "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "May be partly accepted; assign event_id to every event before the first request and reuse those IDs on retry",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }

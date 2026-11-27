@@ -3,14 +3,17 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/Shopify/sarama"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/logger"
+	pkgerrors "github.com/pkg/errors"
 )
 
 // fakePublisher is a test double for messagePublisher. It records every published message
@@ -122,14 +125,81 @@ func TestPublish_OneClusterFailure_DoesNotBlockOther(t *testing.T) {
 	secondary := &fakePublisher{}
 	ep := newPub(logger.NewNoopLogger(), primary, secondary)
 
-	// Primary fails, but secondary must still receive the event (independent writes). The
-	// failure is surfaced as the returned error (service logs it and returns 202 regardless).
+	// Secondary still written; primary error returned.
 	err := ep.Publish(context.Background(), sampleEvent())
 	if err == nil {
 		t.Fatal("expected the primary failure to be returned, got nil")
 	}
 	if secondary.callCount() != 1 {
 		t.Fatalf("expected secondary to still receive the event despite primary failure, got %d", secondary.callCount())
+	}
+}
+
+func TestPublish_SecondaryFailure_NotReturned(t *testing.T) {
+	primary := &fakePublisher{}
+	secondary := &fakePublisher{err: context.DeadlineExceeded}
+	ep := newPub(logger.NewNoopLogger(), primary, secondary)
+
+	if err := ep.Publish(context.Background(), sampleEvent()); err != nil {
+		t.Fatalf("secondary failure must not be returned, got %v", err)
+	}
+	if primary.callCount() != 1 {
+		t.Fatalf("expected primary publish, got %d", primary.callCount())
+	}
+}
+
+func TestIsMessageTooLarge_ThroughWatermillWrapping(t *testing.T) {
+	wrapped := pkgerrors.Wrapf(sarama.ErrMessageSizeTooLarge, "cannot produce message %s", "x")
+	if !IsMessageTooLarge(wrapped) {
+		t.Fatal("expected wrapped sarama size error to be detected")
+	}
+	if IsMessageTooLarge(context.DeadlineExceeded) {
+		t.Fatal("unrelated error must not match")
+	}
+	if !IsMessageTooLarge(errors.Join(wrapped, wrapped)) {
+		t.Fatal("all-oversize join must match")
+	}
+	if IsMessageTooLarge(errors.Join(wrapped, context.DeadlineExceeded)) {
+		t.Fatal("mixed join must stay retryable")
+	}
+	if IsMessageTooLarge(fmt.Errorf("kafka: %w", errors.Join(wrapped, context.DeadlineExceeded))) {
+		t.Fatal("wrapped mixed join must stay retryable")
+	}
+	if !IsMessageTooLarge(fmt.Errorf("kafka: %w", errors.Join(wrapped, wrapped))) {
+		t.Fatal("wrapped all-oversize join must match")
+	}
+}
+
+func TestPublishBatch_SecondaryFailure_NotReturned(t *testing.T) {
+	cfg := testKafkaCfg()
+	cfg.TopicBulk = "events_bulk"
+	cfg.BulkMaxBatchSize = 10
+	ep := newPub(logger.NewNoopLogger(), &fakePublisher{}, &fakePublisher{err: context.DeadlineExceeded})
+	ep.primaryCfg, ep.secondaryCfg = cfg, cfg
+
+	if err := ep.PublishBatch(context.Background(), []*events.Event{sampleEvent()}); err != nil {
+		t.Fatalf("secondary failure must not be returned, got %v", err)
+	}
+}
+
+func TestPublishBatch_CancelledContextStopsPublishing(t *testing.T) {
+	cfg := testKafkaCfg()
+	cfg.TopicBulk = "events_bulk"
+	cfg.BulkMaxBatchSize = 1
+	primary := &fakePublisher{}
+	ep := newPub(logger.NewNoopLogger(), primary, nil)
+	ep.primaryCfg = cfg
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	a, b := sampleEvent(), sampleEvent()
+	b.ID = "evt_456"
+	err := ep.PublishBatch(ctx, []*events.Event{a, b})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if primary.callCount() != 0 {
+		t.Fatalf("expected no publishes after cancel, got %d", primary.callCount())
 	}
 }
 
