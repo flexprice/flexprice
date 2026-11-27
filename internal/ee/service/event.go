@@ -14,6 +14,8 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/sourcegraph/conc/pool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -117,9 +119,20 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		return nil
 	}
 
+	bulkPublish := s.config != nil && s.config.Event.BulkPublishEnabled
+	ctx, span := tracing.StartSpan(ctx, "events.bulk.create", trace.WithAttributes(
+		attribute.Int("events.count", len(events.Events)),
+		attribute.Bool("events.bulk_publish", bulkPublish),
+	))
+	err := s.bulkCreateEvents(ctx, events, bulkPublish)
+	tracing.EndSpan(span, err)
+	return err
+}
+
+func (s *eventService) bulkCreateEvents(ctx context.Context, events *dto.BulkIngestEventRequest, bulkPublish bool) error {
 	// Batched path: one ClickHouse INSERT per batch downstream. Disabled falls back to one
 	// message per event, leaving the `events` topic and its consumers untouched.
-	if s.config != nil && s.config.Event.BulkPublishEnabled {
+	if bulkPublish {
 		return s.bulkCreateEventsBatched(ctx, events)
 	}
 
@@ -167,17 +180,21 @@ func publishFailure(err error, retryHint string) error {
 // instead of poisoning a batch the consumer would retry whole.
 func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.BulkIngestEventRequest) error {
 	domainEvents := make([]*events.Event, 0, len(req.Events))
+	checkCtx, checkSpan := tracing.StartSpan(ctx, "events.bulk.deletion_check")
 	for _, createEventRequest := range req.Events {
 		if err := createEventRequest.Validate(); err != nil {
+			tracing.EndSpan(checkSpan, err)
 			return err
 		}
-		event := createEventRequest.ToEvent(ctx)
-		if err := s.refuseDuringDeletion(ctx, event); err != nil {
+		event := createEventRequest.ToEvent(checkCtx)
+		if err := s.refuseDuringDeletion(checkCtx, event); err != nil {
+			tracing.EndSpan(checkSpan, err)
 			return err
 		}
 		createEventRequest.EventID = event.ID
 		domainEvents = append(domainEvents, event)
 	}
+	tracing.EndSpan(checkSpan, nil)
 
 	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
 		s.logger.Error(ctx, "failed to publish event batch", "event_count", len(domainEvents), "error", err)

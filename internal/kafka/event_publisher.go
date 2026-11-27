@@ -14,6 +14,9 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // messagePublisher is the subset of the watermill publisher that EventPublisher depends
@@ -146,7 +149,10 @@ func determineTopic(kc *config.KafkaConfig, event *events.Event) string {
 // INSERT downstream, paying the per-INSERT cost once per batch instead of once per event.
 // Events are grouped by tenant and environment only — the envelope carries one of each — and
 // placement is left to sarama's default partitioner, since the producer sets no Kafka key.
-func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event) error {
+func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event) (err error) {
+	ctx, span := tracing.StartSpan(ctx, "kafka.publish_batch", trace.WithAttributes(attribute.Int("events.count", len(evts))))
+	defer func() { tracing.EndSpan(span, err) }()
+
 	if len(evts) == 0 {
 		return nil
 	}
@@ -162,6 +168,7 @@ func (p *EventPublisher) PublishBatch(ctx context.Context, evts []*events.Event)
 	if err != nil {
 		return err
 	}
+	span.SetAttributes(attribute.Int("events.batch_groups", len(groups)))
 
 	var errs []error
 	for _, g := range groups {
@@ -265,16 +272,26 @@ func (p *EventPublisher) publishBatchMessage(ctx context.Context, payload []byte
 	msg.Metadata.Set("batch_size", fmt.Sprintf("%d", count))
 
 	var primaryErr error
-	if err := p.primary.Publish(determineBulkTopic(p.primaryCfg), msg); err != nil {
+	if err := p.publishTraced(ctx, "primary", p.primary, determineBulkTopic(p.primaryCfg), msg, count); err != nil {
 		p.logBatchFailure(ctx, "primary", g, count, err)
 		primaryErr = err
 	}
 	if p.secondary != nil {
-		if err := p.secondary.Publish(determineBulkTopic(p.secondaryCfg), msg); err != nil {
+		if err := p.publishTraced(ctx, "secondary", p.secondary, determineBulkTopic(p.secondaryCfg), msg, count); err != nil {
 			p.logBatchFailure(ctx, "secondary", g, count, err)
 		}
 	}
 	return primaryErr
+}
+
+func (p *EventPublisher) publishTraced(ctx context.Context, cluster string, pub messagePublisher, topic string, msg *message.Message, count int) error {
+	_, span := tracing.StartSpan(ctx, "kafka.publish_batch_message", trace.WithAttributes(
+		attribute.String("cluster", cluster),
+		attribute.Int("events.count", count),
+	))
+	err := pub.Publish(topic, msg)
+	tracing.EndSpan(span, err)
+	return err
 }
 
 func (p *EventPublisher) logBatchFailure(ctx context.Context, cluster string, g eventGroup, count int, err error) {
