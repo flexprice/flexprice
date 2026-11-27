@@ -1030,8 +1030,8 @@ type UsageRollupConfig struct {
 	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants and ShadowTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
-	// ShadowTenants keep the usage rollup current but wallet reads stay on ClickHouse; each read also
-	// computes the usage rollup result in the background and records whether the two match.
+	// ShadowTenants keep the usage rollup current; their wallet reads are served from the old path and also
+	// computed on the usage rollup path to record whether the two match.
 	ShadowTenants []string `mapstructure:"shadow_tenants"`
 	// BalanceMaxLiveSeconds lets a real-time balance read reuse a balance cached within this many seconds; 0 = off.
 	BalanceMaxLiveSeconds int64 `mapstructure:"balance_max_live_seconds" default:"5"`
@@ -1040,23 +1040,12 @@ type UsageRollupConfig struct {
 // IsEnabledForTenant reports whether the usage rollup is kept current for tenantID: ingestion, checkpoints and
 // eligibility. True for enabled and shadow tenants.
 func (c UsageRollupConfig) IsEnabledForTenant(tenantID string) bool {
-	return c.Enabled && slices.Contains(c.Tenants(), tenantID)
+	return c.Enabled && (slices.Contains(c.EnabledTenants, tenantID) || slices.Contains(c.ShadowTenants, tenantID))
 }
 
 // IsEnabledForAnyTenant reports whether usage rollup is on for at least one enabled or shadow tenant.
 func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
-	return c.Enabled && len(c.Tenants()) > 0
-}
-
-// ServesTenant reports whether wallet reads of tenantID are served from the usage rollup. Shadow tenants are not.
-func (c UsageRollupConfig) ServesTenant(tenantID string) bool {
-	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
-}
-
-// IsShadowTenant reports whether tenantID only compares usage rollup reads against ClickHouse. A tenant listed in
-// both lists is served.
-func (c UsageRollupConfig) IsShadowTenant(tenantID string) bool {
-	return c.Enabled && !c.ServesTenant(tenantID) && slices.Contains(c.ShadowTenants, tenantID)
+	return c.Enabled && (len(c.EnabledTenants) > 0 || len(c.ShadowTenants) > 0)
 }
 
 // Tenants is every tenant whose usage rollup is kept current: enabled and shadow, without duplicates.

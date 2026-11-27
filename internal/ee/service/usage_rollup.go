@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -30,6 +32,8 @@ type UsageRollupService interface {
 	// IsUsageRollupEligible reports whether this read of sub is on the usage rollup path: a wallet read, for a tenant
 	// with the usage rollup enabled, and a customer whose flag is set.
 	IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool
+	// IsCustomerEligible reports whether the customer's flag is set, evaluating it when a write has cleared it.
+	IsCustomerEligible(ctx context.Context, customerID string) bool
 	// UsagePrices returns the usage prices of sub's plan and addons that match its currency and billing
 	// period, and their meters, both by meter ID. Call it only for a subscription on the usage rollup path.
 	UsagePrices(ctx context.Context, sub *subscription.Subscription) (map[string]*price.Price, map[string]*meter.Meter, error)
@@ -76,14 +80,20 @@ const (
 	usageRollupReadError      = "error"
 )
 
-// Outcomes of a shadow tenant's background usage rollup read, recorded on usage_rollup.shadow_reads alongside
-// usageRollupReadIneligible and usageRollupReadError.
+// Outcomes of comparing a shadow tenant's wallet balance on both paths, recorded on usage_rollup.shadow_reads.
 const (
-	usageRollupShadowMatch    = "match"
-	usageRollupShadowMismatch = "mismatch"
-	// usageRollupShadowTimeout bounds a background read so a slow Redis or ClickHouse can't pile them up.
-	usageRollupShadowTimeout = 5 * time.Second
+	usageRollupShadowMatch      = "match"
+	usageRollupShadowMismatch   = "mismatch"
+	usageRollupShadowIneligible = "ineligible"
+	usageRollupShadowError      = "error"
 )
+
+// usageRollupShadowReadKey marks a context whose wallet read takes the usage rollup path for a shadow tenant.
+type usageRollupShadowReadKey struct{}
+
+func withUsageRollupShadowRead(ctx context.Context) context.Context {
+	return context.WithValue(ctx, usageRollupShadowReadKey{}, true)
+}
 
 // customerAndAddons is the subscription's external customer ID and the addons active in its current period,
 // cached per subscription and period. Exported fields: it is stored as JSON.
@@ -450,15 +460,30 @@ func (s *usageRollupService) periodGrantFeatureIDs(ctx context.Context, sub *sub
 }
 
 func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool {
-	if source != types.UsageSourceWallet || !s.usageRollupEnabled(ctx) {
+	if source != types.UsageSourceWallet || !readsUsageRollup(ctx, s.Config) {
 		return false
 	}
-	eligible, err := s.isEligible(ctx, sub.CustomerID)
+	return s.IsCustomerEligible(ctx, sub.CustomerID)
+}
+
+func (s *usageRollupService) IsCustomerEligible(ctx context.Context, customerID string) bool {
+	eligible, err := s.isEligible(ctx, customerID)
 	if err != nil {
-		s.Logger.Error(ctx, "usage rollup: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", sub.CustomerID)
+		s.Logger.Error(ctx, "usage rollup: failed to read eligibility, reading Postgres and ClickHouse", "error", err, "customer_id", customerID)
 		return false
 	}
 	return eligible
+}
+
+// readsUsageRollup reports whether wallet reads in ctx take the usage rollup path: an enabled tenant, or a shadow
+// tenant's comparison read.
+func readsUsageRollup(ctx context.Context, cfg *config.Configuration) bool {
+	if cfg == nil {
+		return false
+	}
+	shadowRead, _ := ctx.Value(usageRollupShadowReadKey{}).(bool)
+	usageRollup := cfg.UsageRollup
+	return shadowRead || (usageRollup.Enabled && slices.Contains(usageRollup.EnabledTenants, types.GetTenantID(ctx)))
 }
 
 // isEligible reads the flag from the cache, then Postgres, and evaluates it when a write has cleared it.

@@ -496,20 +496,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 // with its plan or addon price and its quantity from the usage rollup. served is false off that path; a
 // usage rollup failure is logged and the caller reads Postgres and ClickHouse instead.
 func (s *meterUsageService) usageRollupMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
-	if !s.Config.UsageRollup.ServesTenant(types.GetTenantID(ctx)) {
+	if !readsUsageRollup(ctx, s.Config) {
 		return nil, false
 	}
-	result, outcome := s.readUsageRollup(ctx, sub)
-	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, outcome))
-	return result, outcome == usageRollupReadServed
-}
-
-// readUsageRollup computes the subscription's current-period usage from the usage rollup. The outcome is
-// usageRollupReadServed when result is set, else why it is not.
-func (s *meterUsageService) readUsageRollup(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, string) {
 	usageRollup := NewUsageRollupService(s.ServiceParams)
 	if !usageRollup.IsUsageRollupEligible(ctx, sub, types.UsageSourceWallet) {
-		return nil, usageRollupReadIneligible
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadIneligible))
+		return nil, false
 	}
 	prices, meters, err := usageRollup.UsagePrices(ctx, sub)
 	var quantities map[string]decimal.Decimal
@@ -517,87 +510,12 @@ func (s *meterUsageService) readUsageRollup(ctx context.Context, sub *subscripti
 		quantities, err = usageRollup.PeriodQuantities(ctx, sub, meters)
 	}
 	if err != nil {
+		metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadError))
 		s.logger.Error(ctx, "usage rollup read failed, reading usage from ClickHouse", "error", err, "subscription_id", sub.ID)
-		return nil, usageRollupReadError
+		return nil, false
 	}
-	return usageRollupSubscriptionMeterUsage(sub, prices, meters, quantities), usageRollupReadServed
-}
-
-// runUsageRollupShadowRead starts a shadow tenant's background usage rollup read; tests run it inline.
-var runUsageRollupShadowRead = func(read func()) { go read() }
-
-// compareUsageRollupInBackground reads a shadow tenant's usage rollup after its wallet read was served from
-// ClickHouse, and records on usage_rollup.shadow_reads whether the two agree. It never changes the served result.
-func (s *meterUsageService) compareUsageRollupInBackground(ctx context.Context, sub *subscription.Subscription, served *SubscriptionMeterUsage, servedIn time.Duration) {
-	// Built now: the caller owns served and sub once this returns.
-	want := quantityByMeterPrice(served)
-	subscriptionCopy := *sub
-	detached := types.WithoutDBTransaction(context.WithoutCancel(ctx))
-	runUsageRollupShadowRead(func() {
-		compareCtx, cancel := context.WithTimeout(detached, usageRollupShadowTimeout)
-		defer cancel()
-		defer func() {
-			if r := recover(); r != nil {
-				s.logger.Error(compareCtx, "panic in usage rollup shadow read", "error", fmt.Sprintf("%v", r), "subscription_id", subscriptionCopy.ID)
-			}
-		}()
-		outcome := s.compareUsageRollup(compareCtx, &subscriptionCopy, want, servedIn)
-		metrics.RecordCounter(compareCtx, metrics.UsageRollupShadowReads, 1, metrics.L(metrics.KeyOutcome, outcome))
-	})
-}
-
-// compareUsageRollup reads the subscription's usage rollup and returns whether it matches want, the quantities
-// ClickHouse served, or why it could not be read. A mismatch is logged with both sides.
-func (s *meterUsageService) compareUsageRollup(ctx context.Context, sub *subscription.Subscription, want map[string]decimal.Decimal, servedIn time.Duration) string {
-	start := clock.Now()
-	result, outcome := s.readUsageRollup(ctx, sub)
-	if outcome != usageRollupReadServed {
-		return outcome
-	}
-	got := quantityByMeterPrice(result)
-	if quantitiesEqual(want, got) {
-		return usageRollupShadowMatch
-	}
-	s.logger.Info(ctx, "usage rollup shadow read differs from ClickHouse",
-		"subscription_id", sub.ID,
-		"customer_id", sub.CustomerID,
-		"clickhouse", want,
-		"usage_rollup", got,
-		"clickhouse_ms", servedIn.Milliseconds(),
-		"usage_rollup_ms", clock.Now().Sub(start).Milliseconds())
-	return usageRollupShadowMismatch
-}
-
-// quantityByMeterPrice sums usage per "meter_id/price_id", leaving out zero totals: the usage rollup has no
-// entry for a meter without usage.
-func quantityByMeterPrice(usage *SubscriptionMeterUsage) map[string]decimal.Decimal {
-	totals := make(map[string]decimal.Decimal)
-	for _, lineItemUsage := range usage.LineItemUsages {
-		priceID := ""
-		if lineItemUsage.Price != nil {
-			priceID = lineItemUsage.Price.ID
-		}
-		key := lineItemUsage.MeterID + "/" + priceID
-		totals[key] = totals[key].Add(lineItemUsage.Usage)
-	}
-	for key, total := range totals {
-		if total.IsZero() {
-			delete(totals, key)
-		}
-	}
-	return totals
-}
-
-func quantitiesEqual(a, b map[string]decimal.Decimal) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for key, quantity := range a {
-		if other, ok := b[key]; !ok || !other.Equal(quantity) {
-			return false
-		}
-	}
-	return true
+	metrics.RecordCounter(ctx, metrics.UsageRollupReads, 1, metrics.L(metrics.KeyOutcome, usageRollupReadServed))
+	return usageRollupSubscriptionMeterUsage(sub, prices, meters, quantities), true
 }
 
 // usageRollupSubscriptionMeterUsage builds the usage of each charged meter with usage, priced by its plan or
@@ -647,29 +565,13 @@ func (s *meterUsageService) GetSubscriptionMeterUsageWithSub(
 		return nil, ierr.NewError("subscription is required").Mark(ierr.ErrValidation)
 	}
 
-	walletPeriodRead := req.Source == types.UsageSourceWallet && !req.LifetimeUsage &&
-		req.StartTime.Equal(sub.CurrentPeriodStart) && req.EndTime.Equal(sub.CurrentPeriodEnd)
-	if walletPeriodRead {
+	if req.Source == types.UsageSourceWallet && !req.LifetimeUsage &&
+		req.StartTime.Equal(sub.CurrentPeriodStart) && req.EndTime.Equal(sub.CurrentPeriodEnd) {
 		if result, served := s.usageRollupMeterUsage(ctx, sub); served {
 			return result, nil
 		}
 	}
 
-	start := clock.Now()
-	result, err := s.subscriptionMeterUsageFromClickHouse(ctx, sub, req)
-	if err == nil && walletPeriodRead && s.Config.UsageRollup.IsShadowTenant(types.GetTenantID(ctx)) {
-		s.compareUsageRollupInBackground(ctx, sub, result, clock.Now().Sub(start))
-	}
-	return result, err
-}
-
-// subscriptionMeterUsageFromClickHouse reads the subscription's line items and prices from Postgres and their
-// usage from ClickHouse.
-func (s *meterUsageService) subscriptionMeterUsageFromClickHouse(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	req *GetSubscriptionMeterUsageRequest,
-) (*SubscriptionMeterUsage, error) {
 	// 2. Resolve external customer IDs for meter_usage queries.
 	// Parent subscriptions fan out to inherited children only when the caller
 	// asks for it via req.IncludeChildren (billing path passes true; analytics

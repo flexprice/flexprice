@@ -565,7 +565,7 @@ meter_usage_tracking_lazy:
 usage_rollup:
   enabled: false # master switch; when true, runs only for enabled_tenants
   enabled_tenants: [] # tenant IDs whose wallet reads are served from the usage rollup
-  shadow_tenants: [] # tenant IDs that keep the usage rollup but only compare it against ClickHouse on wallet reads
+  shadow_tenants: [] # tenant IDs whose wallet reads are served from the old path and compared with the usage rollup
   balance_max_live_seconds: 5 # real-time balance reads reuse a balance cached within this window
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
