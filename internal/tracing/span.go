@@ -8,12 +8,12 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// StartSpan starts a child span on the global provider; no-op when tracing is off.
+// StartSpan is a no-op without tracing.
 func StartSpan(ctx context.Context, name string, attrs ...trace.SpanStartOption) (context.Context, trace.Span) {
 	return otel.Tracer(tracerName).Start(ctx, name, attrs...)
 }
 
-// EndSpan records err on the span, then ends it.
+// EndSpan records err, then ends.
 func EndSpan(span trace.Span, err error) {
 	if err != nil {
 		span.RecordError(err)
