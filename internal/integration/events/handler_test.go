@@ -193,6 +193,7 @@ func TestProcessMessage_RoutesCreditNoteEventsToZohoBooksSync(t *testing.T) {
 				Logger:         testLogger(),
 				Config:         &config.Configuration{IntegrationEvents: config.IntegrationEventsConfig{Enabled: true}},
 				ConnectionRepo: &cnDispatchConnectionRepo{conn: zohoConnection(true, true)},
+				EIMRepo:        &cnPushMappingRepo{},
 				CreditNoteRepo: &cnDispatchCreditNoteRepo{cn: tt.cn},
 				RefundRepo: &cnDispatchRefundRepo{refunds: []*refund.Refund{
 					{ID: "ref_1", InvoiceID: "inv_1", CreditNoteID: lo.ToPtr("cn_1"), RefundStatus: types.RefundStatusSucceeded},

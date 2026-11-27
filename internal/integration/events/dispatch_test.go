@@ -95,11 +95,12 @@ func (f *cnDispatchRefundRepo) List(_ context.Context, filter *types.RefundFilte
 	return f.refunds, f.listErr
 }
 
-// cnDispatchConnectionRepo returns the Zoho Books connection, or not found when conn is nil,
-// and records the billing entity in ctx at lookup time.
+// cnDispatchConnectionRepo returns the Zoho Books connection, or not found when conn is nil or
+// owned by a billing entity other than the one in ctx, and records the billing entity at lookup time.
 type cnDispatchConnectionRepo struct {
 	connection.Repository
 	conn            *connection.Connection
+	owner           string
 	err             error
 	calls           int
 	billingEntityID string
@@ -111,7 +112,7 @@ func (f *cnDispatchConnectionRepo) GetByProvider(ctx context.Context, _ types.Se
 	if f.err != nil {
 		return nil, f.err
 	}
-	if f.conn == nil {
+	if f.conn == nil || (f.owner != "" && f.owner != f.billingEntityID) {
 		return nil, ierr.NewError("connection not found").Mark(ierr.ErrNotFound)
 	}
 	return f.conn, nil
@@ -202,7 +203,7 @@ func TestDispatchCreditNoteVendorSync(t *testing.T) {
 			connRepo := &cnDispatchConnectionRepo{conn: tt.conn, err: tt.connErr}
 			scope := &cnDispatchEntityScope{err: tt.scopeErr}
 
-			err := DispatchCreditNoteVendorSync(context.Background(), tt.cfg, connRepo, cnRepo, scope, testLogger(), cnDispatchEvent(tt.payload), "msg_1")
+			err := DispatchCreditNoteVendorSync(context.Background(), tt.cfg, connRepo, &cnPushMappingRepo{}, cnRepo, scope, testLogger(), cnDispatchEvent(tt.payload), "msg_1")
 
 			switch {
 			case tt.wantStart:
@@ -226,10 +227,21 @@ func TestDispatchCreditNoteVendorSync_WithoutEntityScope(t *testing.T) {
 	cnRepo := &cnDispatchCreditNoteRepo{cn: &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: types.CreditNoteStatusFinalized}}
 	connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true)}
 
-	err := DispatchCreditNoteVendorSync(context.Background(), integrationEventsConfig(true), connRepo, cnRepo, nil, testLogger(), cnDispatchEvent(`{"credit_note_id":"cn_1"}`), "msg_1")
+	err := DispatchCreditNoteVendorSync(context.Background(), integrationEventsConfig(true), connRepo, &cnPushMappingRepo{}, cnRepo, nil, testLogger(), cnDispatchEvent(`{"credit_note_id":"cn_1"}`), "msg_1")
 
 	require.ErrorIs(t, err, errTemporalUnavailable)
 	require.Empty(t, connRepo.billingEntityID)
+}
+
+func TestDispatchCreditNoteVendorSync_AlreadySyncedIsSkipped(t *testing.T) {
+	cnRepo := &cnDispatchCreditNoteRepo{cn: &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: types.CreditNoteStatusFinalized}}
+	connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true)}
+	mappingRepo := &cnPushMappingRepo{mappings: []*entityintegrationmapping.EntityIntegrationMapping{{EntityID: "cn_1", ProviderEntityID: "zcn_1"}}}
+
+	err := DispatchCreditNoteVendorSync(context.Background(), integrationEventsConfig(true), connRepo, mappingRepo, cnRepo, &cnDispatchEntityScope{}, testLogger(), cnDispatchEvent(`{"credit_note_id":"cn_1"}`), "msg_1")
+
+	require.NoError(t, err, "a redelivered event for a synced credit note starts nothing")
+	require.Equal(t, 1, mappingRepo.calls)
 }
 
 func TestDispatchRefundVendorSync(t *testing.T) {
@@ -295,7 +307,7 @@ func TestDispatchRefundVendorSync(t *testing.T) {
 			connRepo := &cnDispatchConnectionRepo{conn: tt.conn, err: tt.connErr}
 			scope := &cnDispatchEntityScope{}
 
-			err := DispatchRefundVendorSync(context.Background(), cfg, connRepo, cnRepo, refundRepo, scope, testLogger(), cnDispatchEvent(tt.payload), "msg_1")
+			err := DispatchRefundVendorSync(context.Background(), cfg, connRepo, &cnPushMappingRepo{}, cnRepo, refundRepo, scope, testLogger(), cnDispatchEvent(tt.payload), "msg_1")
 
 			switch {
 			case tt.wantStart:
@@ -325,7 +337,7 @@ func TestDispatchRefundVendorSync_BillingEntityScopeError(t *testing.T) {
 	cnRepo := &cnDispatchCreditNoteRepo{}
 	connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true)}
 
-	err := DispatchRefundVendorSync(context.Background(), integrationEventsConfig(true), connRepo, cnRepo, refundRepo, &cnDispatchEntityScope{err: scopeErr}, testLogger(), cnDispatchEvent(`{"refund_id":"ref_1"}`), "msg_1")
+	err := DispatchRefundVendorSync(context.Background(), integrationEventsConfig(true), connRepo, &cnPushMappingRepo{}, cnRepo, refundRepo, &cnDispatchEntityScope{err: scopeErr}, testLogger(), cnDispatchEvent(`{"refund_id":"ref_1"}`), "msg_1")
 
 	require.ErrorIs(t, err, scopeErr)
 	require.Zero(t, connRepo.calls)
@@ -379,7 +391,7 @@ func (f *cnPushMappingRepo) List(_ context.Context, filter *types.EntityIntegrat
 	return f.mappings, f.err
 }
 
-func TestPushCreditNoteToZohoBooks(t *testing.T) {
+func TestPushCreditNoteVendorSync(t *testing.T) {
 	dbDown := errors.New("db down")
 	adjustment := func(status types.CreditNoteStatus) *creditnote.CreditNote {
 		return &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: status}
@@ -399,6 +411,7 @@ func TestPushCreditNoteToZohoBooks(t *testing.T) {
 		mappingErr     error
 		refunds        []*refund.Refund
 		refundErr      error
+		opts           []DispatchOption
 		wantErr        error
 		wantValidation bool
 		wantConnCheck  bool
@@ -417,8 +430,12 @@ func TestPushCreditNoteToZohoBooks(t *testing.T) {
 		{name: "refund credit note with finished refunds starts the sync", cn: refundNote, conn: zohoConnection(true, true),
 			refunds: []*refund.Refund{refundRow("ref_1", types.RefundStatusSucceeded), refundRow("ref_2", types.RefundStatusFailed)}, wantErr: errTemporalUnavailable, wantConnCheck: true, wantMapping: true, wantRefunds: true},
 		{name: "refund credit note with a refund in progress is rejected", cn: refundNote, conn: zohoConnection(true, true),
-			refunds: []*refund.Refund{refundRow("ref_1", types.RefundStatusSucceeded), refundRow("ref_2", types.RefundStatusProcessing)}, wantValidation: true, wantConnCheck: true, wantMapping: true, wantRefunds: true},
-		{name: "refund list error is returned", cn: refundNote, conn: zohoConnection(true, true), refundErr: dbDown, wantErr: dbDown, wantConnCheck: true, wantMapping: true, wantRefunds: true},
+			refunds: []*refund.Refund{refundRow("ref_1", types.RefundStatusSucceeded), refundRow("ref_2", types.RefundStatusProcessing)}, wantValidation: true, wantConnCheck: true, wantRefunds: true},
+		{name: "refund list error is returned", cn: refundNote, conn: zohoConnection(true, true), refundErr: dbDown, wantErr: dbDown, wantConnCheck: true, wantRefunds: true},
+		{name: "push limited to Zoho Books starts the sync", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, true),
+			opts: []DispatchOption{OnlyProvider(types.SecretProviderZohoBooks)}, wantErr: errTemporalUnavailable, wantConnCheck: true, wantMapping: true},
+		{name: "push limited to a provider without credit note sync is rejected before any lookup", cn: adjustment(types.CreditNoteStatusFinalized), conn: zohoConnection(true, true),
+			opts: []DispatchOption{OnlyProvider(types.SecretProviderStripe)}, wantValidation: true},
 	}
 
 	for _, tt := range tests {
@@ -427,7 +444,7 @@ func TestPushCreditNoteToZohoBooks(t *testing.T) {
 			mappingRepo := &cnPushMappingRepo{mappings: tt.mappings, err: tt.mappingErr}
 			refundRepo := &cnDispatchRefundRepo{refunds: tt.refunds, listErr: tt.refundErr}
 
-			err := PushCreditNoteToZohoBooks(context.Background(), connRepo, mappingRepo, refundRepo, testLogger(), tt.cn, cnDispatchEvent(`{}`))
+			err := PushCreditNoteVendorSync(context.Background(), connRepo, mappingRepo, refundRepo, &cnDispatchEntityScope{}, testLogger(), tt.cn, cnDispatchEvent(`{}`), tt.opts...)
 
 			switch {
 			case tt.wantValidation:
@@ -449,4 +466,37 @@ func TestPushCreditNoteToZohoBooks(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPushCreditNoteVendorSync_OwnedConnection(t *testing.T) {
+	finalized := &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: types.CreditNoteStatusFinalized}
+
+	t.Run("the invoice's billing entity owns the connection", func(t *testing.T) {
+		connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true), owner: "be_inv_1"}
+		scope := &cnDispatchEntityScope{}
+
+		err := PushCreditNoteVendorSync(context.Background(), connRepo, &cnPushMappingRepo{}, &cnDispatchRefundRepo{}, scope, testLogger(), finalized, cnDispatchEvent(`{}`), Manual())
+
+		require.ErrorIs(t, err, errTemporalUnavailable)
+		require.Equal(t, []string{"inv_1"}, scope.invoiceIDs)
+		require.Equal(t, "be_inv_1", connRepo.billingEntityID, "the connection lookup runs in the invoice's billing entity")
+	})
+
+	t.Run("another billing entity owns the only connection", func(t *testing.T) {
+		connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true), owner: "be_other"}
+
+		err := PushCreditNoteVendorSync(context.Background(), connRepo, &cnPushMappingRepo{}, &cnDispatchRefundRepo{}, &cnDispatchEntityScope{}, testLogger(), finalized, cnDispatchEvent(`{}`), Manual())
+
+		require.True(t, ierr.IsValidation(err), "want a validation error, got %v", err)
+	})
+
+	t.Run("a billing entity scope error is returned before the connection lookup", func(t *testing.T) {
+		scopeErr := errors.New("invoice not found")
+		connRepo := &cnDispatchConnectionRepo{conn: zohoConnection(true, true)}
+
+		err := PushCreditNoteVendorSync(context.Background(), connRepo, &cnPushMappingRepo{}, &cnDispatchRefundRepo{}, &cnDispatchEntityScope{err: scopeErr}, testLogger(), finalized, cnDispatchEvent(`{}`))
+
+		require.ErrorIs(t, err, scopeErr)
+		require.Zero(t, connRepo.calls)
+	})
 }

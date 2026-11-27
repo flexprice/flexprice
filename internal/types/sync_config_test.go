@@ -257,13 +257,19 @@ func TestSyncConfigValidateCreditNoteSync(t *testing.T) {
 	approvalOn := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{SubmitForApproval: true}}
 	approvalOff := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "460000000000358"}}
 	invoiceOn := &EntitySyncConfig{Outbound: true}
+	depositOnly := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "4069923000000034138"}}
 	tests := []struct {
 		name    string
 		cfg     *SyncConfig
 		wantErr bool
 	}{
-		{"outbound credit note sync", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}}, false},
+		{"outbound credit note sync with a deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: depositOnly}, false},
 		{"outbound credit note sync with submit for approval off", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: approvalOff}, false},
+		{"outbound credit note sync without invoice sync settings", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}}, true},
+		{"outbound credit note sync with an empty deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: &InvoiceSyncSettings{}}, true},
+		{"outbound credit note sync with a blank deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "  "}}}, true},
+		{"credit note sync off without a deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{}}, false},
+		{"invoice sync alone without a deposit account", &SyncConfig{Invoice: invoiceOn}, false},
 		{"outbound credit note sync without invoice config", &SyncConfig{CreditNote: &EntitySyncConfig{Outbound: true}}, true},
 		{"outbound credit note sync with invoice outbound off", &SyncConfig{Invoice: &EntitySyncConfig{}, CreditNote: &EntitySyncConfig{Outbound: true}}, true},
 		{"credit note sync off with invoice outbound off", &SyncConfig{Invoice: &EntitySyncConfig{}, CreditNote: &EntitySyncConfig{}}, false},

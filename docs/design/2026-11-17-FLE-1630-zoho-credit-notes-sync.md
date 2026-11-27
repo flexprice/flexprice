@@ -276,9 +276,9 @@ credit raises the Zoho invoice balance by the same amount, so the two stay in st
   migration is needed.
 - `from_account_id` is the existing `deposit_to_account_id` setting, the Zoho ledger account invoice
   payments are recorded into by mark-paid. The refund comes out of the same ledger the payment went into.
-  It must be a Bank or Cash account. When it is empty, `from_account_id` is omitted and Zoho rejects the
-  refund (code 11016, "Involved account types are not applicable"). It is used for both gateway and wallet
-  refunds.
+  It must be a Bank or Cash account. Without it Zoho rejects the refund (code 11016, "Involved account types
+  are not applicable"), so it is required while credit note sync is on and optional otherwise. It is used for
+  both gateway and wallet refunds.
 - Credit note sync requires `submit_for_approval` to be off, so the credit note is created Open and can be
   refunded or applied right away. Approvals must also be off in the Zoho org for credit notes.
 - The sync scopes the context with `BillingEntityService.ScopeToInvoice` before it reads the connection, so

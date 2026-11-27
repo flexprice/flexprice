@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/samber/lo"
 
@@ -20,12 +21,13 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
-// DispatchCreditNoteVendorSync starts the Zoho Books credit note sync for a finalized adjustment
-// credit note, and for any voided credit note. Used on credit_note.updated.
+// DispatchCreditNoteVendorSync starts the credit note sync on each provider that syncs credit
+// notes, for a finalized adjustment credit note and for any voided credit note. Used on credit_note.updated.
 func DispatchCreditNoteVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
 	connRepo connection.Repository,
+	mappingRepo entityintegrationmapping.Repository,
 	creditNoteRepo creditnote.Repository,
 	entityScope interfaces.BillingEntityScope,
 	log *logger.Logger,
@@ -55,24 +57,20 @@ func DispatchCreditNoteVendorSync(
 		return nil
 	}
 
-	ctx, syncEnabled, err := zohoBooksCreditNoteSyncContext(ctx, connRepo, entityScope, cn.InvoiceID)
-	if err != nil || !syncEnabled {
+	ctx, targets, err := creditNoteSyncTargets(ctx, connRepo, entityScope, cn.InvoiceID)
+	if err != nil || len(targets) == 0 {
 		return err
 	}
-
-	temporalSvc := temporalservice.GetGlobalTemporalService()
-	if temporalSvc == nil {
-		return errTemporalUnavailable
-	}
-	return startZohoBooksCreditNoteSync(ctx, temporalSvc, log, cn, event)
+	return dispatchCreditNoteSync(ctx, targets, mappingRepo, log, cn, event, false)
 }
 
-// DispatchRefundVendorSync starts the Zoho Books credit note sync once every refund of a
-// refund credit note has finished. Used on refund.succeeded.
+// DispatchRefundVendorSync starts the credit note sync on each provider that syncs credit notes,
+// once every refund of a refund credit note has finished. Used on refund.succeeded.
 func DispatchRefundVendorSync(
 	ctx context.Context,
 	cfg *config.Configuration,
 	connRepo connection.Repository,
+	mappingRepo entityintegrationmapping.Repository,
 	creditNoteRepo creditnote.Repository,
 	refundRepo refund.Repository,
 	entityScope interfaces.BillingEntityScope,
@@ -101,8 +99,8 @@ func DispatchRefundVendorSync(
 		return nil
 	}
 
-	ctx, syncEnabled, err := zohoBooksCreditNoteSyncContext(ctx, connRepo, entityScope, settled.InvoiceID)
-	if err != nil || !syncEnabled {
+	ctx, targets, err := creditNoteSyncTargets(ctx, connRepo, entityScope, settled.InvoiceID)
+	if err != nil || len(targets) == 0 {
 		return err
 	}
 
@@ -121,64 +119,53 @@ func DispatchRefundVendorSync(
 		return err
 	}
 	if lo.ContainsBy(refunds, func(r *refund.Refund) bool { return !r.RefundStatus.IsTerminal() }) {
-		log.Info(ctx, "integration_events: credit note has refunds still in progress, deferring Zoho Books sync",
+		log.Info(ctx, "integration_events: credit note has refunds still in progress, deferring credit note sync",
 			"credit_note_id", cn.ID,
 			"refund_id", settled.ID,
 		)
 		return nil
 	}
-
-	temporalSvc := temporalservice.GetGlobalTemporalService()
-	if temporalSvc == nil {
-		return errTemporalUnavailable
-	}
-	return startZohoBooksCreditNoteSync(ctx, temporalSvc, log, cn, event)
+	return dispatchCreditNoteSync(ctx, targets, mappingRepo, log, cn, event, false)
 }
 
-// PushCreditNoteToZohoBooks starts the Zoho Books credit note sync for a manual push, with ctx
-// already scoped to the credit note's invoice. A credit note that cannot be pushed is reported
-// as a validation error instead of being skipped.
-func PushCreditNoteToZohoBooks(
+// PushCreditNoteVendorSync starts the credit note sync for a manual push, on the provider named by
+// OnlyProvider or on every provider that syncs credit notes. A credit note that cannot be pushed is
+// reported as a validation error instead of being skipped.
+func PushCreditNoteVendorSync(
 	ctx context.Context,
 	connRepo connection.Repository,
 	mappingRepo entityintegrationmapping.Repository,
 	refundRepo refund.Repository,
+	entityScope interfaces.BillingEntityScope,
 	log *logger.Logger,
 	cn *creditnote.CreditNote,
 	event *types.WebhookEvent,
+	opts ...DispatchOption,
 ) error {
 	if cn.CreditNoteStatus != types.CreditNoteStatusFinalized && cn.CreditNoteStatus != types.CreditNoteStatusVoided {
 		return ierr.NewError("credit note cannot be pushed").
-			WithHint("Only finalized or voided credit notes can be pushed to Zoho Books").
+			WithHint("Only finalized or voided credit notes can be pushed").
 			Mark(ierr.ErrValidation)
 	}
 
-	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderZohoBooks)
+	o := resolveDispatchOptions(opts)
+	if o.onlyProvider != "" && !lo.ContainsBy(creditNoteSyncTriggers(), func(t creditNoteSyncTrigger) bool { return t.provider == o.onlyProvider }) {
+		return ierr.NewError("provider does not sync credit notes").
+			WithHintf("Credit notes cannot be pushed to %s", o.onlyProvider).
+			Mark(ierr.ErrValidation)
+	}
+
+	ctx, targets, err := creditNoteSyncTargets(ctx, connRepo, entityScope, cn.InvoiceID)
 	if err != nil {
 		return err
 	}
-	if conn == nil || !conn.IsInvoiceOutboundEnabled() || !conn.IsCreditNoteOutboundEnabled() {
-		return ierr.NewError("credit note sync is not enabled").
-			WithHint("Turn on credit note sync for the Zoho Books connection to push credit notes").
-			Mark(ierr.ErrValidation)
+	if o.onlyProvider != "" {
+		targets = lo.Filter(targets, func(t creditNoteSyncTarget, _ int) bool { return t.trigger.provider == o.onlyProvider })
 	}
-
-	if cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
-		filter := types.NewEntityIntegrationMappingFilter()
-		filter.EntityType = types.IntegrationEntityTypeCreditNote
-		filter.EntityID = cn.ID
-		filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
-		filter.ConnectionID = conn.ID
-		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-		mappings, err := mappingRepo.List(ctx, filter)
-		if err != nil {
-			return err
-		}
-		if len(mappings) > 0 {
-			return ierr.NewError("credit note is already synced").
-				WithHint("This credit note is already in Zoho Books").
-				Mark(ierr.ErrValidation)
-		}
+	if len(targets) == 0 {
+		return ierr.NewError("credit note sync is not enabled").
+			WithHint("Turn on invoice and credit note sync for the connection to push credit notes").
+			Mark(ierr.ErrValidation)
 	}
 
 	if cn.CreditNoteType == types.CreditNoteTypeRefund && cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
@@ -195,35 +182,121 @@ func PushCreditNoteToZohoBooks(
 		}
 	}
 
+	return dispatchCreditNoteSync(ctx, targets, mappingRepo, log, cn, event, true)
+}
+
+// creditNoteSyncTrigger starts one provider's credit note sync on its connection. A manual
+// trigger reports a credit note it skips as a validation error.
+type creditNoteSyncTrigger struct {
+	provider types.SecretProvider
+	start    func(ctx context.Context, conn *connection.Connection, mappingRepo entityintegrationmapping.Repository, log *logger.Logger, cn *creditnote.CreditNote, event *types.WebhookEvent, manual bool) error
+}
+
+// creditNoteSyncTriggers lists the providers that sync credit notes.
+func creditNoteSyncTriggers() []creditNoteSyncTrigger {
+	return []creditNoteSyncTrigger{
+		{types.SecretProviderZohoBooks, triggerZohoBooksCreditNoteSync},
+	}
+}
+
+type creditNoteSyncTarget struct {
+	trigger creditNoteSyncTrigger
+	conn    *connection.Connection
+}
+
+// creditNoteSyncTargets scopes ctx to the invoice's billing entity and returns each provider whose
+// connection in that scope syncs invoices and credit notes outbound.
+func creditNoteSyncTargets(
+	ctx context.Context,
+	connRepo connection.Repository,
+	entityScope interfaces.BillingEntityScope,
+	invoiceID string,
+) (context.Context, []creditNoteSyncTarget, error) {
+	if entityScope != nil {
+		scopedCtx, err := entityScope.ScopeToInvoice(ctx, invoiceID)
+		if err != nil {
+			return ctx, nil, err
+		}
+		ctx = scopedCtx
+	}
+
+	var targets []creditNoteSyncTarget
+	for _, trigger := range creditNoteSyncTriggers() {
+		conn, err := getConnectionIfExists(ctx, connRepo, trigger.provider)
+		if err != nil {
+			return ctx, nil, err
+		}
+		if conn != nil && conn.IsInvoiceOutboundEnabled() && conn.IsCreditNoteOutboundEnabled() {
+			targets = append(targets, creditNoteSyncTarget{trigger: trigger, conn: conn})
+		}
+	}
+	return ctx, targets, nil
+}
+
+// dispatchCreditNoteSync starts the credit note sync on each target. A sync already running is
+// returned, not skipped, so the event is retried after it.
+func dispatchCreditNoteSync(
+	ctx context.Context,
+	targets []creditNoteSyncTarget,
+	mappingRepo entityintegrationmapping.Repository,
+	log *logger.Logger,
+	cn *creditnote.CreditNote,
+	event *types.WebhookEvent,
+	manual bool,
+) error {
+	var errs []error
+	for _, target := range targets {
+		if err := target.trigger.start(ctx, target.conn, mappingRepo, log, cn, event, manual); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	// A single error is returned as is so its hint reaches the caller.
+	if len(errs) == 1 {
+		return errs[0]
+	}
+	return errors.Join(errs...)
+}
+
+// triggerZohoBooksCreditNoteSync starts the Zoho Books credit note sync, skipping a finalized
+// credit note already mapped on the connection.
+func triggerZohoBooksCreditNoteSync(
+	ctx context.Context,
+	conn *connection.Connection,
+	mappingRepo entityintegrationmapping.Repository,
+	log *logger.Logger,
+	cn *creditnote.CreditNote,
+	event *types.WebhookEvent,
+	manual bool,
+) error {
+	if cn.CreditNoteStatus == types.CreditNoteStatusFinalized {
+		filter := types.NewEntityIntegrationMappingFilter()
+		filter.EntityType = types.IntegrationEntityTypeCreditNote
+		filter.EntityID = cn.ID
+		filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+		filter.ConnectionID = conn.ID
+		filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+		mappings, err := mappingRepo.List(ctx, filter)
+		if err != nil {
+			return err
+		}
+		if len(mappings) > 0 {
+			if manual {
+				return ierr.NewError("credit note is already synced").
+					WithHint("This credit note is already in Zoho Books").
+					Mark(ierr.ErrValidation)
+			}
+			log.Info(ctx, "integration_events: credit note already synced to Zoho Books, skipping",
+				"credit_note_id", cn.ID,
+				"connection_id", conn.ID)
+			return nil
+		}
+	}
+
 	temporalSvc := temporalservice.GetGlobalTemporalService()
 	if temporalSvc == nil {
 		return errTemporalUnavailable
 	}
 	return startZohoBooksCreditNoteSync(ctx, temporalSvc, log, cn, event)
-}
-
-// zohoBooksCreditNoteSyncContext scopes ctx to the invoice's billing entity and reports
-// whether that entity's Zoho Books connection syncs credit notes.
-func zohoBooksCreditNoteSyncContext(
-	ctx context.Context,
-	connRepo connection.Repository,
-	entityScope interfaces.BillingEntityScope,
-	invoiceID string,
-) (context.Context, bool, error) {
-	if entityScope != nil {
-		scopedCtx, err := entityScope.ScopeToInvoice(ctx, invoiceID)
-		if err != nil {
-			return ctx, false, err
-		}
-		ctx = scopedCtx
-	}
-
-	conn, err := getConnectionIfExists(ctx, connRepo, types.SecretProviderZohoBooks)
-	if err != nil {
-		return ctx, false, err
-	}
-	syncEnabled := conn != nil && conn.IsInvoiceOutboundEnabled() && conn.IsCreditNoteOutboundEnabled()
-	return ctx, syncEnabled, nil
 }
 
 func startZohoBooksCreditNoteSync(

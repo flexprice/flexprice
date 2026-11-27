@@ -512,6 +512,13 @@ func (s *SyncConfig) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Zoho rejects a credit note refund without a Bank or Cash account to pay it from.
+	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.ZohoDepositToAccountID() == "" {
+		return ierr.NewError("credit note sync requires a deposit to account").
+			WithHint("Set deposit_to_account_id to the Zoho Bank or Cash account credit note refunds are paid from").
+			Mark(ierr.ErrValidation)
+	}
+
 	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.IsSubmitForApprovalEnabled() {
 		return ierr.NewError("credit note sync requires submit for approval to be disabled").
 			WithHint("Disable submit_for_approval to sync credit notes to Zoho Books").
