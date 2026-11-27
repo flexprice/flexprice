@@ -5,12 +5,14 @@ import (
 	"net/mail"
 	"time"
 
+	cockroachErrors "github.com/cockroachdb/errors"
 	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	"github.com/flexprice/flexprice/internal/domain/user"
@@ -27,7 +29,7 @@ import (
 type ScheduledTaskService interface {
 	CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	GetScheduledTask(ctx context.Context, id string) (*dto.ScheduledTaskResponse, error)
-	ListScheduledTasks(ctx context.Context, filter *types.QueryFilter, connectionID string, entityType types.ScheduledTaskEntityType, interval types.ScheduledTaskInterval, enabled string) (*dto.ListScheduledTasksResponse, error)
+	ListScheduledTasks(ctx context.Context, filter *types.QueryFilter, connectionID string, entityType types.ScheduledTaskEntityType, interval types.ScheduledTaskInterval, enabled string, origin, excludeOrigin types.ExportOrigin) (*dto.ListScheduledTasksResponse, error)
 	UpdateScheduledTask(ctx context.Context, id string, req dto.UpdateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	DeleteScheduledTask(ctx context.Context, id string) error
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
@@ -45,6 +47,7 @@ type scheduledTaskService struct {
 	rbac            *rbac.RBACService
 	analytics       AnalyticsService
 	userRepo        user.Repository
+	customerRepo    customer.Repository
 }
 
 // NewScheduledTaskService accepts a nil scheduler.
@@ -59,6 +62,7 @@ func NewScheduledTaskService(
 	rbacService *rbac.RBACService,
 	analytics AnalyticsService,
 	userRepo user.Repository,
+	customerRepo customer.Repository,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
@@ -71,6 +75,7 @@ func NewScheduledTaskService(
 		rbac:            rbacService,
 		analytics:       analytics,
 		userRepo:        userRepo,
+		customerRepo:    customerRepo,
 	}
 }
 
@@ -156,7 +161,56 @@ func requireAnalyticsRead(ctx context.Context, rbacService *rbac.RBACService, en
 		Mark(ierr.ErrPermissionDenied)
 }
 
+// Dry-runs the filter and checks the report is per customer.
+func (s *scheduledTaskService) validateCustomerFilter(ctx context.Context, req dto.CreateScheduledTaskRequest) error {
+	cf := req.SourceConfig.GetCustomerFilter()
+	if cf == nil {
+		return nil
+	}
+	if req.EntityType == types.ScheduledTaskEntityTypeReport && !reportHasCustomerDimension(req.SourceConfig.ReportKey) {
+		return ierr.NewError("report has no customer dimension").
+			WithHint("This data can't be limited to customers yet.").
+			Mark(ierr.ErrValidation)
+	}
+	if s.customerRepo == nil {
+		return ierr.NewError("customer repository not configured").Mark(ierr.ErrInternal)
+	}
+	count, err := s.customerRepo.Count(ctx, cf)
+	if err != nil {
+		if ierr.IsValidation(err) {
+			hint := "The customer filter is invalid"
+			if hints := cockroachErrors.GetAllHints(err); len(hints) > 0 {
+				hint = hints[0]
+			}
+			return ierr.NewError("invalid customer filter").
+				WithHint(hint).
+				Mark(ierr.ErrValidation)
+		}
+		return err
+	}
+	if max := req.EntityType.MaxFilteredCustomers(); max > 0 && count > max {
+		return types.FilteredCustomersCapError(max)
+	}
+	return nil
+}
+
+func reportHasCustomerDimension(key string) bool {
+	entry, ok := analytics.LookupReport(key)
+	if !ok {
+		return false
+	}
+	for _, d := range entry.Dimensions {
+		if d.Key == "customer_id" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.CreateScheduledTaskRequest) error {
+	if err := s.validateCustomerFilter(ctx, req); err != nil {
+		return err
+	}
 	if !req.EntityType.IsReportSource() {
 		return nil
 	}
@@ -212,17 +266,6 @@ func intervalWindowDays(interval types.ScheduledTaskInterval) int {
 	return 0
 }
 
-func (s *scheduledTaskService) checkWindowRange(ctx context.Context, task *scheduledtask.ScheduledTask, days int) error {
-	if task.EntityType != types.ScheduledTaskEntityTypeAnalyticsView {
-		return checkReportRange(task.SourceConfig.ReportKey, days)
-	}
-	if s.analytics == nil {
-		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
-	}
-	_, err := s.analytics.ValidateViewSource(ctx, task.SourceConfig.ViewID, days)
-	return err
-}
-
 func checkReportRange(key string, days int) error {
 	entry, ok := analytics.LookupReport(key)
 	if !ok || entry.MaxRangeDays <= 0 || days <= entry.MaxRangeDays {
@@ -233,14 +276,64 @@ func checkReportRange(key string, days int) error {
 		Mark(ierr.ErrValidation)
 }
 
+// checkRunWindow applies report window rules.
+func (s *scheduledTaskService) checkRunWindow(ctx context.Context, entity types.ScheduledTaskEntityType, source *types.ExportSourceConfig, start, end *time.Time) error {
+	if !entity.IsReportSource() {
+		return nil
+	}
+	for _, bound := range []*time.Time{start, end} {
+		if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
+			return ierr.NewError("report window must be whole UTC days").
+				WithHint("start_time and end_time must be midnight UTC for report exports").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if start != nil && end != nil && source != nil {
+		days := int(end.Sub(*start).Hours()+23) / 24
+		if entity != types.ScheduledTaskEntityTypeAnalyticsView {
+			return checkReportRange(source.ReportKey, days)
+		}
+		if s.analytics == nil {
+			return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+		}
+		_, err := s.analytics.ValidateViewSource(ctx, source.ViewID, days)
+		return err
+	}
+	return nil
+}
+
+func (s *scheduledTaskService) requireCustomerFilterEnabled(req dto.CreateScheduledTaskRequest) error {
+	if req.SourceConfig.GetCustomerFilter() == nil && req.EntityType != types.ScheduledTaskEntityTypeCustomers {
+		return nil
+	}
+	if s.config != nil && s.config.Exports.CustomerFilterEnabled {
+		return nil
+	}
+	return ierr.NewError("customer filtered exports are not enabled").
+		WithHint("Exports limited to customers are not available yet.").
+		Mark(ierr.ErrValidation)
+}
+
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
+	if err := s.requireCustomerFilterEnabled(req); err != nil {
+		return nil, err
+	}
 	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {
 		return nil, err
+	}
+	if req.Origin == "" {
+		req.Origin = types.ExportOriginConsole
+	}
+	if req.RunWindow != nil {
+		window := req.ForceRunRequest()
+		if err := s.checkRunWindow(ctx, req.EntityType, req.SourceConfig, window.StartTime, window.EndTime); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
@@ -294,6 +387,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		Schedule:           req.Schedule,
 		SourceConfig:       req.SourceConfig,
 		EmailConfig:        emailConfigOrNil(req.EmailConfig),
+		Origin:             req.Origin,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -328,7 +422,38 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		}
 	}
 
-	return dto.ToScheduledTaskResponse(task), nil
+	resp := dto.ToScheduledTaskResponse(task)
+	if req.RunNow {
+		run, err := s.runNow(ctx, task, req.ForceRunRequest())
+		if err != nil {
+			s.logger.Error(ctx, "run_now failed", "error", err, "scheduled_task_id", task.ID)
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), runNowRollbackTimeout)
+			defer cancel()
+			if delErr := s.repo.Delete(cleanupCtx, task.ID); delErr != nil {
+				s.logger.Error(ctx, "run_now rollback failed", "error", delErr, "scheduled_task_id", task.ID)
+				return nil, ierr.WithError(err).
+					WithHintf("The export could not start, and export %s may still exist. Delete it before retrying.", task.ID).
+					WithReportableDetails(map[string]interface{}{"scheduled_task_id": task.ID}).
+					Mark(ierr.ErrInternal)
+			}
+			return nil, err
+		}
+		resp.Run = run
+	}
+	return resp, nil
+}
+
+func (s *scheduledTaskService) runNow(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error) {
+	if s.scheduler == nil {
+		return nil, ierr.NewError("temporal client not configured").
+			WithHint("The export could not be started. Try again later.").
+			Mark(ierr.ErrInternal)
+	}
+	workflowID, startTime, endTime, mode, err := s.startForceRun(ctx, task, req)
+	if err != nil {
+		return nil, err
+	}
+	return forceRunResponse(workflowID, startTime, endTime, mode), nil
 }
 
 // GetScheduledTask retrieves a scheduled task by ID
@@ -348,7 +473,7 @@ func (s *scheduledTaskService) GetScheduledTask(ctx context.Context, id string) 
 }
 
 // ListScheduledTasks retrieves a list of scheduled tasks
-func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *types.QueryFilter, connectionID string, entityType types.ScheduledTaskEntityType, interval types.ScheduledTaskInterval, enabled string) (*dto.ListScheduledTasksResponse, error) {
+func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *types.QueryFilter, connectionID string, entityType types.ScheduledTaskEntityType, interval types.ScheduledTaskInterval, enabled string, origin, excludeOrigin types.ExportOrigin) (*dto.ListScheduledTasksResponse, error) {
 	if filter == nil {
 		filter = types.NewDefaultQueryFilter()
 	}
@@ -360,6 +485,8 @@ func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *t
 		ConnectionID:  connectionID,
 		EntityType:    entityType,
 		Interval:      interval,
+		Origin:        origin,
+		ExcludeOrigin: excludeOrigin,
 		Limit:         filter.GetLimit(),
 		Offset:        filter.GetOffset(),
 	}
@@ -590,6 +717,10 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 		"end_time", endTime,
 		"mode", mode)
 
+	return forceRunResponse(workflowID, startTime, endTime, mode), nil
+}
+
+func forceRunResponse(workflowID string, startTime, endTime time.Time, mode string) *dto.TriggerForceRunResponse {
 	resp := &dto.TriggerForceRunResponse{
 		WorkflowID: workflowID,
 		Message:    "Force run triggered successfully",
@@ -598,7 +729,7 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 	if !startTime.IsZero() && !endTime.IsZero() {
 		resp.StartTime, resp.EndTime = &startTime, &endTime
 	}
-	return resp, nil
+	return resp
 }
 
 // ===== PRIVATE HELPER METHODS =====
@@ -619,16 +750,20 @@ func (s *scheduledTaskService) resumeSchedule(ctx context.Context, task *schedul
 // If customStart and customEnd are provided, uses those times. Otherwise, calculates automatically.
 // Returns: workflowID, startTime, endTime, mode, error
 func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID string, req dto.TriggerForceRunRequest) (string, time.Time, time.Time, string, error) {
-	customStart, customEnd := req.StartTime, req.EndTime
-	s.logger.Info(ctx, "triggering force run", "task_id", taskID, "custom_start", customStart, "custom_end", customEnd)
-
-	// Get the task
 	task, err := s.repo.Get(ctx, taskID)
 	if err != nil {
 		return "", time.Time{}, time.Time{}, "", ierr.WithError(err).
 			WithHint("Failed to get scheduled task").
 			Mark(ierr.ErrDatabase)
 	}
+	return s.startForceRun(ctx, task, req)
+}
+
+// startForceRun starts the export workflow for a loaded task.
+func (s *scheduledTaskService) startForceRun(ctx context.Context, task *scheduledtask.ScheduledTask, req dto.TriggerForceRunRequest) (string, time.Time, time.Time, string, error) {
+	taskID := task.ID
+	customStart, customEnd := req.StartTime, req.EndTime
+	s.logger.Info(ctx, "triggering force run", "task_id", taskID, "custom_start", customStart, "custom_end", customEnd)
 
 	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("cannot run archived or deleted scheduled task").
@@ -657,25 +792,14 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrValidation)
 	}
 
-	if task.EntityType.IsReportSource() {
-		for _, bound := range []*time.Time{customStart, customEnd} {
-			if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
-				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
-					WithHint("start_time and end_time must be midnight UTC for report exports").
-					Mark(ierr.ErrValidation)
-			}
-		}
-		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
-			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
-			if err := s.checkWindowRange(ctx, task, days); err != nil {
-				return "", time.Time{}, time.Time{}, "", err
-			}
-		}
+	if err := s.checkRunWindow(ctx, task.EntityType, task.SourceConfig, customStart, customEnd); err != nil {
+		return "", time.Time{}, time.Time{}, "", err
 	}
 
 	// Determine time range and mode
 	var startTime, endTime time.Time
 	var mode string
+	var err error
 
 	noWindow := customStart == nil && customEnd == nil &&
 		(task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual)
@@ -752,5 +876,6 @@ func (s *scheduledTaskService) GetCapabilities(_ context.Context) *dto.Scheduled
 			Available:     s.config.ExportEmailAvailable(),
 			MaxRecipients: types.MaxExportEmailRecipients,
 		},
+		CustomerFilter: s.config.Exports.CustomerFilterEnabled,
 	}
 }

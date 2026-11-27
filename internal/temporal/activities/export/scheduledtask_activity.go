@@ -74,8 +74,8 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvID)
 
-	// Get scheduled task
-	task, err := a.scheduledTaskRepo.Get(ctx, input.ScheduledTaskID)
+	// Writer sees a just-created task.
+	task, err := a.scheduledTaskRepo.Get(types.WithForceWriter(ctx), input.ScheduledTaskID)
 	if err != nil {
 		a.logger.Error(ctx, "failed to get scheduled task", "error", err)
 		return nil, ierr.WithError(err).

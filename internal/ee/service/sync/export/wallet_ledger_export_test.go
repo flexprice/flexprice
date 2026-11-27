@@ -84,7 +84,13 @@ type ledgerRepo struct {
 	wallet.Repository
 	walletIDs   []string
 	customerIDs []string
+	scopedIDs   []string
 	batches     [][]string
+}
+
+func (r *ledgerRepo) ListWalletIDsByCustomerIDs(_ context.Context, _, _ string, customerIDs []string) ([]string, error) {
+	r.scopedIDs = customerIDs
+	return r.walletIDs, nil
 }
 
 func (r *ledgerRepo) ListWalletIDsForLedgerExport(_ context.Context, _, _ string, _, _ time.Time, customerExternalIDs []string) ([]string, error) {
@@ -101,7 +107,7 @@ func (r *ledgerRepo) GetWalletLedgerForExport(_ context.Context, _, _ string, wa
 
 func TestWalletLedgerWriteDataBatchesWallets(t *testing.T) {
 	repo := &ledgerRepo{walletIDs: lo.Times(51, func(i int) string { return fmt.Sprintf("wallet_%02d", i) })}
-	exporter := NewWalletLedgerExporter(repo, logger.NewNoopLogger())
+	exporter := NewWalletLedgerExporter(repo, nil, logger.NewNoopLogger())
 
 	var buf bytes.Buffer
 	count, err := exporter.WriteData(context.Background(), &dto.ExportRequest{CustomerExternalIDs: []string{"acme"}}, &buf)
@@ -120,7 +126,7 @@ func TestWalletLedgerWriteDataBatchesWallets(t *testing.T) {
 }
 
 func TestWalletLedgerWriteDataNoWallets(t *testing.T) {
-	exporter := NewWalletLedgerExporter(&ledgerRepo{}, logger.NewNoopLogger())
+	exporter := NewWalletLedgerExporter(&ledgerRepo{}, nil, logger.NewNoopLogger())
 
 	var buf bytes.Buffer
 	count, err := exporter.WriteData(context.Background(), &dto.ExportRequest{}, &buf)
@@ -146,4 +152,35 @@ func TestExportObjectKeyCustomerFilter(t *testing.T) {
 	assert.NotEqual(t, full, acme, "a filtered run never replaces the full export")
 	assert.NotEqual(t, acme, exportObjectKey(request("globex"), exporter))
 	assert.Equal(t, exportObjectKey(request("acme", "globex"), exporter), exportObjectKey(request("globex", "acme"), exporter))
+}
+
+func TestExportObjectKeySavedCustomerFilter(t *testing.T) {
+	exporter := &WalletLedgerExporter{}
+	request := func(cf *types.CustomerFilter) *dto.ExportRequest {
+		r := &dto.ExportRequest{
+			StartTime: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+			EndTime:   time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC),
+			JobConfig: &types.S3JobConfig{},
+		}
+		if cf != nil {
+			r.SourceConfig = &types.ExportSourceConfig{CustomerFilter: cf}
+		}
+		return r
+	}
+
+	full := exportObjectKey(request(nil), exporter)
+	assert.Equal(t, "wallet_ledger/wallet_ledger-261001000000-261002000000.csv", full)
+	assert.Equal(t, full, exportObjectKey(&dto.ExportRequest{
+		StartTime: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC),
+		JobConfig: &types.S3JobConfig{}, SourceConfig: &types.ExportSourceConfig{},
+	}, exporter))
+
+	acme := exportObjectKey(request(&types.CustomerFilter{Email: "a@acme.co"}), exporter)
+	globex := exportObjectKey(request(&types.CustomerFilter{Email: "a@globex.co"}), exporter)
+	all := exportObjectKey(request(&types.CustomerFilter{}), exporter)
+	assert.NotEqual(t, full, all)
+	assert.NotEqual(t, acme, globex)
+	assert.NotEqual(t, acme, all)
+	assert.Equal(t, acme, exportObjectKey(request(&types.CustomerFilter{Email: "a@acme.co"}), exporter))
 }

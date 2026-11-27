@@ -24,4 +24,6 @@ type ReportsRepository interface {
 	Enabled() bool
 	MaxRows() int
 	RunReport(ctx context.Context, rv *ResolvedView, tenantID, environmentID string) (*ReportResult, error)
+	// ReportColumns returns RunReport columns without querying.
+	ReportColumns(rv *ResolvedView, tenantID, environmentID string) ([]ReportColumn, error)
 }

@@ -153,6 +153,7 @@ type exportTemporalFake struct {
 	created *models.CreateScheduleOptions
 	handle  *exportHandleFake
 	args    []interface{}
+	runErr  error
 }
 
 func (c *exportTemporalFake) CreateSchedule(_ context.Context, o models.CreateScheduleOptions) (models.ScheduleHandle, error) {
@@ -166,6 +167,9 @@ func (c *exportTemporalFake) GetScheduleHandle(context.Context, string) models.S
 
 func (c *exportTemporalFake) StartWorkflow(_ context.Context, _ models.StartWorkflowOptions, _ interface{}, args ...interface{}) (models.WorkflowRun, error) {
 	c.args = args
+	if c.runErr != nil {
+		return nil, c.runErr
+	}
 	return startedRun{}, nil
 }
 

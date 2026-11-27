@@ -31,6 +31,7 @@ type UsageAnalyticsExporter struct {
 	lineItemRepo         subscription.LineItemRepository
 	usageAnalyticsGetter UsageAnalyticsGetter
 	logger               *logger.Logger
+	scope                customerScope
 }
 
 // NewUsageAnalyticsExporter creates a new usage analytics exporter
@@ -47,6 +48,7 @@ func NewUsageAnalyticsExporter(
 		lineItemRepo:         lineItemRepo,
 		usageAnalyticsGetter: usageAnalyticsGetter,
 		logger:               logger,
+		scope:                newCustomerScope(customerRepo, maxScopedCustomers),
 	}
 }
 
@@ -135,9 +137,27 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 			Mark(ierr.ErrInternal)
 	}
 
-	customers, err := e.resolveExportCustomers(ctx, request.StartTime, request.EndTime)
+	refs, scoped, err := e.scope.resolve(ctx, request)
 	if err != nil {
 		return nil, 0, err
+	}
+	var customers []*customer.Customer
+	if !scoped || len(refs) > 0 {
+		var scope *types.CustomerFilter
+		if scoped {
+			scope = request.SourceConfig.GetCustomerFilter()
+		}
+		customers, err = e.resolveExportCustomers(ctx, request.StartTime, request.EndTime, scope)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	if scoped {
+		allowed := lo.SliceToMap(refs, func(r customer.Ref) (string, struct{}) { return r.ID, struct{}{} })
+		customers = lo.Filter(customers, func(c *customer.Customer, _ int) bool {
+			_, ok := allowed[c.ID]
+			return ok
+		})
 	}
 
 	if len(customers) == 0 {
@@ -253,7 +273,12 @@ func (e *UsageAnalyticsExporter) PrepareData(ctx context.Context, request *dto.E
 
 // resolveExportCustomers returns the union of customers that had events in the export window
 // and customers with published commitment true-up subscription line items.
-func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, startTime, endTime time.Time) ([]*customer.Customer, error) {
+func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, startTime, endTime time.Time, scope *types.CustomerFilter) ([]*customer.Customer, error) {
+	newFilter := types.NewCustomerFilter
+	if scope != nil {
+		newFilter = func() *types.CustomerFilter { return statusFilter(scope) }
+	}
+
 	externalCustomerIDs, err := e.eventRepo.GetDistinctExternalCustomerIDs(ctx, startTime, endTime)
 	if err != nil {
 		return nil, err
@@ -267,7 +292,7 @@ func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, sta
 	var customers []*customer.Customer
 
 	if len(externalCustomerIDs) > 0 {
-		eventFilter := types.NewCustomerFilter()
+		eventFilter := newFilter()
 		eventFilter.ExternalIDs = externalCustomerIDs
 		eventCustomers, err := e.customerRepo.ListAll(ctx, eventFilter)
 		if err != nil {
@@ -285,7 +310,7 @@ func (e *UsageAnalyticsExporter) resolveExportCustomers(ctx context.Context, sta
 	}
 
 	if len(remainingTrueUpCustomerIDs) > 0 {
-		trueUpFilter := types.NewCustomerFilter()
+		trueUpFilter := newFilter()
 		trueUpFilter.CustomerIDs = remainingTrueUpCustomerIDs
 		trueUpCustomers, err := e.customerRepo.ListAll(ctx, trueUpFilter)
 		if err != nil {

@@ -33,7 +33,12 @@ func NewScheduledTaskHandler(
 // @Description interval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.
 // @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Description email_config recipients are allowed only for daily, weekly, monthly and manual exports; hourly, 15MIN and 30MIN reject them.
-// @Description entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
+// @Description entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config cannot be changed later. Clients should tolerate new entity_type values.
+// @Description origin is console (default) or customers_page; customers_page requires customer_filter. customer_filter inside source_config limits the export to matching customers, needs origin customers_page, and is allowed for customers, wallet_ledger, invoice, credit_topups, credit_usage and usage_analytics exports and for reports with a customer dimension; entity_type customers requires it. Until customer filtered exports are enabled for the deployment, customer_filter and entity_type customers return 400.
+// @Description An empty customer_filter exports published customers only; add a status filter to include archived ones. Supported customer_filter fields are filters, metadata, email, billing_entity_id and status; unknown fields and customer id lists are rejected, and limit, offset and sort are ignored.
+// @Description A customers export is a snapshot of the customer list at run time and ignores the run window; it allows interval daily, weekly, monthly or manual.
+// @Description run_now (manual exports only) starts a run right after creation, optionally over run_window; the response then carries run.workflow_id. If the run cannot start, the request fails and the export is deleted best-effort; if that delete fails, the error names the export id.
+// @Description source_config is required for report and analytics_view exports and for customers exports; other entity types accept only customer_filter in it, and only when it is allowed for them. run_window needs both start_time and end_time.
 // @Description Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. The window is the period before the scheduled time's date in the schedule's timezone, as whole UTC days (a Dec 1 00:30 Asia/Kolkata monthly run covers November UTC), and a custom run window must be whole UTC days and its end is exclusive (Nov 1 to Nov 10 excludes Nov 10). A timeseries report grain (or the report's default grain) may not be coarser than the interval: week or month on daily and month on weekly are rejected. export_metadata_fields is not allowed. These exports also need analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
@@ -106,6 +111,8 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Param entity_type query string false "Filter by entity type"
 // @Param interval query string false "Filter by interval"
 // @Param enabled query bool false "Filter by enabled status"
+// @Param origin query string false "Only exports created from this origin" Enums(console, customers_page)
+// @Param exclude_origin query string false "Hide exports created from this origin" Enums(console, customers_page)
 // @Success 200 {object} dto.ListScheduledTasksResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -136,7 +143,16 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 		interval = types.ScheduledTaskInterval(intervalStr)
 	}
 
-	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr)
+	origin := types.ExportOrigin(c.Query("origin"))
+	excludeOrigin := types.ExportOrigin(c.Query("exclude_origin"))
+	for _, o := range []types.ExportOrigin{origin, excludeOrigin} {
+		if err := o.Validate(); err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	resp, err := h.service.ListScheduledTasks(c.Request.Context(), &filter, connectionID, entityType, interval, enabledStr, origin, excludeOrigin)
 	if err != nil {
 		h.logger.Error(c.Request.Context(), "failed to list scheduled tasks", "error", err)
 		c.Error(err)
@@ -218,7 +234,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
 // @Description Without a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.
 // @Description Returns 400 when the export is paused (enabled is false); turn it on first.
-// @Description A custom window's end_time is exclusive: a window from Nov 1 to Nov 10 excludes Nov 10.
+// @Description A custom window's end_time is exclusive: a window from Nov 1 to Nov 10 excludes Nov 10. A customers export is a snapshot of the customer list and ignores the window.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

@@ -219,6 +219,20 @@ func (_u *ScheduledTaskUpdate) ClearEmailConfig() *ScheduledTaskUpdate {
 	return _u
 }
 
+// SetOrigin sets the "origin" field.
+func (_u *ScheduledTaskUpdate) SetOrigin(v types.ExportOrigin) *ScheduledTaskUpdate {
+	_u.mutation.SetOrigin(v)
+	return _u
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_u *ScheduledTaskUpdate) SetNillableOrigin(v *types.ExportOrigin) *ScheduledTaskUpdate {
+	if v != nil {
+		_u.SetOrigin(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdate) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -275,6 +289,11 @@ func (_u *ScheduledTaskUpdate) check() error {
 	if v, ok := _u.mutation.JobConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Origin(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "origin", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.origin": %w`, err)}
 		}
 	}
 	return nil
@@ -360,6 +379,9 @@ func (_u *ScheduledTaskUpdate) sqlSave(ctx context.Context) (_node int, err erro
 	}
 	if _u.mutation.EmailConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldEmailConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Origin(); ok {
+		_spec.SetField(scheduledtask.FieldOrigin, field.TypeString, value)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -571,6 +593,20 @@ func (_u *ScheduledTaskUpdateOne) ClearEmailConfig() *ScheduledTaskUpdateOne {
 	return _u
 }
 
+// SetOrigin sets the "origin" field.
+func (_u *ScheduledTaskUpdateOne) SetOrigin(v types.ExportOrigin) *ScheduledTaskUpdateOne {
+	_u.mutation.SetOrigin(v)
+	return _u
+}
+
+// SetNillableOrigin sets the "origin" field if the given value is not nil.
+func (_u *ScheduledTaskUpdateOne) SetNillableOrigin(v *types.ExportOrigin) *ScheduledTaskUpdateOne {
+	if v != nil {
+		_u.SetOrigin(*v)
+	}
+	return _u
+}
+
 // Mutation returns the ScheduledTaskMutation object of the builder.
 func (_u *ScheduledTaskUpdateOne) Mutation() *ScheduledTaskMutation {
 	return _u.mutation
@@ -640,6 +676,11 @@ func (_u *ScheduledTaskUpdateOne) check() error {
 	if v, ok := _u.mutation.JobConfig(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "job_config", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.job_config": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Origin(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "origin", err: fmt.Errorf(`ent: validator failed for field "ScheduledTask.origin": %w`, err)}
 		}
 	}
 	return nil
@@ -742,6 +783,9 @@ func (_u *ScheduledTaskUpdateOne) sqlSave(ctx context.Context) (_node *Scheduled
 	}
 	if _u.mutation.EmailConfigCleared() {
 		_spec.ClearField(scheduledtask.FieldEmailConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.Origin(); ok {
+		_spec.SetField(scheduledtask.FieldOrigin, field.TypeString, value)
 	}
 	_node = &ScheduledTask{config: _u.config}
 	_spec.Assign = _node.assignValues

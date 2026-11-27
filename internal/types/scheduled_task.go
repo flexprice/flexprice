@@ -1,6 +1,9 @@
 package types
 
 import (
+	"bytes"
+	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
@@ -194,11 +197,103 @@ const (
 	ScheduledTaskEntityTypeRevenueFacts   ScheduledTaskEntityType = "revenue_facts"
 	ScheduledTaskEntityTypeReport         ScheduledTaskEntityType = "report"
 	ScheduledTaskEntityTypeAnalyticsView  ScheduledTaskEntityType = "analytics_view"
+	ScheduledTaskEntityTypeCustomers      ScheduledTaskEntityType = "customers"
 )
 
 // True for report-backed exports.
 func (e ScheduledTaskEntityType) IsReportSource() bool {
 	return e == ScheduledTaskEntityTypeReport || e == ScheduledTaskEntityTypeAnalyticsView
+}
+
+// True when a customer_filter may limit the export.
+func (e ScheduledTaskEntityType) AllowsCustomerFilter() bool {
+	switch e {
+	case ScheduledTaskEntityTypeCustomers,
+		ScheduledTaskEntityTypeWalletLedger,
+		ScheduledTaskEntityTypeInvoice,
+		ScheduledTaskEntityTypeCreditTopups,
+		ScheduledTaskEntityTypeCreditUsage,
+		ScheduledTaskEntityTypeUsageAnalytics,
+		ScheduledTaskEntityTypeReport:
+		return true
+	}
+	return false
+}
+
+const (
+	MaxExportFilteredCustomers = 10000
+	MaxReportFilteredCustomers = 1000
+)
+
+// Zero means uncapped.
+func (e ScheduledTaskEntityType) MaxFilteredCustomers() int {
+	switch e {
+	case ScheduledTaskEntityTypeCustomers:
+		return 0
+	case ScheduledTaskEntityTypeReport:
+		return MaxReportFilteredCustomers
+	}
+	return MaxExportFilteredCustomers
+}
+
+// FilteredCustomersCapError is the over-cap validation error.
+func FilteredCustomersCapError(max int) error {
+	return ierr.NewErrorf("Filter matches more than %d customers; narrow it", max).
+		WithHintf("Filter matches more than %d customers; narrow it", max).
+		Mark(ierr.ErrValidation)
+}
+
+// CustomersExportCapError fails customer exports over cap.
+func CustomersExportCapError(max int) error {
+	return ierr.NewErrorf("Export has more than %d customers; narrow the customer filter", max).
+		WithHintf("Export has more than %d customers; narrow the customer filter", max).
+		Mark(ierr.ErrValidation)
+}
+
+// ExportOrigin is where an export was created.
+type ExportOrigin string
+
+const (
+	ExportOriginConsole       ExportOrigin = "console"
+	ExportOriginCustomersPage ExportOrigin = "customers_page"
+)
+
+// Validate checks the origin; empty is allowed.
+func (o ExportOrigin) Validate() error {
+	switch o {
+	case "", ExportOriginConsole, ExportOriginCustomersPage:
+		return nil
+	}
+	return ierr.NewError("invalid origin").
+		WithHint("Origin must be one of: console, customers_page").
+		Mark(ierr.ErrValidation)
+}
+
+// ValidateExportCustomerFilter rejects id lists a saved export cannot keep.
+func ValidateExportCustomerFilter(f *CustomerFilter) error {
+	if f != nil && (len(f.CustomerIDs) > 0 || len(f.ExternalIDs) > 0 || f.ExternalID != "") {
+		return ierr.NewError("customer ids not supported").
+			WithHint("Filter by fields instead of customer ids.").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// SanitizeExportCustomerFilter keeps only the list filters.
+func SanitizeExportCustomerFilter(f *CustomerFilter) *CustomerFilter {
+	if f == nil {
+		return nil
+	}
+	out := &CustomerFilter{
+		Filters:         f.Filters,
+		MetadataFilter:  f.MetadataFilter,
+		Email:           f.Email,
+		BillingEntityID: f.BillingEntityID,
+	}
+	if f.QueryFilter != nil && f.QueryFilter.Status != nil {
+		out.QueryFilter = &QueryFilter{Status: f.QueryFilter.Status}
+	}
+	return out
 }
 
 // One report filter.
@@ -222,12 +317,64 @@ type ExportSourceConfig struct {
 	ReportKey    string        `json:"report_key,omitempty"`
 	ReportParams *ReportParams `json:"report_params,omitempty"`
 	ViewID       string        `json:"view_id,omitempty"`
+	// Limits the export to matching customers.
+	CustomerFilter *CustomerFilter `json:"customer_filter,omitempty"`
+}
+
+// UnmarshalJSON rejects unknown customer_filter fields.
+func (c *ExportSourceConfig) UnmarshalJSON(data []byte) error {
+	type plain ExportSourceConfig
+	aux := struct {
+		*plain
+		CustomerFilter json.RawMessage `json:"customer_filter"`
+	}{plain: (*plain)(c)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	c.CustomerFilter = nil
+	if len(aux.CustomerFilter) == 0 || string(aux.CustomerFilter) == "null" {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(aux.CustomerFilter))
+	dec.DisallowUnknownFields()
+	filter := &CustomerFilter{}
+	if err := dec.Decode(filter); err != nil {
+		if name, ok := strings.CutPrefix(err.Error(), "json: unknown field "); ok {
+			return ierr.NewErrorf("unknown customer filter field %s", name).
+				WithHintf("Unknown customer filter field: %s", strings.Trim(name, `"`)).
+				Mark(ierr.ErrValidation)
+		}
+		return err
+	}
+	c.CustomerFilter = filter
+	return nil
+}
+
+// GetCustomerFilter is nil-safe.
+func (c *ExportSourceConfig) GetCustomerFilter() *CustomerFilter {
+	if c == nil {
+		return nil
+	}
+	return c.CustomerFilter
 }
 
 // Checks config fits entity.
 func (c *ExportSourceConfig) Validate(entity ScheduledTaskEntityType) error {
+	if entity == ScheduledTaskEntityTypeCustomers {
+		if c == nil || c.CustomerFilter == nil || c.ReportKey != "" || c.ReportParams != nil || c.ViewID != "" {
+			return ierr.NewError("invalid source_config").
+				WithHint("customers exports require only customer_filter").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
+	}
+	if c != nil && c.CustomerFilter != nil && !entity.AllowsCustomerFilter() {
+		return ierr.NewError("customer_filter not supported for this export").
+			WithHint("This data can't be limited to customers yet.").
+			Mark(ierr.ErrValidation)
+	}
 	if !entity.IsReportSource() {
-		if c != nil {
+		if c != nil && (c.CustomerFilter == nil || c.ReportKey != "" || c.ReportParams != nil || c.ViewID != "") {
 			return ierr.NewError("source_config not allowed").
 				WithHint("source_config is only for report and analytics_view exports").
 				Mark(ierr.ErrValidation)
@@ -273,6 +420,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		ScheduledTaskEntityTypeRevenueFacts,
 		ScheduledTaskEntityTypeReport,
 		ScheduledTaskEntityTypeAnalyticsView,
+		ScheduledTaskEntityTypeCustomers,
 	}
 	if e == "" {
 		return ierr.NewError("entity type is required").
@@ -285,7 +433,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid entity type").
-		WithHint("Entity type must be one of: events, invoice, credit_topups, wallet_debits, wallet_ledger, credit_usage, usage_analytics, revenue_facts, report, analytics_view").
+		WithHint("Entity type must be one of: events, invoice, credit_topups, wallet_debits, wallet_ledger, credit_usage, usage_analytics, revenue_facts, report, analytics_view, customers").
 		Mark(ierr.ErrValidation)
 }
 

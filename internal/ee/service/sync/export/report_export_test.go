@@ -20,11 +20,19 @@ type fakeRunner struct {
 	gotRange  string
 	gotKey    string
 	gotViewID string
+	gotParams *types.ReportParams
+	calls     int
+	columns   []string
 }
 
-func (f *fakeRunner) RunReportForExport(_ context.Context, key string, _ *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
-	f.gotKey, f.gotRange = key, rng
+func (f *fakeRunner) RunReportForExport(_ context.Context, key string, params *types.ReportParams, rng string) (*dto.AnalyticsQueryResult, error) {
+	f.gotKey, f.gotRange, f.gotParams = key, rng, params
+	f.calls++
 	return f.result, f.err
+}
+
+func (f *fakeRunner) ReportColumnsForExport(_ context.Context, _ string, _ *types.ReportParams, _ string) ([]string, error) {
+	return f.columns, f.err
 }
 
 func (f *fakeRunner) RunViewForExport(_ context.Context, viewID, rng string) (*dto.AnalyticsQueryResult, time.Time, error) {
@@ -44,7 +52,7 @@ func TestReportExporter_PrepareDataCSV(t *testing.T) {
 		Columns: []*dto.AnalyticsColumn{{Name: "a"}, {Name: "b"}},
 		Rows:    [][]string{{"1", "x,y"}, {"2", "z"}},
 	}}
-	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport)
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport, nil)
 
 	data, n, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 
@@ -64,7 +72,7 @@ func TestReportExporter_NeutralizesFormulaTextOnly(t *testing.T) {
 		},
 		Rows: [][]string{{"=HYPERLINK(1)", "-5"}, {"+a", "1"}, {"-b", "2"}, {"@c", "3"}, {"\tt", "4"}, {"\rr", "5"}, {"gpt-4", "-0.5"}},
 	}}
-	data, _, err := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport).
+	data, _, err := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport, nil).
 		PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 
 	require.NoError(t, err)
@@ -73,7 +81,7 @@ func TestReportExporter_NeutralizesFormulaTextOnly(t *testing.T) {
 
 func TestReportExporter_EmptyResultHeaderOnly(t *testing.T) {
 	runner := &fakeRunner{result: &dto.AnalyticsQueryResult{Columns: []*dto.AnalyticsColumn{{Name: "a"}}}}
-	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport)
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport, nil)
 
 	data, n, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 
@@ -87,7 +95,7 @@ func TestReportExporter_ViewMetadata(t *testing.T) {
 		result: &dto.AnalyticsQueryResult{Columns: []*dto.AnalyticsColumn{{Name: "a"}}},
 		viewAt: time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC),
 	}
-	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeAnalyticsView)
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeAnalyticsView, nil)
 
 	_, _, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeAnalyticsView))
 
@@ -99,7 +107,7 @@ func TestReportExporter_ViewMetadata(t *testing.T) {
 
 func TestReportExporter_DeletedViewIsMarked(t *testing.T) {
 	runner := &fakeRunner{err: ierr.NewError("view not found").Mark(ierr.ErrNotFound)}
-	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeAnalyticsView)
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeAnalyticsView, nil)
 
 	_, _, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeAnalyticsView))
 
@@ -108,7 +116,7 @@ func TestReportExporter_DeletedViewIsMarked(t *testing.T) {
 
 func TestReportExporter_ReportHasNoMetadata(t *testing.T) {
 	runner := &fakeRunner{result: &dto.AnalyticsQueryResult{}}
-	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport)
+	exp := NewReportExporter(runner, types.ScheduledTaskEntityTypeReport, nil)
 	_, _, err := exp.PrepareData(context.Background(), reportRequest(types.ScheduledTaskEntityTypeReport))
 	require.NoError(t, err)
 	require.Empty(t, exp.RunMetadata())
@@ -148,7 +156,7 @@ func TestExport_ReportWithoutRunnerUnsupported(t *testing.T) {
 
 func TestReportExporter_NilResultIsError(t *testing.T) {
 	for _, entity := range []types.ScheduledTaskEntityType{types.ScheduledTaskEntityTypeReport, types.ScheduledTaskEntityTypeAnalyticsView} {
-		exp := NewReportExporter(&fakeRunner{}, entity)
+		exp := NewReportExporter(&fakeRunner{}, entity, nil)
 
 		_, _, err := exp.PrepareData(context.Background(), reportRequest(entity))
 

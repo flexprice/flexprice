@@ -172,6 +172,12 @@ func (s *ExportService) Export(ctx context.Context, request *dto.ExportRequest) 
 		}
 	}
 
+	if request.SourceConfig.GetCustomerFilter() != nil && !request.EntityType.AllowsCustomerFilter() {
+		return nil, ierr.NewError("customer_filter not supported for this export").
+			WithHint("This data can't be limited to customers yet.").
+			Mark(ierr.ErrValidation)
+	}
+
 	// Get the appropriate exporter for the entity type
 	exporter := s.getExporter(request.EntityType)
 	if exporter == nil {
@@ -302,7 +308,7 @@ func (cw *countingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>[-customers-<digest>].csv[.gz].
+// exportObjectKey builds <key_prefix>/<entity>/<entity>-<start>-<end>[-customers-<digest>][-filter-<digest>].csv[.gz].
 // A customer-filtered run gets its own key so it never replaces the full export of the same window.
 func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	startTimeStr := request.StartTime.Format("060102150405")
@@ -311,6 +317,9 @@ func exportObjectKey(request *dto.ExportRequest, exporter Exporter) string {
 	filename := fmt.Sprintf("%s-%s-%s", filenamePrefix, startTimeStr, endTimeStr)
 	if len(request.CustomerExternalIDs) > 0 {
 		filename += "-customers-" + customerFilterDigest(request.CustomerExternalIDs)
+	}
+	if cf := request.SourceConfig.GetCustomerFilter(); cf != nil {
+		filename += "-filter-" + jsonDigest(cf)
 	}
 	if request.ManagedCopy {
 		if suffix := runKeySuffix(request.TaskID); suffix != "" {
@@ -460,13 +469,13 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 	case types.ScheduledTaskEntityTypeEvents:
 		return NewEventExporter(s.meterUsageRepo, s.priceRepo, s.integrationFactory, s.config, s.logger)
 	case types.ScheduledTaskEntityTypeInvoice:
-		return NewInvoiceExporter(s.invoiceRepo, s.integrationFactory, s.logger)
+		return NewInvoiceExporter(s.invoiceRepo, s.customerRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeCreditTopups:
 		if s.walletRepo == nil {
 			s.logger.Info(context.Background(), "wallet repository not configured for credit topup export")
 			return nil
 		}
-		return NewCreditTopupExporter(s.walletRepo, s.integrationFactory, s.logger)
+		return NewCreditTopupExporter(s.walletRepo, s.customerRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeWalletDebits:
 		if s.walletRepo == nil {
 			s.logger.Info(context.Background(), "wallet repository not configured for wallet debit export")
@@ -478,7 +487,7 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			s.logger.Info(context.Background(), "wallet repository not configured for wallet ledger export")
 			return nil
 		}
-		return NewWalletLedgerExporter(s.walletRepo, s.logger)
+		return NewWalletLedgerExporter(s.walletRepo, s.customerRepo, s.logger)
 	case types.ScheduledTaskEntityTypeCreditUsage:
 		if s.walletRepo == nil || s.walletBalanceGetter == nil || s.customerRepo == nil {
 			s.logger.Info(context.Background(), "wallet or customer repository not configured for credit usage export",
@@ -507,7 +516,13 @@ func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Ex
 			s.logger.Info(context.Background(), "report runner not configured for report export")
 			return nil
 		}
-		return NewReportExporter(s.reportRunner, entityType)
+		return NewReportExporter(s.reportRunner, entityType, s.customerRepo)
+	case types.ScheduledTaskEntityTypeCustomers:
+		if s.customerRepo == nil {
+			s.logger.Info(context.Background(), "customer repository not configured for customers export")
+			return nil
+		}
+		return NewCustomersExporter(s.customerRepo)
 	default:
 		return nil
 	}
@@ -518,7 +533,12 @@ func customerFilterDigest(customerExternalIDs []string) string {
 	ids := lo.Uniq(customerExternalIDs)
 	sort.Strings(ids)
 	// JSON, not a joined string: an ID may contain the separator.
-	encoded, _ := json.Marshal(ids)
+	return jsonDigest(ids)
+}
+
+// Struct JSON is canonical: fixed field order.
+func jsonDigest(v any) string {
+	encoded, _ := json.Marshal(v)
 	sum := sha256.Sum256(encoded)
 	return hex.EncodeToString(sum[:6])
 }

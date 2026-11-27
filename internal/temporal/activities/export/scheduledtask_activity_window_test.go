@@ -15,10 +15,12 @@ import (
 
 type stubTaskRepo struct {
 	scheduledtask.Repository
-	row *scheduledtask.ScheduledTask
+	row    *scheduledtask.ScheduledTask
+	writer bool
 }
 
-func (r *stubTaskRepo) Get(context.Context, string) (*scheduledtask.ScheduledTask, error) {
+func (r *stubTaskRepo) Get(ctx context.Context, _ string) (*scheduledtask.ScheduledTask, error) {
+	r.writer = types.ShouldForceWriter(ctx)
 	return r.row, nil
 }
 
@@ -50,6 +52,17 @@ func TestDetails_ScheduledRowUsesScheduleWindow(t *testing.T) {
 	require.Equal(t, mustTime(t, "2026-11-08T18:30:00Z"), got.StartTime)
 	require.Equal(t, mustTime(t, "2026-11-09T18:30:00Z"), got.EndTime)
 	require.True(t, got.ManagedCopy)
+}
+
+func TestDetails_ReadsTaskFromWriter(t *testing.T) {
+	repo := &stubTaskRepo{row: &scheduledtask.ScheduledTask{ID: "st1", Interval: types.ScheduledTaskIntervalManual}}
+	log, err := logger.NewLogger(&config.Configuration{Logging: config.LoggingConfig{Level: types.LogLevelInfo}})
+	require.NoError(t, err)
+	a := NewScheduledTaskActivity(repo, nil, log)
+
+	_, err = a.GetScheduledTaskDetails(context.Background(), GetScheduledTaskDetailsInput{ScheduledTaskID: "st1"})
+	require.NoError(t, err)
+	require.True(t, repo.writer)
 }
 
 func TestDetails_OldRowUnchanged(t *testing.T) {

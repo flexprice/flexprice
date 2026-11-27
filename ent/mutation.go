@@ -80576,6 +80576,7 @@ type ScheduledTaskMutation struct {
 	schedule             **types.ExportSchedule
 	source_config        **types.ExportSourceConfig
 	email_config         **types.ExportEmailConfig
+	origin               *types.ExportOrigin
 	clearedFields        map[string]struct{}
 	done                 bool
 	oldValue             func(context.Context) (*ScheduledTask, error)
@@ -81428,6 +81429,42 @@ func (m *ScheduledTaskMutation) ResetEmailConfig() {
 	delete(m.clearedFields, scheduledtask.FieldEmailConfig)
 }
 
+// SetOrigin sets the "origin" field.
+func (m *ScheduledTaskMutation) SetOrigin(to types.ExportOrigin) {
+	m.origin = &to
+}
+
+// Origin returns the value of the "origin" field in the mutation.
+func (m *ScheduledTaskMutation) Origin() (r types.ExportOrigin, exists bool) {
+	v := m.origin
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrigin returns the old "origin" field's value of the ScheduledTask entity.
+// If the ScheduledTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ScheduledTaskMutation) OldOrigin(ctx context.Context) (v types.ExportOrigin, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrigin is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrigin requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrigin: %w", err)
+	}
+	return oldValue.Origin, nil
+}
+
+// ResetOrigin resets all changes to the "origin" field.
+func (m *ScheduledTaskMutation) ResetOrigin() {
+	m.origin = nil
+}
+
 // Where appends a list predicates to the ScheduledTaskMutation builder.
 func (m *ScheduledTaskMutation) Where(ps ...predicate.ScheduledTask) {
 	m.predicates = append(m.predicates, ps...)
@@ -81462,7 +81499,7 @@ func (m *ScheduledTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ScheduledTaskMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, scheduledtask.FieldTenantID)
 	}
@@ -81514,6 +81551,9 @@ func (m *ScheduledTaskMutation) Fields() []string {
 	if m.email_config != nil {
 		fields = append(fields, scheduledtask.FieldEmailConfig)
 	}
+	if m.origin != nil {
+		fields = append(fields, scheduledtask.FieldOrigin)
+	}
 	return fields
 }
 
@@ -81556,6 +81596,8 @@ func (m *ScheduledTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.SourceConfig()
 	case scheduledtask.FieldEmailConfig:
 		return m.EmailConfig()
+	case scheduledtask.FieldOrigin:
+		return m.Origin()
 	}
 	return nil, false
 }
@@ -81599,6 +81641,8 @@ func (m *ScheduledTaskMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldSourceConfig(ctx)
 	case scheduledtask.FieldEmailConfig:
 		return m.OldEmailConfig(ctx)
+	case scheduledtask.FieldOrigin:
+		return m.OldOrigin(ctx)
 	}
 	return nil, fmt.Errorf("unknown ScheduledTask field %s", name)
 }
@@ -81726,6 +81770,13 @@ func (m *ScheduledTaskMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEmailConfig(v)
+		return nil
+	case scheduledtask.FieldOrigin:
+		v, ok := value.(types.ExportOrigin)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrigin(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ScheduledTask field %s", name)
@@ -81889,6 +81940,9 @@ func (m *ScheduledTaskMutation) ResetField(name string) error {
 		return nil
 	case scheduledtask.FieldEmailConfig:
 		m.ResetEmailConfig()
+		return nil
+	case scheduledtask.FieldOrigin:
+		m.ResetOrigin()
 		return nil
 	}
 	return fmt.Errorf("unknown ScheduledTask field %s", name)
