@@ -131,11 +131,16 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	subscriptionService := service.NewSubscriptionService(s.serviceParams)
+	invoiceService := service.NewInvoiceService(s.serviceParams)
 
 	invoices := make([]string, 0)
 	for _, period := range input.Periods {
-		draft, err := subscriptionService.CreateDraftInvoiceForSubscription(ctx, input.SubscriptionID, period)
+		draft, err := invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
+			SubscriptionID: input.SubscriptionID,
+			PeriodStart:    period.Start,
+			PeriodEnd:      period.End,
+			ReferencePoint: types.ReferencePointPeriodEnd,
+		})
 		if err != nil {
 			// Idempotent no-op: a finalized/paid invoice already exists for this period.
 			// The workflow's intent — "make sure invoices exist for these periods" — is

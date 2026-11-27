@@ -165,6 +165,20 @@ func (_c *SubscriptionPauseCreate) SetNillableProrationBehavior(v *string) *Subs
 	return _c
 }
 
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (_c *SubscriptionPauseCreate) SetProratedCreditGranted(v bool) *SubscriptionPauseCreate {
+	_c.mutation.SetProratedCreditGranted(v)
+	return _c
+}
+
+// SetNillableProratedCreditGranted sets the "prorated_credit_granted" field if the given value is not nil.
+func (_c *SubscriptionPauseCreate) SetNillableProratedCreditGranted(v *bool) *SubscriptionPauseCreate {
+	if v != nil {
+		_c.SetProratedCreditGranted(*v)
+	}
+	return _c
+}
+
 // SetPauseStart sets the "pause_start" field.
 func (_c *SubscriptionPauseCreate) SetPauseStart(v time.Time) *SubscriptionPauseCreate {
 	_c.mutation.SetPauseStart(v)
@@ -325,6 +339,10 @@ func (_c *SubscriptionPauseCreate) defaults() {
 		v := subscriptionpause.DefaultProrationBehavior
 		_c.mutation.SetProrationBehavior(v)
 	}
+	if _, ok := _c.mutation.ProratedCreditGranted(); !ok {
+		v := subscriptionpause.DefaultProratedCreditGranted
+		_c.mutation.SetProratedCreditGranted(v)
+	}
 	if _, ok := _c.mutation.PauseStart(); !ok {
 		v := subscriptionpause.DefaultPauseStart()
 		_c.mutation.SetPauseStart(v)
@@ -389,6 +407,9 @@ func (_c *SubscriptionPauseCreate) check() error {
 		if err := subscriptionpause.ProrationBehaviorValidator(v); err != nil {
 			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.proration_behavior": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ProratedCreditGranted(); !ok {
+		return &ValidationError{Name: "prorated_credit_granted", err: errors.New(`ent: missing required field "SubscriptionPause.prorated_credit_granted"`)}
 	}
 	if _, ok := _c.mutation.PauseStart(); !ok {
 		return &ValidationError{Name: "pause_start", err: errors.New(`ent: missing required field "SubscriptionPause.pause_start"`)}
@@ -480,6 +501,10 @@ func (_c *SubscriptionPauseCreate) createSpec() (*SubscriptionPause, *sqlgraph.C
 	if value, ok := _c.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
 		_node.ProrationBehavior = value
+	}
+	if value, ok := _c.mutation.ProratedCreditGranted(); ok {
+		_spec.SetField(subscriptionpause.FieldProratedCreditGranted, field.TypeBool, value)
+		_node.ProratedCreditGranted = value
 	}
 	if value, ok := _c.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)

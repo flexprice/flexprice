@@ -145,6 +145,20 @@ func (_u *SubscriptionPauseUpdate) SetNillableProrationBehavior(v *string) *Subs
 	return _u
 }
 
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (_u *SubscriptionPauseUpdate) SetProratedCreditGranted(v bool) *SubscriptionPauseUpdate {
+	_u.mutation.SetProratedCreditGranted(v)
+	return _u
+}
+
+// SetNillableProratedCreditGranted sets the "prorated_credit_granted" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdate) SetNillableProratedCreditGranted(v *bool) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetProratedCreditGranted(*v)
+	}
+	return _u
+}
+
 // SetPauseStart sets the "pause_start" field.
 func (_u *SubscriptionPauseUpdate) SetPauseStart(v time.Time) *SubscriptionPauseUpdate {
 	_u.mutation.SetPauseStart(v)
@@ -384,6 +398,9 @@ func (_u *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (_node int, err 
 	if value, ok := _u.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ProratedCreditGranted(); ok {
+		_spec.SetField(subscriptionpause.FieldProratedCreditGranted, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)
 	}
@@ -578,6 +595,20 @@ func (_u *SubscriptionPauseUpdateOne) SetProrationBehavior(v string) *Subscripti
 func (_u *SubscriptionPauseUpdateOne) SetNillableProrationBehavior(v *string) *SubscriptionPauseUpdateOne {
 	if v != nil {
 		_u.SetProrationBehavior(*v)
+	}
+	return _u
+}
+
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (_u *SubscriptionPauseUpdateOne) SetProratedCreditGranted(v bool) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetProratedCreditGranted(v)
+	return _u
+}
+
+// SetNillableProratedCreditGranted sets the "prorated_credit_granted" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdateOne) SetNillableProratedCreditGranted(v *bool) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetProratedCreditGranted(*v)
 	}
 	return _u
 }
@@ -850,6 +881,9 @@ func (_u *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Subsc
 	}
 	if value, ok := _u.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProratedCreditGranted(); ok {
+		_spec.SetField(subscriptionpause.FieldProratedCreditGranted, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)

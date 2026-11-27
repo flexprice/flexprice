@@ -3121,16 +3121,20 @@ func init() {
 	subscriptionpause.DefaultProrationBehavior = subscriptionpauseDescProrationBehavior.Default.(string)
 	// subscriptionpause.ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	subscriptionpause.ProrationBehaviorValidator = subscriptionpauseDescProrationBehavior.Validators[0].(func(string) error)
+	// subscriptionpauseDescProratedCreditGranted is the schema descriptor for prorated_credit_granted field.
+	subscriptionpauseDescProratedCreditGranted := subscriptionpauseFields[6].Descriptor()
+	// subscriptionpause.DefaultProratedCreditGranted holds the default value on creation for the prorated_credit_granted field.
+	subscriptionpause.DefaultProratedCreditGranted = subscriptionpauseDescProratedCreditGranted.Default.(bool)
 	// subscriptionpauseDescPauseStart is the schema descriptor for pause_start field.
-	subscriptionpauseDescPauseStart := subscriptionpauseFields[6].Descriptor()
+	subscriptionpauseDescPauseStart := subscriptionpauseFields[7].Descriptor()
 	// subscriptionpause.DefaultPauseStart holds the default value on creation for the pause_start field.
 	subscriptionpause.DefaultPauseStart = subscriptionpauseDescPauseStart.Default.(func() time.Time)
 	// subscriptionpauseDescOriginalPeriodStart is the schema descriptor for original_period_start field.
-	subscriptionpauseDescOriginalPeriodStart := subscriptionpauseFields[9].Descriptor()
+	subscriptionpauseDescOriginalPeriodStart := subscriptionpauseFields[10].Descriptor()
 	// subscriptionpause.DefaultOriginalPeriodStart holds the default value on creation for the original_period_start field.
 	subscriptionpause.DefaultOriginalPeriodStart = subscriptionpauseDescOriginalPeriodStart.Default.(func() time.Time)
 	// subscriptionpauseDescOriginalPeriodEnd is the schema descriptor for original_period_end field.
-	subscriptionpauseDescOriginalPeriodEnd := subscriptionpauseFields[10].Descriptor()
+	subscriptionpauseDescOriginalPeriodEnd := subscriptionpauseFields[11].Descriptor()
 	// subscriptionpause.DefaultOriginalPeriodEnd holds the default value on creation for the original_period_end field.
 	subscriptionpause.DefaultOriginalPeriodEnd = subscriptionpauseDescOriginalPeriodEnd.Default.(func() time.Time)
 	subscriptionphaseMixin := schema.SubscriptionPhase{}.Mixin()

@@ -9450,6 +9450,10 @@ definitions:
         type: string
       pause_status:
         $ref: '#/definitions/types.PauseStatus'
+      prorated_credit_granted:
+        description: ProratedCreditGranted is set once this pause's paused share of
+          advance fixed charges is credited.
+        type: boolean
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'
@@ -17391,6 +17395,10 @@ definitions:
         type: string
       pause_status:
         $ref: '#/definitions/types.PauseStatus'
+      prorated_credit_granted:
+        description: ProratedCreditGranted is set once this pause's paused share of
+          advance fixed charges is credited.
+        type: boolean
       proration_behavior:
         allOf:
         - $ref: '#/definitions/types.ProrationBehavior'

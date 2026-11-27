@@ -61,6 +61,9 @@ func (SubscriptionPause) Fields() []ent.Field {
 			}).
 			Default(string(types.ProrationBehaviorNone)).
 			NotEmpty(),
+		// Set once this pause's paused share of advance fixed charges is credited to the wallet.
+		field.Bool("prorated_credit_granted").
+			Default(false),
 		field.Time("pause_start").
 			Default(time.Now),
 		field.Time("pause_end").

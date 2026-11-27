@@ -90948,33 +90948,34 @@ func (m *SubscriptionLineItemMutation) ResetEdge(name string) error {
 // SubscriptionPauseMutation represents an operation that mutates the SubscriptionPause nodes in the graph.
 type SubscriptionPauseMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *string
-	tenant_id             *string
-	status                *string
-	created_at            *time.Time
-	updated_at            *time.Time
-	created_by            *string
-	updated_by            *string
-	environment_id        *string
-	pause_status          *string
-	pause_mode            *string
-	resume_mode           *string
-	proration_behavior    *string
-	pause_start           *time.Time
-	pause_end             *time.Time
-	resumed_at            *time.Time
-	original_period_start *time.Time
-	original_period_end   *time.Time
-	reason                *string
-	metadata              *map[string]string
-	clearedFields         map[string]struct{}
-	subscription          *string
-	clearedsubscription   bool
-	done                  bool
-	oldValue              func(context.Context) (*SubscriptionPause, error)
-	predicates            []predicate.SubscriptionPause
+	op                      Op
+	typ                     string
+	id                      *string
+	tenant_id               *string
+	status                  *string
+	created_at              *time.Time
+	updated_at              *time.Time
+	created_by              *string
+	updated_by              *string
+	environment_id          *string
+	pause_status            *string
+	pause_mode              *string
+	resume_mode             *string
+	proration_behavior      *string
+	prorated_credit_granted *bool
+	pause_start             *time.Time
+	pause_end               *time.Time
+	resumed_at              *time.Time
+	original_period_start   *time.Time
+	original_period_end     *time.Time
+	reason                  *string
+	metadata                *map[string]string
+	clearedFields           map[string]struct{}
+	subscription            *string
+	clearedsubscription     bool
+	done                    bool
+	oldValue                func(context.Context) (*SubscriptionPause, error)
+	predicates              []predicate.SubscriptionPause
 }
 
 var _ ent.Mutation = (*SubscriptionPauseMutation)(nil)
@@ -91565,6 +91566,42 @@ func (m *SubscriptionPauseMutation) ResetProrationBehavior() {
 	m.proration_behavior = nil
 }
 
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (m *SubscriptionPauseMutation) SetProratedCreditGranted(b bool) {
+	m.prorated_credit_granted = &b
+}
+
+// ProratedCreditGranted returns the value of the "prorated_credit_granted" field in the mutation.
+func (m *SubscriptionPauseMutation) ProratedCreditGranted() (r bool, exists bool) {
+	v := m.prorated_credit_granted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProratedCreditGranted returns the old "prorated_credit_granted" field's value of the SubscriptionPause entity.
+// If the SubscriptionPause object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionPauseMutation) OldProratedCreditGranted(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProratedCreditGranted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProratedCreditGranted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProratedCreditGranted: %w", err)
+	}
+	return oldValue.ProratedCreditGranted, nil
+}
+
+// ResetProratedCreditGranted resets all changes to the "prorated_credit_granted" field.
+func (m *SubscriptionPauseMutation) ResetProratedCreditGranted() {
+	m.prorated_credit_granted = nil
+}
+
 // SetPauseStart sets the "pause_start" field.
 func (m *SubscriptionPauseMutation) SetPauseStart(t time.Time) {
 	m.pause_start = &t
@@ -91930,7 +91967,7 @@ func (m *SubscriptionPauseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionPauseMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionpause.FieldTenantID)
 	}
@@ -91966,6 +92003,9 @@ func (m *SubscriptionPauseMutation) Fields() []string {
 	}
 	if m.proration_behavior != nil {
 		fields = append(fields, subscriptionpause.FieldProrationBehavior)
+	}
+	if m.prorated_credit_granted != nil {
+		fields = append(fields, subscriptionpause.FieldProratedCreditGranted)
 	}
 	if m.pause_start != nil {
 		fields = append(fields, subscriptionpause.FieldPauseStart)
@@ -92020,6 +92060,8 @@ func (m *SubscriptionPauseMutation) Field(name string) (ent.Value, bool) {
 		return m.ResumeMode()
 	case subscriptionpause.FieldProrationBehavior:
 		return m.ProrationBehavior()
+	case subscriptionpause.FieldProratedCreditGranted:
+		return m.ProratedCreditGranted()
 	case subscriptionpause.FieldPauseStart:
 		return m.PauseStart()
 	case subscriptionpause.FieldPauseEnd:
@@ -92067,6 +92109,8 @@ func (m *SubscriptionPauseMutation) OldField(ctx context.Context, name string) (
 		return m.OldResumeMode(ctx)
 	case subscriptionpause.FieldProrationBehavior:
 		return m.OldProrationBehavior(ctx)
+	case subscriptionpause.FieldProratedCreditGranted:
+		return m.OldProratedCreditGranted(ctx)
 	case subscriptionpause.FieldPauseStart:
 		return m.OldPauseStart(ctx)
 	case subscriptionpause.FieldPauseEnd:
@@ -92173,6 +92217,13 @@ func (m *SubscriptionPauseMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProrationBehavior(v)
+		return nil
+	case subscriptionpause.FieldProratedCreditGranted:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProratedCreditGranted(v)
 		return nil
 	case subscriptionpause.FieldPauseStart:
 		v, ok := value.(time.Time)
@@ -92358,6 +92409,9 @@ func (m *SubscriptionPauseMutation) ResetField(name string) error {
 		return nil
 	case subscriptionpause.FieldProrationBehavior:
 		m.ResetProrationBehavior()
+		return nil
+	case subscriptionpause.FieldProratedCreditGranted:
+		m.ResetProratedCreditGranted()
 		return nil
 	case subscriptionpause.FieldPauseStart:
 		m.ResetPauseStart()

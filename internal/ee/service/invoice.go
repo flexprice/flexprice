@@ -57,9 +57,6 @@ type InvoiceService interface {
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
 	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	CreateDraftInvoiceForSubscription(ctx context.Context, req dto.CreateSubscriptionDraftInvoiceRequest) (*dto.InvoiceResponse, error)
-	// CreatePausedPeriodInvoice records a paused stretch of the subscription as a $0 SKIPPED invoice
-	// with no line items. Idempotent per subscription and period.
-	CreatePausedPeriodInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*invoice.Invoice, error)
 	ComputeInvoice(ctx context.Context, invoiceID string, req *dto.InvoiceComputeRequest) (*invoice.Invoice, bool, error)
 	// GetOrComputeCurrentPeriodDraft gets or creates the subscription's cycle draft for its current
 	// period and computes it. skipped is true when the period is already invoiced or has no charges.
@@ -522,30 +519,6 @@ func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, 
 	}
 	draftReq.SubscriptionCustomerID = &sub.CustomerID
 	return s.CreateEmptyDraftInvoice(ctx, draftReq)
-}
-
-func (s *invoiceService) CreatePausedPeriodInvoice(ctx context.Context, sub *subscription.Subscription, periodStart, periodEnd time.Time) (*invoice.Invoice, error) {
-	billingPeriod := string(sub.BillingPeriod)
-	draft, err := s.CreateEmptyDraftInvoice(ctx, dto.CreateDraftInvoiceRequest{
-		CustomerID:             sub.GetInvoicingCustomerID(),
-		SubscriptionID:         lo.ToPtr(sub.ID),
-		SubscriptionCustomerID: lo.ToPtr(sub.CustomerID),
-		InvoiceType:            types.InvoiceTypeSubscription,
-		Currency:               sub.Currency,
-		BillingPeriod:          &billingPeriod,
-		PeriodStart:            &periodStart,
-		PeriodEnd:              &periodEnd,
-		BillingReason:          types.InvoiceBillingReasonSubscriptionPaused,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	inv, _, err := s.ComputeInvoice(ctx, draft.ID, nil)
-	if err != nil {
-		return nil, err
-	}
-	return inv, nil
 }
 
 func (s *invoiceService) GetOrComputeCurrentPeriodDraft(ctx context.Context, sub *subscription.Subscription) (*invoice.Invoice, bool, error) {

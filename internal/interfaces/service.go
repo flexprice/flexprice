@@ -255,9 +255,6 @@ type SubscriptionService interface {
 	// Calculate Billing Periods for the subscription
 	CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]dto.Period, error)
 
-	// Create Draft Invoice for the subscription
-	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error)
-
 	// Mark cancellation schedule as executed (used by cron and Temporal workflows)
 	MarkCancellationScheduleAsExecuted(ctx context.Context, subscriptionID string) error
 

@@ -2267,9 +2267,16 @@ func (s *subscriptionService) CancelSubscription(
 	if err != nil {
 		return nil, err
 	}
-	// A paused subscription ends at its auto-cancel at the latest, even before the billing run cancels it.
+	// Past its grace period a paused subscription is already being cancelled at its auto-cancel date.
 	if isPaused && subscription.CancelAt != nil && effectiveDate.After(*subscription.CancelAt) {
-		effectiveDate = *subscription.CancelAt
+		return nil, ierr.NewError("the paused subscription's grace period has ended").
+			WithHint("The subscription is cancelled at the end of its pause grace period, so it cannot be cancelled after that").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"auto_cancel_at":  subscription.CancelAt.UTC().Format(time.RFC3339),
+				"cancel_at":       effectiveDate.UTC().Format(time.RFC3339),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Built before the cancellation mutates the subscription. The immediate-cancellation key is
@@ -4556,7 +4563,7 @@ func (s *subscriptionService) PauseSubscription(
 			cancelAt = pauseAt.AddDate(0, 0, *req.PauseGracePeriodDays)
 			if cancelAt.After(lockedSub.CurrentPeriodEnd) {
 				return ierr.NewError("pause_grace_period_days goes past the current period end").
-					WithHint("A pause cannot run past the current period end. Send fewer days or omit the field to use the default").
+					WithHint("The period's one invoice is billed at its end, so a paused subscription must be resumed or cancelled by then. Send fewer days or omit the field to cancel at the period end").
 					WithReportableDetails(map[string]interface{}{
 						"subscription_id":         lockedSub.ID,
 						"pause_grace_period_days": *req.PauseGracePeriodDays,
@@ -7843,19 +7850,6 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 	}
 
 	return periods, nil
-}
-
-// CreateDraftInvoiceForSubscription creates a zero-dollar draft for the period (no invoice number).
-// Always returns a draft; ComputeInvoice later assigns number or marks SKIPPED. Delegates to invoice service.
-func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
-	invoiceService := NewInvoiceService(s.ServiceParams)
-
-	return invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: subscriptionID,
-		PeriodStart:    period.Start,
-		PeriodEnd:      period.End,
-		ReferencePoint: types.ReferencePointPeriodEnd,
-	})
 }
 
 // subscriptionOriginalState holds the original subscription state before cancellation

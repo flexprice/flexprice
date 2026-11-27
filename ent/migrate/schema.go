@@ -3148,6 +3148,7 @@ var (
 		{Name: "pause_mode", Type: field.TypeString, Default: "scheduled", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "resume_mode", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "prorated_credit_granted", Type: field.TypeBool, Default: false},
 		{Name: "pause_start", Type: field.TypeTime},
 		{Name: "pause_end", Type: field.TypeTime, Nullable: true},
 		{Name: "resumed_at", Type: field.TypeTime, Nullable: true},
@@ -3165,7 +3166,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscription_pauses_subscriptions_pauses",
-				Columns:    []*schema.Column{SubscriptionPausesColumns[19]},
+				Columns:    []*schema.Column{SubscriptionPausesColumns[20]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -3174,17 +3175,17 @@ var (
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[19], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[20], SubscriptionPausesColumns[2]},
 			},
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_pause_start_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[12], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[13], SubscriptionPausesColumns[2]},
 			},
 			{
 				Name:    "subscriptionpause_tenant_id_environment_id_pause_end_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[13], SubscriptionPausesColumns[2]},
+				Columns: []*schema.Column{SubscriptionPausesColumns[1], SubscriptionPausesColumns[7], SubscriptionPausesColumns[14], SubscriptionPausesColumns[2]},
 			},
 		},
 	}

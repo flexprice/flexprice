@@ -125,6 +125,11 @@ func ProrationBehavior(v string) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldEQ(FieldProrationBehavior, v))
 }
 
+// ProratedCreditGranted applies equality check predicate on the "prorated_credit_granted" field. It's identical to ProratedCreditGrantedEQ.
+func ProratedCreditGranted(v bool) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldEQ(FieldProratedCreditGranted, v))
+}
+
 // PauseStart applies equality check predicate on the "pause_start" field. It's identical to PauseStartEQ.
 func PauseStart(v time.Time) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldEQ(FieldPauseStart, v))
@@ -923,6 +928,16 @@ func ProrationBehaviorEqualFold(v string) predicate.SubscriptionPause {
 // ProrationBehaviorContainsFold applies the ContainsFold predicate on the "proration_behavior" field.
 func ProrationBehaviorContainsFold(v string) predicate.SubscriptionPause {
 	return predicate.SubscriptionPause(sql.FieldContainsFold(FieldProrationBehavior, v))
+}
+
+// ProratedCreditGrantedEQ applies the EQ predicate on the "prorated_credit_granted" field.
+func ProratedCreditGrantedEQ(v bool) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldEQ(FieldProratedCreditGranted, v))
+}
+
+// ProratedCreditGrantedNEQ applies the NEQ predicate on the "prorated_credit_granted" field.
+func ProratedCreditGrantedNEQ(v bool) predicate.SubscriptionPause {
+	return predicate.SubscriptionPause(sql.FieldNEQ(FieldProratedCreditGranted, v))
 }
 
 // PauseStartEQ applies the EQ predicate on the "pause_start" field.

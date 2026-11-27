@@ -1152,6 +1152,7 @@ func (r *subscriptionRepository) UpdatePause(ctx context.Context, pause *domainS
 		SetResumeMode(string(pause.ResumeMode)).
 		SetNillablePauseEnd(pause.PauseEnd).
 		SetNillableResumedAt(pause.ResumedAt).
+		SetProratedCreditGranted(pause.ProratedCreditGranted).
 		SetReason(pause.Reason).
 		SetMetadata(pause.Metadata).
 		SetUpdatedBy(pause.UpdatedBy).

@@ -22,6 +22,9 @@ type SubscriptionPause struct {
 	// ProrationBehavior decides whether this pause's days are taken off the fixed charges.
 	ProrationBehavior types.ProrationBehavior `db:"proration_behavior" json:"proration_behavior"`
 
+	// ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited.
+	ProratedCreditGranted bool `db:"prorated_credit_granted" json:"prorated_credit_granted"`
+
 	// PauseStart is when the pause actually started
 	PauseStart time.Time `db:"pause_start" json:"pause_start"`
 
@@ -55,20 +58,21 @@ func SubscriptionPauseFromEnt(p *ent.SubscriptionPause) *SubscriptionPause {
 	}
 
 	return &SubscriptionPause{
-		ID:                  p.ID,
-		SubscriptionID:      p.SubscriptionID,
-		PauseStatus:         types.PauseStatus(p.PauseStatus),
-		PauseMode:           types.PauseMode(p.PauseMode),
-		ResumeMode:          types.ResumeMode(p.ResumeMode),
-		ProrationBehavior:   types.ProrationBehavior(p.ProrationBehavior),
-		PauseStart:          p.PauseStart,
-		PauseEnd:            p.PauseEnd,
-		ResumedAt:           p.ResumedAt,
-		OriginalPeriodStart: p.OriginalPeriodStart,
-		OriginalPeriodEnd:   p.OriginalPeriodEnd,
-		Reason:              p.Reason,
-		Metadata:            p.Metadata,
-		EnvironmentID:       p.EnvironmentID,
+		ID:                    p.ID,
+		SubscriptionID:        p.SubscriptionID,
+		PauseStatus:           types.PauseStatus(p.PauseStatus),
+		PauseMode:             types.PauseMode(p.PauseMode),
+		ResumeMode:            types.ResumeMode(p.ResumeMode),
+		ProrationBehavior:     types.ProrationBehavior(p.ProrationBehavior),
+		ProratedCreditGranted: p.ProratedCreditGranted,
+		PauseStart:            p.PauseStart,
+		PauseEnd:              p.PauseEnd,
+		ResumedAt:             p.ResumedAt,
+		OriginalPeriodStart:   p.OriginalPeriodStart,
+		OriginalPeriodEnd:     p.OriginalPeriodEnd,
+		Reason:                p.Reason,
+		Metadata:              p.Metadata,
+		EnvironmentID:         p.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  p.TenantID,
 			Status:    types.Status(p.Status),

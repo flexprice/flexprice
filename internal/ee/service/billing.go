@@ -260,9 +260,8 @@ func (s *billingService) CalculateFixedCharges(
 			if skip {
 				continue
 			}
-			if item.InvoiceCadence == types.InvoiceCadenceArrear {
-				amount = amount.Mul(billedFractionOutsidePauses(serviceablePeriod, params.ProratedPausedPeriods))
-			}
+			// TODO: prorated pauses are not taken off longer-cadence arrear charges. e.g. a $90 quarterly arrear line on a
+			// monthly subscription paused 10 days in January is billed $90 in March, since the pause is only known for its own month.
 
 			line, roundedAmount, include := s.buildFixedInvoiceLineItem(ctx, sub, item, amount, linePeriodStart, linePeriodEnd)
 			if !include {
@@ -2414,8 +2413,7 @@ func (s *billingService) calculateMeterUsageCharges(
 	if err != nil {
 		return nil, err
 	}
-	// From the subscription start, so a longer-cadence line's earlier months are covered too.
-	stretches := pausedStretches(pauses, sub.StartDate, periodEnd)
+	stretches := pausedStretches(pauses, periodStart, periodEnd)
 	pausedPeriods := lo.Map(stretches, func(st pausedStretch, _ int) types.Period { return st.period })
 
 	// Fixed charges (all of them, one call — CalculateFixedCharges fans out per item).

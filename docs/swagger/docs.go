@@ -31537,6 +31537,10 @@ const docTemplate = `{
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
                 },
+                "prorated_credit_granted": {
+                    "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited.",
+                    "type": "boolean"
+                },
                 "proration_behavior": {
                     "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",
                     "allOf": [
@@ -42190,6 +42194,10 @@ const docTemplate = `{
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
+                },
+                "prorated_credit_granted": {
+                    "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited.",
+                    "type": "boolean"
                 },
                 "proration_behavior": {
                     "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",

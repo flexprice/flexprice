@@ -32535,6 +32535,10 @@
           "pause_status": {
             "$ref": "#/components/schemas/types.PauseStatus"
           },
+          "prorated_credit_granted": {
+            "type": "boolean",
+            "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited."
+          },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
@@ -43184,6 +43188,10 @@
           },
           "pause_status": {
             "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "prorated_credit_granted": {
+            "type": "boolean",
+            "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited."
           },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"

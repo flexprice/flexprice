@@ -5,12 +5,10 @@ import (
 	"sort"
 	"time"
 
-	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -20,12 +18,14 @@ import (
 // pausedStretch is a part of a window the subscription spent paused.
 type pausedStretch struct {
 	period types.Period
+	pause  *subscription.SubscriptionPause
 	// prorated is set when the pause was sent with create_prorations.
 	prorated bool
 }
 
 // pausedStretches clips every pause overlapping [from, to) to that window, oldest first. A pause
 // never runs past the period it started in, and one ended by a cancel runs to that period's end.
+// e.g. window [Feb 1, Mar 1), paused Feb 10 and resumed Feb 15: [Feb 10, Feb 15). Not resumed: [Feb 10, Mar 1).
 func pausedStretches(pauses []*subscription.SubscriptionPause, from, to time.Time) []pausedStretch {
 	stretches := make([]pausedStretch, 0, len(pauses))
 	for _, p := range pauses {
@@ -43,6 +43,7 @@ func pausedStretches(pauses []*subscription.SubscriptionPause, from, to time.Tim
 		}
 		stretches = append(stretches, pausedStretch{
 			period:   types.Period{Start: start, End: end},
+			pause:    p,
 			prorated: p.ProrationBehavior == types.ProrationBehaviorCreateProrations,
 		})
 	}
@@ -59,6 +60,7 @@ func proratedPausedPeriods(stretches []pausedStretch) []types.Period {
 
 // activeTimeRanges is [from, to) minus the paused periods, which are sorted by start. A window paused
 // throughout returns one empty range, so a usage query over it reads nothing instead of the whole window.
+// e.g. [Feb 1, Mar 1) paused [Feb 10, Feb 15): [Feb 1, Feb 10) and [Feb 15, Mar 1).
 func activeTimeRanges(from, to time.Time, paused []types.Period) []events.TimeRange {
 	ranges := make([]events.TimeRange, 0, len(paused)+1)
 	cursor := from
@@ -81,6 +83,7 @@ func activeTimeRanges(from, to time.Time, paused []types.Period) []events.TimeRa
 }
 
 // billedFractionOutsidePauses is the share of period not covered by the paused periods.
+// e.g. [Feb 1, Mar 1) paused [Feb 8, Feb 15): 21/28 = 0.75.
 func billedFractionOutsidePauses(period types.Period, paused []types.Period) decimal.Decimal {
 	total := period.End.Sub(period.Start)
 	if total <= 0 || len(paused) == 0 {
@@ -103,8 +106,8 @@ func pausedDuration(period types.Period, paused []types.Period) time.Duration {
 	return covered
 }
 
-// creditPausedAdvanceCharges credits the customer's wallet with the prorated paused part of the
-// advance fixed charges billed for inv's period, once that period has closed.
+// creditPausedAdvanceCharges credits the customer's wallet with the paused share of the advance fixed
+// charges billed for inv's period, once that period has closed. Each pause is credited once.
 func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *invoice.Invoice) error {
 	reason := types.InvoiceBillingReason(inv.BillingReason)
 	if inv.InvoiceType != types.InvoiceTypeSubscription || inv.SubscriptionID == nil ||
@@ -116,117 +119,79 @@ func (s *invoiceService) creditPausedAdvanceCharges(ctx context.Context, inv *in
 	if inv.PeriodEnd.After(clock.Now()) {
 		return nil
 	}
+	billedPeriod := types.Period{Start: *inv.PeriodStart, End: *inv.PeriodEnd}
 
 	pauses, err := s.SubRepo.ListPauses(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return err
 	}
-	// The advance charges were billed for the pause's whole period, so the time after a cancel counts too.
-	var periodPauses []*subscription.SubscriptionPause
-	for _, p := range pauses {
-		if p.PauseStart.Before(*inv.PeriodEnd) && p.OriginalPeriodEnd.After(*inv.PeriodStart) {
-			periodPauses = append(periodPauses, p)
-		}
-	}
-	if len(periodPauses) == 0 {
-		return nil
-	}
-	billedPeriod := types.Period{Start: periodPauses[0].OriginalPeriodStart, End: periodPauses[0].OriginalPeriodEnd}
-	prorated := proratedPausedPeriods(pausedStretches(periodPauses, *inv.PeriodStart, billedPeriod.End))
-	if len(prorated) == 0 {
-		return nil
-	}
-
-	// One credit per subscription per billing period, however many pauses or invoices the period has.
-	creditKey := idempotency.NewGenerator().GenerateKey(idempotency.ScopePauseProratedCredit, map[string]interface{}{
-		"subscription_id": *inv.SubscriptionID,
-		"period_start":    billedPeriod.Start.UTC().Format(time.RFC3339Nano),
+	// A credited pause is left out, so a voided and recomputed invoice does not credit it again.
+	uncredited := lo.Reject(pauses, func(p *subscription.SubscriptionPause, _ int) bool { return p.ProratedCreditGranted })
+	stretches := lo.Filter(pausedStretches(uncredited, billedPeriod.Start, billedPeriod.End), func(st pausedStretch, _ int) bool {
+		return st.prorated
 	})
-	existing, err := s.WalletRepo.GetTransactionByIdempotencyKey(ctx, creditKey)
-	if err != nil && !ierr.IsNotFound(err) {
-		return err
-	}
-	if existing != nil {
+	if len(stretches) == 0 {
 		return nil
 	}
+	creditedPauses := lo.Map(stretches, func(st pausedStretch, _ int) *subscription.SubscriptionPause { return st.pause })
 
-	sub, err := s.SubRepo.Get(ctx, *inv.SubscriptionID)
+	// The period's advance charges sit on earlier invoices: Feb's fee on Jan's invoice, a mid-Feb upgrade on its proration invoice.
+	// TODO: longer-cadence advance charges are not credited past their first month. e.g. a quarterly fee for Jan to Mar sits on
+	// December's invoice, which does not touch February, so a February pause gets no credit.
+	billedInvoices, err := s.InvoiceRepo.List(ctx, &types.InvoiceFilter{
+		QueryFilter:    types.NewNoLimitQueryFilter(),
+		SubscriptionID: *inv.SubscriptionID,
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  []types.InvoiceStatus{types.InvoiceStatusFinalized},
+		PeriodStartLTE: &billedPeriod.End,
+		PeriodEndGTE:   &billedPeriod.Start,
+	})
 	if err != nil {
 		return err
 	}
-	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-	lineItemFilter.SubscriptionIDs = []string{sub.ID}
-	lineItemFilter.ActiveFilter = true
-	lineItemFilter.CurrentPeriodStart = &billedPeriod.Start
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
-	if err != nil {
-		return err
-	}
-	advanceItems := lo.Filter(lineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
-		return item.PriceType == types.PRICE_TYPE_FIXED && item.InvoiceCadence == types.InvoiceCadenceAdvance
-	})
-	if len(advanceItems) == 0 {
-		return nil
-	}
-	longerCadenceItems, periodCadenceItems := lo.FilterReject(advanceItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
-		return types.IsLongerCadence(item.BillingPeriod, item.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount)
-	})
-
-	billingService := NewBillingService(s.ServiceParams)
-	var advanceLines []dto.CreateInvoiceLineItemRequest
-	if len(periodCadenceItems) > 0 {
-		periodSub := *sub
-		periodSub.LineItems = periodCadenceItems
-		advance, err := billingService.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-			Subscription: &periodSub,
-			PeriodStart:  billedPeriod.Start,
-			PeriodEnd:    billedPeriod.End,
-		})
-		if err != nil {
-			return err
-		}
-		advanceLines = append(advanceLines, advance.LineItems...)
-	}
-	// A longer-cadence charge started before this period, so it is priced over its service period holding it.
-	for _, item := range longerCadenceItems {
-		grid, err := types.NewBillingPeriodGrid(longerItemAnchor(sub, item), item.BillingPeriod, max(item.BillingPeriodCount, 1), sub.Timezone)
-		if err != nil {
-			return err
-		}
-		servicePeriod := types.FullBillingPeriod(billedPeriod.Start, grid)
-		itemSub := *sub
-		itemSub.LineItems = []*subscription.SubscriptionLineItem{item}
-		advance, err := billingService.CalculateFixedCharges(ctx, &dto.CalculateFixedChargesParams{
-			Subscription: &itemSub,
-			PeriodStart:  servicePeriod.Start,
-			PeriodEnd:    servicePeriod.End,
-		})
-		if err != nil {
-			return err
-		}
-		advanceLines = append(advanceLines, advance.LineItems...)
-	}
-
-	// Each charge refunds the paused share of its own service period that falls in this billing period.
 	credit := decimal.Zero
-	for _, line := range advanceLines {
-		linePeriod := types.Period{Start: lo.FromPtr(line.PeriodStart), End: lo.FromPtr(line.PeriodEnd)}
-		credit = credit.Add(line.Amount.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, prorated))))
-	}
-	// A converted invoice is issued in the billing currency, so the credit takes its frozen rate.
-	if inv.FxConversion != nil && !inv.FxConversion.Rate.IsZero() {
-		credit = credit.Mul(inv.FxConversion.Rate)
+	for _, billed := range billedInvoices {
+		// inv's own fixed lines for this period are arrear, already billed for the active time only.
+		if billed.ID == inv.ID {
+			continue
+		}
+		for _, line := range billed.LineItems {
+			if lo.FromPtr(line.PriceType) != string(types.PRICE_TYPE_FIXED) || line.PeriodStart == nil || line.PeriodEnd == nil {
+				continue
+			}
+			linePeriod := types.Period{Start: *line.PeriodStart, End: *line.PeriodEnd}
+			if !linePeriod.Start.Before(billedPeriod.End) || !linePeriod.End.After(billedPeriod.Start) {
+				continue
+			}
+			// Paused time runs to the line's end, so a pause ended by a cancel also credits the days after the cancel.
+			// e.g. $28 charged for [Feb 1, Mar 1), paused Feb 10 and cancelled Feb 20: 28 × 19/28 = $19 credit.
+			paused := proratedPausedPeriods(pausedStretches(creditedPauses, billedPeriod.Start, linePeriod.End))
+			charged := line.Amount.Sub(line.LineItemDiscount).Sub(line.InvoiceLevelDiscount)
+			credit = credit.Add(charged.Mul(decimal.NewFromInt(1).Sub(billedFractionOutsidePauses(linePeriod, paused))))
+		}
 	}
 	creditAmount := types.RoundToCurrencyPrecision(credit, inv.Currency)
 	if !creditAmount.IsPositive() {
 		return nil
 	}
+
+	creditKey := idempotency.NewGenerator().GenerateKey(idempotency.ScopePauseProratedCredit, map[string]interface{}{
+		"subscription_id": *inv.SubscriptionID,
+		"pause_ids":       lo.Map(creditedPauses, func(p *subscription.SubscriptionPause, _ int) string { return p.ID }),
+	})
 	if _, err := NewWalletService(s.ServiceParams).TopUpWalletForProratedCharge(ctx, inv.CustomerID, creditAmount, inv.Currency, creditKey); err != nil {
 		return err
 	}
+	for _, p := range creditedPauses {
+		p.ProratedCreditGranted = true
+		p.UpdatedBy = types.GetUserID(ctx)
+		if err := s.SubRepo.UpdatePause(ctx, p); err != nil {
+			return err
+		}
+	}
 	s.Logger.Info(ctx, "credited paused part of advance fixed charges",
 		"invoice_id", inv.ID,
-		"subscription_id", sub.ID,
+		"subscription_id", *inv.SubscriptionID,
 		"credit_amount", creditAmount)
 	return nil
 }

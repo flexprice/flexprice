@@ -107,9 +107,11 @@ stretch. This aggregation does not exist today and is the main piece of work. Th
 same query.
 - **Arrear fixed charges** have not been paid yet, so they are billed only for the period minus the prorated
 time: amount × (period − prorated time) ÷ period. Nothing is refunded.
-- **Advance fixed charges** were paid when the period started. Each charge's prorated part, amount ×
+- **Advance fixed charges** were paid when the period started. The fixed lines billed for the period are
+read from the subscription's earlier finalized invoices, and each line's prorated part, amount charged ×
 prorated time ÷ its own period, is credited to the customer's wallet when the period's invoice is
-finalized. The credit is keyed on the subscription and the billing period, so the period is credited once.
+finalized. The credited pauses are marked with `prorated_credit_granted`, so a voided and rebilled
+invoice credits nothing more.
 
 A pause sent with `none` therefore counts as billed time for fixed charges, which is what `none` means
 today.

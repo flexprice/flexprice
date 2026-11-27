@@ -307,10 +307,12 @@ const (
 
 	// InvoiceBillingReasonSubscriptionPaused records a period, or part of one, during which the
 	// subscription was paused. It has no line items, is never computed and is always SKIPPED.
+	// No longer created; kept for invoices raised by immediate pauses before single-invoice billing.
 	InvoiceBillingReasonSubscriptionPaused InvoiceBillingReason = "SUBSCRIPTION_PAUSED"
 
 	// InvoiceBillingReasonSubscriptionResume is the first invoice after a paused subscription resumes.
 	// Compute: advance charges from the resume time to the next billing date (ReferencePointPeriodStart).
+	// No longer created; kept for invoices raised by resumes before single-invoice billing.
 	InvoiceBillingReasonSubscriptionResume InvoiceBillingReason = "SUBSCRIPTION_RESUME"
 
 	// InvoiceBillingReasonBillingTerms is an invoice that carries only billing-term instalments (separate delivery).

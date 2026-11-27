@@ -30825,6 +30825,10 @@
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
                 },
+                "prorated_credit_granted": {
+                    "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited.",
+                    "type": "boolean"
+                },
                 "proration_behavior": {
                     "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",
                     "$ref": "#/definitions/types.ProrationBehavior"
@@ -41054,6 +41058,10 @@
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
+                },
+                "prorated_credit_granted": {
+                    "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited.",
+                    "type": "boolean"
                 },
                 "proration_behavior": {
                     "description": "ProrationBehavior decides whether this pause's days are taken off the fixed charges.",
