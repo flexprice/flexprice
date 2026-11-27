@@ -146,6 +146,83 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription_WithoutCheckoutIsUncha
 	s.Empty(sessions)
 }
 
+// With auto_finalize off the opening invoice stays a draft until the user finalizes it. A checkout with
+// nothing due activates the subscription either way and holds only its invoice.
+func (s *SubscriptionServiceSuite) TestCreateSubscription_AutoFinalize() {
+	tests := []struct {
+		name                     string
+		autoFinalize             bool
+		trialDays                int
+		fullDiscountCheckout     bool
+		collectionMethod         types.CollectionMethod
+		paymentBehavior          types.PaymentBehavior
+		wantBillingReason        types.InvoiceBillingReason
+		wantStatus               types.InvoiceStatus
+		wantPaymentStatus        types.PaymentStatus
+		wantPaymentStatusOnFinal types.PaymentStatus
+	}{
+		{name: "opening invoice, on", autoFinalize: true, collectionMethod: types.CollectionMethodSendInvoice, paymentBehavior: types.PaymentBehaviorDefaultActive, wantBillingReason: types.InvoiceBillingReasonSubscriptionCreate, wantStatus: types.InvoiceStatusFinalized, wantPaymentStatus: types.PaymentStatusPending},
+		{name: "opening invoice, off", autoFinalize: false, collectionMethod: types.CollectionMethodSendInvoice, paymentBehavior: types.PaymentBehaviorDefaultActive, wantBillingReason: types.InvoiceBillingReasonSubscriptionCreate, wantStatus: types.InvoiceStatusDraft, wantPaymentStatus: types.PaymentStatusPending, wantPaymentStatusOnFinal: types.PaymentStatusPending},
+		{name: "trial start, on", autoFinalize: true, trialDays: 14, collectionMethod: types.CollectionMethodChargeAutomatically, paymentBehavior: types.PaymentBehaviorAllowIncomplete, wantBillingReason: types.InvoiceBillingReasonSubscriptionTrialStart, wantStatus: types.InvoiceStatusFinalized, wantPaymentStatus: types.PaymentStatusSucceeded},
+		{name: "trial start, off", autoFinalize: false, trialDays: 14, collectionMethod: types.CollectionMethodChargeAutomatically, paymentBehavior: types.PaymentBehaviorAllowIncomplete, wantBillingReason: types.InvoiceBillingReasonSubscriptionTrialStart, wantStatus: types.InvoiceStatusDraft, wantPaymentStatus: types.PaymentStatusPending, wantPaymentStatusOnFinal: types.PaymentStatusPending},
+		{name: "checkout with nothing due, on", autoFinalize: true, fullDiscountCheckout: true, wantBillingReason: types.InvoiceBillingReasonSubscriptionCreate, wantStatus: types.InvoiceStatusFinalized, wantPaymentStatus: types.PaymentStatusSucceeded},
+		{name: "checkout with nothing due, off", autoFinalize: false, fullDiscountCheckout: true, wantBillingReason: types.InvoiceBillingReasonSubscriptionCreate, wantStatus: types.InvoiceStatusDraft, wantPaymentStatus: types.PaymentStatusPending, wantPaymentStatusOnFinal: types.PaymentStatusSucceeded},
+	}
+
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			planID := fmt.Sprintf("plan_auto_finalize_%d", i)
+			s.seedFixedPricePlan(planID, decimal.NewFromInt(50), tt.trialDays)
+
+			settingsSvc := NewSettingsService(s.service.(*subscriptionService).ServiceParams).(*settingsService)
+			cfg, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+			s.Require().NoError(err)
+			cfg.AutoFinalize = tt.autoFinalize
+			s.Require().NoError(UpdateSetting(settingsSvc, ctx, types.SettingKeyInvoiceConfig, cfg))
+
+			req := s.checkoutCreateRequest(planID)
+			if tt.fullDiscountCheckout {
+				code := fmt.Sprintf("FREE_%d", i)
+				seedPercentCoupon(ctx, s.Require(), s.GetStores(), code, 100, nil)
+				req.SubscriptionCoupons = []dto.SubscriptionCouponInput{{CouponCode: code}}
+			} else {
+				req.Checkout = nil
+				req.CollectionMethod = lo.ToPtr(tt.collectionMethod)
+				req.PaymentBehavior = lo.ToPtr(tt.paymentBehavior)
+			}
+
+			resp, err := s.service.CreateSubscription(ctx, req)
+			s.Require().NoError(err)
+			s.Require().NotNil(resp.LatestInvoice)
+
+			if tt.fullDiscountCheckout {
+				s.Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus, "nothing due activates without a payment gate")
+				s.True(resp.LatestInvoice.AmountDue.IsZero())
+			}
+
+			opening := resp.LatestInvoice
+			s.Equal(string(tt.wantBillingReason), opening.BillingReason)
+			s.Equal(tt.wantStatus, opening.InvoiceStatus)
+			s.Equal(tt.wantPaymentStatus, opening.PaymentStatus)
+
+			if tt.wantStatus != types.InvoiceStatusDraft {
+				return
+			}
+
+			s.Nil(opening.InvoiceNumber, "a held draft is not numbered")
+
+			s.Require().NoError(NewInvoiceService(s.service.(*subscriptionService).ServiceParams).FinalizeInvoice(ctx, opening.ID, dto.FinalizeInvoiceRequest{}))
+
+			finalized, err := s.GetStores().InvoiceRepo.Get(ctx, opening.ID)
+			s.Require().NoError(err)
+			s.Equal(types.InvoiceStatusFinalized, finalized.InvoiceStatus)
+			s.NotNil(finalized.InvoiceNumber)
+			s.Equal(tt.wantPaymentStatusOnFinal, finalized.PaymentStatus)
+		})
+	}
+}
+
 // A delegated subscription checks the invoicing customer's billing currency, not the subscriber's.
 func (s *SubscriptionServiceSuite) TestCreateSubscription_DelegatedInvoicingCustomerBillingCurrencyIsChecked() {
 	ctx := s.GetContext()
