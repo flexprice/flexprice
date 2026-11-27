@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strconv"
 	"testing"
@@ -5875,6 +5876,74 @@ func TestVisiblePropertyKey(t *testing.T) {
 	}
 }
 
+func TestCostPricesInCurrency(t *testing.T) {
+	usage := func(id, meterID, currency string) *price.Price {
+		return &price.Price{ID: id, MeterID: meterID, Currency: currency}
+	}
+	names := map[string]string{"m_sms": "Cost SMS provider=bandwidth", "m_voice": "Cost Voice"}
+	tests := []struct {
+		name       string
+		prices     []*price.Price
+		used       []string
+		currency   string
+		want       map[string]string // meter ID -> price ID
+		wantReason string
+	}{
+		{
+			name:     "matching currency among several",
+			prices:   []*price.Price{usage("p_gbp", "m_sms", "gbp"), usage("p_usd", "m_sms", "usd")},
+			used:     []string{"m_sms"},
+			currency: "usd",
+			want:     map[string]string{"m_sms": "p_usd"},
+		},
+		{
+			name:     "match ignores case",
+			prices:   []*price.Price{usage("p_gbp", "m_sms", "gbp"), usage("p_usd", "m_sms", "usd")},
+			used:     []string{"m_sms"},
+			currency: "USD",
+			want:     map[string]string{"m_sms": "p_usd"},
+		},
+		{
+			name:       "meters with usage and no price in the currency",
+			prices:     []*price.Price{usage("p_voice", "m_voice", "gbp"), usage("p_sms", "m_sms", "gbp")},
+			used:       []string{"m_voice", "m_sms"},
+			currency:   "usd",
+			wantReason: "Cost is unavailable: the cost sheet has no USD price for Cost SMS provider=bandwidth, Cost Voice.",
+		},
+		{
+			name:     "meter without usage and no price in the currency",
+			prices:   []*price.Price{usage("p_usd", "m_sms", "usd"), usage("p_voice", "m_voice", "gbp")},
+			used:     []string{"m_sms"},
+			currency: "usd",
+			want:     map[string]string{"m_sms": "p_usd"},
+		},
+		{
+			name:   "no currency, usage priced in one currency",
+			prices: []*price.Price{usage("p_sms", "m_sms", "gbp"), usage("p_voice", "m_voice", "usd")},
+			used:   []string{"m_sms"},
+			want:   map[string]string{"m_sms": "p_sms"},
+		},
+		{
+			name:       "no currency, usage priced in several currencies",
+			prices:     []*price.Price{usage("p_usd", "m_sms", "usd"), usage("p_gbp", "m_sms", "gbp")},
+			used:       []string{"m_sms"},
+			wantReason: "Cost is unavailable: the customer has no subscription to set the currency, and the cost sheet prices this usage in more than one currency (GBP, USD).",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, reason := costPricesInCurrency(tt.prices, tt.used, names, tt.currency)
+			if reason != tt.wantReason {
+				t.Errorf("reason = %q, want %q", reason, tt.wantReason)
+			}
+			gotIDs := lo.MapValues(got, func(p *price.Price, _ string) string { return p.ID })
+			if !maps.Equal(gotIDs, tt.want) {
+				t.Errorf("prices = %v, want %v", gotIDs, tt.want)
+			}
+		})
+	}
+}
+
 func (s *MeterUsageServiceSuite) TestRegularMeter_WindowCostsReconcile() {
 	tests := []struct {
 		name        string
@@ -7952,7 +8021,7 @@ type noCostsheet struct {
 	CostSheetUsageTrackingService
 }
 
-func (noCostsheet) GetCostAnalyticsFromMeterUsage(context.Context, *dto.GetCostAnalyticsRequest) (*dto.GetCostAnalyticsResponse, error) {
+func (noCostsheet) GetCostAnalyticsFromMeterUsage(context.Context, *dto.GetCostAnalyticsRequest, string) (*dto.GetCostAnalyticsResponse, error) {
 	return nil, ierr.NewError("no active costsheet found").Mark(ierr.ErrNotFound)
 }
 

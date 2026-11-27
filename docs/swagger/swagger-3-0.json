@@ -27248,6 +27248,10 @@
               "$ref": "#/components/schemas/CostAnalyticItem"
             }
           },
+          "cost_unavailable_reason": {
+            "type": "string",
+            "description": "CostUnavailableReason says why cost could not be calculated; empty when it was.\nCost, margin and ROI are zero when it is set."
+          },
           "currency": {
             "type": "string"
           },

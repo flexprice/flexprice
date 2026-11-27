@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -15,13 +18,15 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 // CostSheetUsageTrackingService handles cost sheet usage tracking operations for metered events
 type CostSheetUsageTrackingService interface {
 	// Get Analytics computed from meter usage (replaces the costsheet_usage read path)
-	GetCostAnalyticsFromMeterUsage(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetCostAnalyticsResponse, error)
+	// currency is the customer's subscription currency; cost is priced in it.
+	GetCostAnalyticsFromMeterUsage(ctx context.Context, req *dto.GetCostAnalyticsRequest, currency string) (*dto.GetCostAnalyticsResponse, error)
 }
 
 type costsheetUsageTrackingService struct {
@@ -54,10 +59,13 @@ func NewCostSheetUsageTrackingService(
 //   - Collects the meters referenced by the costsheet's usage-based prices.
 //   - Calls MeterUsageService.GetDetailedAnalytics scoped to those meters to
 //     get aggregated quantities per (meter, source, properties).
-//   - Multiplies each quantity by its costsheet price using PriceService.
+//   - Multiplies each quantity by its meter's costsheet price in the given
+//     currency using PriceService. A meter with usage and no price in that
+//     currency makes cost unavailable (CostUnavailableReason).
 func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	ctx context.Context,
 	req *dto.GetCostAnalyticsRequest,
+	currency string,
 ) (*dto.GetCostAnalyticsResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -91,11 +99,11 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		}
 	}
 
-	// STEP3: Walk the costsheet's prices to get meter IDs and a meter->price
-	// map. Costsheet prices are scoped via PRICE_ENTITY_TYPE_COSTSHEET, which
-	// is distinct from subscription prices — i.e. these are the cost rates,
-	// not the customer-facing rates.
-	meterToPrice := make(map[string]*price.Price)
+	// STEP3: Walk the costsheet's prices to get its usage prices and their
+	// meter IDs. Costsheet prices are scoped via PRICE_ENTITY_TYPE_COSTSHEET,
+	// which is distinct from subscription prices — i.e. these are the cost
+	// rates, not the customer-facing rates.
+	usagePrices := make([]*price.Price, 0, len(costSheet.Prices))
 	meterIDs := make([]string, 0)
 	for _, p := range costSheet.Prices {
 		if p == nil || p.Price == nil || !p.IsUsage() {
@@ -104,11 +112,10 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		if p.MeterID == "" {
 			continue
 		}
-		if _, seen := meterToPrice[p.MeterID]; seen {
-			continue
+		usagePrices = append(usagePrices, p.Price)
+		if !lo.Contains(meterIDs, p.MeterID) {
+			meterIDs = append(meterIDs, p.MeterID)
 		}
-		meterToPrice[p.MeterID] = p.Price
-		meterIDs = append(meterIDs, p.MeterID)
 	}
 
 	// No usage prices, or no customer: revenue analytics reports zero without a
@@ -152,7 +159,29 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		return nil, err
 	}
 
-	// STEP6: Re-cost each item using the costsheet price for its meter.
+	// STEP6: Pick each meter's costsheet price in the requested currency;
+	// only meters with usage need one. Meters go by their own name: vendor
+	// meters often share one event name and differ only by filter, so the
+	// event name cannot tell them apart.
+	meterNames := make(map[string]string, len(usageResp.Items))
+	usedMeterIDs := make([]string, 0, len(usageResp.Items))
+	for _, item := range usageResp.Items {
+		meterNames[item.MeterID] = item.EventName
+		if m := meterMap[item.MeterID]; m != nil && m.Name != "" {
+			meterNames[item.MeterID] = m.Name
+		}
+		if !item.TotalUsage.IsZero() {
+			usedMeterIDs = append(usedMeterIDs, item.MeterID)
+		}
+	}
+	meterToPrice, unavailableReason := costPricesInCurrency(usagePrices, usedMeterIDs, meterNames, currency)
+	if unavailableReason != "" {
+		response := s.emptyCostAnalyticsResponse(req, costSheet, cust)
+		response.CostUnavailableReason = unavailableReason
+		return response, nil
+	}
+
+	// STEP7: Re-cost each item using the costsheet price for its meter.
 	priceService := NewPriceService(s.ServiceParams)
 	response := &dto.GetCostAnalyticsResponse{
 		CostsheetID:   costSheet.ID,
@@ -171,8 +200,8 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	for _, item := range usageResp.Items {
 		csPrice, ok := meterToPrice[item.MeterID]
 		if !ok {
-			// Meter is present in usage results but not in the costsheet —
-			// skip; nothing to cost it against.
+			// No costsheet price for this meter in the currency — skip;
+			// nothing to cost it against.
 			continue
 		}
 		m := meterMap[item.MeterID]
@@ -203,16 +232,9 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 			totalCost = priceService.CalculateCost(ctx, csPrice, item.TotalUsage)
 		}
 
-		// The meter's own name: vendor meters often share one event name and
-		// differ only by filter, so the event name cannot tell them apart.
-		meterName := item.EventName
-		if m != nil && m.Name != "" {
-			meterName = m.Name
-		}
-
 		costItem := dto.CostAnalyticItem{
 			MeterID:       item.MeterID,
-			MeterName:     meterName,
+			MeterName:     meterNames[item.MeterID],
 			Source:        item.Source,
 			Properties:    item.Properties,
 			TotalCost:     totalCost,
@@ -255,6 +277,57 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	}
 
 	return response, nil
+}
+
+// costPricesInCurrency returns each meter's cost price in the given currency.
+// An empty currency resolves to the one currency the meters with usage are
+// priced in. A non-empty reason means cost cannot be calculated.
+func costPricesInCurrency(
+	prices []*price.Price,
+	usedMeterIDs []string,
+	meterNames map[string]string,
+	currency string,
+) (map[string]*price.Price, string) {
+	if currency == "" {
+		currencies := make([]string, 0)
+		for _, p := range prices {
+			if lo.Contains(usedMeterIDs, p.MeterID) {
+				currencies = append(currencies, strings.ToUpper(p.Currency))
+			}
+		}
+		currencies = lo.Uniq(currencies)
+		sort.Strings(currencies)
+		if len(currencies) > 1 {
+			return nil, fmt.Sprintf(
+				"Cost is unavailable: the customer has no subscription to set the currency, and the cost sheet prices this usage in more than one currency (%s).",
+				strings.Join(currencies, ", "))
+		}
+		if len(currencies) == 1 {
+			currency = currencies[0]
+		}
+	}
+
+	meterToPrice := make(map[string]*price.Price)
+	for _, p := range prices {
+		if _, seen := meterToPrice[p.MeterID]; !seen && types.IsMatchingCurrency(p.Currency, currency) {
+			meterToPrice[p.MeterID] = p
+		}
+	}
+
+	missing := make([]string, 0)
+	for _, p := range prices {
+		if _, priced := meterToPrice[p.MeterID]; !priced && lo.Contains(usedMeterIDs, p.MeterID) {
+			missing = append(missing, meterNames[p.MeterID])
+		}
+	}
+	if len(missing) > 0 {
+		missing = lo.Uniq(missing)
+		sort.Strings(missing)
+		return nil, fmt.Sprintf("Cost is unavailable: the cost sheet has no %s price for %s.",
+			strings.ToUpper(currency), strings.Join(missing, ", "))
+	}
+
+	return meterToPrice, ""
 }
 
 // safeInt64FromEventCount converts a ClickHouse COUNT(DISTINCT ...) result to
