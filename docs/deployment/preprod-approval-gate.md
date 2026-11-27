@@ -56,12 +56,16 @@ the service's task definition, not in CI.
 
 ### 2b. Optional: Kubernetes preprod tag
 
-Set the repo variable `K8S_PREPROD_TAG` to a tag name. On main and `v*` runs,
+Set the repo variable `K8S_PREPROD_TAG` to a dedicated tag name. Reserved tags
+(`main`, `latest`, `develop`, `v*`) fail the job, because `:main` is the
+production trigger. On main and `v*` runs,
 `retag-k8s-preprod` copies `:<sha>` to that tag after migrations, before either
 approval gate. Point the preprod cluster's Argo CD Image Updater at it (digest
 strategy). Both gates wait for this job, and treat it as skipped when the
 variable is unset. CI only publishes the tag: before approving, confirm the
-rollout itself in Argo CD or its notifications.
+rollout itself in Argo CD or its notifications. Also confirm that the digest
+running in preprod matches the `:<sha>` digest of the run you are approving. A
+`main` run and a `v*` run can overlap and move the tag out of order.
 
 ### 3. Verify with a dry run
 

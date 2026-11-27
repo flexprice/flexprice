@@ -446,6 +446,16 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           TARGET_TAG: ${{ vars.K8S_PREPROD_TAG }}
         run: |
+          # Never move a production trigger tag.
+          case "${TARGET_TAG}" in
+            main|latest|develop|v*)
+              echo "::error::K8S_PREPROD_TAG '${TARGET_TAG}' is reserved; use a dedicated preprod tag"
+              exit 1 ;;
+          esac
+          if ! echo "${TARGET_TAG}" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+            echo "::error::Invalid K8S_PREPROD_TAG format"
+            exit 1
+          fi
           docker buildx imagetools create \
             --tag "${GHCR_IMAGE}:${TARGET_TAG}" \
             "${GHCR_IMAGE}:${GITHUB_SHA}"
