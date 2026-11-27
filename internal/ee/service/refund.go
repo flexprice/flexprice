@@ -25,10 +25,12 @@ import (
 )
 
 type RefundService interface {
-	// PrepareRefundsForCreditNote and PrepareRefundsForVoidedInvoice persist PENDING refund rows in the caller's
-	// transaction. They touch no gateway; Dispatch does that after the commit.
+	// PrepareRefundsForCreditNote, PrepareRefundsForVoidedInvoice and PrepareRefundForLateCapture persist PENDING
+	// refund rows in the caller's transaction. They touch no gateway; Dispatch does that after the commit.
 	PrepareRefundsForCreditNote(ctx context.Context, cn *creditnote.CreditNote, inv *invoice.Invoice, target *types.RefundTarget) ([]*refund.Refund, error)
 	PrepareRefundsForVoidedInvoice(ctx context.Context, inv *invoice.Invoice, amount decimal.Decimal) ([]*refund.Refund, error)
+	// PrepareRefundForLateCapture plans a refund of the whole of p, a capture its invoice did not take.
+	PrepareRefundForLateCapture(ctx context.Context, p *payment.Payment, inv *invoice.Invoice) (*refund.Refund, error)
 
 	// Dispatch moves one planned row towards settlement. Must run outside a transaction.
 	Dispatch(ctx context.Context, refundID string) error
@@ -102,6 +104,32 @@ func (s *refundService) PrepareRefundsForVoidedInvoice(ctx context.Context, inv 
 	}
 
 	return s.persist(ctx, rows)
+}
+
+func (s *refundService) PrepareRefundForLateCapture(ctx context.Context, p *payment.Payment, inv *invoice.Invoice) (*refund.Refund, error) {
+	if p == nil || inv == nil {
+		return nil, ierr.NewError("missing payment or invoice").
+			WithHint("A late capture refund needs both the payment and its invoice.").
+			Mark(ierr.ErrValidation)
+	}
+
+	row := s.newRow(ctx, inv, p.Amount, allocationContext{
+		reason:         types.RefundReasonOrderChange,
+		idempotencyKey: fmt.Sprintf("%s-late-capture", p.ID),
+	}, 0)
+	row.PaymentID = lo.ToPtr(p.ID)
+
+	if isGatewayRefundable(p) {
+		row.RefundDestination = types.RefundDestinationGateway
+		row.PaymentGateway = p.PaymentGateway
+		row.GatewayIdempotencyToken = lo.ToPtr(row.IdempotencyKey)
+	}
+
+	rows, err := s.persist(ctx, []*refund.Refund{row})
+	if err != nil {
+		return nil, err
+	}
+	return rows[0], nil
 }
 
 func (s *refundService) persist(ctx context.Context, rows []*refund.Refund) ([]*refund.Refund, error) {

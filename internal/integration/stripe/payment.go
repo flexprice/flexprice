@@ -15,7 +15,6 @@ import (
 	"github.com/stripe/stripe-go/v82/webhook"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -25,8 +24,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-const refundLockTTL = 15 * time.Minute
-
 // PaymentService handles Stripe payment operations
 type PaymentService struct {
 	client         *Client
@@ -35,7 +32,6 @@ type PaymentService struct {
 	priceSyncSvc   *stripePriceSyncService
 	invoiceRepo    invoice.Repository
 	paymentRepo    payment.Repository
-	locker         cache.Locker
 	logger         *logger.Logger
 }
 
@@ -136,7 +132,6 @@ func NewPaymentService(
 	priceSyncSvc *stripePriceSyncService,
 	invoiceRepo invoice.Repository,
 	paymentRepo payment.Repository,
-	locker cache.Locker,
 	logger *logger.Logger,
 ) *PaymentService {
 	return &PaymentService{
@@ -146,7 +141,6 @@ func NewPaymentService(
 		priceSyncSvc:   priceSyncSvc,
 		invoiceRepo:    invoiceRepo,
 		paymentRepo:    paymentRepo,
-		locker:         locker,
 		logger:         logger,
 	}
 }
@@ -2193,164 +2187,8 @@ func (s *PaymentService) AttachPaymentToStripeInvoiceAndReconcile(
 	}
 }
 
-// RefundLateCapturedPayment refunds a payment that settled after its checkout session
-// expired — Stripe's 30-minute minimum session expiry outlives FlexPrice's own TTL, so
-// the invoice/payment are already archived and there's nothing to deliver the money to.
-func (s *PaymentService) RefundLateCapturedPayment(
-	ctx context.Context,
-	flexpricePaymentID string,
-	stripePaymentIntentID string,
-	paymentService interfaces.PaymentService,
-) error {
-	lockKey := cache.GenerateKey(ctx, cache.PrefixStripeWebhookRefundLock, flexpricePaymentID)
-	lock, err := s.locker.AcquireLock(ctx, lockKey, refundLockTTL)
-	if err != nil {
-		return ierr.WithError(err).
-			WithMessage("failed to acquire refund lock").
-			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
-			Mark(ierr.ErrInternal)
-	}
-	if !lock.AcquiredSuccessfully() {
-		s.logger.Info(ctx, "refund already in progress for this payment, skipping", "payment_id", flexpricePaymentID)
-		return nil
-	}
-	defer func() {
-		if releaseErr := lock.Release(ctx); releaseErr != nil {
-			s.logger.Error(ctx, "failed to release refund lock", "error", releaseErr, "payment_id", flexpricePaymentID)
-		}
-	}()
-
-	existingPayment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
-	if err != nil {
-		return ierr.WithError(err).
-			WithMessage("failed to get payment record for refund").
-			WithReportableDetails(map[string]interface{}{"payment_id": flexpricePaymentID}).
-			Mark(ierr.ErrInternal)
-	}
-	if existingPayment.PaymentStatus == types.PaymentStatusRefunded ||
-		existingPayment.PaymentStatus == types.PaymentStatusPartiallyRefunded {
-		s.logger.Info(ctx, "payment already refunded, skipping",
-			"payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
-		return nil
-	}
-
-	refundID, err := s.ensureRefunded(ctx, stripePaymentIntentID, flexpricePaymentID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithMessage("failed to refund late-captured payment at Stripe").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id":               flexpricePaymentID,
-				"stripe_payment_intent_id": stripePaymentIntentID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	if err := s.recordLateCaptureRefund(ctx, existingPayment, stripePaymentIntentID, refundID, paymentService); err != nil {
-		return ierr.WithError(err).
-			WithMessage("refund confirmed at Stripe but failed to update FlexPrice payment status").
-			WithReportableDetails(map[string]interface{}{
-				"payment_id":       flexpricePaymentID,
-				"stripe_refund_id": refundID,
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
-	s.logger.Info(ctx, "refunded late-captured stripe payment",
-		"payment_id", flexpricePaymentID,
-		"stripe_payment_intent_id", stripePaymentIntentID,
-		"stripe_refund_id", refundID)
-	return nil
-}
-
-// recordLateCaptureRefund marks the payment REFUNDED, settling it first when still unsettled
-// (the lifecycle only refunds from a settled status). FAILED/VOIDED only get the refund reference.
-func (s *PaymentService) recordLateCaptureRefund(
-	ctx context.Context,
-	existingPayment *dto.PaymentResponse,
-	stripePaymentIntentID string,
-	refundID string,
-	paymentService interfaces.PaymentService,
-) error {
-	now := clock.Now()
-	metadata := existingPayment.Metadata
-	if refundID != "" {
-		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"stripe_refund_id": refundID})
-	}
-
-	switch existingPayment.PaymentStatus {
-	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
-		if _, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
-			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
-			SucceededAt:      lo.ToPtr(now),
-			GatewayPaymentID: lo.ToPtr(stripePaymentIntentID),
-		}); err != nil {
-			return err
-		}
-	case types.PaymentStatusFailed, types.PaymentStatusVoided:
-		s.logger.Info(ctx, "late-captured payment is in a final status, recording refund reference only",
-			"payment_id", existingPayment.ID, "status", existingPayment.PaymentStatus)
-		_, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
-			GatewayPaymentID: lo.ToPtr(stripePaymentIntentID),
-			Metadata:         &metadata,
-		})
-		return err
-	}
-
-	_, err := paymentService.UpdatePayment(ctx, existingPayment.ID, dto.UpdatePaymentRequest{
-		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(now),
-		GatewayPaymentID: lo.ToPtr(stripePaymentIntentID),
-		Metadata:         &metadata,
-	})
-	return err
-}
-
-// ensureRefunded submits a full refund to Stripe unless the PaymentIntent is already
-// fully refunded. Returns the Stripe refund ID, empty when already refunded.
-func (s *PaymentService) ensureRefunded(ctx context.Context, paymentIntentID string, flexpricePaymentID string) (string, error) {
-	stripeClient, _, err := s.client.GetStripeClient(ctx)
-	if err != nil {
-		return "", ierr.WithError(err).
-			WithMessage("failed to get Stripe client for refund").
-			Mark(ierr.ErrInternal)
-	}
-
-	// The idempotency key only lasts 24h, so this check covers later redeliveries.
-	// latest_charge must be expanded — unexpanded it carries only the ID.
-	params := &stripe.PaymentIntentRetrieveParams{
-		Expand: []*string{stripe.String("latest_charge")},
-	}
-	if pi, err := stripeClient.V1PaymentIntents.Retrieve(ctx, paymentIntentID, params); err != nil {
-		s.logger.Info(ctx, "failed to read stripe payment intent before refunding, proceeding anyway",
-			"stripe_payment_intent_id", paymentIntentID, "error", err)
-	} else if pi.LatestCharge != nil && pi.LatestCharge.Refunded {
-		s.logger.Info(ctx, "stripe payment intent is already fully refunded, skipping duplicate submission",
-			"stripe_payment_intent_id", paymentIntentID)
-		return "", nil
-	}
-
-	refundParams := &stripe.RefundCreateParams{
-		PaymentIntent: stripe.String(paymentIntentID),
-	}
-	refundParams.SetIdempotencyKey(refundIdempotencyKey(ctx, flexpricePaymentID))
-
-	refund, err := stripeClient.V1Refunds.Create(ctx, refundParams)
-	if err != nil {
-		return "", err
-	}
-	return refund.ID, nil
-}
-
 func chargeIdempotencyKey(ctx context.Context, paymentID string) string {
 	return idempotency.NewGenerator().GenerateKey(idempotency.ScopePayment, map[string]interface{}{
-		"payment_id":     paymentID,
-		"tenant_id":      types.GetTenantID(ctx),
-		"environment_id": types.GetEnvironmentID(ctx),
-	})
-}
-
-func refundIdempotencyKey(ctx context.Context, paymentID string) string {
-	return idempotency.NewGenerator().GenerateKey(idempotency.ScopeRefund, map[string]interface{}{
 		"payment_id":     paymentID,
 		"tenant_id":      types.GetTenantID(ctx),
 		"environment_id": types.GetEnvironmentID(ctx),

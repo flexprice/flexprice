@@ -201,7 +201,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			"flexprice_payment_id", flexpricePaymentID)
 
 		// Off-session charges never raise checkout.session.completed, so this is the only
-		// webhook that completes their session, or refunds them if it already ended.
+		// webhook that completes their session, or settles their capture late if it already ended.
 		handled, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, paymentIntent.ID, services)
 		if err != nil || handled {
 			return err
@@ -215,6 +215,10 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 				"payment_intent_id", paymentIntent.ID,
 				"event_id", event.ID)
 			return nil
+		}
+
+		if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+			return h.settleLateCapture(ctx, flexpricePaymentID, paymentIntent.ID, services)
 		}
 
 		// Skip card payments - they're handled synchronously by charge API
@@ -1035,6 +1039,10 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 		return nil
 	}
 
+	if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+		return h.settleLateCapture(ctx, flexpricePaymentID, piID, services)
+	}
+
 	// check if payment is already succeeded
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
@@ -1067,36 +1075,36 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	return nil
 }
 
-// refundLateCapturedPayment gives back a payment that landed after its checkout session
-// ended — the Stripe Checkout Session outlives the FlexPrice one.
-func (h *Handler) refundLateCapturedPayment(
+// settleLateCapture settles a capture that landed after we gave up on its payment, e.g. once the
+// FlexPrice checkout session ended while the Stripe one was still open.
+func (h *Handler) settleLateCapture(
 	ctx context.Context,
-	session *dto.CheckoutSessionResponse,
 	flexpricePaymentID string,
 	stripePaymentIntentID string,
 	services *ServiceDependencies,
-) {
+) error {
 	if stripePaymentIntentID == "" {
-		h.logger.Error(ctx, "late-captured payment has no stripe payment intent to refund — manual reconciliation required",
+		h.logger.Error(ctx, "late-captured payment has no stripe payment intent — manual reconciliation required",
 			"error", "missing stripe payment intent id",
-			"session_id", session.ID,
-			"session_status", session.CheckoutStatus,
 			"flexprice_payment_id", flexpricePaymentID)
-		return
+		return nil
 	}
 
-	if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, stripePaymentIntentID, services.PaymentService); err != nil {
-		h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
+	if err := services.PaymentService.SettleLateCapture(ctx, &dto.SettleLateCaptureRequest{
+		PaymentID:        flexpricePaymentID,
+		GatewayPaymentID: stripePaymentIntentID,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to settle late-captured payment",
 			"error", err,
-			"session_id", session.ID,
-			"session_status", session.CheckoutStatus,
 			"flexprice_payment_id", flexpricePaymentID,
 			"stripe_payment_intent_id", stripePaymentIntentID)
+		return err
 	}
+	return nil
 }
 
-// handleCheckoutSessionForPayment completes pending checkout sessions and refunds
-// expired/failed ones. Returns false when the payment has no checkout session.
+// handleCheckoutSessionForPayment completes pending checkout sessions and settles captures on
+// expired/failed ones as late captures. Returns false when the payment has no checkout session.
 func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
 	flexpricePaymentID string,
@@ -1152,7 +1160,9 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"stripe_payment_intent_id", stripePaymentIntentID)
 		}
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
-		h.refundLateCapturedPayment(ctx, session, flexpricePaymentID, stripePaymentIntentID, services)
+		if err := h.settleLateCapture(ctx, flexpricePaymentID, stripePaymentIntentID, services); err != nil {
+			return true, err
+		}
 	default:
 		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",
 			"session_id", session.ID,

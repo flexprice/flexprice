@@ -166,8 +166,8 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		"razorpay_payment_id", payment.ID,
 		"flexprice_payment_id", flexpricePaymentID)
 
-	// Get payment record
-	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	// The webhook is the gateway's answer; a sync here would settle a late capture before the checks below see it.
+	paymentRecord, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID, SkipGatewaySync: true})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record",
 			"error", err,
@@ -200,10 +200,13 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 		return nil
 	}
 
-	// We already gave up on this payment, so the late capture is refunded rather than applied.
-	if paymentRecord.PaymentStatus == types.PaymentStatusFailed {
-		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, payment.ID, services.PaymentService); err != nil {
-			h.logger.Error(ctx, "failed to refund payment captured after it failed",
+	// We already gave up on this payment, so the capture is settled as a late one.
+	if paymentRecord.PaymentStatus == types.PaymentStatusFailed || paymentRecord.PaymentStatus == types.PaymentStatusVoided {
+		if err := services.PaymentService.SettleLateCapture(ctx, &dto.SettleLateCaptureRequest{
+			PaymentID:        flexpricePaymentID,
+			GatewayPaymentID: payment.ID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to settle late-captured payment",
 				"error", err,
 				"flexprice_payment_id", flexpricePaymentID,
 				"razorpay_payment_id", payment.ID)
@@ -517,8 +520,8 @@ func (h *Handler) handlePaymentLinkFailed(ctx context.Context, event *RazorpayWe
 	return nil
 }
 
-// handleCheckoutSessionForPayment completes pending checkout sessions and refunds
-// expired/failed ones (the session ended without delivering the product). Returns
+// handleCheckoutSessionForPayment completes pending checkout sessions and settles captures on
+// expired/failed ones as late captures (the session ended without delivering the product). Returns
 // false if this payment has no checkout session (i.e. it's a standalone payment).
 func (h *Handler) handleCheckoutSessionForPayment(
 	ctx context.Context,
@@ -555,7 +558,7 @@ func (h *Handler) handleCheckoutSessionForPayment(
 		if !ierr.IsAlreadyExists(err) {
 			return false, err
 		}
-		// The session ended instead, e.g. it was past expiry: this capture is late and is refunded below.
+		// The session ended instead, e.g. it was past expiry: this capture is late and is settled below.
 		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
 			return false, err
 		}
@@ -563,12 +566,16 @@ func (h *Handler) handleCheckoutSessionForPayment(
 
 	switch session.CheckoutStatus {
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
-		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, razorpayPaymentID, services.PaymentService); err != nil {
-			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
+		if err := services.PaymentService.SettleLateCapture(ctx, &dto.SettleLateCaptureRequest{
+			PaymentID:        flexpricePaymentID,
+			GatewayPaymentID: razorpayPaymentID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to settle late-captured payment",
 				"error", err,
 				"flexprice_payment_id", flexpricePaymentID,
 				"razorpay_payment_id", razorpayPaymentID,
 			)
+			return true, err
 		}
 	default:
 		h.logger.Info(ctx, "checkout session in non-actionable status, ignoring webhook",

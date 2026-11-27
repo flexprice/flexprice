@@ -69,6 +69,9 @@ type PaymentService interface {
 	ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error)
 	// VoidOpenPaymentLinks closes an invoice's unpaid payment links once the caller's transaction commits.
 	VoidOpenPaymentLinks(ctx context.Context, invoiceID, reason string)
+	// SettleLateCapture records a capture on a payment we had given up on as succeeded, then applies it to
+	// the invoice when the invoice still owes all of it, otherwise refunds it in full. Idempotent; must run outside a transaction.
+	SettleLateCapture(ctx context.Context, req *dto.SettleLateCaptureRequest) error
 }
 
 // InvoiceService defines the interface for invoice operations

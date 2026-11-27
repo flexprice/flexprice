@@ -10,13 +10,9 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics/metricstest"
 	"github.com/stretchr/testify/require"
 	"testing"
-	"time"
 
-	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/shopspring/decimal"
 
-	transactionModel "github.com/chargebee/chargebee-go/v3/models/transaction"
-	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
@@ -100,47 +96,25 @@ func (s *fakeCheckoutSessionService) CleanupCheckoutSession(_ context.Context, s
 	return nil
 }
 
-// ── chargebee.ChargebeeClient fake: only the refund endpoints are exercised ──
+// ── chargebee.ChargebeeClient fake ───────────────────────────────────────────
 
-type refundClient struct {
+type connectionClient struct {
 	chargebee.ChargebeeClient
-	amount         int64
-	amountRefunded int64
-	refundCalls    []int64
-	refundErr      error
 }
 
-func (c *refundClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+func (c *connectionClient) GetConnection(_ context.Context) (*connection.Connection, error) {
 	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderChargebee}, nil
-}
-
-func (c *refundClient) RetrieveTransaction(_ context.Context, _ string) (*transactionModel.Transaction, error) {
-	txn := &transactionModel.Transaction{Id: testChargebeeTxnID, Amount: c.amount}
-	if c.amountRefunded > 0 {
-		txn.LinkedRefunds = []*transactionModel.LinkedRefund{{
-			TxnId:     "txn_refund_000",
-			TxnStatus: transactionEnum.StatusSuccess,
-			TxnAmount: c.amountRefunded,
-		}}
-	}
-	return txn, nil
-}
-
-func (c *refundClient) RefundTransaction(_ context.Context, _ string, amountMinor int64, _ string) (*transactionModel.Transaction, error) {
-	c.refundCalls = append(c.refundCalls, amountMinor)
-	if c.refundErr != nil {
-		return nil, c.refundErr
-	}
-	return &transactionModel.Transaction{Id: "txn_refund_001"}, nil
 }
 
 // ── interfaces.PaymentService fake ───────────────────────────────────────────
 
 type fakePaymentService struct {
 	interfaces.PaymentService
-	payment    *dto.PaymentResponse
-	getErr     error
-	updateReqs []dto.UpdatePaymentRequest
+	payment        *dto.PaymentResponse
+	getErr         error
+	updateReqs     []dto.UpdatePaymentRequest
+	lateCaptures   []dto.SettleLateCaptureRequest
+	lateCaptureErr error
 }
 
 func (s *fakePaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
@@ -155,18 +129,10 @@ func (s *fakePaymentService) UpdatePayment(_ context.Context, _ string, req dto.
 	return s.payment, nil
 }
 
-// ── cache.Locker fake: always grants the lock ────────────────────────────────
-
-type grantingLocker struct{}
-
-func (grantingLocker) AcquireLock(_ context.Context, _ string, _ time.Duration) (cache.Lock, error) {
-	return grantedLock{}, nil
+func (s *fakePaymentService) SettleLateCapture(_ context.Context, req *dto.SettleLateCaptureRequest) error {
+	s.lateCaptures = append(s.lateCaptures, *req)
+	return s.lateCaptureErr
 }
-
-type grantedLock struct{}
-
-func (grantedLock) AcquiredSuccessfully() bool      { return true }
-func (grantedLock) Release(_ context.Context) error { return nil }
 
 // ── suite ────────────────────────────────────────────────────────────────────
 
@@ -176,7 +142,7 @@ type ChargebeeWebhookCheckoutSuite struct {
 	handler     *Handler
 	checkoutSvc *fakeCheckoutSessionService
 	paymentSvc  *fakePaymentService
-	client      *refundClient
+	client      *connectionClient
 	services    *ServiceDependencies
 }
 
@@ -190,7 +156,7 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 
 	log := logger.NewNoopLogger()
 
-	s.client = &refundClient{amount: 10000}
+	s.client = &connectionClient{}
 	invoiceSvc := &chargebee.InvoiceService{
 		InvoiceServiceParams: chargebee.InvoiceServiceParams{
 			Client: s.client,
@@ -203,7 +169,7 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 		},
 	}
 
-	s.handler = NewHandler(s.client, invoiceSvc, chargebee.NewPaymentService(s.client, grantingLocker{}, log), log)
+	s.handler = NewHandler(s.client, invoiceSvc, log)
 	s.checkoutSvc = &fakeCheckoutSessionService{}
 	s.paymentSvc = &fakePaymentService{payment: &dto.PaymentResponse{
 		ID:            testFlexpricePaymentID,
@@ -291,8 +257,8 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_NoSessionFallsThrou
 }
 
 // A late payment on a terminal session must not be completed — the invoice and
-// payment are archived by then, so the money is refunded instead.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionIsRefunded() {
+// payment are archived by then, so the capture is settled as a late one instead.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionSettlesLateCapture() {
 	s.seedSession(types.CheckoutStatusExpired)
 
 	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
@@ -300,40 +266,16 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionIsRef
 	s.Require().NoError(err)
 	s.True(handled, "must still not fall through: reconciling would credit an archived invoice")
 	s.Empty(s.checkoutSvc.completeCalls)
-	s.Equal([]int64{10000}, s.client.refundCalls, "the full payment amount, in minor units")
-
-	s.Require().Len(s.paymentSvc.updateReqs, 1)
-	s.Equal(string(types.PaymentStatusRefunded), *s.paymentSvc.updateReqs[0].PaymentStatus)
-	s.Require().NotNil(s.paymentSvc.updateReqs[0].RefundedAt)
-	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
-}
-
-// A redelivered webhook must not refund twice.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_AlreadyRefundedPaymentIsNotRefundedAgain() {
-	s.seedSession(types.CheckoutStatusFailed)
-	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusRefunded
-
-	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
-
-	s.Require().NoError(err)
-	s.True(handled)
-	s.Empty(s.client.refundCalls)
+	s.Equal([]dto.SettleLateCaptureRequest{{PaymentID: testFlexpricePaymentID, GatewayPaymentID: testChargebeeTxnID}}, s.paymentSvc.lateCaptures)
 	s.Empty(s.paymentSvc.updateReqs)
 }
 
-// Chargebee itself is the second guard: a transaction with nothing left to refund
-// must not receive another refund submission.
-func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FullyRefundedTransactionIsNotResubmitted() {
-	s.seedSession(types.CheckoutStatusExpired)
-	s.client.amountRefunded = 10000
+// A late capture that fails to settle is returned, not swallowed.
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LateCaptureErrorIsReturned() {
+	s.seedSession(types.CheckoutStatusFailed)
+	s.paymentSvc.lateCaptureErr = ierr.NewError("db down").Mark(ierr.ErrDatabase)
 
-	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
-
-	s.Require().NoError(err)
-	s.True(handled)
-	s.Empty(s.client.refundCalls)
-	s.Require().Len(s.paymentSvc.updateReqs, 1, "the FlexPrice payment still has to be marked refunded")
-	s.Nil(s.paymentSvc.updateReqs[0].Metadata, "no refund id to record when nothing was submitted")
+	s.Require().Error(s.handler.handlePaymentSucceeded(s.ctx, s.event(EventPaymentSucceeded), s.services))
 }
 
 // A lookup failure must not silently fall through to the double-counting path.
@@ -477,7 +419,7 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_SessionWinsOverLink
 
 func TestHandleWebhookEvent_UnhandledTypeCountedAsOther(t *testing.T) {
 	r := metricstest.Install(t)
-	h := NewHandler(nil, nil, nil, logger.NewNoopLogger())
+	h := NewHandler(nil, nil, logger.NewNoopLogger())
 
 	require.NoError(t, h.HandleWebhookEvent(types.SetEnvironmentID(types.SetTenantID(context.Background(), "ten_gw_cb"), "env_gw"), &ChargebeeWebhookEvent{EventType: "attacker_chosen"}, "env_gw", nil))
 

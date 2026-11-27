@@ -24,7 +24,6 @@ type ServiceDependencies = interfaces.ServiceDependencies
 type Handler struct {
 	client     chargebee.ChargebeeClient
 	invoiceSvc chargebee.ChargebeeInvoiceService
-	paymentSvc *chargebee.PaymentService
 	logger     *logger.Logger
 }
 
@@ -32,13 +31,11 @@ type Handler struct {
 func NewHandler(
 	client chargebee.ChargebeeClient,
 	invoiceSvc chargebee.ChargebeeInvoiceService,
-	paymentSvc *chargebee.PaymentService,
 	logger *logger.Logger,
 ) *Handler {
 	return &Handler{
 		client:     client,
 		invoiceSvc: invoiceSvc,
-		paymentSvc: paymentSvc,
 		logger:     logger,
 	}
 }
@@ -122,21 +119,22 @@ func (h *Handler) handlePaymentSucceeded(ctx context.Context, event *ChargebeeWe
 	// credits a purchased-credit top-up, and it adds to AmountPaid where the checkout
 	// path sets it absolutely — running both overpays and never credits. So route to
 	// exactly one of them.
+	// A handled payment's error is a late capture that failed to settle; it is returned so the step can rerun.
 	handled, err := h.handleCheckoutSessionForPayment(ctx, flexpricePaymentID, flexpriceInvoiceID, invoice.ID, transaction.ID, services)
+	if handled {
+		return err
+	}
 	if err != nil {
 		return nil // Already logged; don't fail webhook processing
-	}
-	if handled {
-		return nil
 	}
 
 	// A payment link created for an existing invoice has no checkout session, and the
 	// hosted page invoices the charge on a Chargebee invoice of its own, so there is no
 	// mapping either — the note is the only thread back. Settle that payment directly.
-	if handled, err := h.settleLinkedPayment(ctx, flexpricePaymentID, transaction.ID, services); err != nil {
+	if handled, err := h.settleLinkedPayment(ctx, flexpricePaymentID, transaction.ID, services); handled {
+		return err
+	} else if err != nil {
 		return nil // Already logged; don't fail webhook processing
-	} else if handled {
-		return nil
 	}
 
 	if flexpriceInvoiceID == "" {
@@ -278,15 +276,17 @@ func (h *Handler) handleCheckoutSessionForPayment(
 
 	case types.CheckoutStatusExpired, types.CheckoutStatusFailed:
 		// The hosted page outlives the session, so the customer paid after we gave up.
-		// The invoice and payment are archived by then and nothing can be delivered
-		// for the money — give it back.
-		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, chargebeeTransactionID, services.PaymentService); err != nil {
-			h.logger.Error(ctx, "failed to refund late-captured payment — manual reconciliation required",
+		if err := services.PaymentService.SettleLateCapture(ctx, &dto.SettleLateCaptureRequest{
+			PaymentID:        flexpricePaymentID,
+			GatewayPaymentID: chargebeeTransactionID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to settle late-captured payment",
 				"error", err,
 				"session_id", session.ID,
 				"session_status", session.CheckoutStatus,
 				"flexprice_payment_id", flexpricePaymentID,
 				"chargebee_transaction_id", chargebeeTransactionID)
+			return true, err
 		}
 
 	default:
@@ -319,8 +319,24 @@ func (h *Handler) settleLinkedPayment(
 
 	// A tenant's own notes land in the same array, so anything that is not one of our
 	// payment ids simply is not ours to settle.
-	if _, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID}); err != nil {
+	existing, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	if err != nil {
 		return false, nil
+	}
+
+	// We already gave up on this payment, so the capture is settled as a late one.
+	if existing.PaymentStatus == types.PaymentStatusFailed || existing.PaymentStatus == types.PaymentStatusVoided {
+		if err := services.PaymentService.SettleLateCapture(ctx, &dto.SettleLateCaptureRequest{
+			PaymentID:        flexpricePaymentID,
+			GatewayPaymentID: chargebeeTransactionID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to settle late-captured payment",
+				"error", err,
+				"flexprice_payment_id", flexpricePaymentID,
+				"chargebee_transaction_id", chargebeeTransactionID)
+			return true, err
+		}
+		return true, nil
 	}
 
 	// Settlement books the payment's own amount and does not check it against

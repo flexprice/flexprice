@@ -79,7 +79,7 @@ func (s *ChargebeeRefundWebhookSuite) SetupTest() {
 			GatewayRefundID:   lo.ToPtr("txn_refund_001"),
 		},
 	}
-	s.handler = NewHandler(nil, nil, nil, logger.NewNoopLogger())
+	s.handler = NewHandler(nil, nil, logger.NewNoopLogger())
 	s.services = &ServiceDependencies{RefundService: s.refundSv}
 }
 

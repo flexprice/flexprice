@@ -64,6 +64,7 @@ func (s *RefundServiceSuite) params() ServiceParams {
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+		IntegrationFactory:       s.GetIntegrationFactory(),
 	}
 }
 
@@ -483,4 +484,136 @@ func (s *RefundServiceSuite) customerWalletBalance() decimal.Decimal {
 	s.NoError(err)
 	s.Len(wallets, 1)
 	return wallets[0].Balance
+}
+
+func (s *RefundServiceSuite) TestSettleLateCapture() {
+	type invoiceState struct {
+		status        types.Status
+		invoiceStatus types.InvoiceStatus
+		paymentStatus types.PaymentStatus
+		amountPaid    int64
+	}
+	tests := []struct {
+		name          string
+		invoice       invoiceState
+		paymentStatus types.PaymentStatus
+		amount        int64
+		wantRefund    bool
+		wantPaid      int64
+		wantInvStatus types.PaymentStatus
+	}{
+		{
+			name:          "archived draft invoice of an expired checkout refunds",
+			invoice:       invoiceState{types.StatusArchived, types.InvoiceStatusDraft, types.PaymentStatusPending, 0},
+			paymentStatus: types.PaymentStatusPending,
+			amount:        100,
+			wantRefund:    true,
+			wantInvStatus: types.PaymentStatusPending,
+		},
+		{
+			name:          "draft invoice refunds",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusDraft, types.PaymentStatusPending, 0},
+			paymentStatus: types.PaymentStatusFailed,
+			amount:        100,
+			wantRefund:    true,
+			wantInvStatus: types.PaymentStatusPending,
+		},
+		{
+			name:          "finalized invoice owing the full capture accepts it",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusFinalized, types.PaymentStatusPending, 0},
+			paymentStatus: types.PaymentStatusFailed,
+			amount:        100,
+			wantPaid:      100,
+			wantInvStatus: types.PaymentStatusSucceeded,
+		},
+		{
+			name:          "finalized invoice owing more than the capture accepts it as a part payment",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusFinalized, types.PaymentStatusFailed, 0},
+			paymentStatus: types.PaymentStatusVoided,
+			amount:        60,
+			wantPaid:      60,
+			wantInvStatus: types.PaymentStatusPending,
+		},
+		{
+			name:          "invoice owing less than the capture refunds it in full",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusFinalized, types.PaymentStatusPending, 50},
+			paymentStatus: types.PaymentStatusPending,
+			amount:        100,
+			wantRefund:    true,
+			wantPaid:      50,
+			wantInvStatus: types.PaymentStatusPending,
+		},
+		{
+			name:          "invoice paid another way refunds",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusFinalized, types.PaymentStatusSucceeded, 100},
+			paymentStatus: types.PaymentStatusFailed,
+			amount:        100,
+			wantRefund:    true,
+			wantPaid:      100,
+			wantInvStatus: types.PaymentStatusSucceeded,
+		},
+		{
+			name:          "voided invoice refunds",
+			invoice:       invoiceState{types.StatusPublished, types.InvoiceStatusVoided, types.PaymentStatusPending, 0},
+			paymentStatus: types.PaymentStatusVoided,
+			amount:        100,
+			wantRefund:    true,
+			wantInvStatus: types.PaymentStatusPending,
+		},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.SetupTest()
+			ctx := s.GetContext()
+
+			inv := s.testData.invoice
+			inv.Status = tt.invoice.status
+			inv.InvoiceStatus = tt.invoice.invoiceStatus
+			inv.PaymentStatus = tt.invoice.paymentStatus
+			inv.AmountPaid = decimal.NewFromInt(tt.invoice.amountPaid)
+			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+			s.Require().NoError(s.GetStores().InvoiceRepo.Update(ctx, inv))
+
+			p := s.createPayment("pay_late", decimal.NewFromInt(tt.amount), types.PaymentMethodTypePaymentLink, lo.ToPtr("stripe"), s.testData.now)
+			p.PaymentStatus = tt.paymentStatus
+			p.GatewayPaymentID = nil
+			s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+
+			paymentService := NewPaymentService(s.params())
+			req := &dto.SettleLateCaptureRequest{PaymentID: "pay_late", GatewayPaymentID: "pi_late"}
+			s.Require().NoError(paymentService.SettleLateCapture(ctx, req))
+			// A redelivery finds the payment settled and changes nothing.
+			s.Require().NoError(paymentService.SettleLateCapture(ctx, req))
+
+			captured, err := s.GetStores().PaymentRepo.Get(ctx, "pay_late")
+			s.Require().NoError(err)
+			s.Equal(types.PaymentStatusSucceeded, captured.PaymentStatus)
+			s.Equal("pi_late", lo.FromPtr(captured.GatewayPaymentID))
+			s.NotNil(captured.SucceededAt)
+
+			after, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+			s.Require().NoError(err)
+			s.True(after.AmountPaid.Equal(decimal.NewFromInt(tt.wantPaid)), "amount paid %s", after.AmountPaid)
+			s.True(after.AmountRemaining.Equal(after.AmountDue.Sub(after.AmountPaid)), "amount remaining %s", after.AmountRemaining)
+			s.Equal(tt.wantInvStatus, after.PaymentStatus)
+
+			rows, err := s.GetStores().RefundRepo.ListByInvoice(ctx, inv.ID)
+			s.Require().NoError(err)
+			if !tt.wantRefund {
+				s.Empty(rows)
+				return
+			}
+
+			// No Stripe connection here, so the gateway refund fails over to the wallet.
+			gateway := lo.Filter(rows, func(r *refund.Refund, _ int) bool { return r.RefundDestination == types.RefundDestinationGateway })
+			s.Require().Len(gateway, 1)
+			s.Require().Len(rows, 2)
+			s.Equal("pay_late", lo.FromPtr(gateway[0].PaymentID))
+			s.Equal("stripe", lo.FromPtr(gateway[0].PaymentGateway))
+			s.Equal("pay_late-late-capture-0", gateway[0].IdempotencyKey)
+			s.True(gateway[0].Amount.Equal(decimal.NewFromInt(tt.amount)))
+			s.Equal(types.RefundStatusFailed, gateway[0].RefundStatus)
+			s.True(s.customerWalletBalance().Equal(decimal.NewFromInt(tt.amount)))
+		})
+	}
 }
