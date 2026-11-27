@@ -237,18 +237,7 @@ func (l *redisLocker) AcquireLocks(ctx context.Context, keys []string, ttl time.
 			tokens = append(tokens, token)
 			cmds = append(cmds, acquireScript.Eval(ctx, pipe, []string{key}, token, ms))
 		}
-		done := make(chan error, 1)
-		go func() {
-			_, err := pipe.Exec(ctx)
-			done <- err
-		}()
-		var err error
-		select {
-		case err = <-done:
-		case <-ctx.Done():
-			err = ctx.Err()
-		}
-		if err != nil && firstErr == nil {
+		if _, err := pipe.Exec(ctx); err != nil && firstErr == nil {
 			firstErr = err
 		}
 		for i, cmd := range cmds {
