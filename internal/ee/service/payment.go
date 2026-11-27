@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
@@ -672,6 +673,95 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
 
 	return dto.NewPaymentResponse(p), nil
+}
+
+func (s *paymentService) SettleLateCapture(ctx context.Context, req *dto.SettleLateCaptureRequest) error {
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	p, err := s.PaymentRepo.Get(ctx, req.PaymentID)
+	if err != nil {
+		return err
+	}
+	if p.IsPaymentPaid() || p.PaymentStatus == types.PaymentStatusRefunded || p.PaymentStatus == types.PaymentStatusPartiallyRefunded {
+		s.Logger.Info(ctx, "late capture already settled",
+			"payment_id", p.ID, "payment_status", p.PaymentStatus, "gateway_payment_id", req.GatewayPaymentID)
+		return nil
+	}
+
+	if err := s.RecordAttempt(ctx, p.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: req.GatewayPaymentID,
+	}); err != nil {
+		s.Logger.Error(ctx, "failed to record late capture attempt",
+			"error", err, "payment_id", p.ID, "gateway_payment_id", req.GatewayPaymentID)
+	}
+
+	inv, err := s.InvoiceRepo.Get(ctx, p.DestinationID)
+	if err != nil {
+		return err
+	}
+
+	// Accepted in full or refunded in full, never split.
+	accept := inv.Status == types.StatusPublished &&
+		inv.InvoiceStatus == types.InvoiceStatusFinalized &&
+		inv.PaymentStatus != types.PaymentStatusSucceeded &&
+		inv.PaymentStatus != types.PaymentStatusOverpaid &&
+		inv.AmountRemaining.GreaterThanOrEqual(p.Amount)
+
+	captured := payment.NewPaymentBuilder(p).
+		WithPaymentStatus(types.PaymentStatusSucceeded).
+		WithSucceededAt(lo.ToPtr(clock.Now())).
+		WithGatewayPaymentID(lo.ToPtr(req.GatewayPaymentID)).
+		Build()
+
+	// The expected-status write lets one delivery through, so a redelivery or a parallel worker records nothing twice.
+	// FAILED and VOIDED have no public transition to SUCCEEDED; this internal write is the only way out of them.
+	var refundRow *refund.Refund
+	err = s.DB.WithTx(ctx, func(tx context.Context) error {
+		paymentCtx := withPaymentStatusAction(tx, p.ID, p.PaymentStatus, captured.PaymentStatus)
+		if err := s.PaymentRepo.UpdateWithExpectedStatus(paymentCtx, captured, p.PaymentStatus); err != nil {
+			return err
+		}
+		if accept {
+			return nil
+		}
+
+		var err error
+		refundRow, err = NewRefundService(s.ServiceParams).PrepareRefundForLateCapture(tx, captured, inv)
+		return err
+	})
+	if ierr.IsVersionConflict(err) {
+		s.Logger.Info(ctx, "late capture already recorded by another delivery",
+			"payment_id", p.ID, "gateway_payment_id", req.GatewayPaymentID)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	s.recordPaymentTransition(ctx, captured, p.PaymentStatus)
+	postPaymentJournal(ctx, s.ServiceParams, p.ID)
+	s.publishSystemEvent(ctx, types.WebhookEventPaymentUpdated, p.ID)
+
+	if accept {
+		s.Logger.Info(ctx, "late capture applied to its invoice",
+			"payment_id", p.ID, "invoice_id", inv.ID, "gateway_payment_id", req.GatewayPaymentID, "amount", p.Amount.String())
+		invoiceStatus := lo.Ternary(inv.AmountRemaining.Equal(p.Amount), types.PaymentStatusSucceeded, types.PaymentStatusPending)
+		return NewInvoiceService(s.ServiceParams).ReconcilePaymentStatus(ctx, inv.ID, invoiceStatus, &p.Amount)
+	}
+
+	s.Logger.Info(ctx, "late capture refunded",
+		"payment_id", p.ID, "invoice_id", inv.ID, "gateway_payment_id", req.GatewayPaymentID,
+		"refund_id", refundRow.ID, "amount", p.Amount.String())
+
+	// A dispatch failure leaves a PENDING row that RetryRefund can pick up.
+	if err := NewRefundService(s.ServiceParams).Dispatch(ctx, refundRow.ID); err != nil {
+		s.Logger.Error(ctx, "failed to dispatch late capture refund",
+			"error", err, "refund_id", refundRow.ID, "payment_id", p.ID)
+	}
+	return nil
 }
 
 // gatewayAttemptDetails asks the payment's gateway how the attempt was paid; it returns nil when the gateway can't say.

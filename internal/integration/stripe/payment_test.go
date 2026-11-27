@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -423,4 +424,14 @@ func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
 			require.True(t, decimal.RequireFromString(tc.want).Equal(paymentSvc.createReq.Amount), "got %s", paymentSvc.createReq.Amount)
 		})
 	}
+}
+
+func TestChargeIdempotencyKeyIsStablePerPayment(t *testing.T) {
+	ctx := testContext()
+	k1 := chargeIdempotencyKey(ctx, "pay_001")
+	require.NotEmpty(t, k1)
+	require.Equal(t, k1, chargeIdempotencyKey(ctx, "pay_001"))
+	require.True(t, strings.HasPrefix(k1, "payment-"))
+
+	require.NotEqual(t, k1, chargeIdempotencyKey(ctx, "pay_002"))
 }

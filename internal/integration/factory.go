@@ -187,7 +187,6 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		priceSyncSvc,
 		f.invoiceRepo,
 		f.paymentRepo,
-		f.locker,
 		f.logger,
 	)
 
@@ -396,19 +395,15 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		Logger:                       f.logger,
 	})
 
-	paymentSvc := chargebee.NewPaymentService(chargebeeClient, f.locker, f.logger)
-
 	// Create webhook handler
 	webhookHandler := chargebeewebhook.NewHandler(
 		chargebeeClient,
 		invoiceSvc.(*chargebee.InvoiceService),
-		paymentSvc,
 		f.logger,
 	)
 
 	return &ChargebeeIntegration{
 		Client:         chargebeeClient,
-		PaymentSvc:     paymentSvc,
 		ItemFamilySvc:  itemFamilySvc,
 		ItemSvc:        itemSvc,
 		ItemPriceSvc:   itemPriceSvc,
@@ -901,7 +896,6 @@ type ChargebeeIntegration struct {
 	ItemPriceSvc   chargebee.ChargebeeItemPriceService
 	CustomerSvc    chargebee.ChargebeeCustomerService
 	InvoiceSvc     chargebee.ChargebeeInvoiceService
-	PaymentSvc     *chargebee.PaymentService
 	PlanSyncSvc    chargebee.ChargebeePlanSyncService
 	WebhookHandler *chargebeewebhook.Handler
 }
@@ -1693,6 +1687,14 @@ func (f *Factory) refundProviderFor(gateway types.PaymentGatewayType) func(conte
 				return nil, err
 			}
 			return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	case types.PaymentGatewayTypeStripe:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetStripeIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &stripe.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
 		}
 	default:
 		return nil

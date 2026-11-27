@@ -10,7 +10,6 @@ import (
 	customerModel "github.com/chargebee/chargebee-go/v3/models/customer"
 	paymentSourceModel "github.com/chargebee/chargebee-go/v3/models/paymentsource"
 	transactionModel "github.com/chargebee/chargebee-go/v3/models/transaction"
-	transactionEnum "github.com/chargebee/chargebee-go/v3/models/transaction/enum"
 	"github.com/samber/lo"
 )
 
@@ -57,24 +56,6 @@ func (c *Client) RetrieveCustomer(ctx context.Context, chargebeeCustomerID strin
 	return res.Customer, nil
 }
 
-// RetrieveTransaction fetches a transaction, chiefly to see what has already been
-// refunded against it.
-func (c *Client) RetrieveTransaction(ctx context.Context, transactionID string) (*transactionModel.Transaction, error) {
-	env, err := c.env(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := transaction.Retrieve(transactionID).Contexts(ctx).RequestWithEnv(env)
-	if err != nil {
-		return nil, wrapAPIError(err, "Failed to retrieve Chargebee transaction")
-	}
-	if res.Transaction == nil {
-		return nil, missingPayload("transaction")
-	}
-	return res.Transaction, nil
-}
-
 // RefundTransaction refunds amountMinor against a settled transaction. Chargebee
 // scopes the idempotency key globally, so callers must namespace it per operation.
 func (c *Client) RefundTransaction(ctx context.Context, transactionID string, amountMinor int64, idempotencyKey string) (*transactionModel.Transaction, error) {
@@ -98,21 +79,4 @@ func (c *Client) RefundTransaction(ctx context.Context, transactionID string, am
 		return nil, missingPayload("transaction")
 	}
 	return res.Transaction, nil
-}
-
-// AmountRefunded totals the refunds already linked to a transaction. The API has
-// no amount_unrefunded field on this model, so the guard against submitting a
-// second refund is computed from linked_refunds.
-func AmountRefunded(txn *transactionModel.Transaction) int64 {
-	if txn == nil {
-		return 0
-	}
-	var total int64
-	for _, refund := range txn.LinkedRefunds {
-		if refund == nil || refund.TxnStatus == transactionEnum.StatusFailure {
-			continue
-		}
-		total += refund.TxnAmount
-	}
-	return total
 }

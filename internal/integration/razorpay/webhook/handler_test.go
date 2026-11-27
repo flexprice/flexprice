@@ -1,7 +1,7 @@
 package webhook
 
 // Tests for the checkout-session status branching shared by handlePaymentLinkPaid
-// and handlePaymentCaptured: Pending → complete, Expired/Failed → refund, other → no-op.
+// and handlePaymentCaptured: Pending → complete, Expired/Failed → late capture, other → no-op.
 
 import (
 	"context"
@@ -33,36 +33,14 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// ── fake RazorpayClient (RefundPayment/FetchPayment exercised via PaymentService) ─
+// ── fake RazorpayClient ──────────────────────────────────────────────────────
 
 type webhookTestRazorpayClient struct {
 	razorpay.RazorpayClient
-	refundCalls  []string // razorpayPaymentID per call
-	refundErrors []error
-	refundStatus string
 }
 
 func (c *webhookTestRazorpayClient) GetConnection(_ context.Context) (*connection.Connection, error) {
 	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderRazorpay}, nil
-}
-
-func (c *webhookTestRazorpayClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
-	var refundStatus interface{}
-	if c.refundStatus != "" {
-		refundStatus = c.refundStatus
-	}
-	return map[string]interface{}{"refund_status": refundStatus}, nil
-}
-
-func (c *webhookTestRazorpayClient) RefundPayment(_ context.Context, paymentID string, _ int64, _ string) (map[string]interface{}, error) {
-	c.refundCalls = append(c.refundCalls, paymentID)
-	if len(c.refundErrors) > 0 {
-		err := c.refundErrors[0]
-		c.refundErrors = c.refundErrors[1:]
-		return nil, err
-	}
-	c.refundStatus = "full"
-	return map[string]interface{}{"id": "rfnd_test001"}, nil
 }
 
 // ── fake cache.Locker — always acquires ──────────────────────────────────────
@@ -109,6 +87,8 @@ type webhookTestPaymentService struct {
 	getCalls    int
 	updateCalls []dto.UpdatePaymentRequest
 	attempts    []dto.RecordAttemptRequest
+	settles     []string // gateway payment id per SettleLateCapture call
+	settleErr   error
 }
 
 func (s *webhookTestPaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
@@ -130,6 +110,11 @@ func (s *webhookTestPaymentService) UpdatePayment(_ context.Context, _ string, r
 func (s *webhookTestPaymentService) RecordAttempt(_ context.Context, _ string, req dto.RecordAttemptRequest) error {
 	s.attempts = append(s.attempts, req)
 	return nil
+}
+
+func (s *webhookTestPaymentService) SettleLateCapture(_ context.Context, req *dto.SettleLateCaptureRequest) error {
+	s.settles = append(s.settles, req.GatewayPaymentID)
+	return s.settleErr
 }
 
 // failedAttempts returns only the declined attempts, so assertions stay focused on
@@ -288,7 +273,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_Completes() {
 
 	s.NoError(err)
 	s.Require().Len(s.checkoutSvc.completeCalls, 1)
-	s.Empty(s.client.refundCalls, "pending session must not trigger a refund")
+	s.Empty(s.paymentSvc.settles, "pending session must not settle a late capture")
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPendingSession_PastExpiry_Refunds() {
@@ -301,7 +286,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_PastExpiry_Refunds() 
 
 	s.NoError(err)
 	s.Require().Len(s.checkoutSvc.completeCalls, 1)
-	s.Equal([]string{"pay_rzp_001"}, s.client.refundCalls, "a capture the expired session would not take is refunded")
+	s.Equal([]string{"pay_rzp_001"}, s.paymentSvc.settles, "a capture the expired session would not take is settled late")
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestPendingSession_CompleteError_Retries() {
@@ -313,10 +298,10 @@ func (s *WebhookCheckoutBranchingSuite) TestPendingSession_CompleteError_Retries
 	err := s.handler.handlePaymentLinkPaid(s.ctx, s.makeEvent("plink_test001", "pay_rzp_001"), s.services)
 
 	s.Error(err, "the error reaches the webhook so Razorpay redelivers")
-	s.Empty(s.client.refundCalls)
+	s.Empty(s.paymentSvc.settles)
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
+func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_SettlesLateCapture() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
@@ -325,12 +310,11 @@ func (s *WebhookCheckoutBranchingSuite) TestExpiredSession_Refunds() {
 
 	s.NoError(err)
 	s.Empty(s.checkoutSvc.completeCalls, "expired session must not be completed")
-	s.Require().Len(s.client.refundCalls, 1)
-	s.Equal("pay_rzp_001", s.client.refundCalls[0])
-	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
+	s.Require().Len(s.paymentSvc.settles, 1)
+	s.Equal("pay_rzp_001", s.paymentSvc.settles[0])
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
+func (s *WebhookCheckoutBranchingSuite) TestFailedSession_SettlesLateCapture() {
 	// payment_link.cancelled/expired marks the session Failed, not Expired
 	// (Expired is set only by the cleanup cron).
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
@@ -341,9 +325,8 @@ func (s *WebhookCheckoutBranchingSuite) TestFailedSession_Refunds() {
 
 	s.NoError(err)
 	s.Empty(s.checkoutSvc.completeCalls)
-	s.Require().Len(s.client.refundCalls, 1)
-	s.Equal("pay_rzp_001", s.client.refundCalls[0])
-	s.Equal(types.PaymentStatusRefunded, s.paymentSvc.payment.PaymentStatus)
+	s.Require().Len(s.paymentSvc.settles, 1)
+	s.Equal("pay_rzp_001", s.paymentSvc.settles[0])
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
@@ -355,7 +338,7 @@ func (s *WebhookCheckoutBranchingSuite) TestCompletedSession_NoOp() {
 
 	s.NoError(err)
 	s.Empty(s.checkoutSvc.completeCalls)
-	s.Empty(s.client.refundCalls)
+	s.Empty(s.paymentSvc.settles)
 }
 
 func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
@@ -363,22 +346,10 @@ func (s *WebhookCheckoutBranchingSuite) TestNoSessionFound_NoOp() {
 
 	s.NoError(err)
 	s.Empty(s.checkoutSvc.completeCalls)
-	s.Empty(s.client.refundCalls)
+	s.Empty(s.paymentSvc.settles)
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPayment_NotRetried() {
-	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
-	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
-	event.Payload.Payment.Entity.ID = "pay_rzp_001"
-	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
-
-	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
-
-	s.NoError(err)
-	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
-}
-
-func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refunds() {
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_SettlesLateCapture() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusExpired,
 	}
@@ -390,11 +361,11 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ExpiredSession_Refun
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
 
 	s.NoError(err)
-	s.Require().Len(s.client.refundCalls, 1)
-	s.Equal("pay_rzp_001", s.client.refundCalls[0])
+	s.Require().Len(s.paymentSvc.settles, 1)
+	s.Equal("pay_rzp_001", s.paymentSvc.settles[0])
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refunds() {
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_SettlesLateCapture() {
 	s.checkoutSvc.session = &dto.CheckoutSessionResponse{
 		ID: "pay_flex_001", CheckoutStatus: types.CheckoutStatusFailed,
 	}
@@ -406,8 +377,8 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedSession_Refund
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
 
 	s.NoError(err)
-	s.Require().Len(s.client.refundCalls, 1)
-	s.Equal("pay_rzp_001", s.client.refundCalls[0])
+	s.Require().Len(s.paymentSvc.settles, 1)
+	s.Equal("pay_rzp_001", s.paymentSvc.settles[0])
 }
 
 // ── payment.failed: a decline is one attempt, not our decision to stop ───────
@@ -574,7 +545,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_SessionLookupError_D
 	s.Error(err, "an unreadable session is surfaced, not swallowed")
 	s.Equal(types.PaymentStatusPending, s.paymentSvc.payment.PaymentStatus,
 		"an unreadable session must not be treated as 'no session' and settled")
-	s.Empty(s.client.refundCalls)
+	s.Empty(s.paymentSvc.settles)
 	s.Equal(1, s.paymentSvc.getCalls)
 }
 
@@ -642,7 +613,7 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_NoSessionFound_Falls
 	err := s.handler.handlePaymentCaptured(s.ctx, event, s.services)
 
 	s.NoError(err)
-	s.Empty(s.client.refundCalls)
+	s.Empty(s.paymentSvc.settles)
 	s.Require().NotEmpty(s.paymentSvc.updateCalls, "standalone path must still update the payment to Succeeded")
 	s.Equal(types.PaymentStatusSucceeded, s.paymentSvc.payment.PaymentStatus)
 }
@@ -667,44 +638,34 @@ func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_ZeroAmountIsIgnored(
 	s.Empty(s.paymentSvc.updateCalls)
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentIsRefundedAndStaysFailed() {
-	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
-	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
-	event.Payload.Payment.Entity.ID = "pay_rzp_late"
-	event.Payload.Payment.Entity.Amount = 50000
-	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedOrVoidedPaymentSettlesLateCapture() {
+	for _, status := range []types.PaymentStatus{types.PaymentStatusFailed, types.PaymentStatusVoided} {
+		s.Run(string(status), func() {
+			s.SetupTest()
+			s.paymentSvc.payment.PaymentStatus = status
+			event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
+			event.Payload.Payment.Entity.ID = "pay_rzp_late"
+			event.Payload.Payment.Entity.Amount = 50000
+			event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
-	s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
+			s.NoError(s.handler.handlePaymentCaptured(s.ctx, event, s.services))
 
-	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
-	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
-	s.Require().Len(s.paymentSvc.updateCalls, 1)
-	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
+			s.Equal([]string{"pay_rzp_late"}, s.paymentSvc.settles)
+			s.Empty(s.paymentSvc.updateCalls, "the standalone settlement path must not run")
+		})
+	}
 }
 
-func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_FailedPaymentRefundRetriesAndDuplicateIsIdempotent() {
+func (s *WebhookCheckoutBranchingSuite) TestPaymentCaptured_LateCaptureErrorReachesWebhook() {
 	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
-	s.client.refundErrors = []error{errors.New("temporary refund error")}
+	s.paymentSvc.settleErr = errors.New("temporary settle error")
 	event := &RazorpayWebhookEvent{Event: string(EventPaymentCaptured)}
 	event.Payload.Payment.Entity.ID = "pay_rzp_late"
 	event.Payload.Payment.Entity.Amount = 50000
 	event.Payload.Payment.Entity.Notes = map[string]interface{}{"flexprice_payment_id": "pay_flex_001"}
 
 	err := s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services)
-	s.Require().Error(err)
-	s.ErrorContains(err, "temporary refund error")
-	s.Equal([]string{"pay_rzp_late"}, s.client.refundCalls)
-	s.Empty(s.paymentSvc.updateCalls, "a failed provider refund must not be recorded as refunded")
-
-	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
-	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
-	s.Require().Len(s.paymentSvc.updateCalls, 1)
-	s.Equal("rfnd_test001", (*s.paymentSvc.updateCalls[0].Metadata)["razorpay_refund_id"])
-
-	s.NoError(s.handler.HandleWebhookEvent(s.ctx, event, "env_test", s.services))
-	s.Equal([]string{"pay_rzp_late", "pay_rzp_late"}, s.client.refundCalls)
-	s.Len(s.paymentSvc.updateCalls, 1, "a repeated delivery must not submit or record a second refund")
-	s.Equal(types.PaymentStatusFailed, s.paymentSvc.payment.PaymentStatus)
+	s.ErrorContains(err, "temporary settle error", "the error reaches the webhook so Razorpay redelivers")
 }
 
 type recordingPublisher struct {

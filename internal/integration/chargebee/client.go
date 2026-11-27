@@ -62,7 +62,6 @@ type ChargebeeClient interface {
 	CreateHostedCheckoutPage(ctx context.Context, req HostedCheckoutPageRequest) (*hostedPageModel.HostedPage, error)
 	ListPaymentSources(ctx context.Context, chargebeeCustomerID string) ([]*paymentSourceModel.PaymentSource, error)
 	RetrieveCustomer(ctx context.Context, chargebeeCustomerID string) (*customer.Customer, error)
-	RetrieveTransaction(ctx context.Context, transactionID string) (*transactionModel.Transaction, error)
 	RefundTransaction(ctx context.Context, transactionID string, amountMinor int64, idempotencyKey string) (*transactionModel.Transaction, error)
 	CreateManagePaymentSourcesPage(ctx context.Context, chargebeeCustomerID, redirectURL, gatewayAccountID string) (*hostedPageModel.HostedPage, error)
 	AssignPaymentRole(ctx context.Context, chargebeeCustomerID, paymentSourceID string, role enum.Role) error

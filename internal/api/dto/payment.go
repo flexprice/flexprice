@@ -120,6 +120,26 @@ type GetPaymentRequest struct {
 	SkipGatewaySync bool
 }
 
+// SettleLateCaptureRequest names a gateway capture that landed after we gave up on its payment.
+type SettleLateCaptureRequest struct {
+	PaymentID        string `json:"payment_id"`
+	GatewayPaymentID string `json:"gateway_payment_id"`
+}
+
+func (r *SettleLateCaptureRequest) Validate() error {
+	if r == nil || r.PaymentID == "" {
+		return ierr.NewError("missing payment ID").
+			WithHint("Please provide the payment the capture belongs to.").
+			Mark(ierr.ErrValidation)
+	}
+	if r.GatewayPaymentID == "" {
+		return ierr.NewError("missing gateway payment ID").
+			WithHint("Please provide the gateway's id for the captured payment.").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // PaymentResponse represents a payment response
 type PaymentResponse struct {
 	ID string `json:"id"`
