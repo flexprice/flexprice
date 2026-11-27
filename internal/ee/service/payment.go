@@ -587,6 +587,16 @@ func (s *paymentService) UpdatePayment(ctx context.Context, id string, req dto.U
 				WithHint("This payment cannot be voided until the gateway reports its outcome").
 				Mark(ierr.ErrInvalidOperation)
 		}
+		// A voided payment's link must not stay payable at the gateway.
+		if target == types.PaymentStatusVoided && observedStatus != target &&
+			p.PaymentMethodType == types.PaymentMethodTypePaymentLink && !s.closeProviderLink(ctx, p.DestinationID, p) {
+			return nil, ierr.NewError("payment link could not be closed at the gateway").
+				WithHint("This payment cannot be voided while its payment link can still be paid").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": id,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
 		p.PaymentStatus = target
 	}
 	if req.PaymentGateway != nil {
@@ -1493,14 +1503,13 @@ func (s *paymentService) VoidOpenPaymentLinks(ctx context.Context, invoiceID, re
 			if session != nil {
 				continue
 			}
-			if !s.closeProviderLink(runCtx, invoiceID, p) {
-				continue
-			}
-			if _, err := s.UpdatePayment(runCtx, p.ID, dto.UpdatePaymentRequest{
+			// UpdatePayment closes the link first; a link it could not close keeps its payment.
+			_, err = s.UpdatePayment(runCtx, p.ID, dto.UpdatePaymentRequest{
 				PaymentStatus: lo.ToPtr(string(types.PaymentStatusVoided)),
 				VoidedAt:      lo.ToPtr(clock.Now()),
 				Metadata:      lo.ToPtr(lo.Assign(p.Metadata, types.Metadata{"void_reason": reason})),
-			}); err != nil {
+			})
+			if err != nil && !ierr.IsInvalidOperation(err) {
 				s.Logger.Error(runCtx, "failed to void payment link",
 					"error", err, "invoice_id", invoiceID, "payment_id", p.ID, "reason", reason)
 			}
