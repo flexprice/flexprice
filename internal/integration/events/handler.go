@@ -8,7 +8,9 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -28,6 +30,8 @@ type Handler interface {
 type Deps struct {
 	ConnectionRepo connection.Repository
 	EIMRepo        entityintegrationmapping.Repository
+	CreditNoteRepo creditnote.Repository
+	RefundRepo     refund.Repository
 	EntityScope    interfaces.BillingEntityScope
 	Logger         *logger.Logger
 	Config         *config.Configuration
@@ -98,6 +102,33 @@ func NewHandler(deps Deps) Handler {
 				h.deps.Config,
 				h.deps.ConnectionRepo,
 				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
+		types.WebhookEventCreditNoteUpdated: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchCreditNoteVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.CreditNoteRepo,
+				h.deps.EntityScope,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
+		types.WebhookEventRefundSucceeded: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchRefundVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.CreditNoteRepo,
+				h.deps.RefundRepo,
+				h.deps.EntityScope,
 				h.deps.Logger,
 				event,
 				msg.UUID,

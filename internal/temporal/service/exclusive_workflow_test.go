@@ -55,6 +55,11 @@ func TestExecuteWorkflowExclusiveID(t *testing.T) {
 			&models.RazorpayInvoiceSyncWorkflowInput{InvoiceID: "inv_1", CustomerID: "cust_1", TenantID: "tenant_1", EnvironmentID: "env_1"},
 			"wf_razorpay_invoice_sync_inv_1", true,
 		},
+		{
+			"zoho credit note sync", types.TemporalZohoBooksCreditNoteSyncWorkflow,
+			&models.ZohoBooksCreditNoteSyncWorkflowInput{CreditNoteID: "cn_1"},
+			"wf_zoho_credit_note_sync_cn_1", true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

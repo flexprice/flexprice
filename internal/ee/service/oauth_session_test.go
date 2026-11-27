@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,4 +65,20 @@ func TestStoreOAuthSessionIgnoresReservedMetadataKeys(t *testing.T) {
 
 	_, err = svc.GetOAuthSession(ctx, "evil_session")
 	require.Error(t, err)
+}
+
+func TestBuildOAuthURLZohoDefaultScopesCoverCreditNoteSync(t *testing.T) {
+	log := logger.NewNoopLogger()
+	params := ServiceParams{Logger: log, DB: testutil.NewMockPostgresClient(log), SettingsRepo: testutil.NewInMemorySettingsStore()}
+	svc := NewOAuthService(testutil.NewInMemoryConnectionStore(), plainEncryption{}, nil, nil, log, params)
+
+	authURL, err := svc.BuildOAuthURL(types.OAuthProviderZohoBooks, "client_1", "http://localhost:3000/callback", "state_1", map[string]string{})
+	require.NoError(t, err)
+
+	parsed, err := url.Parse(authURL)
+	require.NoError(t, err)
+	scopes := strings.Split(parsed.Query().Get("scope"), ",")
+	for _, scope := range []string{"ZohoBooks.creditnotes.CREATE", "ZohoBooks.creditnotes.READ", "ZohoBooks.invoices.DELETE", "ZohoBooks.invoices.CREATE"} {
+		require.Contains(t, scopes, scope)
+	}
 }

@@ -122,6 +122,27 @@ func TestResourceIDsArePathEscaped(t *testing.T) {
 		{"submit invoice", func(c *Client) error {
 			return c.SubmitInvoiceForApproval(context.Background(), id)
 		}, base + "invoices/..%2Fx%3Fy=z/submit?"},
+		{"refund credit note", func(c *Client) error {
+			_, err := c.RefundCreditNote(context.Background(), id, &CreditNoteRefundRequest{})
+			return err
+		}, base + "creditnotes/..%2Fx%3Fy=z/refunds?"},
+		{"apply credit note to invoices", func(c *Client) error {
+			return c.ApplyCreditNoteToInvoices(context.Background(), id, &CreditNoteApplyRequest{})
+		}, base + "creditnotes/..%2Fx%3Fy=z/invoices?"},
+		{"get credit note", func(c *Client) error {
+			_, err := c.GetCreditNote(context.Background(), id)
+			return err
+		}, base + "creditnotes/..%2Fx%3Fy=z?"},
+		{"void credit note", func(c *Client) error {
+			return c.VoidCreditNote(context.Background(), id)
+		}, base + "creditnotes/..%2Fx%3Fy=z/status/void?"},
+		{"list invoice credits applied", func(c *Client) error {
+			_, err := c.ListInvoiceCreditsApplied(context.Background(), id)
+			return err
+		}, base + "invoices/..%2Fx%3Fy=z/creditsapplied?"},
+		{"delete invoice applied credit", func(c *Client) error {
+			return c.DeleteInvoiceAppliedCredit(context.Background(), id, "../a?b=c")
+		}, base + "invoices/..%2Fx%3Fy=z/creditsapplied/..%2Fa%3Fb=c?"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

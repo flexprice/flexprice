@@ -14,6 +14,7 @@ type SyncConfig struct {
 	Plan         *EntitySyncConfig `json:"plan,omitempty"`
 	Subscription *EntitySyncConfig `json:"subscription,omitempty"`
 	Invoice      *EntitySyncConfig `json:"invoice,omitempty"`
+	CreditNote   *EntitySyncConfig `json:"credit_note,omitempty"` // Credit note sync (Zoho Books only), outbound only
 	Customer     *EntitySyncConfig `json:"customer,omitempty"`
 	Payment      *EntitySyncConfig `json:"payment,omitempty"` // Payment sync (QuickBooks bidirectional)
 	Price        *EntitySyncConfig `json:"price,omitempty"`   // Price sync (Stripe only) — outbound only, see Validate()
@@ -499,6 +500,29 @@ func (s *SyncConfig) Validate() error {
 
 	if s.Invoice != nil && s.Invoice.Inbound {
 		return ierr.NewError("invoice inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	if s.CreditNote != nil && s.CreditNote.Inbound {
+		return ierr.NewError("credit note inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	if s.CreditNote != nil && s.CreditNote.Outbound && (s.Invoice == nil || !s.Invoice.Outbound) {
+		return ierr.NewError("credit note sync requires invoice outbound sync").
+			WithHint("Enable invoice outbound sync to sync credit notes to Zoho Books").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Zoho rejects a credit note refund without a Bank or Cash account to pay it from.
+	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.ZohoDepositToAccountID() == "" {
+		return ierr.NewError("credit note sync requires a deposit to account").
+			WithHint("Set deposit_to_account_id to the Zoho Bank or Cash account credit note refunds are paid from").
+			Mark(ierr.ErrValidation)
+	}
+
+	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.IsSubmitForApprovalEnabled() {
+		return ierr.NewError("credit note sync requires submit for approval to be disabled").
+			WithHint("Disable submit_for_approval to sync credit notes to Zoho Books").
+			Mark(ierr.ErrValidation)
 	}
 
 	if s.Deal != nil && s.Deal.Inbound {
