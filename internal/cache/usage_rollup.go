@@ -15,8 +15,8 @@ import (
 const (
 	usageRollupHourLayout = "2006010215"
 
-	// activeSetTTL outlives the last checkpoint run that reads an hour's active set: that run's cutoff
-	// is the hour plus LateWindow, and it fires LateWindow + CutoffGrace later. One hour of slack.
+	// activeSetTTL outlives the checkpoint run that reads an hour's active set, which fires 1h + LateWindow
+	// + CutoffGrace after the hour starts; the TTL may date from the hour's first write.
 	activeSetTTL = 2*usagerollup.LateWindow + usagerollup.CutoffGrace + time.Hour
 )
 
@@ -135,4 +135,17 @@ func mergeHourlyUsage(usage []usagerollup.HourlyUsage) []usagerollup.HourlyUsage
 		}
 	}
 	return result
+}
+
+func (s *hourlyUsageRepository) ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error) {
+	tenantID, environmentID := types.GetTenantID(ctx), types.GetEnvironmentID(ctx)
+	if tenantID == "" || environmentID == "" {
+		return nil, fmt.Errorf("usage rollup active customers: tenant and environment are required")
+	}
+	key := newUsageRollupKeys(s.keyPrefix, tenantID, environmentID, usagerollup.HourlyUsage{Hour: hour}).active
+	customers, err := s.client.SMembers(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("usage rollup active customers: %w", err)
+	}
+	return customers, nil
 }

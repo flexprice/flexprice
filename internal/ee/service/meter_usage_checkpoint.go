@@ -5,10 +5,14 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/meterusagecheckpoint"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -166,4 +170,279 @@ func (s *meterUsageService) SaveUsageCheckpointsForSubscription(
 		}
 	}
 	return nil
+}
+
+// UsageCheckpointService adds finalized ClickHouse usage to per-period meter totals for customers
+// whose usage is in the Redis hourly totals.
+type UsageCheckpointService interface {
+	// ActiveEnvironments returns every environment of the tenants with usage rollup on.
+	ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error)
+
+	// UpdateCustomerCheckpoints brings the period totals of the customers active in the hour before
+	// cutoff, in the tenant and environment in ctx, up to cutoff.
+	UpdateCustomerCheckpoints(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error)
+}
+
+// UsageCheckpointEnvironment names one tenant environment to checkpoint.
+type UsageCheckpointEnvironment struct {
+	TenantID      string
+	EnvironmentID string
+}
+
+// UsageCheckpointResult counts the customers read and what happened to each.
+type UsageCheckpointResult struct {
+	Customers int
+	Outcomes  map[string]int
+}
+
+func (r *UsageCheckpointResult) record(ctx context.Context, outcome usageCheckpointOutcome, count int) {
+	if count == 0 {
+		return
+	}
+	r.Outcomes[string(outcome)] += count
+	metrics.RecordCounter(ctx, metrics.UsageCheckpointCustomers, int64(count), metrics.L(metrics.KeyOutcome, string(outcome)))
+}
+
+type usageCheckpointOutcome string
+
+const (
+	usageCheckpointUpdated        usageCheckpointOutcome = "updated"
+	usageCheckpointCurrent        usageCheckpointOutcome = "current"
+	usageCheckpointConflict       usageCheckpointOutcome = "conflict"
+	usageCheckpointNoSubscription usageCheckpointOutcome = "no_subscription"
+)
+
+// checkpointBatchSize caps the customers in one Postgres or ClickHouse IN list. At 500, even
+// 255-character IDs keep a ClickHouse query well under its 256 KiB max_query_size.
+const checkpointBatchSize = 500
+
+type usageCheckpointService struct {
+	ServiceParams
+}
+
+// NewUsageCheckpointService returns the service behind the hourly usage checkpoint job.
+func NewUsageCheckpointService(params ServiceParams) UsageCheckpointService {
+	return &usageCheckpointService{ServiceParams: params}
+}
+
+// usageWindow is the [start, end) range of usage a run reads. Times are UTC so equal windows are
+// equal map keys.
+type usageWindow struct {
+	start, end time.Time
+}
+
+// customerWindow is one customer's usage in one window.
+type customerWindow struct {
+	externalCustomerID string
+	window             usageWindow
+}
+
+func (s *usageCheckpointService) ActiveEnvironments(ctx context.Context) ([]UsageCheckpointEnvironment, error) {
+	usageRollup := s.Config.UsageRollup
+	if !usageRollup.Enabled {
+		return nil, nil
+	}
+	var environments []UsageCheckpointEnvironment
+	for _, tenantID := range usageRollup.EnabledTenants {
+		tenantCtx := context.WithValue(ctx, types.CtxTenantID, tenantID)
+		filter := types.GetDefaultFilter()
+		for {
+			page, err := s.EnvironmentRepo.List(tenantCtx, filter)
+			if err != nil {
+				return nil, err
+			}
+			for _, e := range page {
+				environments = append(environments, UsageCheckpointEnvironment{TenantID: tenantID, EnvironmentID: e.ID})
+			}
+			if len(page) < filter.Limit {
+				break
+			}
+			filter.Offset += filter.Limit
+		}
+	}
+	return environments, nil
+}
+
+func (s *usageCheckpointService) UpdateCustomerCheckpoints(ctx context.Context, cutoff time.Time) (*UsageCheckpointResult, error) {
+	if s.HourlyUsageRepo == nil {
+		return nil, ierr.NewError("usage rollup repository is not configured").
+			WithHint("Usage checkpoints need Redis; fix the redis config or disable usage_rollup.").
+			Mark(ierr.ErrSystem)
+	}
+	// Only the hour this run finalizes: a customer missed by a failed run is caught up the next time
+	// they are active, from their watermark.
+	externalCustomerIDs, err := s.HourlyUsageRepo.ListActiveCustomers(ctx, cutoff.Add(-time.Hour))
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("Failed to read active customers from the usage rollup").Mark(ierr.ErrSystem)
+	}
+
+	result := &UsageCheckpointResult{Customers: len(externalCustomerIDs), Outcomes: make(map[string]int)}
+	for _, batch := range lo.Chunk(externalCustomerIDs, checkpointBatchSize) {
+		if err := s.updateCustomerCheckpoints(ctx, batch, cutoff, result); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// updateCustomerCheckpoints brings up to checkpointBatchSize customers up to cutoff: three Postgres reads,
+// one ClickHouse read per distinct window and one Postgres transaction.
+func (s *usageCheckpointService) updateCustomerCheckpoints(ctx context.Context, externalCustomerIDs []string, cutoff time.Time, result *UsageCheckpointResult) error {
+	customerFilter := types.NewNoLimitCustomerFilter()
+	customerFilter.ExternalIDs = externalCustomerIDs
+	customers, err := s.CustomerRepo.List(ctx, customerFilter)
+	if err != nil || len(customers) == 0 {
+		return err
+	}
+	customerIDs := lo.Map(customers, func(c *customer.Customer, _ int) string { return c.ID })
+
+	subs, err := s.SubRepo.List(ctx, &types.SubscriptionFilter{
+		QueryFilter:        types.NewNoLimitQueryFilter(),
+		CustomerIDs:        customerIDs,
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive, types.SubscriptionStatusTrialing},
+	})
+	if err != nil {
+		return err
+	}
+	subsByCustomer := lo.GroupBy(subs, func(sub *subscription.Subscription) string { return sub.CustomerID })
+
+	watermarks, err := s.MeterUsageCheckpointRepo.ListMeterUsageCheckpointWatermarks(ctx, customerIDs)
+	if err != nil {
+		return err
+	}
+	watermarkByCustomer := lo.SliceToMap(watermarks, func(w *meterusagecheckpoint.MeterUsageCheckpointWatermark) (string, time.Time) {
+		return w.CustomerID, w.AggregatedUntil.UTC()
+	})
+
+	updates := make(map[string]*meterusagecheckpoint.CustomerCheckpointUpdate)
+	// customersByWindow is who to read from ClickHouse per window; periodStarts is which billing periods
+	// each customer's window usage is added to.
+	customersByWindow := make(map[usageWindow][]string)
+	periodStarts := make(map[customerWindow][]time.Time)
+	for _, cust := range customers {
+		customerSubs := subsByCustomer[cust.ID]
+		if len(customerSubs) == 0 {
+			result.record(ctx, usageCheckpointNoSubscription, 1)
+			continue
+		}
+		watermark := watermarkByCustomer[cust.ID]
+		// Stop at the earliest period end, so usage after it waits for the next period instead of being skipped.
+		to := cutoff.UTC()
+		for _, sub := range customerSubs {
+			to = types.EarliestOf(to, sub.CurrentPeriodEnd.UTC())
+		}
+		starts := lo.Uniq(lo.Map(customerSubs, func(sub *subscription.Subscription, _ int) time.Time { return sub.CurrentPeriodStart.UTC() }))
+		windowed := false
+		for _, start := range starts {
+			window := usageWindow{start: types.LatestOf(watermark, start), end: to}
+			if !window.end.After(window.start) {
+				continue
+			}
+			key := customerWindow{externalCustomerID: cust.ExternalID, window: window}
+			if len(periodStarts[key]) == 0 {
+				customersByWindow[window] = append(customersByWindow[window], cust.ExternalID)
+			}
+			periodStarts[key] = append(periodStarts[key], start)
+			windowed = true
+		}
+		if !windowed {
+			result.record(ctx, usageCheckpointCurrent, 1)
+			continue
+		}
+		updates[cust.ExternalID] = &meterusagecheckpoint.CustomerCheckpointUpdate{CustomerID: cust.ID, From: watermark, To: to}
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+
+	if err := s.addWindowUsage(ctx, customersByWindow, periodStarts, updates); err != nil {
+		return err
+	}
+	applied, err := s.MeterUsageCheckpointRepo.UpdateCustomerCheckpoints(ctx, lo.Values(updates))
+	if err != nil {
+		return err
+	}
+	result.record(ctx, usageCheckpointUpdated, applied)
+	result.record(ctx, usageCheckpointConflict, len(updates)-applied)
+	return nil
+}
+
+// addWindowUsage reads each window's usage from ClickHouse, once for all customers sharing it, and adds it
+// to their updates under every billing period it belongs to. Meters a period total does not hold (deleted,
+// unsupported or never reset) are left out.
+func (s *usageCheckpointService) addWindowUsage(
+	ctx context.Context,
+	customersByWindow map[usageWindow][]string,
+	periodStarts map[customerWindow][]time.Time,
+	updates map[string]*meterusagecheckpoint.CustomerCheckpointUpdate,
+) error {
+	type windowRow struct {
+		window usageWindow
+		total  *events.MeterTotals
+	}
+	var rows []windowRow
+	for window, externalCustomerIDs := range customersByWindow {
+		totals, err := s.MeterUsageRepo.GetUsageByCustomerAndMeter(ctx, &events.MeterUsageQueryParams{
+			TenantID:            types.GetTenantID(ctx),
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			ExternalCustomerIDs: externalCustomerIDs,
+			StartTime:           window.start,
+			EndTime:             window.end,
+			// Stored totals, so FINAL merges duplicate rows.
+			UseFinal: true,
+		})
+		if err != nil {
+			return err
+		}
+		for _, t := range totals {
+			rows = append(rows, windowRow{window: window, total: t})
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	meters, err := s.MeterRepo.ListByIDs(ctx, lo.Uniq(lo.Map(rows, func(r windowRow, _ int) string { return r.total.MeterID })))
+	if err != nil {
+		return err
+	}
+	aggregationByMeter := make(map[string]types.AggregationType, len(meters))
+	for _, m := range meters {
+		// Never-reset SUM meters keep running totals instead, and the read path doesn't use them.
+		if usagerollup.SupportsAggregation(m.Aggregation.Type) && !keepsRunningAggregate(m) {
+			aggregationByMeter[m.ID] = m.Aggregation.Type
+		}
+	}
+	for _, r := range rows {
+		aggregation, ok := aggregationByMeter[r.total.MeterID]
+		if !ok {
+			continue
+		}
+		update := updates[r.total.ExternalCustomerID]
+		for _, start := range periodStarts[customerWindow{externalCustomerID: r.total.ExternalCustomerID, window: r.window}] {
+			update.Totals = append(update.Totals, meterusagecheckpoint.PeriodTotal{
+				PeriodStart:     start,
+				MeterID:         r.total.MeterID,
+				AggregationType: aggregation,
+				Quantity:        addWindowTotal(aggregation, decimal.Zero, false, r.total),
+			})
+		}
+	}
+	return nil
+}
+
+// addWindowTotal merges one window's total into a stored total. hasStored is false for a new row,
+// so a MAX of negative values is not clamped to zero.
+func addWindowTotal(aggregation types.AggregationType, stored decimal.Decimal, hasStored bool, window *events.MeterTotals) decimal.Decimal {
+	switch aggregation {
+	case types.AggregationCount:
+		return stored.Add(decimal.NewFromInt(int64(window.Count)))
+	case types.AggregationMax:
+		if !hasStored || window.Max.GreaterThan(stored) {
+			return window.Max
+		}
+		return stored
+	default:
+		return stored.Add(window.Sum)
+	}
 }

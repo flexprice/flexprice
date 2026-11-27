@@ -152,6 +152,24 @@ type CheckoutSessionExpiryWorkflowResult struct {
 // SelfBillingHourlyWorkflowInput is the input for SelfBillingHourlyWorkflow.
 type SelfBillingHourlyWorkflowInput struct{}
 
+// ===================== Usage Checkpoint =====================
+
+// UsageCheckpointWorkflowInput is the input for UsageCheckpointWorkflow.
+type UsageCheckpointWorkflowInput struct{}
+
+// UsageCheckpointEnvironment names one tenant environment with usage rollup enabled.
+type UsageCheckpointEnvironment struct {
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+}
+
+// UsageCheckpointEnvironmentInput asks to bring one environment's per-period totals up to Cutoff.
+type UsageCheckpointEnvironmentInput struct {
+	TenantID      string    `json:"tenant_id"`
+	EnvironmentID string    `json:"environment_id"`
+	Cutoff        time.Time `json:"cutoff"`
+}
+
 // ===================== Billing Instalments Due =====================
 
 // BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.

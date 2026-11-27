@@ -86,11 +86,10 @@ func TestNewHourlyUsageRepositoryWithoutRedis(t *testing.T) {
 
 func TestActiveSetOutlivesLastRead(t *testing.T) {
 	hour := time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC)
-	lastCutoffReadingHour := hour.Add(usagerollup.LateWindow)
-	lastRunReadingHour := lastCutoffReadingHour.Add(usagerollup.LateWindow + usagerollup.CutoffGrace)
-	require.True(t, usagerollup.Cutoff(lastRunReadingHour).Equal(lastCutoffReadingHour))
-	require.True(t, hour.Add(activeSetTTL).After(lastRunReadingHour),
-		"a set written at the start of its hour must still exist when the last run reads it")
+	run := hour.Add(time.Hour + usagerollup.LateWindow + usagerollup.CutoffGrace)
+	require.True(t, usagerollup.Cutoff(run).Equal(hour.Add(time.Hour)), "this run checkpoints the hour")
+	require.True(t, hour.Add(activeSetTTL).After(run.Add(30*time.Minute)),
+		"a set written at the start of its hour must outlive the run that reads it, with room for a retry")
 }
 
 func TestMergeHourlyUsage(t *testing.T) {

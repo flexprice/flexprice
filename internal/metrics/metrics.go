@@ -33,6 +33,8 @@ const (
 	EventsScopeDropped Name = "events.scope_dropped"
 	UsageRollupRows    Name = "usage_rollup.rows"
 
+	UsageCheckpointCustomers Name = "usage_checkpoint.customers"
+
 	ActivityDropped            Name = "activity.dropped"
 	ActivityUncaptured         Name = "activity.uncaptured"
 	ActivityCaptureFailed      Name = "activity.capture_failed"
@@ -58,6 +60,8 @@ var catalog = map[Name]definition{
 	EmailDeliveries:    {"Customer email send attempts by the dispatcher, by outcome; a deferred email is counted again on each retry", "{email}"},
 	EventsScopeDropped: {"Events dropped by consumers because message and event scope differ, by consumer", "{event}"},
 	UsageRollupRows:    {"Meter usage rows added to the Redis hourly totals by outcome (written, too_old, error)", "{row}"},
+
+	UsageCheckpointCustomers: {"Customer billing periods handled by the usage checkpoint job, by outcome", "{period}"},
 
 	ActivityDropped:            {"Activity entries dropped before reaching Kafka, by reason", "{entry}"},
 	ActivityUncaptured:         {"Bulk writes on a logged entity that returned only a row count, by entity", "{write}"},

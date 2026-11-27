@@ -53,4 +53,6 @@ type Repository interface {
 	// Increment merges usage into Redis: SUM and COUNT add, MAX keeps the higher value. Entries for
 	// the same customer, meter and hour may repeat.
 	Increment(ctx context.Context, usage []HourlyUsage) error
+	// ListActiveCustomers returns the external customer IDs with usage in the UTC hour starting at hour.
+	ListActiveCustomers(ctx context.Context, hour time.Time) ([]string, error)
 }

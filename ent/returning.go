@@ -52,6 +52,7 @@ import (
 	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpointwatermark"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -2825,6 +2826,68 @@ func scanReturningMeterUsageCheckpoint(rows *sql.Rows) ([]*MeterUsageCheckpoint,
 	var out []*MeterUsageCheckpoint
 	for rows.Next() {
 		node := &MeterUsageCheckpoint{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*MeterUsageCheckpointWatermark.
+func (_u *MeterUsageCheckpointWatermarkUpdate) SaveReturning(ctx context.Context) ([]*MeterUsageCheckpointWatermark, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *MeterUsageCheckpointWatermarkUpdate) sqlSaveReturning(ctx context.Context) ([]*MeterUsageCheckpointWatermark, error) {
+	var out []*MeterUsageCheckpointWatermark
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", meterusagecheckpointwatermark.Table, meterusagecheckpointwatermark.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningMeterUsageCheckpointWatermark(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*MeterUsageCheckpointWatermark.
+func (_d *MeterUsageCheckpointWatermarkDelete) ExecReturning(ctx context.Context) ([]*MeterUsageCheckpointWatermark, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *MeterUsageCheckpointWatermarkDelete) sqlExecReturning(ctx context.Context) ([]*MeterUsageCheckpointWatermark, error) {
+	var out []*MeterUsageCheckpointWatermark
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", meterusagecheckpointwatermark.Table, meterusagecheckpointwatermark.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningMeterUsageCheckpointWatermark(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningMeterUsageCheckpointWatermark(rows *sql.Rows) ([]*MeterUsageCheckpointWatermark, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*MeterUsageCheckpointWatermark
+	for rows.Next() {
+		node := &MeterUsageCheckpointWatermark{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

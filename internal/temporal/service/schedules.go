@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
@@ -172,6 +173,16 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 			Offset:    20 * time.Minute, // fires at :20 so the previous hour has settled (selfbilling waits 15 minutes)
 			Workflow:  cronWorkflows.SelfBillingHourlyWorkflow,
 			Input:     models.SelfBillingHourlyWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
+			// Always declared; a no-op unless usage_rollup is enabled. Fires at :10 so usage stamped
+			// just before the cutoff has landed in ClickHouse.
+			ID:        types.ScheduleIDUsageCheckpoint,
+			Interval:  1 * time.Hour,
+			Offset:    usagerollup.CutoffGrace,
+			Workflow:  cronWorkflows.UsageCheckpointWorkflow,
+			Input:     models.UsageCheckpointWorkflowInput{},
 			TaskQueue: types.TemporalTaskQueueCron,
 		},
 		{

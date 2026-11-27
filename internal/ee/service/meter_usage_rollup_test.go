@@ -18,9 +18,14 @@ import (
 )
 
 type fakeHourlyUsageRepository struct {
-	calls int
-	usage []usagerollup.HourlyUsage
-	err   error
+	calls  int
+	usage  []usagerollup.HourlyUsage
+	err    error
+	active map[time.Time][]string
+}
+
+func (f *fakeHourlyUsageRepository) ListActiveCustomers(_ context.Context, hour time.Time) ([]string, error) {
+	return f.active[hour], f.err
 }
 
 func (f *fakeHourlyUsageRepository) Increment(_ context.Context, usage []usagerollup.HourlyUsage) error {

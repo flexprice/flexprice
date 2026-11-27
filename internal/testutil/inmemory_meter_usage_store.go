@@ -795,6 +795,41 @@ func propsString(m map[string]string) string {
 // GetDistinctMeterIDs
 // ---------------------------------------------------------------------------
 
+func (s *InMemoryMeterUsageStore) GetUsageByCustomerAndMeter(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	byCustomerMeter := make(map[string]*events.MeterTotals)
+	seen := make(map[string]struct{})
+	for _, r := range s.records {
+		if !matchRecord(r, params) {
+			continue
+		}
+		key := r.MeterID + "|" + r.ID
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		customerMeter := r.ExternalCustomerID + "|" + r.MeterID
+		t, ok := byCustomerMeter[customerMeter]
+		if !ok {
+			t = &events.MeterTotals{ExternalCustomerID: r.ExternalCustomerID, MeterID: r.MeterID, Max: r.QtyTotal}
+			byCustomerMeter[customerMeter] = t
+		}
+		t.Sum = t.Sum.Add(r.QtyTotal)
+		t.Count++
+		if r.QtyTotal.GreaterThan(t.Max) {
+			t.Max = r.QtyTotal
+		}
+	}
+	totals := make([]*events.MeterTotals, 0, len(byCustomerMeter))
+	for _, t := range byCustomerMeter {
+		totals = append(totals, t)
+	}
+	sort.Slice(totals, func(i, j int) bool { return totals[i].MeterID < totals[j].MeterID })
+	return totals, nil
+}
+
 func (s *InMemoryMeterUsageStore) GetDistinctMeterIDs(_ context.Context, params *events.MeterUsageQueryParams) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

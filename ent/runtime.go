@@ -48,6 +48,7 @@ import (
 	"github.com/flexprice/flexprice/ent/journalline"
 	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/meterusagecheckpoint"
+	"github.com/flexprice/flexprice/ent/meterusagecheckpointwatermark"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/paymentmethod"
@@ -2135,6 +2136,39 @@ func init() {
 	meterusagecheckpointDescAggregationType := meterusagecheckpointFields[3].Descriptor()
 	// meterusagecheckpoint.AggregationTypeValidator is a validator for the "aggregation_type" field. It is called by the builders before save.
 	meterusagecheckpoint.AggregationTypeValidator = meterusagecheckpointDescAggregationType.Validators[0].(func(string) error)
+	meterusagecheckpointwatermarkMixin := schema.MeterUsageCheckpointWatermark{}.Mixin()
+	meterusagecheckpointwatermarkMixinFields0 := meterusagecheckpointwatermarkMixin[0].Fields()
+	_ = meterusagecheckpointwatermarkMixinFields0
+	meterusagecheckpointwatermarkMixinFields1 := meterusagecheckpointwatermarkMixin[1].Fields()
+	_ = meterusagecheckpointwatermarkMixinFields1
+	meterusagecheckpointwatermarkFields := schema.MeterUsageCheckpointWatermark{}.Fields()
+	_ = meterusagecheckpointwatermarkFields
+	// meterusagecheckpointwatermarkDescTenantID is the schema descriptor for tenant_id field.
+	meterusagecheckpointwatermarkDescTenantID := meterusagecheckpointwatermarkMixinFields0[0].Descriptor()
+	// meterusagecheckpointwatermark.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	meterusagecheckpointwatermark.TenantIDValidator = meterusagecheckpointwatermarkDescTenantID.Validators[0].(func(string) error)
+	// meterusagecheckpointwatermarkDescStatus is the schema descriptor for status field.
+	meterusagecheckpointwatermarkDescStatus := meterusagecheckpointwatermarkMixinFields0[1].Descriptor()
+	// meterusagecheckpointwatermark.DefaultStatus holds the default value on creation for the status field.
+	meterusagecheckpointwatermark.DefaultStatus = meterusagecheckpointwatermarkDescStatus.Default.(string)
+	// meterusagecheckpointwatermarkDescCreatedAt is the schema descriptor for created_at field.
+	meterusagecheckpointwatermarkDescCreatedAt := meterusagecheckpointwatermarkMixinFields0[2].Descriptor()
+	// meterusagecheckpointwatermark.DefaultCreatedAt holds the default value on creation for the created_at field.
+	meterusagecheckpointwatermark.DefaultCreatedAt = meterusagecheckpointwatermarkDescCreatedAt.Default.(func() time.Time)
+	// meterusagecheckpointwatermarkDescUpdatedAt is the schema descriptor for updated_at field.
+	meterusagecheckpointwatermarkDescUpdatedAt := meterusagecheckpointwatermarkMixinFields0[3].Descriptor()
+	// meterusagecheckpointwatermark.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	meterusagecheckpointwatermark.DefaultUpdatedAt = meterusagecheckpointwatermarkDescUpdatedAt.Default.(func() time.Time)
+	// meterusagecheckpointwatermark.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	meterusagecheckpointwatermark.UpdateDefaultUpdatedAt = meterusagecheckpointwatermarkDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// meterusagecheckpointwatermarkDescEnvironmentID is the schema descriptor for environment_id field.
+	meterusagecheckpointwatermarkDescEnvironmentID := meterusagecheckpointwatermarkMixinFields1[0].Descriptor()
+	// meterusagecheckpointwatermark.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	meterusagecheckpointwatermark.DefaultEnvironmentID = meterusagecheckpointwatermarkDescEnvironmentID.Default.(string)
+	// meterusagecheckpointwatermarkDescCustomerID is the schema descriptor for customer_id field.
+	meterusagecheckpointwatermarkDescCustomerID := meterusagecheckpointwatermarkFields[1].Descriptor()
+	// meterusagecheckpointwatermark.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	meterusagecheckpointwatermark.CustomerIDValidator = meterusagecheckpointwatermarkDescCustomerID.Validators[0].(func(string) error)
 	paymentMixin := schema.Payment{}.Mixin()
 	paymentMixinFields0 := paymentMixin[0].Fields()
 	_ = paymentMixinFields0

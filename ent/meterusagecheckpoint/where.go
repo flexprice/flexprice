@@ -127,6 +127,11 @@ func AggregatedUntil(v time.Time) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldAggregatedUntil, v))
 }
 
+// PeriodStart applies equality check predicate on the "period_start" field. It's identical to PeriodStartEQ.
+func PeriodStart(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldPeriodStart, v))
+}
+
 // InvoiceID applies equality check predicate on the "invoice_id" field. It's identical to InvoiceIDEQ.
 func InvoiceID(v string) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldInvoiceID, v))
@@ -859,6 +864,56 @@ func AggregatedUntilLT(v time.Time) predicate.MeterUsageCheckpoint {
 // AggregatedUntilLTE applies the LTE predicate on the "aggregated_until" field.
 func AggregatedUntilLTE(v time.Time) predicate.MeterUsageCheckpoint {
 	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldAggregatedUntil, v))
+}
+
+// PeriodStartEQ applies the EQ predicate on the "period_start" field.
+func PeriodStartEQ(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldEQ(FieldPeriodStart, v))
+}
+
+// PeriodStartNEQ applies the NEQ predicate on the "period_start" field.
+func PeriodStartNEQ(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldNEQ(FieldPeriodStart, v))
+}
+
+// PeriodStartIn applies the In predicate on the "period_start" field.
+func PeriodStartIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldIn(FieldPeriodStart, vs...))
+}
+
+// PeriodStartNotIn applies the NotIn predicate on the "period_start" field.
+func PeriodStartNotIn(vs ...time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldNotIn(FieldPeriodStart, vs...))
+}
+
+// PeriodStartGT applies the GT predicate on the "period_start" field.
+func PeriodStartGT(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldGT(FieldPeriodStart, v))
+}
+
+// PeriodStartGTE applies the GTE predicate on the "period_start" field.
+func PeriodStartGTE(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldGTE(FieldPeriodStart, v))
+}
+
+// PeriodStartLT applies the LT predicate on the "period_start" field.
+func PeriodStartLT(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldLT(FieldPeriodStart, v))
+}
+
+// PeriodStartLTE applies the LTE predicate on the "period_start" field.
+func PeriodStartLTE(v time.Time) predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldLTE(FieldPeriodStart, v))
+}
+
+// PeriodStartIsNil applies the IsNil predicate on the "period_start" field.
+func PeriodStartIsNil() predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldIsNull(FieldPeriodStart))
+}
+
+// PeriodStartNotNil applies the NotNil predicate on the "period_start" field.
+func PeriodStartNotNil() predicate.MeterUsageCheckpoint {
+	return predicate.MeterUsageCheckpoint(sql.FieldNotNull(FieldPeriodStart))
 }
 
 // InvoiceIDEQ applies the EQ predicate on the "invoice_id" field.
