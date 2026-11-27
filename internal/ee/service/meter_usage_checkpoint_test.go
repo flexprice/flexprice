@@ -128,19 +128,19 @@ var checkpointPeriodStart = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 
 func checkpointHour(h int) time.Time { return checkpointPeriodStart.Add(time.Duration(h) * time.Hour) }
 
-// countingMeterUsageStore counts GetMeterTotals calls to prove customers sharing a window share a query.
+// countingMeterUsageStore counts GetUsageByCustomerAndMeter calls to prove customers sharing a window share a query.
 type countingMeterUsageStore struct {
 	*testutil.InMemoryMeterUsageStore
 	totalsCalls int
 	finalCalls  int
 }
 
-func (s *countingMeterUsageStore) GetMeterTotals(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+func (s *countingMeterUsageStore) GetUsageByCustomerAndMeter(ctx context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
 	s.totalsCalls++
 	if params.UseFinal {
 		s.finalCalls++
 	}
-	return s.InMemoryMeterUsageStore.GetMeterTotals(ctx, params)
+	return s.InMemoryMeterUsageStore.GetUsageByCustomerAndMeter(ctx, params)
 }
 
 type checkpointHarness struct {

@@ -795,7 +795,7 @@ func propsString(m map[string]string) string {
 // GetDistinctMeterIDs
 // ---------------------------------------------------------------------------
 
-func (s *InMemoryMeterUsageStore) GetMeterTotals(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
+func (s *InMemoryMeterUsageStore) GetUsageByCustomerAndMeter(_ context.Context, params *events.MeterUsageQueryParams) ([]*events.MeterTotals, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

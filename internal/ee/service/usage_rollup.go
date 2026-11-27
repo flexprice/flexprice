@@ -609,7 +609,7 @@ func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscrip
 	clickhouseWindows, hours := planUsageReads(from, end, redisFrom, ongoing)
 	for _, window := range clickhouseWindows {
 		metrics.RecordCounter(ctx, metrics.UsageRollupGapQueries, 1)
-		totals, err := s.MeterUsageRepo.GetMeterTotals(ctx, &events.MeterUsageQueryParams{
+		totals, err := s.MeterUsageRepo.GetUsageByCustomerAndMeter(ctx, &events.MeterUsageQueryParams{
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
 			ExternalCustomerIDs: []string{customerAndAddons.ExternalCustomerID},
