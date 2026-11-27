@@ -248,6 +248,9 @@ func extractWorkflowContext(args []interface{}) (tenantID, environmentID, userID
 			case "InvoiceID":
 				entity, entityID = "invoice", idVal
 				continue
+			case "CreditNoteID":
+				entity, entityID = "credit_note", idVal
+				continue
 			case "SubscriptionID":
 				entity, entityID = "subscription", idVal
 				continue
