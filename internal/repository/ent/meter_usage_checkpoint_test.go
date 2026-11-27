@@ -144,4 +144,14 @@ func TestMeterUsageCheckpointRepositoryUpdateCustomerCheckpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, latest.Total.Equal(decimal.NewFromInt(42)))
 	require.Nil(t, latest.PeriodStart)
+
+	// Subscriptions with different period starts give one row per period on a meter, all at the same To.
+	secondPeriod := periodStart.AddDate(0, 0, 14)
+	n, err = repo.UpdateCustomerCheckpoints(ctx, []*meterusagecheckpoint.CustomerCheckpointUpdate{
+		update("cust_two_periods", time.Time{}, hour(4), total("m_sum", types.AggregationSum, 2),
+			meterusagecheckpoint.PeriodTotal{PeriodStart: secondPeriod, MeterID: "m_sum", AggregationType: types.AggregationSum, Quantity: decimal.NewFromInt(2)}),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, map[string]string{"m_sum": "2"}, totals("cust_two_periods"))
 }

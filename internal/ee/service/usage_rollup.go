@@ -119,6 +119,8 @@ func (s *usageRollupService) ClearEligibility(ctx context.Context, entity UsageR
 	if !s.usageRollupEnabled(ctx) {
 		return
 	}
+	// Callers clear after their write commits; a client gone mid-request must not leave the flag set.
+	ctx = context.WithoutCancel(ctx)
 	customerIDs, err := s.eligibilityCustomers(ctx, entity, entityID)
 	if err != nil {
 		s.Logger.Error(ctx, "usage rollup: failed to resolve customers to clear", "error", err, "entity", entity, "entity_id", entityID)
@@ -611,6 +613,7 @@ func (s *usageRollupService) PeriodQuantities(ctx context.Context, sub *subscrip
 			TenantID:            types.GetTenantID(ctx),
 			EnvironmentID:       types.GetEnvironmentID(ctx),
 			ExternalCustomerIDs: []string{customerAndAddons.ExternalCustomerID},
+			UseFinal:            true,
 			StartTime:           window.start,
 			EndTime:             window.end,
 		})
