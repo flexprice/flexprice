@@ -647,6 +647,56 @@ func (s *UsageRollupSuite) TestWalletBalanceMatchesFullCompute() {
 	s.Equal("8", s.lineItemUsage(sub.ID, types.UsageSourceWallet).String())
 }
 
+// A shadow tenant's balance is served from the old path; the usage rollup balance is only compared.
+func (s *UsageRollupSuite) TestShadowTenantServesOldPathAndCompares() {
+	ctx := s.GetContext()
+	sub := s.seed(nil)
+	s.clearEligibility(UsageRollupSubscription, sub.ID)
+	s.svc.Config.UsageRollup = config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{types.DefaultTenantID}}
+	w := s.prepaidWallet("wallet_shadow", sub.CustomerID)
+	wallets := NewWalletService(s.svc.ServiceParams).(*walletService)
+
+	recent := time.Now().UTC().Add(-time.Hour)
+	s.Require().NoError(s.svc.MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+		Event: events.Event{ID: "evt_shadow", TenantID: types.GetTenantID(ctx), EnvironmentID: types.GetEnvironmentID(ctx),
+			ExternalCustomerID: "ext_rt", Timestamp: recent},
+		MeterID: "mtr_rt", QtyTotal: decimal.NewFromInt(2),
+	}}))
+	usageRollup := s.svc.HourlyUsageRepo.(*fakeHourlyUsageRepository)
+	usageRollup.hourly[recent.Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(2)}}
+
+	served, err := wallets.GetWalletBalanceV2(ctx, w.ID)
+	s.Require().NoError(err)
+	s.Equal("996", lo.FromPtr(served.RealTimeBalance).String(), "1000 - 2 units at 2")
+	s.Equal(usageRollupShadowMatch, wallets.compareUsageRollupBalance(ctx, w, served))
+
+	// A unit only Redis holds: the served balance stays on ClickHouse, the usage rollup balance differs.
+	usageRollup.hourly[time.Now().UTC().Truncate(time.Hour)] = []usagerollup.HourlyUsage{{MeterID: "mtr_rt", Aggregation: types.AggregationSum, Quantity: decimal.NewFromInt(1)}}
+	served, err = wallets.GetWalletBalanceV2(ctx, w.ID)
+	s.Require().NoError(err)
+	s.Equal("996", lo.FromPtr(served.RealTimeBalance).String(), "the usage rollup balance is never served")
+	s.Equal(usageRollupShadowMismatch, wallets.compareUsageRollupBalance(ctx, w, served))
+
+	p, err := s.GetStores().PriceRepo.Get(ctx, "price_rt")
+	s.Require().NoError(err)
+	p.UpdatedAt = time.Now().UTC()
+	s.Require().NoError(s.GetStores().PriceRepo.Update(ctx, p, false))
+	s.clearEligibility(UsageRollupPlan, "plan_rt")
+	s.Equal(usageRollupShadowIneligible, wallets.compareUsageRollupBalance(ctx, w, served))
+
+	s.svc.Config.UsageRollup.ShadowTenants = nil
+	s.Empty(wallets.compareUsageRollupBalance(ctx, w, served), "not a shadow tenant")
+}
+
+func (s *UsageRollupSuite) prepaidWallet(id, customerID string) *wallet.Wallet {
+	ctx := s.GetContext()
+	w := &wallet.Wallet{ID: id, CustomerID: customerID, Currency: "usd", WalletType: types.WalletTypePrePaid,
+		Balance: decimal.NewFromInt(1000), CreditBalance: decimal.NewFromInt(1000), ConversionRate: decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1), WalletStatus: types.WalletStatusActive, BaseModel: types.GetDefaultBaseModel(ctx)}
+	s.Require().NoError(s.GetStores().WalletRepo.CreateWallet(ctx, w))
+	return w
+}
+
 // lineItemUsage returns the seeded line item's current-period usage as read for source.
 func (s *UsageRollupSuite) lineItemUsage(subscriptionID string, source types.UsageSource) decimal.Decimal {
 	ctx := s.GetContext()

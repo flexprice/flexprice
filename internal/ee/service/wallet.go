@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -3370,6 +3372,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		if resp != nil && resp.RealTimeBalance != nil {
 			s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 		}
+		s.compareUsageRollupBalance(ctx, w, resp)
 		return resp, nil
 	}
 
@@ -3383,7 +3386,50 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	if resp != nil && resp.RealTimeBalance != nil {
 		s.setWalletRealtimeBalanceToCache(ctx, walletID, *resp.RealTimeBalance)
 	}
+	s.compareUsageRollupBalance(ctx, w, resp)
 	return resp, nil
+}
+
+// compareUsageRollupBalance runs a shadow tenant's balance on the usage rollup path too and records on
+// usage_rollup.shadow_reads how it compares with the served balance, which comes from the old path. It returns
+// the outcome, "" when the tenant is not a shadow tenant.
+func (s *walletService) compareUsageRollupBalance(ctx context.Context, w *wallet.Wallet, served *dto.WalletBalanceResponse) string {
+	usageRollup := s.Config.UsageRollup
+	if served == nil || served.RealTimeBalance == nil || !usageRollup.Enabled || !slices.Contains(usageRollup.ShadowTenants, types.GetTenantID(ctx)) {
+		return ""
+	}
+	outcome := usageRollupShadowMatch
+	defer func() {
+		metrics.RecordCounter(ctx, metrics.UsageRollupShadowReads, 1, metrics.L(metrics.KeyOutcome, outcome))
+	}()
+
+	rollupCtx := withUsageRollupShadowRead(ctx)
+	// The usage rollup path only runs for eligible customers; for others the compute would read ClickHouse again.
+	eligible, err := (&usageRollupService{ServiceParams: s.ServiceParams}).isEligible(rollupCtx, w.CustomerID)
+	if err != nil {
+		outcome = usageRollupShadowError
+		s.Logger.Error(ctx, "usage rollup shadow eligibility failed", "error", err, "wallet_id", w.ID)
+		return outcome
+	}
+	if !eligible {
+		outcome = usageRollupShadowIneligible
+		return outcome
+	}
+	rollup, err := s.computeRealtimeBalance(rollupCtx, w)
+	switch {
+	case err != nil || rollup == nil || rollup.RealTimeBalance == nil:
+		outcome = usageRollupShadowError
+		s.Logger.Error(ctx, "usage rollup shadow balance failed", "error", err, "wallet_id", w.ID)
+	case !rollup.RealTimeBalance.Equal(*served.RealTimeBalance):
+		outcome = usageRollupShadowMismatch
+		s.Logger.Info(ctx, "usage rollup shadow balance differs",
+			"wallet_id", w.ID,
+			"customer_id", w.CustomerID,
+			"served_balance", served.RealTimeBalance.String(),
+			"usage_rollup_balance", rollup.RealTimeBalance.String(),
+			"diff", rollup.RealTimeBalance.Sub(*served.RealTimeBalance).String())
+	}
+	return outcome
 }
 
 // buildResponseFromCachedBalance builds a WalletBalanceResponse from a cached

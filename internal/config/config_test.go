@@ -301,3 +301,17 @@ func TestValidateEmail(t *testing.T) {
 	off.Email.Enabled = true
 	assert.NoError(t, off.validateEmail())
 }
+
+// Shadow tenants keep the usage rollup current like enabled tenants.
+func TestUsageRollupTenants(t *testing.T) {
+	c := UsageRollupConfig{Enabled: true, EnabledTenants: []string{"t_on"}, ShadowTenants: []string{"t_shadow"}}
+
+	for tenantID, want := range map[string]bool{"t_on": true, "t_shadow": true, "t_off": false} {
+		assert.Equal(t, want, c.IsEnabledForTenant(tenantID), tenantID)
+	}
+	assert.Equal(t, []string{"t_on", "t_shadow"}, c.Tenants())
+	assert.True(t, UsageRollupConfig{Enabled: true, ShadowTenants: []string{"t_shadow"}}.IsEnabledForAnyTenant(), "shadow alone needs dedup too")
+
+	c.Enabled = false
+	assert.False(t, c.IsEnabledForTenant("t_on") || c.IsEnabledForTenant("t_shadow"), "the master switch turns all off")
+}

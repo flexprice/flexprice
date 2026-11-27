@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clock"
+	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -75,6 +77,21 @@ const (
 	usageRollupReadIneligible = "ineligible"
 	usageRollupReadError      = "error"
 )
+
+// Outcomes of comparing a shadow tenant's wallet balance on both paths, recorded on usage_rollup.shadow_reads.
+const (
+	usageRollupShadowMatch      = "match"
+	usageRollupShadowMismatch   = "mismatch"
+	usageRollupShadowIneligible = "ineligible"
+	usageRollupShadowError      = "error"
+)
+
+// usageRollupShadowReadKey marks a context whose wallet read takes the usage rollup path for a shadow tenant.
+type usageRollupShadowReadKey struct{}
+
+func withUsageRollupShadowRead(ctx context.Context) context.Context {
+	return context.WithValue(ctx, usageRollupShadowReadKey{}, true)
+}
 
 // customerAndAddons is the subscription's external customer ID and the addons active in its current period,
 // cached per subscription and period. Exported fields: it is stored as JSON.
@@ -441,7 +458,7 @@ func (s *usageRollupService) periodGrantFeatureIDs(ctx context.Context, sub *sub
 }
 
 func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *subscription.Subscription, source types.UsageSource) bool {
-	if source != types.UsageSourceWallet || !s.usageRollupEnabled(ctx) {
+	if source != types.UsageSourceWallet || !readsUsageRollup(ctx, s.Config) {
 		return false
 	}
 	eligible, err := s.isEligible(ctx, sub.CustomerID)
@@ -450,6 +467,17 @@ func (s *usageRollupService) IsUsageRollupEligible(ctx context.Context, sub *sub
 		return false
 	}
 	return eligible
+}
+
+// readsUsageRollup reports whether wallet reads in ctx take the usage rollup path: an enabled tenant, or a shadow
+// tenant's comparison read.
+func readsUsageRollup(ctx context.Context, cfg *config.Configuration) bool {
+	if cfg == nil {
+		return false
+	}
+	shadowRead, _ := ctx.Value(usageRollupShadowReadKey{}).(bool)
+	usageRollup := cfg.UsageRollup
+	return shadowRead || (usageRollup.Enabled && slices.Contains(usageRollup.EnabledTenants, types.GetTenantID(ctx)))
 }
 
 // isEligible reads the flag from the cache, then Postgres, and evaluates it when a write has cleared it.

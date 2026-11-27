@@ -91,6 +91,13 @@ func TestRecordUsageRollup(t *testing.T) {
 			wantSum:     "5",
 		},
 		{
+			name:        "shadow tenant writes like an enabled one",
+			usageRollup: config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{"tenant_on"}},
+			records:     []*events.MeterUsage{usage("mtr_sum", now, 2)},
+			wantCalls:   1,
+			wantSum:     "2",
+		},
+		{
 			name:        "tenant not enabled writes nothing",
 			usageRollup: config.UsageRollupConfig{Enabled: true, EnabledTenants: []string{"tenant_other"}},
 			records:     []*events.MeterUsage{usage("mtr_sum", now, 2)},

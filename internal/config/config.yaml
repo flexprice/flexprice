@@ -564,7 +564,8 @@ meter_usage_tracking_lazy:
 # Hourly per-customer meter quantities in Redis for real-time usage reads.
 usage_rollup:
   enabled: false # master switch; when true, runs only for enabled_tenants
-  enabled_tenants: [] # tenant IDs with usage rollup
+  enabled_tenants: [] # tenant IDs whose wallet reads are served from the usage rollup
+  shadow_tenants: [] # tenant IDs whose wallet reads are served from the old path and compared with the usage rollup
 
 # Usage-driven alert pipeline: meter-usage post-insert schedules a debounced
 # per-customer Temporal workflow (spend + entitlement grants + wallet alerts).

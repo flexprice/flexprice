@@ -496,7 +496,7 @@ func (s *meterUsageService) GetSubscriptionMeterUsage(
 // with its plan or addon price and its quantity from the usage rollup. served is false off that path; a
 // usage rollup failure is logged and the caller reads Postgres and ClickHouse instead.
 func (s *meterUsageService) usageRollupMeterUsage(ctx context.Context, sub *subscription.Subscription) (*SubscriptionMeterUsage, bool) {
-	if !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
+	if !readsUsageRollup(ctx, s.Config) {
 		return nil, false
 	}
 	usageRollup := NewUsageRollupService(s.ServiceParams)

@@ -1027,19 +1027,34 @@ type MeterUsageTrackingConfig struct {
 
 // UsageRollupConfig gates writing hourly per-customer meter quantities to Redis on ingest.
 type UsageRollupConfig struct {
-	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants.
+	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants and ShadowTenants.
 	Enabled        bool     `mapstructure:"enabled" default:"false"`
 	EnabledTenants []string `mapstructure:"enabled_tenants"`
+	// ShadowTenants keep the usage rollup current; their wallet reads are served from the old path and also
+	// computed on the usage rollup path to record whether the two match.
+	ShadowTenants []string `mapstructure:"shadow_tenants"`
 }
 
-// IsEnabledForTenant reports whether ingestion writes usage rollup for tenantID.
+// IsEnabledForTenant reports whether the usage rollup is kept current for tenantID: ingestion, checkpoints and
+// eligibility. True for enabled and shadow tenants.
 func (c UsageRollupConfig) IsEnabledForTenant(tenantID string) bool {
-	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
+	return c.Enabled && (slices.Contains(c.EnabledTenants, tenantID) || slices.Contains(c.ShadowTenants, tenantID))
 }
 
-// IsEnabledForAnyTenant reports whether usage rollup is on for at least one tenant.
+// IsEnabledForAnyTenant reports whether usage rollup is on for at least one enabled or shadow tenant.
 func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
-	return c.Enabled && len(c.EnabledTenants) > 0
+	return c.Enabled && (len(c.EnabledTenants) > 0 || len(c.ShadowTenants) > 0)
+}
+
+// Tenants is every tenant whose usage rollup is kept current: enabled and shadow, without duplicates.
+func (c UsageRollupConfig) Tenants() []string {
+	tenants := slices.Clone(c.EnabledTenants)
+	for _, tenantID := range c.ShadowTenants {
+		if !slices.Contains(tenants, tenantID) {
+			tenants = append(tenants, tenantID)
+		}
+	}
+	return tenants
 }
 
 // ValidateUsageRollup rejects an enabled usage rollup without Redis event dedup on both meter

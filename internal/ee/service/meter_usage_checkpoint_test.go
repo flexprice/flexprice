@@ -378,6 +378,11 @@ func TestUsageCheckpointActiveEnvironments(t *testing.T) {
 		{TenantID: "tenant_on", EnvironmentID: "env_2"},
 	}, got, "every environment of each enabled tenant")
 
+	svc.Config.UsageRollup = config.UsageRollupConfig{Enabled: true, ShadowTenants: []string{"tenant_on"}}
+	got, err = svc.ActiveEnvironments(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 2, "shadow tenants are checkpointed too")
+
 	svc.Config.UsageRollup.Enabled = false
 	got, err = svc.ActiveEnvironments(context.Background())
 	require.NoError(t, err)
