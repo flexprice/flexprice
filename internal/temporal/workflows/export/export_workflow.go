@@ -1,9 +1,12 @@
 package export
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/email"
 	"github.com/flexprice/flexprice/internal/temporal/activities/export"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -209,9 +212,11 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 			EnvID:    taskDetails.EnvID,
 			UserID:   input.UserID,
 			Status:   types.TaskStatusFailed,
-			Error:    err.Error(),
+			Error:    runFailureMessage(err),
 		}
 		_ = workflow.ExecuteActivity(ctx, taskActivity.UpdateTaskStatus, failInput).Get(ctx, nil)
+
+		deliverRun(ctx, &taskDetails, taskID, types.TaskStatusFailed, 0, err)
 
 		success = false
 	} else {
@@ -244,6 +249,8 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 
 		success = true
 
+		deliverRun(ctx, &taskDetails, taskID, types.TaskStatusCompleted, exportOutput.RecordCount, nil)
+
 		logger.Info("Export workflow completed successfully", "task_id", taskID)
 	}
 
@@ -261,4 +268,116 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		RecordCount: exportOutput.RecordCount,
 		Success:     true,
 	}, nil
+}
+
+// Never fails the run.
+func deliverRun(ctx workflow.Context, details *export.ScheduledTaskDetails, taskID string, status types.TaskStatus, recordCount int, runErr error) {
+	if workflow.GetVersion(ctx, "export-deliveries", workflow.DefaultVersion, 1) != 1 {
+		return
+	}
+	logger := workflow.GetLogger(ctx)
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 2 * time.Minute,
+		RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+	})
+	var delivery export.DeliveryActivity
+
+	deliveries := []types.ExportDelivery{fileDelivery(ctx, details, runErr)}
+
+	emailAllowed := details.Interval != types.ScheduledTaskIntervalHourly
+	if workflow.GetVersion(ctx, "export-email-intervals", workflow.DefaultVersion, 1) == 1 {
+		emailAllowed = details.Interval.SupportsEmail()
+	}
+	if len(details.EmailRecipients) > 0 && emailAllowed {
+		var out export.SendExportEmailsOutput
+		emailCtx := workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+			StartToCloseTimeout: 5 * time.Minute,
+			RetryPolicy:         &temporal.RetryPolicy{MaximumAttempts: 3},
+		})
+		err := workflow.ExecuteActivity(emailCtx, delivery.SendExportEmails, export.SendExportEmailsInput{
+			TaskID:          taskID,
+			ScheduledTaskID: details.ScheduledTaskID,
+			TenantID:        details.TenantID,
+			EnvID:           details.EnvID,
+			ExportName:      details.Name,
+			EntityType:      details.EntityType,
+			Interval:        details.Interval,
+			Recipients:      details.EmailRecipients,
+			RunStatus:       status,
+			WindowStart:     details.StartTime,
+			WindowEnd:       details.EndTime,
+			RecordCount:     recordCount,
+		}).Get(emailCtx, &out)
+		if err != nil {
+			logger.Error("Failed to send export emails", "error", err, "task_id", taskID)
+			for _, addr := range details.EmailRecipients {
+				deliveries = append(deliveries, types.ExportDelivery{
+					Type:   types.ExportDeliveryTypeEmail,
+					Target: email.MaskAddress(addr),
+					Status: types.ExportDeliveryStatusFailed,
+					Detail: "email step failed",
+					At:     workflow.Now(ctx),
+				})
+			}
+		} else {
+			deliveries = append(deliveries, out.Deliveries...)
+		}
+	}
+
+	err := workflow.ExecuteActivity(ctx, delivery.RecordDeliveries, export.RecordDeliveriesInput{
+		TaskID:     taskID,
+		TenantID:   details.TenantID,
+		EnvID:      details.EnvID,
+		Deliveries: deliveries,
+	}).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Failed to record deliveries", "error", err, "task_id", taskID)
+	}
+}
+
+func fileDelivery(ctx workflow.Context, details *export.ScheduledTaskDetails, runErr error) types.ExportDelivery {
+	d := types.ExportDelivery{
+		Type:   types.ExportDeliveryTypeFlexprice,
+		Target: "Flexprice",
+		Status: types.ExportDeliveryStatusDelivered,
+		At:     workflow.Now(ctx),
+	}
+	if details.ConnectionID != "" {
+		d.Type = types.ExportDeliveryTypeS3
+		d.Target = "s3"
+		if cfg := details.JobConfig; cfg != nil {
+			d.Target = cfg.Bucket + "/" + cfg.KeyPrefix
+			if cfg.Provider == types.SecretProviderGCS {
+				d.Type = types.ExportDeliveryTypeGCS
+			}
+		}
+	}
+	if runErr != nil {
+		d.Status = types.ExportDeliveryStatusFailed
+		d.Detail = runFailureMessage(runErr)
+	}
+	return d
+}
+
+const (
+	runTimedOutMessage = "The export took too long and was stopped"
+	runFailedMessage   = "The export failed"
+)
+
+// User-facing; full error stays in logs.
+func runFailureMessage(err error) string {
+	if temporal.IsTimeoutError(err) || errors.Is(err, context.DeadlineExceeded) {
+		return runTimedOutMessage
+	}
+	var appErr *temporal.ApplicationError
+	if !errors.As(err, &appErr) {
+		return runFailedMessage
+	}
+	switch appErr.Type() {
+	case export.ErrTypeTimedOut:
+		return runTimedOutMessage
+	case export.ErrTypeViewDeleted, export.ErrTypeDestinationWrite:
+		return appErr.Message()
+	}
+	return runFailedMessage
 }

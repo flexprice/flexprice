@@ -48,6 +48,14 @@ func (noopRedisCache) ForceCacheGetWithTTL(_ context.Context, _ string) (interfa
 	return nil, 0, false
 }
 
+func (noopRedisCache) Incr(_ context.Context, _ string, _ time.Duration) (int64, error) {
+	return 0, nil
+}
+
+func (noopRedisCache) TrySetNX(_ context.Context, _ string, _ interface{}, _ time.Duration) (bool, error) {
+	return false, nil
+}
+
 var _ cache.RedisCache = noopRedisCache{}
 
 // newRealPostgresTestClient builds a real postgres.IClient backed by an actual

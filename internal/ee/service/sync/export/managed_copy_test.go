@@ -278,3 +278,9 @@ func TestExport_ManagedConnectionRechecksDestination(t *testing.T) {
 		})
 	}
 }
+
+func TestUploadFailure_TagsOnlyCustomerConnections(t *testing.T) {
+	raw := io.ErrUnexpectedEOF
+	require.ErrorIs(t, uploadFailure(&dto.ExportRequest{}, raw), ErrDestinationWrite)
+	require.NotErrorIs(t, uploadFailure(&dto.ExportRequest{ManagedCopy: true}, raw), ErrDestinationWrite)
+}

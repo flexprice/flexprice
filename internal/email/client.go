@@ -64,6 +64,11 @@ func (c *EmailClient) GetReplyTo() string {
 
 // SendEmail sends a plain text or HTML email
 func (c *EmailClient) SendEmail(ctx context.Context, from, to, subject, htmlContent, textContent string) (string, error) {
+	return c.SendEmailIdempotent(ctx, from, to, subject, htmlContent, textContent, "")
+}
+
+// SendEmailIdempotent dedupes by key when set
+func (c *EmailClient) SendEmailIdempotent(ctx context.Context, from, to, subject, htmlContent, textContent, idempotencyKey string) (string, error) {
 	if !c.enabled {
 		return "", fmt.Errorf("email client is disabled")
 	}
@@ -76,12 +81,17 @@ func (c *EmailClient) SendEmail(ctx context.Context, from, to, subject, htmlCont
 		Text:    textContent,
 	}
 
-	// Add reply-to if available
 	if c.replyTo != "" {
 		params.ReplyTo = c.replyTo
 	}
 
-	sent, err := c.client.Emails.SendWithContext(ctx, params)
+	var sent *resend.SendEmailResponse
+	var err error
+	if idempotencyKey != "" {
+		sent, err = c.client.Emails.SendWithOptions(ctx, params, &resend.SendEmailOptions{IdempotencyKey: idempotencyKey})
+	} else {
+		sent, err = c.client.Emails.SendWithContext(ctx, params)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to send email: %w", err)
 	}

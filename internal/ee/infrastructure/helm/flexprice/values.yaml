@@ -1627,6 +1627,11 @@ app:
 checkout:
   baseUrl: ""   # e.g. "https://admin.flexprice.io"
 
+# Scheduled export delivery → rendered into config.yaml as exports.*
+exports:
+  consoleBaseUrl: "" # e.g. "https://admin.flexprice.io"; required for email delivery
+  maxEmailsPerHour: 200
+
 # Feature flag configuration
 featureFlag:
   enableFeatureUsageForAnalytics: true

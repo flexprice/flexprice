@@ -80575,6 +80575,7 @@ type ScheduledTaskMutation struct {
 	name                 *string
 	schedule             **types.ExportSchedule
 	source_config        **types.ExportSourceConfig
+	email_config         **types.ExportEmailConfig
 	clearedFields        map[string]struct{}
 	done                 bool
 	oldValue             func(context.Context) (*ScheduledTask, error)
@@ -81378,6 +81379,55 @@ func (m *ScheduledTaskMutation) ResetSourceConfig() {
 	delete(m.clearedFields, scheduledtask.FieldSourceConfig)
 }
 
+// SetEmailConfig sets the "email_config" field.
+func (m *ScheduledTaskMutation) SetEmailConfig(tec *types.ExportEmailConfig) {
+	m.email_config = &tec
+}
+
+// EmailConfig returns the value of the "email_config" field in the mutation.
+func (m *ScheduledTaskMutation) EmailConfig() (r *types.ExportEmailConfig, exists bool) {
+	v := m.email_config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmailConfig returns the old "email_config" field's value of the ScheduledTask entity.
+// If the ScheduledTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ScheduledTaskMutation) OldEmailConfig(ctx context.Context) (v *types.ExportEmailConfig, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmailConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmailConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmailConfig: %w", err)
+	}
+	return oldValue.EmailConfig, nil
+}
+
+// ClearEmailConfig clears the value of the "email_config" field.
+func (m *ScheduledTaskMutation) ClearEmailConfig() {
+	m.email_config = nil
+	m.clearedFields[scheduledtask.FieldEmailConfig] = struct{}{}
+}
+
+// EmailConfigCleared returns if the "email_config" field was cleared in this mutation.
+func (m *ScheduledTaskMutation) EmailConfigCleared() bool {
+	_, ok := m.clearedFields[scheduledtask.FieldEmailConfig]
+	return ok
+}
+
+// ResetEmailConfig resets all changes to the "email_config" field.
+func (m *ScheduledTaskMutation) ResetEmailConfig() {
+	m.email_config = nil
+	delete(m.clearedFields, scheduledtask.FieldEmailConfig)
+}
+
 // Where appends a list predicates to the ScheduledTaskMutation builder.
 func (m *ScheduledTaskMutation) Where(ps ...predicate.ScheduledTask) {
 	m.predicates = append(m.predicates, ps...)
@@ -81412,7 +81462,7 @@ func (m *ScheduledTaskMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ScheduledTaskMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, scheduledtask.FieldTenantID)
 	}
@@ -81461,6 +81511,9 @@ func (m *ScheduledTaskMutation) Fields() []string {
 	if m.source_config != nil {
 		fields = append(fields, scheduledtask.FieldSourceConfig)
 	}
+	if m.email_config != nil {
+		fields = append(fields, scheduledtask.FieldEmailConfig)
+	}
 	return fields
 }
 
@@ -81501,6 +81554,8 @@ func (m *ScheduledTaskMutation) Field(name string) (ent.Value, bool) {
 		return m.Schedule()
 	case scheduledtask.FieldSourceConfig:
 		return m.SourceConfig()
+	case scheduledtask.FieldEmailConfig:
+		return m.EmailConfig()
 	}
 	return nil, false
 }
@@ -81542,6 +81597,8 @@ func (m *ScheduledTaskMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldSchedule(ctx)
 	case scheduledtask.FieldSourceConfig:
 		return m.OldSourceConfig(ctx)
+	case scheduledtask.FieldEmailConfig:
+		return m.OldEmailConfig(ctx)
 	}
 	return nil, fmt.Errorf("unknown ScheduledTask field %s", name)
 }
@@ -81663,6 +81720,13 @@ func (m *ScheduledTaskMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSourceConfig(v)
 		return nil
+	case scheduledtask.FieldEmailConfig:
+		v, ok := value.(*types.ExportEmailConfig)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmailConfig(v)
+		return nil
 	}
 	return fmt.Errorf("unknown ScheduledTask field %s", name)
 }
@@ -81720,6 +81784,9 @@ func (m *ScheduledTaskMutation) ClearedFields() []string {
 	if m.FieldCleared(scheduledtask.FieldSourceConfig) {
 		fields = append(fields, scheduledtask.FieldSourceConfig)
 	}
+	if m.FieldCleared(scheduledtask.FieldEmailConfig) {
+		fields = append(fields, scheduledtask.FieldEmailConfig)
+	}
 	return fields
 }
 
@@ -81760,6 +81827,9 @@ func (m *ScheduledTaskMutation) ClearField(name string) error {
 		return nil
 	case scheduledtask.FieldSourceConfig:
 		m.ClearSourceConfig()
+		return nil
+	case scheduledtask.FieldEmailConfig:
+		m.ClearEmailConfig()
 		return nil
 	}
 	return fmt.Errorf("unknown ScheduledTask nullable field %s", name)
@@ -81816,6 +81886,9 @@ func (m *ScheduledTaskMutation) ResetField(name string) error {
 		return nil
 	case scheduledtask.FieldSourceConfig:
 		m.ResetSourceConfig()
+		return nil
+	case scheduledtask.FieldEmailConfig:
+		m.ResetEmailConfig()
 		return nil
 	}
 	return fmt.Errorf("unknown ScheduledTask field %s", name)

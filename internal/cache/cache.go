@@ -57,6 +57,12 @@ type RedisCache interface {
 	// fetch those from the DB and Set them back. A disabled cache reports
 	// every key missing.
 	GetBulk(ctx context.Context, keys []string) (found map[string]interface{}, missing []string)
+
+	// Incr increments counter, sets ttl.
+	Incr(ctx context.Context, key string, ttl time.Duration) (int64, error)
+
+	// TrySetNX sets key only if absent; reports whether it was set.
+	TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error)
 }
 
 // Predefined cache key prefixes for different entity types

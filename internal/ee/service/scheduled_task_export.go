@@ -220,6 +220,12 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		}
 	}
 
+	if req.EmailConfig != nil {
+		if err := s.validateRecipients(ctx, task.Interval, req.EmailConfig); err != nil {
+			return err
+		}
+	}
+
 	previous := *task
 	scheduleChanged := req.Schedule != nil && !reflect.DeepEqual(task.Schedule, req.Schedule)
 	if req.Name != nil {
@@ -227,6 +233,9 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 	}
 	if scheduleChanged {
 		task.Schedule = req.Schedule
+	}
+	if req.EmailConfig != nil {
+		task.EmailConfig = emailConfigOrNil(req.EmailConfig)
 	}
 	task.UpdatedBy = types.GetUserID(ctx)
 
@@ -238,7 +247,12 @@ func (s *scheduledTaskService) updateExportSettings(ctx context.Context, task *s
 		}
 	}
 
-	if err := s.repo.UpdateSettings(ctx, task); err != nil {
+	fields := scheduledtask.SettingsFields{
+		Name:     req.Name != nil,
+		Schedule: scheduleChanged,
+		Email:    req.EmailConfig != nil,
+	}
+	if err := s.repo.UpdateSettings(ctx, task, fields); err != nil {
 		s.logger.Error(ctx, "failed to update scheduled task settings", "id", task.ID, "error", err)
 		if synced {
 			// Restore committed schedule; concurrent winner wins.
