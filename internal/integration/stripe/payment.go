@@ -2234,6 +2234,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return nil
 	}
 
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: stripePaymentIntentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"stripe_payment_intent_id", stripePaymentIntentID)
+	}
+
 	refundID, err := s.ensureRefunded(ctx, stripePaymentIntentID, flexpricePaymentID)
 	if err != nil {
 		return ierr.WithError(err).

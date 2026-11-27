@@ -540,22 +540,25 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
-		final, completed, err := services.CheckoutSessionService.CompleteOrGetCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: razorpayPaymentID,
 		})
-		if err != nil {
-			h.logger.Error(ctx, "failed to complete checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_payment_id", flexpricePaymentID,
-				"razorpay_payment_id", razorpayPaymentID,
-			)
-			return false, err
-		}
-		if completed {
+		if err == nil {
 			return true, nil
 		}
-		session = final
+		h.logger.Error(ctx, "failed to complete checkout session",
+			"error", err,
+			"session_id", session.ID,
+			"flexprice_payment_id", flexpricePaymentID,
+			"razorpay_payment_id", razorpayPaymentID,
+		)
+		if !ierr.IsAlreadyExists(err) {
+			return false, err
+		}
+		// The session ended instead, e.g. it was past expiry: this capture is late and is refunded below.
+		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
+			return false, err
+		}
 	}
 
 	switch session.CheckoutStatus {

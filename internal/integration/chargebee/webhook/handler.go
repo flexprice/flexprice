@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/metrics"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
 	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -237,21 +238,13 @@ func (h *Handler) handleCheckoutSessionForPayment(
 	}
 
 	if session.CheckoutStatus == types.CheckoutStatusInitiated || session.CheckoutStatus == types.CheckoutStatusPending {
-		final, completed, err := services.CheckoutSessionService.CompleteOrGetCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
+		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{
 			ProviderPaymentIntentID: chargebeeTransactionID,
 			ProviderMetadata: map[string]string{
 				"chargebee_transaction_id": chargebeeTransactionID,
 			},
 		})
-		if err != nil {
-			h.logger.Error(ctx, "failed to complete checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_invoice_id", flexpriceInvoiceID,
-				"chargebee_transaction_id", chargebeeTransactionID)
-			return true, nil
-		}
-		if completed {
+		if err == nil {
 			h.logger.Info(ctx, "completed checkout session from chargebee webhook",
 				"session_id", session.ID,
 				"flexprice_invoice_id", flexpriceInvoiceID,
@@ -270,7 +263,18 @@ func (h *Handler) handleCheckoutSessionForPayment(
 			}
 			return true, nil
 		}
-		session = final
+		if !ierr.IsAlreadyExists(err) {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_invoice_id", flexpriceInvoiceID,
+				"chargebee_transaction_id", chargebeeTransactionID)
+			return true, nil
+		}
+		// The session ended instead, e.g. it was past expiry: a capture it missed is refunded below.
+		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
+			return false, err
+		}
 	}
 
 	switch session.CheckoutStatus {

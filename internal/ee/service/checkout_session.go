@@ -736,20 +736,6 @@ func (s *checkoutSessionService) CompleteCheckoutSession(ctx context.Context, se
 	return nil
 }
 
-func (s *checkoutSessionService) CompleteOrGetCheckoutSession(ctx context.Context, sessionID string, providerResult *types.CheckoutProviderResult) (*dto.CheckoutSessionResponse, bool, error) {
-	completeErr := s.CompleteCheckoutSession(ctx, sessionID, providerResult)
-	if completeErr != nil && !ierr.IsAlreadyExists(completeErr) {
-		return nil, false, completeErr
-	}
-
-	// Completion or expiry cleanup just wrote the row, so read it from the writer.
-	session, err := s.CheckoutSessionRepo.Get(types.WithForceWriter(ctx), sessionID)
-	if err != nil {
-		return nil, false, err
-	}
-	return dto.ToCheckoutSessionResponse(session), completeErr == nil, nil
-}
-
 func checkoutMetricLabels(session *domainCheckout.CheckoutSession, status types.CheckoutStatus) []metrics.Label {
 	return []metrics.Label{
 		metrics.L(metrics.KeyProvider, string(session.PaymentProvider)),

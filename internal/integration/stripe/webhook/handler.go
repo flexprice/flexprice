@@ -1129,25 +1129,28 @@ func (h *Handler) handleCheckoutSessionForPayment(
 				"stripe_payment_intent_id": stripePaymentIntentID,
 			}
 		}
-		final, completed, err := services.CheckoutSessionService.CompleteOrGetCheckoutSession(ctx, session.ID, providerResult)
-		if err != nil {
-			h.logger.Error(ctx, "failed to complete checkout session",
-				"error", err,
-				"session_id", session.ID,
-				"flexprice_payment_id", flexpricePaymentID,
-				"stripe_payment_intent_id", stripePaymentIntentID,
-			)
-			// Fail the webhook so Stripe redelivers.
-			return false, err
-		}
-		if completed {
+		err := services.CheckoutSessionService.CompleteCheckoutSession(ctx, session.ID, providerResult)
+		if err == nil {
 			h.logger.Info(ctx, "completed checkout session from stripe webhook",
 				"session_id", session.ID,
 				"flexprice_payment_id", flexpricePaymentID,
 				"stripe_payment_intent_id", stripePaymentIntentID)
 			return true, nil
 		}
-		session = final
+		if !ierr.IsAlreadyExists(err) {
+			h.logger.Error(ctx, "failed to complete checkout session",
+				"error", err,
+				"session_id", session.ID,
+				"flexprice_payment_id", flexpricePaymentID,
+				"stripe_payment_intent_id", stripePaymentIntentID,
+			)
+			// The session is still pending, so fail the webhook and let Stripe redeliver.
+			return false, err
+		}
+		// The session ended instead, e.g. it was past expiry: a capture it missed is refunded below.
+		if session, err = services.CheckoutSessionService.Get(types.WithForceWriter(ctx), session.ID); err != nil {
+			return false, err
+		}
 	}
 
 	switch session.CheckoutStatus {
