@@ -1,0 +1,58 @@
+# Checks for the FlexPrice agent SDK (TypeScript).
+# Runs only when the SDK's folder or this file changes.
+name: Agent SDK (TypeScript)
+
+on:
+  pull_request:
+    paths:
+      - 'agents/sdk/typescript/**'
+      - '.github/workflows/agent-sdk-typescript.yml'
+  push:
+    branches: [main, develop]
+    paths:
+      - 'agents/sdk/typescript/**'
+      - '.github/workflows/agent-sdk-typescript.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-sdk-typescript-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24', '26']
+    defaults:
+      run:
+        working-directory: agents/sdk/typescript
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: agents/sdk/typescript/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

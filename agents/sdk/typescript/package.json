@@ -1,0 +1,35 @@
+{
+  "name": "@flexprice/agent-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Meters LLM calls and sends usage events to FlexPrice.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint --max-warnings=0 src test"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.15.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1"
+  }
+}
