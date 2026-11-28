@@ -8,11 +8,13 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/analytics"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/storage"
 	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/types"
@@ -36,6 +38,8 @@ type scheduledTaskService struct {
 	logger          *logger.Logger
 	config          *config.Configuration
 	storageResolver storage.Resolver
+	rbac            *rbac.RBACService
+	analytics       AnalyticsService
 }
 
 // NewScheduledTaskService accepts a nil scheduler.
@@ -47,6 +51,8 @@ func NewScheduledTaskService(
 	logger *logger.Logger,
 	config *config.Configuration,
 	storageResolver storage.Resolver,
+	rbacService *rbac.RBACService,
+	analytics AnalyticsService,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
@@ -56,13 +62,111 @@ func NewScheduledTaskService(
 		logger:          logger,
 		config:          config,
 		storageResolver: storageResolver,
+		rbac:            rbacService,
+		analytics:       analytics,
 	}
+}
+
+// Denies report exports without analytics read.
+func requireAnalyticsRead(ctx context.Context, rbacService *rbac.RBACService, entity types.ScheduledTaskEntityType) error {
+	if !entity.IsReportSource() {
+		return nil
+	}
+	if rbacService != nil && rbacService.HasPermission(types.GetRoles(ctx), string(types.EntityAnalytics), string(types.ActionRead)) {
+		return nil
+	}
+	return ierr.NewError("analytics read permission required").
+		WithHint("Report exports require analytics read access").
+		Mark(ierr.ErrPermissionDenied)
+}
+
+func (s *scheduledTaskService) validateSource(ctx context.Context, req dto.CreateScheduledTaskRequest) error {
+	if !req.EntityType.IsReportSource() {
+		return nil
+	}
+	if s.analytics == nil {
+		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+	}
+	if req.EntityType == types.ScheduledTaskEntityTypeAnalyticsView {
+		grain, err := s.analytics.ValidateViewSource(ctx, req.SourceConfig.ViewID, intervalWindowDays(req.Interval))
+		if err != nil {
+			return err
+		}
+		return checkGrain(grain, req.Interval)
+	}
+	if err := s.analytics.ValidateReportSource(ctx, req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, intervalWindowDays(req.Interval)); err != nil {
+		return err
+	}
+	return checkReportGrain(req.SourceConfig.ReportKey, req.SourceConfig.ReportParams, req.Interval)
+}
+
+// Partial buckets would repeat across runs.
+func checkReportGrain(key string, params *types.ReportParams, interval types.ScheduledTaskInterval) error {
+	if params == nil || params.Shape != string(types.ShapeTimeseries) {
+		return nil
+	}
+	grain := types.Grain(params.Grain)
+	if entry, ok := analytics.LookupReport(key); grain == "" && ok && len(entry.Grains) > 0 {
+		grain = entry.Grains[0]
+	}
+	return checkGrain(grain, interval)
+}
+
+func checkGrain(grain types.Grain, interval types.ScheduledTaskInterval) error {
+	grainDays := map[types.Grain]int{types.GrainWeek: 7, types.GrainMonth: 31}[grain]
+	windowDays := intervalWindowDays(interval)
+	if windowDays == 0 || grainDays <= windowDays {
+		return nil
+	}
+	return ierr.NewErrorf("grain %s is coarser than the %s interval", grain, interval).
+		WithHint("Choose a grain no coarser than the export interval").
+		Mark(ierr.ErrValidation)
+}
+
+// Longest window per interval.
+func intervalWindowDays(interval types.ScheduledTaskInterval) int {
+	switch interval {
+	case types.ScheduledTaskIntervalDaily:
+		return 1
+	case types.ScheduledTaskIntervalWeekly:
+		return 7
+	case types.ScheduledTaskIntervalMonthly:
+		return 31
+	}
+	return 0
+}
+
+func (s *scheduledTaskService) checkWindowRange(ctx context.Context, task *scheduledtask.ScheduledTask, days int) error {
+	if task.EntityType != types.ScheduledTaskEntityTypeAnalyticsView {
+		return checkReportRange(task.SourceConfig.ReportKey, days)
+	}
+	if s.analytics == nil {
+		return ierr.NewError("analytics service not configured").Mark(ierr.ErrInternal)
+	}
+	_, err := s.analytics.ValidateViewSource(ctx, task.SourceConfig.ViewID, days)
+	return err
+}
+
+func checkReportRange(key string, days int) error {
+	entry, ok := analytics.LookupReport(key)
+	if !ok || entry.MaxRangeDays <= 0 || days <= entry.MaxRangeDays {
+		return nil
+	}
+	return ierr.NewErrorf("report covers at most %d days", entry.MaxRangeDays).
+		WithHintf("This report covers at most %d days; choose a shorter interval or window", entry.MaxRangeDays).
+		Mark(ierr.ErrValidation)
 }
 
 // CreateScheduledTask creates a new scheduled task
 func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.CreateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+	if err := requireAnalyticsRead(ctx, s.rbac, req.EntityType); err != nil {
+		return nil, err
+	}
+	if err := s.validateSource(ctx, req); err != nil {
 		return nil, err
 	}
 
@@ -109,6 +213,7 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		TemporalScheduleID: temporalScheduleID,
 		Name:               req.Name,
 		Schedule:           req.Schedule,
+		SourceConfig:       req.SourceConfig,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -154,6 +259,9 @@ func (s *scheduledTaskService) GetScheduledTask(ctx context.Context, id string) 
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
+	}
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return nil, err
 	}
 
 	return dto.ToScheduledTaskResponse(task), nil
@@ -205,7 +313,13 @@ func (s *scheduledTaskService) ListScheduledTasks(ctx context.Context, filter *t
 		Offset: filter.GetOffset(),
 	}
 
-	return dto.ToScheduledTaskListResponse(tasks, pagination), nil
+	resp := dto.ToScheduledTaskListResponse(tasks, pagination)
+	for _, item := range resp.Items {
+		if requireAnalyticsRead(ctx, s.rbac, item.EntityType) != nil {
+			item.SourceConfig = nil
+		}
+	}
+	return resp, nil
 }
 
 // UpdateScheduledTask updates a scheduled task (only enabled field can be changed)
@@ -224,6 +338,10 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		return nil, ierr.WithError(err).
 			WithHint("Scheduled task not found").
 			Mark(ierr.ErrNotFound)
+	}
+
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return nil, err
 	}
 
 	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
@@ -442,6 +560,10 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrValidation)
 	}
 
+	if err := requireAnalyticsRead(ctx, s.rbac, task.EntityType); err != nil {
+		return "", time.Time{}, time.Time{}, "", err
+	}
+
 	if !task.Enabled {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("export is paused").
 			WithHint("Turn the export on to run it.").
@@ -453,6 +575,22 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("customer filter is not supported for this export").
 			WithHintf("customer_external_ids can only be used with %s exports", types.ScheduledTaskEntityTypeWalletLedger).
 			Mark(ierr.ErrValidation)
+	}
+
+	if task.EntityType.IsReportSource() {
+		for _, bound := range []*time.Time{customStart, customEnd} {
+			if bound != nil && !bound.UTC().Equal(bound.UTC().Truncate(24*time.Hour)) {
+				return "", time.Time{}, time.Time{}, "", ierr.NewError("report window must be whole UTC days").
+					WithHint("start_time and end_time must be midnight UTC for report exports").
+					Mark(ierr.ErrValidation)
+			}
+		}
+		if customStart != nil && customEnd != nil && task.SourceConfig != nil {
+			days := int(customEnd.Sub(*customStart).Hours()+23) / 24
+			if err := s.checkWindowRange(ctx, task, days); err != nil {
+				return "", time.Time{}, time.Time{}, "", err
+			}
+		}
 	}
 
 	// Determine time range and mode

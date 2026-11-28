@@ -92,6 +92,29 @@ func Window(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule
 	return start.UTC(), end.UTC(), nil
 }
 
+// ReportWindow returns whole UTC-day bounds of the period before the scheduled local date.
+func ReportWindow(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule, scheduledStart time.Time) (time.Time, time.Time, error) {
+	if interval == types.ScheduledTaskIntervalHourly {
+		return time.Time{}, time.Time{}, ierr.NewError("hourly report exports are not supported").
+			WithHint("Report exports run daily, weekly or monthly").
+			Mark(ierr.ErrValidation)
+	}
+	loc := time.UTC
+	if schedule != nil {
+		var err error
+		if loc, err = schedule.Location(); err != nil {
+			return time.Time{}, time.Time{}, err
+		}
+	}
+	y, m, d := scheduledStart.In(loc).Date()
+	return Window(interval, &types.ExportSchedule{Timezone: "UTC"}, time.Date(y, m, d, 0, 0, 0, 0, time.UTC))
+}
+
+// Formats window as dates.
+func ReportRange(start, end time.Time) string {
+	return start.UTC().Format("2006-01-02") + ".." + end.UTC().Format("2006-01-02")
+}
+
 // Cron returns the schedule's cron expression.
 func Cron(interval types.ScheduledTaskInterval, schedule *types.ExportSchedule) (string, error) {
 	if interval == types.ScheduledTaskIntervalManual {

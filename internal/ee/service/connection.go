@@ -1203,6 +1203,8 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 		s.Logger,
 		s.Config,
 		s.StorageResolver,
+		s.RBAC,
+		nil,
 	)
 
 	// Scheduled tasks cleanup

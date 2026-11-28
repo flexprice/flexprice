@@ -57,6 +57,7 @@ type ScheduledTaskDetails struct {
 	EndTime         time.Time
 	JobConfig       *types.S3JobConfig
 	ManagedCopy     bool
+	SourceConfig    *types.ExportSourceConfig
 }
 
 // GetScheduledTaskDetails fetches scheduled task and calculates time range
@@ -109,6 +110,12 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 			"scheduled_task_id", input.ScheduledTaskID,
 			"start_time", startTime,
 			"end_time", endTime)
+	} else if task.EntityType.IsReportSource() {
+		startTime, endTime, err = scheduledtask.ReportWindow(task.Interval, task.Schedule, executionTime)
+		if err != nil {
+			a.logger.Error(ctx, "failed to compute report window", "error", err, "scheduled_task_id", input.ScheduledTaskID)
+			return nil, temporal.NewNonRetryableApplicationError("invalid export schedule", "InvalidSchedule", err)
+		}
 	} else if task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual {
 		startTime, endTime, err = scheduledtask.Bounds(task.Interval, task.Schedule, executionTime)
 		if err != nil {
@@ -139,6 +146,7 @@ func (a *ScheduledTaskActivity) GetScheduledTaskDetails(ctx context.Context, inp
 		EndTime:         endTime,
 		JobConfig:       jobConfig,
 		ManagedCopy:     task.IsManagedCopy(),
+		SourceConfig:    task.SourceConfig,
 	}, nil
 }
 

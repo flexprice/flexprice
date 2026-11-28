@@ -32,6 +32,8 @@ func NewScheduledTaskHandler(
 // @Description connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.
 // @Description interval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.
 // @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.
+// @Description entity_type report or analytics_view exports a predefined report or a saved view and requires source_config ({report_key, report_params} for report, {view_id} for analytics_view); source_config is rejected for other entity types and cannot be changed later. Clients should tolerate new entity_type values.
+// @Description Report sources allow interval daily, weekly, monthly or manual; schedule is required unless manual. The window is the period before the scheduled time's date in the schedule's timezone, as whole UTC days (a Dec 1 00:30 Asia/Kolkata monthly run covers November UTC), and a custom run window must be whole UTC days and its end is exclusive (Nov 1 to Nov 10 excludes Nov 10). A timeseries report grain (or the report's default grain) may not be coarser than the interval: week or month on daily and month on weekly are rejected. export_metadata_fields is not allowed. These exports also need analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -64,6 +66,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 // @Summary Get scheduled task
 // @ID getScheduledTask
 // @Description Use when you need to load a single scheduled task (e.g. to show details in a UI or check its configuration).
+// @Description report and analytics_view exports need analytics read access; without it this returns 403.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -71,6 +74,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 // @Param id path string true "Scheduled Task ID"
 // @Success 200 {object} dto.ScheduledTaskResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled/{id} [get]
@@ -90,6 +94,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Summary List scheduled tasks
 // @ID listScheduledTasks
 // @Description Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.
+// @Description report and analytics_view rows omit source_config when the caller lacks analytics read access.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -212,6 +217,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
 // @Description Without a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.
 // @Description Returns 400 when the export is paused (enabled is false); turn it on first.
+// @Description A custom window's end_time is exclusive: a window from Nov 1 to Nov 10 excludes Nov 10.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

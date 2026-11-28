@@ -212,6 +212,7 @@ type CompleteTaskInput struct {
 	FileURL     string
 	RecordCount int
 	FileSize    int64
+	Metadata    map[string]string
 }
 
 // CompleteTask marks a task as completed with final details
@@ -266,6 +267,9 @@ func (a *TaskActivity) CompleteTask(ctx context.Context, input CompleteTaskInput
 	}
 	existingTask.Metadata["file_size_bytes"] = input.FileSize
 	existingTask.Metadata["completed_at"] = now.Format(time.RFC3339)
+	for k, v := range input.Metadata {
+		existingTask.Metadata[k] = v
+	}
 
 	err = a.taskRepo.Update(ctx, existingTask)
 	if err != nil {

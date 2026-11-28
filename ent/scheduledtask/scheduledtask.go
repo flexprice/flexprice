@@ -43,6 +43,8 @@ const (
 	FieldName = "name"
 	// FieldSchedule holds the string denoting the schedule field in the database.
 	FieldSchedule = "schedule"
+	// FieldSourceConfig holds the string denoting the source_config field in the database.
+	FieldSourceConfig = "source_config"
 	// Table holds the table name of the scheduledtask in the database.
 	Table = "scheduled_tasks"
 )
@@ -65,6 +67,7 @@ var Columns = []string{
 	FieldTemporalScheduleID,
 	FieldName,
 	FieldSchedule,
+	FieldSourceConfig,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

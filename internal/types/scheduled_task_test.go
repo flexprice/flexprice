@@ -7,6 +7,21 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestExportSourceConfig_Validate(t *testing.T) {
+	report := &ExportSourceConfig{ReportKey: "k", ReportParams: &ReportParams{Shape: "timeseries"}}
+	view := &ExportSourceConfig{ViewID: "v"}
+	require.NoError(t, report.Validate(ScheduledTaskEntityTypeReport))
+	require.NoError(t, view.Validate(ScheduledTaskEntityTypeAnalyticsView))
+	require.NoError(t, (*ExportSourceConfig)(nil).Validate(ScheduledTaskEntityTypeEvents))
+	require.Error(t, (*ExportSourceConfig)(nil).Validate(ScheduledTaskEntityTypeReport))
+	require.Error(t, report.Validate(ScheduledTaskEntityTypeEvents))
+	require.Error(t, view.Validate(ScheduledTaskEntityTypeReport))
+	require.Error(t, report.Validate(ScheduledTaskEntityTypeAnalyticsView))
+	require.True(t, ScheduledTaskEntityTypeReport.IsReportSource())
+	require.False(t, ScheduledTaskEntityTypeEvents.IsReportSource())
+	require.NoError(t, ScheduledTaskEntityTypeAnalyticsView.Validate())
+}
+
 // TestStorageExportConfig_ValidateForProvider_RegionRequirement covers Finding B:
 // Region must be required for S3 but must NOT be required for GCS, since GCS
 // buckets in this codebase's usage don't carry a region requirement (see

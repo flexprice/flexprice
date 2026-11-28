@@ -140,3 +140,53 @@ func TestBoundsScheduledMatchesWindow(t *testing.T) {
 		}
 	}
 }
+
+func TestReportWindow(t *testing.T) {
+	tests := []struct {
+		name      string
+		interval  types.ScheduledTaskInterval
+		tz        string
+		start     string
+		wantStart string
+		wantEnd   string
+		wantErr   bool
+	}{
+		{"daily", types.ScheduledTaskIntervalDaily, "UTC", "2026-11-10T19:00:00Z", "2026-11-09T00:00:00Z", "2026-11-10T00:00:00Z", false},
+		{"weekly", types.ScheduledTaskIntervalWeekly, "UTC", "2026-11-11T05:00:00Z", "2026-11-02T00:00:00Z", "2026-11-09T00:00:00Z", false},
+		{"monthly", types.ScheduledTaskIntervalMonthly, "UTC", "2026-11-01T00:30:00Z", "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z", false},
+		{"manual no schedule", types.ScheduledTaskIntervalManual, "", "2026-11-11T08:00:00Z", "2026-11-10T00:00:00Z", "2026-11-11T00:00:00Z", false},
+		{"hourly", types.ScheduledTaskIntervalHourly, "UTC", "2026-11-11T08:00:00Z", "", "", true},
+		{"daily IST", types.ScheduledTaskIntervalDaily, "Asia/Kolkata", "2026-11-10T19:00:00Z", "2026-11-10T00:00:00Z", "2026-11-11T00:00:00Z", false},
+		{"weekly IST", types.ScheduledTaskIntervalWeekly, "Asia/Kolkata", "2026-11-15T19:00:00Z", "2026-11-09T00:00:00Z", "2026-11-16T00:00:00Z", false},
+		{"monthly IST", types.ScheduledTaskIntervalMonthly, "Asia/Kolkata", "2026-11-30T19:00:00Z", "2026-11-01T00:00:00Z", "2026-12-01T00:00:00Z", false},
+		{"monthly LA", types.ScheduledTaskIntervalMonthly, "America/Los_Angeles", "2026-12-01T05:00:00Z", "2026-10-01T00:00:00Z", "2026-11-01T00:00:00Z", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sched *types.ExportSchedule
+			if tt.tz != "" {
+				sched = &types.ExportSchedule{Timezone: tt.tz}
+			}
+			s, e, err := ReportWindow(tt.interval, sched, mustTime(t, tt.start))
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !s.Equal(mustTime(t, tt.wantStart)) || !e.Equal(mustTime(t, tt.wantEnd)) {
+				t.Fatalf("got [%v, %v)", s, e)
+			}
+		})
+	}
+}
+
+func TestReportRange(t *testing.T) {
+	got := ReportRange(mustTime(t, "2026-11-09T00:00:00Z"), mustTime(t, "2026-11-10T00:00:00Z"))
+	if got != "2026-11-09..2026-11-10" {
+		t.Fatal(got)
+	}
+}

@@ -19,6 +19,7 @@ type ScheduledTask struct {
 	TemporalScheduleID string // Temporal schedule ID
 	Name               string
 	Schedule           *types.ExportSchedule
+	SourceConfig       *types.ExportSourceConfig
 	Status             types.Status
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
