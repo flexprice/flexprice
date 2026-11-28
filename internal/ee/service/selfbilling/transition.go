@@ -90,6 +90,14 @@ func (s *selfBillingService) updateTenantStatus(ctx context.Context, t *tenant.T
 	// A bought plan replaces the trial; one still running would otherwise end into an invoice.
 	if sub != nil && sub.status == types.SubscriptionStatusActive {
 		if err := s.client.EndTrials(ctx, s.extID(t.ID)); err != nil {
+			// The tenant is already active. The trial stays on Cloud, and the next sync retries the cancel.
+			s.notify(ctx, alert{
+				Event:      alertLeftoverTrial,
+				TenantID:   t.ID,
+				TenantName: t.Name,
+				Email:      t.BillingDetails.Email,
+				ToStatus:   next,
+			})
 			return "", err
 		}
 	}

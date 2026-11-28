@@ -2,6 +2,7 @@ package selfbilling
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -234,4 +235,61 @@ func TestUpdateTenantStatus_Alerts(t *testing.T) {
 			}, got[0])
 		})
 	}
+}
+
+// A paid plan is already active. Canceling the trial failed, so the tenant stays active, the trial
+// stays on Cloud, and the next sync retries the cancel. That state has to alert, not only log.
+func TestUpdateTenantStatus_EndTrialsFailureAlertsLeftoverTrial(t *testing.T) {
+	fc := newFakeClient()
+	fc.err = errors.New("cloud unavailable")
+	s, d := newTestService(fc)
+	sink := newAlertSink(t, s)
+	require.NoError(t, d.tenants.Create(context.Background(), &tenant.Tenant{
+		ID:             "t1",
+		Name:           "Acme",
+		Status:         types.StatusPublished,
+		InternalStatus: types.TenantInternalStatusTrialing,
+		BillingDetails: tenant.TenantBillingDetails{Email: "a@acme.io"},
+	}))
+
+	tn, err := d.tenants.GetByID(context.Background(), "t1")
+	require.NoError(t, err)
+	_, err = s.updateTenantStatus(tenantCtx("t1"), tn, activeSub)
+	require.Error(t, err)
+
+	got, err := d.tenants.GetByID(context.Background(), "t1")
+	require.NoError(t, err)
+	assert.Equal(t, types.TenantInternalStatusActive, got.InternalStatus)
+	assert.Equal(t, []string{"us:t1"}, fc.trialsEnded)
+
+	first := sink.waitFor(t, 2)
+	const leftover alertEvent = "leftover_trial"
+	assert.ElementsMatch(t, []alertEvent{alertTenantActivated, leftover}, []alertEvent{first[0].Event, first[1].Event})
+	assert.Equal(t, leftoverTrialAlert(first), alert{
+		Event:      leftover,
+		TenantID:   "t1",
+		TenantName: "Acme",
+		Email:      "a@acme.io",
+		Region:     "us",
+		ToStatus:   types.TenantInternalStatusActive,
+		OccurredAt: leftoverTrialAlert(first).OccurredAt,
+	})
+
+	// The hourly sync reloads the tenant and tries the cancel again.
+	_, err = s.updateTenantStatus(tenantCtx("t1"), got, activeSub)
+	require.Error(t, err)
+	assert.Equal(t, []string{"us:t1", "us:t1"}, fc.trialsEnded)
+
+	again := sink.waitFor(t, 3)
+	assert.Equal(t, alertEvent("leftover_trial"), again[2].Event)
+	assert.Equal(t, types.TenantInternalStatusActive, again[2].ToStatus)
+}
+
+func leftoverTrialAlert(alerts []alert) alert {
+	for _, a := range alerts {
+		if a.Event == "leftover_trial" {
+			return a
+		}
+	}
+	return alert{}
 }
