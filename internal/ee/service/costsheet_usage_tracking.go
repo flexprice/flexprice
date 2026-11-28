@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -15,13 +16,15 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 // CostSheetUsageTrackingService handles cost sheet usage tracking operations for metered events
 type CostSheetUsageTrackingService interface {
 	// Get Analytics computed from meter usage (replaces the costsheet_usage read path)
-	GetCostAnalyticsFromMeterUsage(ctx context.Context, req *dto.GetCostAnalyticsRequest) (*dto.GetCostAnalyticsResponse, error)
+	// currency is the customer's billing currency; empty when the customer has no subscription.
+	GetCostAnalyticsFromMeterUsage(ctx context.Context, req *dto.GetCostAnalyticsRequest, currency string) (*dto.GetCostAnalyticsResponse, error)
 }
 
 type costsheetUsageTrackingService struct {
@@ -58,6 +61,7 @@ func NewCostSheetUsageTrackingService(
 func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	ctx context.Context,
 	req *dto.GetCostAnalyticsRequest,
+	currency string,
 ) (*dto.GetCostAnalyticsResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -91,29 +95,19 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		}
 	}
 
-	// STEP3: Walk the costsheet's prices to get meter IDs and a meter->price
-	// map. Costsheet prices are scoped via PRICE_ENTITY_TYPE_COSTSHEET, which
-	// is distinct from subscription prices — i.e. these are the cost rates,
-	// not the customer-facing rates.
-	meterToPrice := make(map[string]*price.Price)
-	meterIDs := make([]string, 0)
-	for _, p := range costSheet.Prices {
-		if p == nil || p.Price == nil || !p.IsUsage() {
-			continue
-		}
-		if p.MeterID == "" {
-			continue
-		}
-		if _, seen := meterToPrice[p.MeterID]; seen {
-			continue
-		}
-		meterToPrice[p.MeterID] = p.Price
-		meterIDs = append(meterIDs, p.MeterID)
+	// No customer: revenue analytics reports zero without a customer, so cost
+	// does too rather than scanning every customer's usage.
+	if cust == nil {
+		return s.emptyCostAnalyticsResponse(req, costSheet, cust), nil
 	}
 
-	// No usage prices, or no customer: revenue analytics reports zero without a
-	// customer, so cost does too rather than scanning every customer's usage.
-	if len(meterIDs) == 0 || cust == nil {
+	// STEP3: Map each costsheet meter to its cost price in the customer's currency.
+	meterToPrice, err := costPricesByMeter(costSheet.Prices, currency)
+	if err != nil {
+		return nil, err
+	}
+	meterIDs := lo.Keys(meterToPrice)
+	if len(meterIDs) == 0 {
 		return s.emptyCostAnalyticsResponse(req, costSheet, cust), nil
 	}
 
@@ -249,12 +243,49 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		response.TotalCost = response.TotalCost.Add(totalCost)
 		response.TotalQuantity = response.TotalQuantity.Add(item.TotalUsage)
 		response.TotalEvents += itemEventCount // #nosec G115 -- bounded above before cast, see safeInt64FromEventCount
-		if response.Currency == "" && csPrice.Currency != "" {
+		if response.Currency == "" {
 			response.Currency = csPrice.Currency
 		}
 	}
 
 	return response, nil
+}
+
+// costPricesByMeter maps each meter to its costsheet usage price in currency. Without a currency, a meter
+// priced in several currencies is an error: picking one would cost the customer in the wrong currency.
+func costPricesByMeter(prices []*dto.PriceResponse, currency string) (map[string]*price.Price, error) {
+	pricesByMeter := make(map[string][]*price.Price)
+	for _, p := range prices {
+		if p == nil || p.Price == nil || !p.IsUsage() || p.MeterID == "" {
+			continue
+		}
+		pricesByMeter[p.MeterID] = append(pricesByMeter[p.MeterID], p.Price)
+	}
+
+	meterToPrice := make(map[string]*price.Price, len(pricesByMeter))
+	for meterID, meterPrices := range pricesByMeter {
+		if currency == "" {
+			currencies := lo.Uniq(lo.Map(meterPrices, func(p *price.Price, _ int) string { return strings.ToLower(p.Currency) }))
+			if len(currencies) > 1 {
+				return nil, ierr.NewError("costsheet prices this meter in several currencies").
+					WithHint("The customer has no subscription to choose a currency from. Subscribe the customer, or keep one currency per meter on the costsheet").
+					WithReportableDetails(map[string]any{"meter_id": meterID, "currencies": currencies}).
+					Mark(ierr.ErrValidation)
+			}
+			meterToPrice[meterID] = meterPrices[0]
+			continue
+		}
+
+		match, found := lo.Find(meterPrices, func(p *price.Price) bool { return strings.EqualFold(p.Currency, currency) })
+		if !found {
+			return nil, ierr.NewError("costsheet has no price for this meter in the customer's currency").
+				WithHint("Add a price in the customer's currency for this meter to the costsheet").
+				WithReportableDetails(map[string]any{"meter_id": meterID, "currency": currency}).
+				Mark(ierr.ErrValidation)
+		}
+		meterToPrice[meterID] = match
+	}
+	return meterToPrice, nil
 }
 
 // safeInt64FromEventCount converts a ClickHouse COUNT(DISTINCT ...) result to
