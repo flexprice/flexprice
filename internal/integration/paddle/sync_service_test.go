@@ -1139,9 +1139,6 @@ func (m *mockSubscriptionService) TriggerSubscriptionDraftAndComputeWorkflowWith
 func (m *mockSubscriptionService) CalculateBillingPeriods(ctx context.Context, subscriptionID string) ([]apidto.Period, error) {
 	return nil, nil
 }
-func (m *mockSubscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period apidto.Period) (*apidto.InvoiceResponse, error) {
-	return nil, nil
-}
 func (m *mockSubscriptionService) MarkCancellationScheduleAsExecuted(ctx context.Context, subscriptionID string) error {
 	return nil
 }

@@ -16649,7 +16649,7 @@
           "Subscriptions"
         ],
         "summary": "Pause subscription",
-        "description": "Use when a customer stops temporarily. Pauses an active subscription now: usage and arrear fixed charges up to the pause are billed on a closing invoice, and every paused period after it gets a $0 skipped invoice.",
+        "description": "Use when a customer stops temporarily. Pauses an active subscription now without raising an invoice.",
         "operationId": "pauseSubscription",
         "parameters": [
           {
@@ -16729,7 +16729,7 @@
           "Subscriptions"
         ],
         "summary": "Resume subscription",
-        "description": "Use when a paused customer comes back. Resumes a paused subscription now on its existing billing anchor: the first period runs from the resume to the next billing date and its advance charges are invoiced at once.",
+        "description": "Use when a paused customer comes back. Resumes a paused subscription now without raising an invoice: its scheduled cancellation is removed and the period's invoice is billed at the period end.",
         "operationId": "resumeSubscription",
         "parameters": [
           {
@@ -29575,6 +29575,11 @@
             },
             "description": "Metadata stored on the pause\n@Example {\"requested_by\": \"customer\", \"channel\": \"support_ticket\"}"
           },
+          "pause_grace_period_days": {
+            "minimum": 1,
+            "type": "integer",
+            "description": "PauseGracePeriodDays cancels the subscription if it is not resumed within these days.\n@Description Must not go past the current period end. When omitted, the pause_grace_period_days of the subscription_config setting is used, capped at the period end, and without it the subscription is cancelled at the current period end if it is still paused.\n@Example 15"
+          },
           "proration_behavior": {
             "$ref": "#/components/schemas/types.ProrationBehavior"
           },
@@ -29584,7 +29589,7 @@
             "description": "Reason for pausing the subscription\n@Description Optional reason for the pause. Maximum 255 characters\n@Example \"Customer requested temporary suspension\""
           }
         },
-        "description": "Pauses an active subscription now. Usage and arrear fixed charges up to the pause are billed on a closing invoice."
+        "description": "Pauses an active subscription now. No invoice is raised: the period keeps its one invoice, billed at the period end or at the cancellation. Usage is billed for the time the subscription was active, and fixed charges for the paused days follow proration_behavior."
       },
       "PauseSubscriptionResponse": {
         "type": "object",
@@ -30896,12 +30901,9 @@
               "type": "string"
             },
             "description": "Metadata merged into the pause\n@Example {\"resumed_by\": \"admin\"}"
-          },
-          "proration_behavior": {
-            "$ref": "#/components/schemas/types.ProrationBehavior"
           }
         },
-        "description": "Resumes a paused subscription now. The billing anchor is kept, so the first period runs from the resume time to the next billing date."
+        "description": "Resumes a paused subscription now. No invoice is raised: the period's invoice carries on and is billed at the period end."
       },
       "ResumeSubscriptionResponse": {
         "type": "object",
@@ -32532,6 +32534,13 @@
           },
           "pause_status": {
             "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "prorated_credit_granted": {
+            "type": "boolean",
+            "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited."
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "reason": {
             "type": "string",
@@ -43179,6 +43188,13 @@
           },
           "pause_status": {
             "$ref": "#/components/schemas/types.PauseStatus"
+          },
+          "prorated_credit_granted": {
+            "type": "boolean",
+            "description": "ProratedCreditGranted is set once this pause's paused share of advance fixed charges is credited."
+          },
+          "proration_behavior": {
+            "$ref": "#/components/schemas/types.ProrationBehavior"
           },
           "reason": {
             "type": "string",

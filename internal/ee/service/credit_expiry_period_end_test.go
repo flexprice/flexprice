@@ -74,9 +74,9 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_ImmediateCancelBillsTheDraf
 	s.WithinDuration(inv.IssueDate.AddDate(0, 0, 1), *inv.DueDate, time.Second)
 }
 
-// Pause bills the draft like an immediate cancel: the draft becomes the closing invoice, keeping the
-// 20 applied at expiry, and only the 10 used after the expiry is taken from purchased credits.
-func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_PauseBillsTheDraft() {
+// Pause keeps the draft open as the period's one invoice, with the 20 applied at expiry. Cancelling the
+// paused subscription then bills that draft: only the 10 used after the expiry is taken from purchased credits.
+func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_PauseKeepsTheDraft() {
 	sub, draft := s.settledSubscription("subs_pause_invoice")
 
 	_, err := s.subscriptionService().PauseSubscription(s.GetContext(), sub.ID, &dto.PauseSubscriptionRequest{
@@ -84,17 +84,29 @@ func (s *CreditExpiryInvoiceRaceSuite) TestPeriodEnd_PauseBillsTheDraft() {
 	})
 	s.Require().NoError(err)
 
-	invoices := s.subscriptionInvoices(sub.ID)
-	s.Require().Len(invoices, 1, "no second invoice for the same usage")
-	inv := s.invoice(draft.ID)
-	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
-	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
-	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the pause")
-	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
-	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
+	s.Require().Len(s.subscriptionInvoices(sub.ID), 1, "no invoice raised at the pause")
+	kept := s.invoice(draft.ID)
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), kept.BillingReason)
+	s.Equal(types.InvoiceStatusDraft, kept.InvoiceStatus)
+	s.True(kept.PeriodEnd.Equal(*draft.PeriodEnd), "period end unchanged")
+	s.True(decimal.NewFromInt(20).Equal(kept.TotalPrepaidCreditsApplied), "applied %s", kept.TotalPrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(100).Equal(s.creditsAvailable("wtxn_purchased")), "purchased untouched, left %s", s.creditsAvailable("wtxn_purchased"))
 	paused, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
 	s.Require().NoError(err)
 	s.Equal(types.SubscriptionStatusPaused, paused.SubscriptionStatus)
+
+	_, err = s.subscriptionService().CancelSubscription(s.GetContext(), sub.ID, &dto.CancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
+	})
+	s.Require().NoError(err)
+
+	s.Require().Len(s.subscriptionInvoices(sub.ID), 1, "no second invoice for the same usage")
+	inv := s.invoice(draft.ID)
+	s.Equal(string(types.InvoiceBillingReasonProration), inv.BillingReason)
+	s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+	s.True(inv.PeriodEnd.Before(draft.PeriodEnd.Add(-24*time.Hour)), "period end moved to the cancel")
+	s.True(decimal.NewFromInt(30).Equal(inv.TotalPrepaidCreditsApplied), "applied %s", inv.TotalPrepaidCreditsApplied)
+	s.True(decimal.NewFromInt(90).Equal(s.creditsAvailable("wtxn_purchased")), "only 10 from purchased, left %s", s.creditsAvailable("wtxn_purchased"))
 }
 
 // A draft opened by credit expiry mid-period is due from period end while open, and from the

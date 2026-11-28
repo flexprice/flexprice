@@ -2214,8 +2214,9 @@ func (s *subscriptionService) CancelSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// A paused subscription was settled at the pause (closing invoice and advance credit), so it can
-	// only be cancelled immediately and that cancellation bills and credits nothing.
+	// A paused subscription already holds its auto-cancel, so it can only be cancelled immediately.
+	// Its open draft is billed up to now over the active stretches, and the pause settles the
+	// paused time of advance fixed charges when that invoice is finalized.
 	isPaused := subscription.SubscriptionStatus == types.SubscriptionStatusPaused
 	if isPaused {
 		if req.CancellationType != types.CancellationTypeImmediate {
@@ -2228,7 +2229,7 @@ func (s *subscriptionService) CancelSubscription(
 				Mark(ierr.ErrValidation)
 		}
 		req.ProrationBehavior = types.ProrationBehaviorNone
-		req.CancelImmediatelyInvoicePolicy = types.CancelImmediatelyInvoicePolicySkip
+		req.CancelImmediatelyInvoicePolicy = types.CancelImmediatelyInvoicePolicyGenerateInvoice
 	}
 
 	// cancel_at must be after period start (covers scheduled_date too, which shortens the period to it).
@@ -2265,6 +2266,17 @@ func (s *subscriptionService) CancelSubscription(
 	effectiveDate, err := s.determineEffectiveDate(subscription, req.CancellationType, req.CancelAt)
 	if err != nil {
 		return nil, err
+	}
+	// Past its grace period a paused subscription is already being cancelled at its auto-cancel date.
+	if isPaused && subscription.CancelAt != nil && effectiveDate.After(*subscription.CancelAt) {
+		return nil, ierr.NewError("the paused subscription's grace period has ended").
+			WithHint("The subscription is cancelled at the end of its pause grace period, so it cannot be cancelled after that").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"auto_cancel_at":  subscription.CancelAt.UTC().Format(time.RFC3339),
+				"cancel_at":       effectiveDate.UTC().Format(time.RFC3339),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Built before the cancellation mutates the subscription. The immediate-cancellation key is
@@ -2382,6 +2394,10 @@ func (s *subscriptionService) CancelSubscription(
 			}
 			subscription.PauseStatus = types.PauseStatusNone
 			subscription.ActivePauseID = nil
+			// The pause's auto-cancel is replaced by this cancellation.
+			if err := s.cancelAllPendingSchedules(ctx, subscription.ID); err != nil {
+				return err
+			}
 		}
 
 		// Step 7: Update subscription status
@@ -4514,8 +4530,8 @@ func (s *subscriptionService) allowsEmptyPrices(workflowType *types.TemporalWork
 	return lo.Contains(emptyPricesAllowedWorkflows, *workflowType)
 }
 
-// PauseSubscription pauses an active subscription now. The period up to the pause is billed on a
-// closing invoice, and every paused period after it is recorded as a $0 SKIPPED invoice.
+// PauseSubscription pauses an active subscription now. No invoice is raised: the period keeps its one
+// cycle draft, and the subscription is scheduled to cancel if it is not resumed by the auto-cancel time.
 func (s *subscriptionService) PauseSubscription(
 	ctx context.Context,
 	subscriptionID string,
@@ -4531,10 +4547,7 @@ func (s *subscriptionService) PauseSubscription(
 	var sub *subscription.Subscription
 	var pause *subscription.SubscriptionPause
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		if _, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID); err != nil {
-			return err
-		}
-		lockedSub, lineItems, err := s.SubRepo.GetWithLineItems(txCtx, subscriptionID)
+		lockedSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
 		if err != nil {
 			return err
 		}
@@ -4544,11 +4557,40 @@ func (s *subscriptionService) PauseSubscription(
 			return err
 		}
 
+		// The grace period comes from the request, else the subscription_config setting, else it runs to the period end.
+		cancelAt := lockedSub.CurrentPeriodEnd
+		if req.PauseGracePeriodDays != nil {
+			cancelAt = pauseAt.AddDate(0, 0, *req.PauseGracePeriodDays)
+			if cancelAt.After(lockedSub.CurrentPeriodEnd) {
+				return ierr.NewError("pause_grace_period_days goes past the current period end").
+					WithHint("The period's one invoice is billed at its end, so a paused subscription must be resumed or cancelled by then. Send fewer days or omit the field to cancel at the period end").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id":         lockedSub.ID,
+						"pause_grace_period_days": *req.PauseGracePeriodDays,
+						"auto_cancel_at":          cancelAt,
+						"current_period_end":      lockedSub.CurrentPeriodEnd,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		} else {
+			settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+			subscriptionConfig, err := GetSetting[types.SubscriptionConfig](settingsSvc, txCtx, types.SettingKeySubscriptionConfig)
+			if err != nil {
+				return err
+			}
+			if subscriptionConfig.PauseGracePeriodDays != nil {
+				if graceEnd := pauseAt.AddDate(0, 0, *subscriptionConfig.PauseGracePeriodDays); graceEnd.Before(cancelAt) {
+					cancelAt = graceEnd
+				}
+			}
+		}
+
 		pause = &subscription.SubscriptionPause{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_PAUSE),
 			SubscriptionID:      lockedSub.ID,
 			PauseStatus:         types.PauseStatusActive,
 			PauseMode:           types.PauseModeImmediate,
+			ProrationBehavior:   prorationBehavior,
 			PauseStart:          pauseAt,
 			OriginalPeriodStart: lockedSub.CurrentPeriodStart,
 			OriginalPeriodEnd:   lockedSub.CurrentPeriodEnd,
@@ -4557,63 +4599,53 @@ func (s *subscriptionService) PauseSubscription(
 			EnvironmentID:       lockedSub.EnvironmentID,
 			BaseModel:           types.GetDefaultBaseModel(txCtx),
 		}
-
-		// The unused part of advance fixed charges is measured against the period as it stood before the pause.
-		creditAmount := decimal.Zero
-		if prorationBehavior == types.ProrationBehaviorCreateProrations {
-			prorationResult, err := NewProrationService(s.ServiceParams).CalculateSubscriptionCancellationProration(
-				txCtx, lockedSub, lineItems, types.CancellationTypeImmediate, pauseAt, req.Reason, prorationBehavior)
-			if err != nil {
-				return err
-			}
-			_, creditAmount = s.convertProrationResultToDetails(prorationResult)
-		}
-
-		// The open draft becomes the closing invoice, so its usage is not billed again at the original period end.
-		invoiceService := NewInvoiceService(s.ServiceParams)
-		if _, err := invoiceService.MoveCycleDraft(txCtx, lockedSub, pauseAt, types.InvoiceBillingReasonProration); err != nil {
-			return err
-		}
-		paymentParams := dto.NewPaymentParametersFromSubscription(lockedSub.CollectionMethod, lockedSub.PaymentBehavior, lockedSub.GatewayPaymentMethodID).
-			NormalizePaymentParameters()
-		if _, _, err := invoiceService.CreateSubscriptionInvoice(txCtx, &dto.CreateSubscriptionInvoiceRequest{
-			SubscriptionID:    lockedSub.ID,
-			PeriodStart:       lockedSub.CurrentPeriodStart,
-			PeriodEnd:         pauseAt,
-			ReferencePoint:    types.ReferencePointCancel,
-			ProrationBehavior: &prorationBehavior,
-		}, paymentParams, types.InvoiceFlowCancel, false); err != nil {
-			return err
-		}
-
-		if creditAmount.GreaterThan(decimal.Zero) {
-			walletService := NewWalletService(s.ServiceParams)
-			creditKey := fmt.Sprintf("proration_credit_pause|%s|%s", lockedSub.ID, pause.ID)
-			if _, err := walletService.TopUpWalletForProratedCharge(txCtx, lockedSub.GetInvoicingCustomerID(), creditAmount.Abs(), lockedSub.Currency, creditKey); err != nil {
-				return err
-			}
-		}
-
 		if err := s.SubRepo.CreatePause(txCtx, pause); err != nil {
 			return err
 		}
 
-		// Payment handling on the closing invoice can write the subscription, so the latest row is updated.
-		sub, err = s.SubRepo.Get(txCtx, subscriptionID)
-		if err != nil {
+		// The auto-cancel is an ordinary scheduled_date cancellation, so the billing run cancels the
+		// subscription and finalizes the period's draft at cancelAt, and a resume reverts it.
+		cancelReq := &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeScheduledDate,
+			CancelAt:          &cancelAt,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            types.CancellationReasonPauseExpired,
+		}
+		originalState := &subscriptionOriginalState{
+			CancelAtPeriodEnd:        lockedSub.CancelAtPeriodEnd,
+			CancelAt:                 lockedSub.CancelAt,
+			EndDate:                  lockedSub.EndDate,
+			OriginalCurrentPeriodEnd: lockedSub.CurrentPeriodEnd,
+		}
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		if cancelAt.Before(lockedSub.CurrentPeriodEnd) {
+			if _, err := invoiceService.MoveCycleDraft(txCtx, lockedSub, cancelAt, types.InvoiceBillingReasonSubscriptionCycle); err != nil {
+				return err
+			}
+		}
+
+		lockedSub.SubscriptionStatus = types.SubscriptionStatusPaused
+		lockedSub.PauseStatus = types.PauseStatusActive
+		lockedSub.ActivePauseID = lo.ToPtr(pause.ID)
+		if err := s.updateSubscriptionForCancellation(txCtx, lockedSub, cancelReq.CancellationType, cancelAt, cancelReq.Reason); err != nil {
 			return err
 		}
-		sub.SubscriptionStatus = types.SubscriptionStatusPaused
-		sub.PauseStatus = types.PauseStatusActive
-		sub.ActivePauseID = lo.ToPtr(pause.ID)
-		sub.CurrentPeriodStart = pauseAt
-		if err := s.SubRepo.Update(txCtx, sub); err != nil {
+		if err := s.createCancellationSchedule(txCtx, lockedSub, cancelReq, cancelAt, originalState); err != nil {
 			return err
 		}
 
-		if sub.SubscriptionType == types.SubscriptionTypeParent {
-			return s.cascadePauseToInherited(txCtx, sub)
+		if lockedSub.SubscriptionType == types.SubscriptionTypeParent {
+			if err := s.CascadeCancelToInheritedSubscriptions(txCtx, lockedSub); err != nil {
+				return err
+			}
 		}
+
+		// The draft holds the active stretch so far; the period-end run reuses it.
+		if _, _, err := invoiceService.GetOrComputeCurrentPeriodDraft(txCtx, lockedSub); err != nil {
+			return err
+		}
+
+		sub = lockedSub
 		return nil
 	})
 	if err != nil {
@@ -4624,6 +4656,7 @@ func (s *subscriptionService) PauseSubscription(
 		"subscription_id", sub.ID,
 		"pause_id", pause.ID,
 		"pause_start", pause.PauseStart,
+		"auto_cancel_at", sub.CancelAt,
 		"proration_behavior", prorationBehavior)
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
@@ -4696,8 +4729,8 @@ func (s *subscriptionService) validatePause(ctx context.Context, sub *subscripti
 	return nil
 }
 
-// ResumeSubscription resumes a paused subscription now. The billing anchor is kept, so the first
-// period runs from the resume to the next billing date and its advance charges are invoiced at once.
+// ResumeSubscription resumes a paused subscription now. No invoice is raised: the pause's scheduled
+// cancellation is reverted, the period end comes back and the period's cycle draft carries on.
 func (s *subscriptionService) ResumeSubscription(
 	ctx context.Context,
 	subscriptionID string,
@@ -4744,37 +4777,21 @@ func (s *subscriptionService) ResumeSubscription(
 			return err
 		}
 
-		// Paused periods that ended before the billing run rolled them are recorded first, then
-		// the paused stretch of the period the resume falls in.
-		invoiceService := NewInvoiceService(s.ServiceParams)
-		for !lockedSub.CurrentPeriodEnd.After(resumeAt) {
-			if _, err := invoiceService.CreatePausedPeriodInvoice(txCtx, lockedSub, lockedSub.CurrentPeriodStart, lockedSub.CurrentPeriodEnd); err != nil {
-				return err
-			}
-			nextPeriodEnd, err := types.NextBillingDate(&types.NextBillingDateParams{
-				CurrentPeriodStart:  lockedSub.CurrentPeriodEnd,
-				BillingAnchor:       lockedSub.BillingAnchor,
-				Unit:                lockedSub.BillingPeriodCount,
-				Period:              lockedSub.BillingPeriod,
-				SubscriptionEndDate: lockedSub.EndDate,
-				Timezone:            lockedSub.Timezone,
-			})
-			if err != nil {
-				return err
-			}
-			lockedSub.CurrentPeriodStart = lockedSub.CurrentPeriodEnd
-			lockedSub.CurrentPeriodEnd = nextPeriodEnd
+		// Reverting the auto-cancel restores cancel_at, end_date and the period end, and moves the draft back.
+		schedule, err := s.SubScheduleRepo.GetPendingBySubscriptionAndType(txCtx, lockedSub.ID, types.SubscriptionScheduleChangeTypeCancellation)
+		if err != nil {
+			return err
 		}
-		if resumeAt.After(lockedSub.CurrentPeriodStart) {
-			if _, err := invoiceService.CreatePausedPeriodInvoice(txCtx, lockedSub, lockedSub.CurrentPeriodStart, resumeAt); err != nil {
+		if schedule != nil {
+			scheduleService := NewSubscriptionScheduleService(s.ServiceParams, nil).(*subscriptionScheduleService)
+			if err := scheduleService.cancelSchedule(txCtx, schedule); err != nil {
 				return err
 			}
 		}
 
-		// The anchor is kept: the period end is still the next billing date on the anchor's schedule.
-		lockedSub.CurrentPeriodStart = resumeAt
-		if req.ProrationBehavior != nil {
-			lockedSub.ProrationBehavior = *req.ProrationBehavior
+		lockedSub, err = s.SubRepo.GetForUpdate(txCtx, subscriptionID)
+		if err != nil {
+			return err
 		}
 		lockedSub.SubscriptionStatus = types.SubscriptionStatusActive
 		lockedSub.PauseStatus = types.PauseStatusNone
@@ -4805,30 +4822,6 @@ func (s *subscriptionService) ResumeSubscription(
 			}
 		}
 
-		// Advance fixed charges of the period that starts at the resume, priced by the subscription's proration_behavior.
-		paymentParams := dto.NewPaymentParametersFromSubscription(lockedSub.CollectionMethod, lockedSub.PaymentBehavior, lockedSub.GatewayPaymentMethodID).
-			NormalizePaymentParameters()
-		if _, _, err := invoiceService.CreateSubscriptionInvoice(txCtx, &dto.CreateSubscriptionInvoiceRequest{
-			SubscriptionID: lockedSub.ID,
-			PeriodStart:    resumeAt,
-			PeriodEnd:      lockedSub.CurrentPeriodEnd,
-			ReferencePoint: types.ReferencePointPeriodStart,
-			BillingReason:  types.InvoiceBillingReasonSubscriptionResume,
-		}, paymentParams, types.InvoiceFlowRenewal, false); err != nil {
-			return err
-		}
-
-		// The payment step saves the subscription it read from the cache, which still holds the
-		// paused state. Keep the status it decided and write the resumed fields back.
-		paidSub, err := s.SubRepo.GetForUpdate(txCtx, subscriptionID)
-		if err != nil {
-			return err
-		}
-		lockedSub.SubscriptionStatus = paidSub.SubscriptionStatus
-		if err := s.SubRepo.Update(txCtx, lockedSub); err != nil {
-			return err
-		}
-
 		sub = lockedSub
 		return nil
 	})
@@ -4840,7 +4833,7 @@ func (s *subscriptionService) ResumeSubscription(
 		"subscription_id", sub.ID,
 		"pause_id", pause.ID,
 		"resumed_at", pause.ResumedAt,
-		"proration_behavior", sub.ProrationBehavior)
+		"current_period_end", sub.CurrentPeriodEnd)
 
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionResumed, subscriptionID)
@@ -6702,6 +6695,7 @@ func toSubscriptionMeterUsageRequest(req *dto.GetUsageBySubscriptionRequest) *Ge
 		// child's usage — that is the consolidated-invoice contract.
 		IncludeChildren: true,
 		LineItems:       req.LineItems,
+		PausedPeriods:   req.PausedPeriods,
 	}
 }
 
@@ -7856,32 +7850,6 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 	}
 
 	return periods, nil
-}
-
-// CreateDraftInvoiceForSubscription creates a zero-dollar draft for the period (no invoice number).
-// Always returns a draft; ComputeInvoice later assigns number or marks SKIPPED. Delegates to invoice service.
-func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
-	invoiceService := NewInvoiceService(s.ServiceParams)
-
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-	// A period that passes while paused is recorded as a $0 SKIPPED invoice instead of being billed.
-	if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
-		inv, err := invoiceService.CreatePausedPeriodInvoice(ctx, sub, period.Start, period.End)
-		if err != nil {
-			return nil, err
-		}
-		return dto.NewInvoiceResponse(inv), nil
-	}
-
-	return invoiceService.CreateDraftInvoiceForSubscription(ctx, dto.CreateSubscriptionDraftInvoiceRequest{
-		SubscriptionID: subscriptionID,
-		PeriodStart:    period.Start,
-		PeriodEnd:      period.End,
-		ReferencePoint: types.ReferencePointPeriodEnd,
-	})
 }
 
 // subscriptionOriginalState holds the original subscription state before cancellation

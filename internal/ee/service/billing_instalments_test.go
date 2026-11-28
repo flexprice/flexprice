@@ -236,15 +236,15 @@ func (s *CommitmentE2ESuite) TestInstalments_TrialStartCarriesNone() {
 	s.True(billed[0].Amount.Equal(instalments[0].Amount), "billed %s of %s", billed[0].Amount, instalments[0].Amount)
 }
 
-// An instalment dated while the subscription is paused waits: the paused stretch bills nothing, and the invoice issued
-// at the resume carries it.
-func (s *CommitmentE2ESuite) TestInstalments_PauseDefersToResume() {
+// An instalment dated while the subscription is paused is billed on the period's one invoice, raised at the period end.
+func (s *CommitmentE2ESuite) TestInstalments_PauseBillsOnThePeriodInvoice() {
 	ctx := s.GetContext()
 
-	// Resuming runs on the real clock, so the subscription starts two months back and pauses in the month before this.
+	// The pause and the instalment fall in last month, which has closed.
 	now := time.Now().UTC()
 	start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -2, 0)
-	pauseStart := start.AddDate(0, 1, 5)
+	pausedPeriod := start.AddDate(0, 1, 0)
+	pauseStart := pausedPeriod.AddDate(0, 0, 5)
 
 	tokens := s.planWith("paused", types.BILLING_PERIOD_MONTHLY, s.tokens, "0.10")
 	created := s.subscribe(tokens, start)
@@ -254,37 +254,26 @@ func (s *CommitmentE2ESuite) TestInstalments_PauseDefersToResume() {
 
 	sub, err := s.GetStores().SubscriptionRepo.Get(ctx, created.ID)
 	s.Require().NoError(err)
-	pause := &subscription.SubscriptionPause{
+	s.Require().NoError(s.GetStores().SubscriptionRepo.CreatePause(ctx, &subscription.SubscriptionPause{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_PAUSE),
 		SubscriptionID:      sub.ID,
-		PauseStatus:         types.PauseStatusActive,
+		PauseStatus:         types.PauseStatusCompleted,
 		PauseMode:           types.PauseModeImmediate,
+		ResumeMode:          types.ResumeModeImmediate,
+		ProrationBehavior:   types.ProrationBehaviorNone,
 		PauseStart:          pauseStart,
-		OriginalPeriodStart: start.AddDate(0, 1, 0),
-		OriginalPeriodEnd:   start.AddDate(0, 2, 0),
+		ResumedAt:           lo.ToPtr(pauseStart.AddDate(0, 0, 10)),
+		OriginalPeriodStart: pausedPeriod,
+		OriginalPeriodEnd:   pausedPeriod.AddDate(0, 1, 0),
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
-	}
-	s.Require().NoError(s.GetStores().SubscriptionRepo.CreatePause(ctx, pause))
+	}))
 
-	sub.SubscriptionStatus = types.SubscriptionStatusPaused
-	sub.PauseStatus = types.PauseStatusActive
-	sub.ActivePauseID = lo.ToPtr(pause.ID)
-	sub.CurrentPeriodStart, sub.CurrentPeriodEnd = pauseStart, start.AddDate(0, 2, 0)
-	s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+	billed := s.billPeriod(sub.ID, pausedPeriod)
 
-	_, err = s.subscriptions.ResumeSubscription(ctx, sub.ID, &dto.ResumeSubscriptionRequest{})
-	s.Require().NoError(err)
-
-	paused := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonSubscriptionPaused)
-	s.Require().NotEmpty(paused)
-	for _, inv := range paused {
-		s.Empty(s.storedInstalmentLines(inv.ID), "paused stretch %s-%s", inv.PeriodStart, inv.PeriodEnd)
-	}
-
-	resumed := s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonSubscriptionResume)
-	s.Require().Len(resumed, 1)
-	s.Len(s.storedInstalmentLines(resumed[0].ID), 1)
+	s.Len(s.storedInstalmentLines(billed.ID), 1)
+	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonSubscriptionPaused))
+	s.Empty(s.invoicesWithReason(sub.ID, types.InvoiceBillingReasonSubscriptionResume))
 }
 
 // Two instalments of one commitment covering the same month, as two terms can produce them, stay two lines however

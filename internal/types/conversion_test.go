@@ -40,6 +40,18 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "with pause grace period",
+			input: map[string]interface{}{
+				"grace_period_days":       float64(3),
+				"pause_grace_period_days": float64(15),
+			},
+			expected: SubscriptionConfig{
+				GracePeriodDays:      3,
+				PauseGracePeriodDays: func() *int { days := 15; return &days }(),
+			},
+			wantErr: false,
+		},
+		{
 			name:     "nil input returns zero value",
 			input:    nil,
 			expected: SubscriptionConfig{},
@@ -56,7 +68,35 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expected.GracePeriodDays, result.GracePeriodDays)
 				assert.Equal(t, tt.expected.AutoCancellationEnabled, result.AutoCancellationEnabled)
+				assert.Equal(t, tt.expected.PauseGracePeriodDays, result.PauseGracePeriodDays)
 			}
+		})
+	}
+}
+
+func TestValidateSettingValue_SubscriptionConfigPauseGracePeriod(t *testing.T) {
+	tests := []struct {
+		name    string
+		days    interface{}
+		wantErr bool
+	}{
+		{name: "unset", days: nil},
+		{name: "one day", days: float64(1)},
+		{name: "zero days", days: float64(0), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value := map[string]interface{}{"grace_period_days": float64(3)}
+			if tt.days != nil {
+				value["pause_grace_period_days"] = tt.days
+			}
+			err := ValidateSettingValue(SettingKeySubscriptionConfig, value)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
 		})
 	}
 }

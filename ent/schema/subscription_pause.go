@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // SubscriptionPause holds the schema definition for the SubscriptionPause entity.
@@ -53,6 +54,16 @@ func (SubscriptionPause) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Optional(),
+		// Decides whether this pause's days are taken off the fixed charges.
+		field.String("proration_behavior").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.ProrationBehaviorNone)).
+			NotEmpty(),
+		// Set once this pause's paused share of advance fixed charges is credited to the wallet.
+		field.Bool("prorated_credit_granted").
+			Default(false),
 		field.Time("pause_start").
 			Default(time.Now),
 		field.Time("pause_end").

@@ -10,6 +10,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -146,37 +147,64 @@ func (s *subscriptionScheduleService) Cancel(ctx context.Context, scheduleID str
 			return fmt.Errorf("failed to get schedule: %w", err)
 		}
 
-		if !schedule.CanBeCancelled() {
-			return fmt.Errorf("schedule cannot be cancelled (status: %s)", schedule.Status)
+		// A paused subscription's cancellation is its auto-cancel; without it the pause would run past the period end.
+		if schedule.ScheduleType == types.SubscriptionScheduleChangeTypeCancellation {
+			sub, err := s.SubRepo.GetForUpdate(txCtx, schedule.SubscriptionID)
+			if err != nil {
+				return err
+			}
+			if sub.SubscriptionStatus == types.SubscriptionStatusPaused {
+				return ierr.NewError("the cancellation of a paused subscription cannot be cancelled").
+					WithHint("Resume the subscription instead, which removes its scheduled cancellation").
+					WithReportableDetails(map[string]interface{}{
+						"schedule_id":     schedule.ID,
+						"subscription_id": sub.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			// A resume may have cancelled the schedule before the lock was taken.
+			schedule, err = s.SubScheduleRepo.Get(txCtx, scheduleID)
+			if err != nil {
+				return fmt.Errorf("failed to get schedule: %w", err)
+			}
 		}
 
-		// Restore subscription state based on schedule type
-		if err := s.restoreSubscriptionState(txCtx, schedule); err != nil {
-			s.Logger.Error(ctx, "failed to restore subscription state",
-				"schedule_id", scheduleID,
-				"error", err,
-			)
-			return fmt.Errorf("failed to restore subscription state: %w", err)
-		}
-
-		now := clock.Now()
-		schedule.Status = types.ScheduleStatusCancelled
-		schedule.CancelledAt = &now
-		schedule.UpdatedAt = now
-		schedule.UpdatedBy = types.GetUserID(txCtx)
-
-		if err := s.SubScheduleRepo.Update(txCtx, schedule); err != nil {
-			return fmt.Errorf("failed to cancel schedule: %w", err)
-		}
-
-		s.Logger.Info(ctx, "schedule cancelled in database",
-			"schedule_id", scheduleID,
-			"subscription_id", schedule.SubscriptionID,
-			"schedule_type", string(schedule.ScheduleType),
-		)
-
-		return nil
+		return s.cancelSchedule(txCtx, schedule)
 	})
+}
+
+// cancelSchedule restores the subscription to its state before the schedule and marks the schedule cancelled.
+func (s *subscriptionScheduleService) cancelSchedule(ctx context.Context, schedule *subscription.SubscriptionSchedule) error {
+	if !schedule.CanBeCancelled() {
+		return fmt.Errorf("schedule cannot be cancelled (status: %s)", schedule.Status)
+	}
+
+	// Restore subscription state based on schedule type
+	if err := s.restoreSubscriptionState(ctx, schedule); err != nil {
+		s.Logger.Error(ctx, "failed to restore subscription state",
+			"schedule_id", schedule.ID,
+			"error", err,
+		)
+		return fmt.Errorf("failed to restore subscription state: %w", err)
+	}
+
+	now := clock.Now()
+	schedule.Status = types.ScheduleStatusCancelled
+	schedule.CancelledAt = &now
+	schedule.UpdatedAt = now
+	schedule.UpdatedBy = types.GetUserID(ctx)
+
+	if err := s.SubScheduleRepo.Update(ctx, schedule); err != nil {
+		return fmt.Errorf("failed to cancel schedule: %w", err)
+	}
+
+	s.Logger.Info(ctx, "schedule cancelled in database",
+		"schedule_id", schedule.ID,
+		"subscription_id", schedule.SubscriptionID,
+		"schedule_type", string(schedule.ScheduleType),
+	)
+
+	return nil
 }
 
 // CancelBySubscriptionAndType cancels a pending schedule by subscription ID and schedule type
@@ -494,6 +522,10 @@ func (s *subscriptionScheduleService) restoreCancellationState(
 	// updateSubscriptionForCancellation at scheduling time) stays permanently non-nil after a
 	// revert, which later spuriously blocks executePlanChange's cancellation guard.
 	sub.CancelledAt = nil
+	// For the same reason, the cancellation keys written at scheduling time had no prior value.
+	delete(sub.Metadata, "cancellation_type")
+	delete(sub.Metadata, "cancellation_reason")
+	delete(sub.Metadata, "effective_date")
 	// Restore CurrentPeriodEnd if it was shortened at scheduling time (scheduled_date with effectiveDate < period end).
 	// Nil-safe: old schedule records without this field are handled gracefully.
 	if config.OriginalCurrentPeriodEnd != nil {

@@ -131,6 +131,34 @@ func (_u *SubscriptionPauseUpdate) ClearResumeMode() *SubscriptionPauseUpdate {
 	return _u
 }
 
+// SetProrationBehavior sets the "proration_behavior" field.
+func (_u *SubscriptionPauseUpdate) SetProrationBehavior(v string) *SubscriptionPauseUpdate {
+	_u.mutation.SetProrationBehavior(v)
+	return _u
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdate) SetNillableProrationBehavior(v *string) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetProrationBehavior(*v)
+	}
+	return _u
+}
+
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (_u *SubscriptionPauseUpdate) SetProratedCreditGranted(v bool) *SubscriptionPauseUpdate {
+	_u.mutation.SetProratedCreditGranted(v)
+	return _u
+}
+
+// SetNillableProratedCreditGranted sets the "prorated_credit_granted" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdate) SetNillableProratedCreditGranted(v *bool) *SubscriptionPauseUpdate {
+	if v != nil {
+		_u.SetProratedCreditGranted(*v)
+	}
+	return _u
+}
+
 // SetPauseStart sets the "pause_start" field.
 func (_u *SubscriptionPauseUpdate) SetPauseStart(v time.Time) *SubscriptionPauseUpdate {
 	_u.mutation.SetPauseStart(v)
@@ -314,6 +342,11 @@ func (_u *SubscriptionPauseUpdate) check() error {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProrationBehavior(); ok {
+		if err := subscriptionpause.ProrationBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.proration_behavior": %w`, err)}
+		}
+	}
 	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPause.subscription"`)
 	}
@@ -361,6 +394,12 @@ func (_u *SubscriptionPauseUpdate) sqlSave(ctx context.Context) (_node int, err 
 	}
 	if _u.mutation.ResumeModeCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumeMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProratedCreditGranted(); ok {
+		_spec.SetField(subscriptionpause.FieldProratedCreditGranted, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)
@@ -543,6 +582,34 @@ func (_u *SubscriptionPauseUpdateOne) SetNillableResumeMode(v *string) *Subscrip
 // ClearResumeMode clears the value of the "resume_mode" field.
 func (_u *SubscriptionPauseUpdateOne) ClearResumeMode() *SubscriptionPauseUpdateOne {
 	_u.mutation.ClearResumeMode()
+	return _u
+}
+
+// SetProrationBehavior sets the "proration_behavior" field.
+func (_u *SubscriptionPauseUpdateOne) SetProrationBehavior(v string) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetProrationBehavior(v)
+	return _u
+}
+
+// SetNillableProrationBehavior sets the "proration_behavior" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdateOne) SetNillableProrationBehavior(v *string) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetProrationBehavior(*v)
+	}
+	return _u
+}
+
+// SetProratedCreditGranted sets the "prorated_credit_granted" field.
+func (_u *SubscriptionPauseUpdateOne) SetProratedCreditGranted(v bool) *SubscriptionPauseUpdateOne {
+	_u.mutation.SetProratedCreditGranted(v)
+	return _u
+}
+
+// SetNillableProratedCreditGranted sets the "prorated_credit_granted" field if the given value is not nil.
+func (_u *SubscriptionPauseUpdateOne) SetNillableProratedCreditGranted(v *bool) *SubscriptionPauseUpdateOne {
+	if v != nil {
+		_u.SetProratedCreditGranted(*v)
+	}
 	return _u
 }
 
@@ -742,6 +809,11 @@ func (_u *SubscriptionPauseUpdateOne) check() error {
 			return &ValidationError{Name: "pause_mode", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.pause_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.ProrationBehavior(); ok {
+		if err := subscriptionpause.ProrationBehaviorValidator(v); err != nil {
+			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPause.proration_behavior": %w`, err)}
+		}
+	}
 	if _u.mutation.SubscriptionCleared() && len(_u.mutation.SubscriptionIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "SubscriptionPause.subscription"`)
 	}
@@ -806,6 +878,12 @@ func (_u *SubscriptionPauseUpdateOne) sqlSave(ctx context.Context) (_node *Subsc
 	}
 	if _u.mutation.ResumeModeCleared() {
 		_spec.ClearField(subscriptionpause.FieldResumeMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProrationBehavior(); ok {
+		_spec.SetField(subscriptionpause.FieldProrationBehavior, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ProratedCreditGranted(); ok {
+		_spec.SetField(subscriptionpause.FieldProratedCreditGranted, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.PauseStart(); ok {
 		_spec.SetField(subscriptionpause.FieldPauseStart, field.TypeTime, value)

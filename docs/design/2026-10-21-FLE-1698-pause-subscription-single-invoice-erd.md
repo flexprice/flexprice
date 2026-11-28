@@ -18,8 +18,7 @@ number of days.
 draft, which is computed over the parts of the period when the subscription was active and finalized at
 the period end. Each pause keeps its own `proration_behavior`, which decides whether its paused days are
 taken off the fixed charges. A paused subscription is never rolled into the next period: it is cancelled after
-`auto_cancel_days_after_pause`, or at the period end when it is not set, and the draft is finalized at that
-point.
+its pause grace period, or at the period end when none is set, and the draft is finalized at that point.
 
 ## How it works today
 
@@ -51,13 +50,18 @@ schedule restores the subscription's `cancel_at`, `end_date` and period end.
 
 The pause time is the moment of the request.
 
-1. The pause is refused when `pause time + auto_cancel_days_after_pause` is after the current period end (400). The
-existing phase 1 validations stay.
+1. The pause is refused when `pause time + pause_grace_period_days` from the request is after the current period
+end (400). The existing phase 1 validations stay.
 2. A `subscription_pauses` row is written with `pause_start` set to the pause time and the request's
 `proration_behavior`.
-3. A `scheduled_date` cancellation is scheduled for `pause time + auto_cancel_days_after_pause`, or for the current
-period end when `auto_cancel_days_after_pause` is not sent. This uses the existing cancellation schedule, so the
-billing run cancels the subscription at that time without any new trigger.
+3. A `scheduled_date` cancellation is scheduled at the end of the pause grace period, resolved in this order:
+   1. `pause time + pause_grace_period_days` from the request.
+   2. Otherwise `pause time + pause_grace_period_days` from the `subscription_config` setting, capped at the
+   current period end.
+   3. Otherwise the current period end.
+
+   This uses the existing cancellation schedule, so the billing run cancels the subscription at that time
+   without any new trigger.
 4. The subscription becomes `paused`. `current_period_start` and the billing anchor do not change.
 5. The cycle draft for the period is recomputed over the active stretches so far. It is created if it does
 not exist yet.
@@ -91,8 +95,8 @@ still open runs to the end of the invoice period, and the time after a cancel be
 subscription was cancelled from.
 
 - **Active:** the subscription was not paused.
-- **Paused, refundable:** paused by a pause sent with `create_prorations`.
-- **Paused, not refundable:** paused by a pause sent with `none`.
+- **Paused, prorated:** paused by a pause sent with `create_prorations`.
+- **Paused, not prorated:** paused by a pause sent with `none`.
 
 Usage and fixed charges are then computed from these stretches:
 
@@ -101,19 +105,21 @@ queries take every paused stretch as a range to exclude, so each meter is aggreg
 time. Tiers, volume pricing, MAX, COUNT_UNIQUE and LATEST then apply to the combined active usage, not per
 stretch. This aggregation does not exist today and is the main piece of work. The invoice preview uses the
 same query.
-- **Arrear fixed charges** are billed for the period minus the refundable time: amount × (period −
-refundable time) ÷ period.
-- **Advance fixed charges** were billed when the period started. The refundable part, amount × refundable
-time ÷ period, is credited to the customer's wallet when the draft is finalized. The credit is keyed on the
-invoice, so a retried finalization does not credit twice.
+- **Arrear fixed charges** have not been paid yet, so they are billed only for the period minus the prorated
+time: amount × (period − prorated time) ÷ period. Nothing is refunded.
+- **Advance fixed charges** were paid when the period started. The fixed lines billed for the period are
+read from the subscription's earlier finalized invoices, and each line's prorated part, amount charged ×
+prorated time ÷ its own period, is credited to the customer's wallet when the period's invoice is
+finalized. The credited pauses are marked with `prorated_credit_granted`, so a voided and rebilled
+invoice credits nothing more.
 
 A pause sent with `none` therefore counts as billed time for fixed charges, which is what `none` means
-today. The refundable stretches are recorded on the invoice so the fixed charge amounts can be reconciled.
+today.
 
 **Example.** A monthly subscription with a 30-day period, a $300 advance fee and a $60 arrear fee, is
 paused twice:
 
-| Pause | Days | `proration_behavior` | Refundable days |
+| Pause | Days | `proration_behavior` | Prorated days |
 |---|---|---|---|
 | Day 5 to day 10 | 5 | `create_prorations` | 5 |
 | Day 20 to day 25 | 5 | `none` | 0 |
@@ -128,7 +134,7 @@ $50 of the advance fee, 5 of 30 days of $300, is credited to the wallet.
 ```json
 {
   "proration_behavior": "create_prorations",
-  "auto_cancel_days_after_pause": 15,
+  "pause_grace_period_days": 15,
   "reason": "Customer requested a hold",
   "metadata": { "requested_by": "support" }
 }
@@ -137,7 +143,7 @@ $50 of the advance fee, 5 of 30 days of $300, is credited to the wallet.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `proration_behavior` | enum | no | `none` (default) or `create_prorations`. Decides whether this pause's days are taken off the fixed charges |
-| `auto_cancel_days_after_pause` | integer | no | Minimum 1. The subscription is cancelled if it is not resumed within these days. Must not go past the current period end. When omitted, the subscription is cancelled at the period end |
+| `pause_grace_period_days` | integer | no | Minimum 1. The subscription is cancelled if it is not resumed within these days. Must not go past the current period end. When omitted, the `subscription_config` setting's value is used, capped at the period end, and without it the subscription is cancelled at the period end |
 | `reason` | string | no | Max 255 characters |
 | `metadata` | map | no | Stored on the pause |
 
@@ -164,9 +170,9 @@ sequenceDiagram
     participant Run as subscription-billing
     participant DB as Postgres
 
-    C->>Svc: pause (proration_behavior, auto_cancel_days_after_pause)
+    C->>Svc: pause (proration_behavior, pause_grace_period_days)
     Svc->>DB: subscription_pauses row with proration_behavior, subscription paused
-    Svc->>Sch: schedule cancel at pause + auto_cancel_days_after_pause, or period end
+    Svc->>Sch: schedule cancel at pause + grace period (request, else setting), or period end
     Svc->>Inv: recompute cycle draft over active stretches
     opt resumed before the cancel time
         C->>Svc: resume
@@ -180,7 +186,7 @@ sequenceDiagram
         Run->>Svc: cancel at cancel_at
         Run->>Inv: compute draft up to cancel_at over active stretches, finalize
     end
-    Inv->>DB: wallet credit for refundable paused time
+    Inv->>DB: wallet credit for prorated paused time
 ```
 
 ### ERD
@@ -214,7 +220,7 @@ erDiagram
         string id PK
         string subscription_id FK
         string schedule_type "cancellation"
-        timestamp scheduled_at "pause + auto_cancel_days_after_pause, or period end"
+        timestamp scheduled_at "pause + pause grace period, or period end"
         string status "pending, cancelled, executed"
     }
     INVOICES {
@@ -232,8 +238,12 @@ erDiagram
 - **New column** `subscription_pauses.proration_behavior`, a string defaulting to `none`, with a migration.
 Existing rows read as `none`.
 
-`auto_cancel_days_after_pause` is not stored. It is only used to compute the cancellation time, which is stored on the
-existing cancellation schedule and `cancel_at`. The `SUBSCRIPTION_PAUSED` and `SUBSCRIPTION_RESUME` billing
+`pause_grace_period_days` is not stored on the pause. It is only used to compute the cancellation time, which is
+stored on the existing cancellation schedule and `cancel_at`.
+
+**Setting.** `subscription_config` gains an optional `pause_grace_period_days` (minimum 1), the default grace
+period of the environment's pauses. It is unset by default, so pauses cancel at the period end. No migration is
+needed, since settings are stored as JSON. The `SUBSCRIPTION_PAUSED` and `SUBSCRIPTION_RESUME` billing
 reasons from phase 1 are no longer raised.
 
 ### Workflow
@@ -251,8 +261,8 @@ by its pause's `proration_behavior`, as described above.
 Features to support after 2.1. Each is listed by what it should do. The approach for each is designed
 separately.
 
-- **Default `auto_cancel_days_after_pause`.** A hierarchical default, set at the tenant level and below, and applied when a pause request does not send its own value.
-- **`auto_cancel_days_after_pause` with scheduled pause and resume.** The pause and resume requests accept it when the pause or the resume is scheduled.
+- **Customer and subscription overrides of `pause_grace_period_days`.** Through the existing `subscription_config` overrides.
+- **`pause_grace_period_days` with scheduled pause and resume.** The pause and resume requests accept it when the pause or the resume is scheduled.
 - **Scheduled pause.** Pause a subscription at a future time instead of immediately.
 - **Automatic resume.** Set, when pausing, the time at which the subscription resumes on its own.
 - **Scheduled resume.** Resume a paused subscription at a future time instead of immediately. A pause with a resume time may then span more than one billing period.

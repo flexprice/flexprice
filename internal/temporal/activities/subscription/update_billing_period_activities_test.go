@@ -455,9 +455,8 @@ func (s *BillingActivitiesSuite) pausedSubscription(ctx context.Context, id stri
 	return sub, pause
 }
 
-// A period that passes while paused is recorded as a SKIPPED invoice and is not handed to the
-// invoice workflow, since there is nothing to finalize or collect.
-func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_RecordsPausedPeriodWithoutProcessingIt() {
+// A paused subscription's period gets its ordinary cycle draft, which is handed to the invoice workflow.
+func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_PausedPeriodGetsTheCycleDraft() {
 	ctx := types.SetEnvironmentID(s.GetContext(), "env_create_draft_invoices_paused")
 	p1Start := time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC)
 	p1End := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
@@ -473,48 +472,113 @@ func (s *BillingActivitiesSuite) TestCreateDraftInvoicesActivity_RecordsPausedPe
 
 	output, err := s.activities.CreateDraftInvoicesActivity(ctx, input)
 	s.Require().NoError(err)
-	s.Empty(output.InvoiceIDs, "the paused period is not sent to the invoice workflow")
+	s.Require().Len(output.InvoiceIDs, 1, "the period's draft is sent to the invoice workflow")
 
-	filter := types.NewNoLimitInvoiceFilter()
-	filter.SubscriptionID = sub.ID
-	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusSkipped}
-	invoices, err := s.GetStores().InvoiceRepo.List(ctx, filter)
+	draft, err := s.GetStores().InvoiceRepo.Get(ctx, output.InvoiceIDs[0])
 	s.Require().NoError(err)
-	s.Require().Len(invoices, 1)
-	s.Equal(string(types.InvoiceBillingReasonSubscriptionPaused), invoices[0].BillingReason)
-	s.True(invoices[0].PeriodStart.Equal(p1Start))
-	s.True(invoices[0].PeriodEnd.Equal(p1End))
-	s.True(invoices[0].Total.IsZero())
+	s.Equal(string(types.InvoiceBillingReasonSubscriptionCycle), draft.BillingReason)
+	s.Equal(types.InvoiceStatusDraft, draft.InvoiceStatus)
+	s.True(draft.PeriodStart.Equal(p1Start))
+	s.True(draft.PeriodEnd.Equal(p1End))
 }
 
-// A subscription that reaches its end date while paused is cancelled and its pause completed.
-func (s *BillingActivitiesSuite) TestCheckCancellationActivity_EndDateWhilePausedCompletesThePause() {
-	ctx := types.SetEnvironmentID(s.GetContext(), "env_check_cancellation_paused")
-	periodStart := s.testData.now.Add(-20 * 24 * time.Hour)
-	periodEnd := s.testData.now.Add(-24 * time.Hour)
-	sub, pause := s.pausedSubscription(ctx, "sub_check_cancellation_paused", periodStart, periodEnd)
-	sub.EndDate = lo.ToPtr(periodEnd)
-	s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+// A paused subscription that reaches its cancel time is cancelled and its pause completed: at its end
+// date, or at the pause's auto-cancel, whose schedule is then executed. A paused parent's inherited
+// children are cancelled with it.
+func (s *BillingActivitiesSuite) TestCheckCancellationActivity_WhilePausedCompletesThePause() {
+	tests := []struct {
+		name       string
+		autoCancel bool
+		parent     bool
+	}{
+		{name: "end date"},
+		{name: "pause auto-cancel", autoCancel: true},
+		{name: "parent pause auto-cancel", autoCancel: true, parent: true},
+	}
 
-	output, err := s.activities.CheckCancellationActivity(ctx, subscriptionModels.CheckSubscriptionCancellationActivityInput{
-		SubscriptionID: sub.ID,
-		TenantID:       types.GetTenantID(ctx),
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-		UserID:         types.GetUserID(ctx),
-		Period:         dto.Period{Start: periodStart, End: periodEnd},
-	})
-	s.Require().NoError(err)
-	s.True(output.IsCancelled)
+	for i, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := types.SetEnvironmentID(s.GetContext(), "env_check_cancellation_paused")
+			periodStart := s.testData.now.Add(-20 * 24 * time.Hour)
+			periodEnd := s.testData.now.Add(-24 * time.Hour)
+			sub, pause := s.pausedSubscription(ctx, "sub_check_cancellation_paused_"+string(rune('a'+i)), periodStart, periodEnd)
+			sub.EndDate = lo.ToPtr(periodEnd)
+			var schedule *subscription.SubscriptionSchedule
+			if tt.autoCancel {
+				sub.CancelAt = lo.ToPtr(periodEnd)
+				sub.CancelAtPeriodEnd = true
+				schedule = &subscription.SubscriptionSchedule{
+					ID:             "schedule_" + sub.ID,
+					SubscriptionID: sub.ID,
+					ScheduleType:   types.SubscriptionScheduleChangeTypeCancellation,
+					ScheduledAt:    periodEnd,
+					Status:         types.ScheduleStatusPending,
+					TenantID:       types.GetTenantID(ctx),
+					EnvironmentID:  types.GetEnvironmentID(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionScheduleRepo.Create(ctx, schedule))
+			}
+			var child *subscription.Subscription
+			if tt.parent {
+				sub.SubscriptionType = types.SubscriptionTypeParent
+				child = &subscription.Subscription{
+					ID:                   sub.ID + "_child",
+					CustomerID:           s.testData.customer.ID,
+					PlanID:               s.testData.plan.ID,
+					ParentSubscriptionID: lo.ToPtr(sub.ID),
+					SubscriptionType:     types.SubscriptionTypeInherited,
+					SubscriptionStatus:   types.SubscriptionStatusPaused,
+					PauseStatus:          types.PauseStatusActive,
+					CancelAt:             sub.CancelAt,
+					CancelAtPeriodEnd:    true,
+					EndDate:              sub.EndDate,
+					StartDate:            periodStart,
+					BillingAnchor:        periodStart,
+					CurrentPeriodStart:   periodStart,
+					CurrentPeriodEnd:     periodEnd,
+					BillingPeriod:        types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount:   1,
+					Currency:             "usd",
+					Timezone:             "UTC",
+					BaseModel:            types.GetDefaultBaseModel(ctx),
+				}
+				s.NoError(s.GetStores().SubscriptionRepo.Create(ctx, child))
+			}
+			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
 
-	cancelled, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
-	s.Require().NoError(err)
-	s.Equal(types.SubscriptionStatusCancelled, cancelled.SubscriptionStatus)
-	s.Equal(types.PauseStatusNone, cancelled.PauseStatus)
-	s.Nil(cancelled.ActivePauseID)
+			output, err := s.activities.CheckCancellationActivity(ctx, subscriptionModels.CheckSubscriptionCancellationActivityInput{
+				SubscriptionID: sub.ID,
+				TenantID:       types.GetTenantID(ctx),
+				EnvironmentID:  types.GetEnvironmentID(ctx),
+				UserID:         types.GetUserID(ctx),
+				Period:         dto.Period{Start: periodStart, End: periodEnd},
+			})
+			s.Require().NoError(err)
+			s.True(output.IsCancelled)
 
-	completed, err := s.GetStores().SubscriptionRepo.GetPause(ctx, pause.ID)
-	s.Require().NoError(err)
-	s.Equal(types.PauseStatusCompleted, completed.PauseStatus)
+			cancelled, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+			s.Require().NoError(err)
+			s.Equal(types.SubscriptionStatusCancelled, cancelled.SubscriptionStatus)
+			s.Equal(types.PauseStatusNone, cancelled.PauseStatus)
+			s.Nil(cancelled.ActivePauseID)
+
+			completed, err := s.GetStores().SubscriptionRepo.GetPause(ctx, pause.ID)
+			s.Require().NoError(err)
+			s.Equal(types.PauseStatusCompleted, completed.PauseStatus)
+
+			if schedule != nil {
+				executed, err := s.GetStores().SubscriptionScheduleRepo.Get(ctx, schedule.ID)
+				s.Require().NoError(err)
+				s.Equal(types.ScheduleStatusExecuted, executed.Status)
+			}
+			if child != nil {
+				cancelledChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+				s.Require().NoError(err)
+				s.Equal(types.SubscriptionStatusCancelled, cancelledChild.SubscriptionStatus, "the inherited child is cancelled with its parent")
+				s.Equal(types.PauseStatusNone, cancelledChild.PauseStatus)
+			}
+		})
+	}
 }
 
 func (s *BillingActivitiesSuite) TestUpdateCurrentPeriodActivity_QuietNeverCycleOpensAndEvaluatesOnce() {

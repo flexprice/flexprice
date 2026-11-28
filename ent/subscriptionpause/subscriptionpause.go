@@ -36,6 +36,10 @@ const (
 	FieldPauseMode = "pause_mode"
 	// FieldResumeMode holds the string denoting the resume_mode field in the database.
 	FieldResumeMode = "resume_mode"
+	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
+	FieldProrationBehavior = "proration_behavior"
+	// FieldProratedCreditGranted holds the string denoting the prorated_credit_granted field in the database.
+	FieldProratedCreditGranted = "prorated_credit_granted"
 	// FieldPauseStart holds the string denoting the pause_start field in the database.
 	FieldPauseStart = "pause_start"
 	// FieldPauseEnd holds the string denoting the pause_end field in the database.
@@ -77,6 +81,8 @@ var Columns = []string{
 	FieldPauseStatus,
 	FieldPauseMode,
 	FieldResumeMode,
+	FieldProrationBehavior,
+	FieldProratedCreditGranted,
 	FieldPauseStart,
 	FieldPauseEnd,
 	FieldResumedAt,
@@ -117,6 +123,12 @@ var (
 	DefaultPauseMode string
 	// PauseModeValidator is a validator for the "pause_mode" field. It is called by the builders before save.
 	PauseModeValidator func(string) error
+	// DefaultProrationBehavior holds the default value on creation for the "proration_behavior" field.
+	DefaultProrationBehavior string
+	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
+	ProrationBehaviorValidator func(string) error
+	// DefaultProratedCreditGranted holds the default value on creation for the "prorated_credit_granted" field.
+	DefaultProratedCreditGranted bool
 	// DefaultPauseStart holds the default value on creation for the "pause_start" field.
 	DefaultPauseStart func() time.Time
 	// DefaultOriginalPeriodStart holds the default value on creation for the "original_period_start" field.
@@ -186,6 +198,16 @@ func ByPauseMode(opts ...sql.OrderTermOption) OrderOption {
 // ByResumeMode orders the results by the resume_mode field.
 func ByResumeMode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldResumeMode, opts...).ToFunc()
+}
+
+// ByProrationBehavior orders the results by the proration_behavior field.
+func ByProrationBehavior(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProrationBehavior, opts...).ToFunc()
+}
+
+// ByProratedCreditGranted orders the results by the prorated_credit_granted field.
+func ByProratedCreditGranted(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProratedCreditGranted, opts...).ToFunc()
 }
 
 // ByPauseStart orders the results by the pause_start field.

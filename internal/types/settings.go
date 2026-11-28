@@ -98,6 +98,8 @@ type DefaultSettingValue struct {
 type SubscriptionConfig struct {
 	GracePeriodDays         int  `json:"grace_period_days" validate:"required,min=1"`
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
+	// PauseGracePeriodDays cancels a paused subscription not resumed within these days, capped at the period end. Unset cancels at the period end.
+	PauseGracePeriodDays *int `json:"pause_grace_period_days,omitempty" validate:"omitempty,min=1"`
 }
 
 // SettingsOverride holds the environment settings a customer or subscription overrides; unset fields inherit.
