@@ -13954,7 +13954,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.",
+                "description": "Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14031,7 +14031,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.\nconnection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.\ninterval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.\nWindow = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14137,7 +14137,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when pausing or resuming a scheduled task. Only the enabled field can be changed.",
+                "description": "Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name or schedule.\nChanging schedule.timezone (an export without a schedule runs in UTC) is rejected once the export has a completed run; create a new export instead. A schedule time that daylight saving skips in its timezone is rejected for daily, weekly and monthly exports.",
                 "consumes": [
                     "application/json"
                 ],
@@ -14158,7 +14158,7 @@ const docTemplate = `{
                         "required": true
                     },
                     {
-                        "description": "Update request (enabled: true/false to pause/resume)",
+                        "description": "Update request (enabled, name, schedule)",
                         "name": "scheduled_task",
                         "in": "body",
                         "required": true,
@@ -14253,7 +14253,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.",
+                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.\nWithout a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.\nReturns 400 when the export is paused (enabled is false); turn it on first.",
                 "consumes": [
                     "application/json"
                 ],
@@ -23793,10 +23793,8 @@ const docTemplate = `{
         "CreateScheduledTaskRequest": {
             "type": "object",
             "required": [
-                "connection_id",
                 "entity_type",
-                "interval",
-                "job_config"
+                "interval"
             ],
             "properties": {
                 "connection_id": {
@@ -23809,10 +23807,13 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.ScheduledTaskEntityType"
                 },
                 "interval": {
-                    "description": "Note: \"custom\" is excluded from API (internal testing only)",
+                    "description": "\"custom\" is excluded from API.",
                     "enum": [
                         "hourly",
-                        "daily"
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "manual"
                     ],
                     "allOf": [
                         {
@@ -23822,6 +23823,12 @@ const docTemplate = `{
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 }
             }
         },
@@ -30164,10 +30171,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "interval": {
-                    "description": "Note: \"custom\" is excluded from API docs",
+                    "description": "\"custom\" is excluded from API.",
                     "enum": [
                         "hourly",
-                        "daily"
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "manual"
                     ],
                     "allOf": [
                         {
@@ -30177,6 +30187,15 @@ const docTemplate = `{
                 },
                 "job_config": {
                     "$ref": "#/definitions/types.S3JobConfig"
+                },
+                "managed_copy": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 },
                 "status": {
                     "type": "string"
@@ -33140,6 +33159,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "start_time": {
+                    "description": "Omitted when the run computes its own window.",
                     "type": "string"
                 },
                 "workflow_id": {
@@ -33755,12 +33775,15 @@ const docTemplate = `{
         },
         "UpdateScheduledTaskRequest": {
             "type": "object",
-            "required": [
-                "enabled"
-            ],
             "properties": {
                 "enabled": {
                     "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "schedule": {
+                    "$ref": "#/definitions/types.ExportSchedule"
                 }
             }
         },
@@ -38302,7 +38325,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "skip_line_items": {
-                    "description": "SkipLineItems if true, will not include line items in the response",
+                    "description": "SkipLineItems if true, will not include line items in the response.\nPages that include line items are limited to MaxInvoiceListLimitWithLineItems invoices.",
                     "type": "boolean"
                 },
                 "sort": {
@@ -39592,7 +39615,10 @@ const docTemplate = `{
                 "30MIN",
                 "custom",
                 "hourly",
-                "daily"
+                "daily",
+                "weekly",
+                "monthly",
+                "manual"
             ],
             "x-enum-comments": {
                 "ScheduledTaskIntervalCustom": "10 minutes for testing"
@@ -39602,7 +39628,10 @@ const docTemplate = `{
                 "ScheduledTaskIntervalEvery30Minutes",
                 "ScheduledTaskIntervalCustom",
                 "ScheduledTaskIntervalHourly",
-                "ScheduledTaskIntervalDaily"
+                "ScheduledTaskIntervalDaily",
+                "ScheduledTaskIntervalWeekly",
+                "ScheduledTaskIntervalMonthly",
+                "ScheduledTaskIntervalManual"
             ]
         },
         "types.SecretProvider": {
@@ -42426,6 +42455,39 @@ const docTemplate = `{
                 "EmailTypeInvoice",
                 "EmailTypeInvoicePaymentReminder"
             ]
+        },
+        "types.ExportSchedule": {
+            "type": "object",
+            "required": [
+                "timezone"
+            ],
+            "properties": {
+                "day_of_month": {
+                    "description": "Required for monthly.",
+                    "type": "integer",
+                    "maximum": 28,
+                    "minimum": 1
+                },
+                "day_of_week": {
+                    "description": "Required for weekly; 0 is Sunday.",
+                    "type": "integer",
+                    "maximum": 6,
+                    "minimum": 0
+                },
+                "hour": {
+                    "type": "integer",
+                    "maximum": 23,
+                    "minimum": 0
+                },
+                "minute": {
+                    "type": "integer",
+                    "maximum": 59,
+                    "minimum": 0
+                },
+                "timezone": {
+                    "type": "string"
+                }
+            }
         },
         "types.InstrumentDetails": {
             "type": "object",

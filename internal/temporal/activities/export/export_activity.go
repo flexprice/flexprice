@@ -89,6 +89,8 @@ type ExportDataInput struct {
 	EndTime             time.Time
 	JobConfig           *types.S3JobConfig
 	CustomerExternalIDs []string
+	ManagedCopy         bool
+	TaskID              string
 }
 
 // ExportDataOutput represents output from export
@@ -121,6 +123,8 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 		EndTime:             input.EndTime,
 		JobConfig:           input.JobConfig,
 		CustomerExternalIDs: input.CustomerExternalIDs,
+		ManagedCopy:         input.ManagedCopy,
+		TaskID:              input.TaskID,
 	}
 
 	// Use the ExportService which handles routing to the correct exporter

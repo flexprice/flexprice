@@ -2,24 +2,19 @@ package service
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/clock"
-
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
+	domainTask "github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/storage"
-	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
-	"github.com/flexprice/flexprice/internal/temporal/models"
-	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -31,31 +26,33 @@ type ScheduledTaskService interface {
 	UpdateScheduledTask(ctx context.Context, id string, req dto.UpdateScheduledTaskRequest) (*dto.ScheduledTaskResponse, error)
 	DeleteScheduledTask(ctx context.Context, id string) error
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
-
-	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 }
 
 type scheduledTaskService struct {
 	repo            scheduledtask.Repository
+	taskRepo        domainTask.Repository
 	connectionRepo  connection.Repository
-	temporalClient  temporalClient.TemporalClient
+	scheduler       exportschedule.Scheduler
 	logger          *logger.Logger
 	config          *config.Configuration
 	storageResolver storage.Resolver
 }
 
+// NewScheduledTaskService accepts a nil scheduler.
 func NewScheduledTaskService(
 	repo scheduledtask.Repository,
+	taskRepo domainTask.Repository,
 	connectionRepo connection.Repository,
-	temporalClient temporalClient.TemporalClient,
+	scheduler exportschedule.Scheduler,
 	logger *logger.Logger,
 	config *config.Configuration,
 	storageResolver storage.Resolver,
 ) ScheduledTaskService {
 	return &scheduledTaskService{
 		repo:            repo,
+		taskRepo:        taskRepo,
 		connectionRepo:  connectionRepo,
-		temporalClient:  temporalClient,
+		scheduler:       scheduler,
 		logger:          logger,
 		config:          config,
 		storageResolver: storageResolver,
@@ -81,171 +78,22 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		"entity_type", req.EntityType,
 		"connection_id", req.ConnectionID)
 
-	// Fetch the connection to check if it's Flexprice-managed
-	conn, err := s.connectionRepo.Get(ctx, req.ConnectionID)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get connection", "connection_id", req.ConnectionID, "error", err)
-		return nil, ierr.WithError(err).
-			WithHint("Connection not found").
-			Mark(ierr.ErrNotFound)
-	}
+	taskID := types.GenerateUUIDWithPrefix("schtask")
 
-	// Check if this is a Flexprice-managed S3 connection
-	jobConfig := req.JobConfig
-	isManaged := conn.SyncConfig != nil && conn.SyncConfig.Storage != nil && conn.SyncConfig.Storage.IsFlexpriceManaged
-
-	if conn.ProviderType == types.SecretProviderGCS && isManaged {
-		// GCS needs no region; skip S3 validation.
-		s.logger.Info(ctx, "handling flexprice-managed GCS connection for scheduled task",
-			"connection_id", req.ConnectionID,
-			"tenant_id", tenantID)
-
-		if req.JobConfig == nil {
-			return nil, ierr.NewError("job config is required for flexprice-managed GCS").
-				WithHint("Storage job configuration must be provided").
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := req.JobConfig.Compression.Validate(); err != nil {
-			return nil, err
-		}
-
-		if err := s.config.FlexpriceGCSExports.Validate(); err != nil {
-			return nil, err
-		}
-
-		jobConfig = &types.S3JobConfig{
-			Provider:             types.SecretProviderGCS,
-			Bucket:               s.config.FlexpriceGCSExports.Bucket,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
-			Compression:          req.JobConfig.Compression,
-			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
-		}
-		if jobConfig.Compression == "" {
-			jobConfig.Compression = types.S3CompressionTypeNone
-		}
-
-		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
-
-		s.logger.Info(ctx, "populated job config for flexprice-managed GCS",
-			"bucket", jobConfig.Bucket,
-			"key_prefix", jobConfig.KeyPrefix,
-			"tenant_id", tenantID,
-			"environment_id", envID,
-			"compression", jobConfig.Compression)
-	} else if conn.ProviderType == types.SecretProviderS3 && isManaged {
-		s.logger.Info(ctx, "handling flexprice-managed S3 connection for scheduled task",
-			"connection_id", req.ConnectionID,
-			"tenant_id", tenantID)
-
-		// For Flexprice-managed: validate only compression and encryption first
-		if req.JobConfig == nil {
-			return nil, ierr.NewError("job config is required for flexprice-managed S3").
-				WithHint("S3 job configuration must be provided").
-				Mark(ierr.ErrValidation)
-		}
-
-		if err := req.JobConfig.ValidateForFlexpriceManaged(); err != nil {
-			s.logger.Error(ctx, "invalid job config for flexprice-managed S3", "error", err)
-			return nil, err
-		}
-
-		// Populate bucket, region, and key_prefix from config
-		jobConfig = &types.S3JobConfig{
-			Bucket:               s.config.FlexpriceS3Exports.Bucket,
-			Region:               s.config.FlexpriceS3Exports.Region,
-			KeyPrefix:            conn.SyncConfig.Storage.KeyPrefix, // Tenant + Environment isolation
-			Compression:          req.JobConfig.Compression,
-			Encryption:           req.JobConfig.Encryption,
-			ExportMetadataFields: req.JobConfig.ExportMetadataFields,
-		}
-
-		// Set defaults if not provided
-		if jobConfig.Compression == "" {
-			jobConfig.Compression = types.S3CompressionTypeNone
-		}
-		if jobConfig.Encryption == "" {
-			jobConfig.Encryption = types.S3EncryptionTypeAES256
-		}
-
-		s.logger.Info(ctx, "populated job config for flexprice-managed S3",
-			"bucket", jobConfig.Bucket,
-			"region", jobConfig.Region,
-			"key_prefix", jobConfig.KeyPrefix,
-			"tenant_id", tenantID,
-			"environment_id", envID,
-			"compression", jobConfig.Compression,
-			"encryption", jobConfig.Encryption)
-
-		// Final validation after population
-		if err := jobConfig.Validate(); err != nil {
-			s.logger.Error(ctx, "invalid populated job config for flexprice-managed S3", "error", err)
-			return nil, err
-		}
-		if err := jobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
+	var jobConfig *types.S3JobConfig
+	var err error
+	if req.ConnectionID == "" {
+		jobConfig, err = s.flexpriceJobConfig(ctx, req, taskID)
 	} else {
-		// Custom GCS is not supported; only managed GCS.
-		if conn.ProviderType == types.SecretProviderGCS {
-			return nil, ierr.NewError("custom GCS storage is not supported").
-				WithHint("Only Flexprice-managed GCS storage is supported").
-				Mark(ierr.ErrValidation)
-		}
-		// Provider from connection, not caller JSON.
-		if req.JobConfig != nil {
-			req.JobConfig.Provider = conn.ProviderType
-		}
-		if err := req.JobConfig.Validate(); err != nil {
-			s.logger.Error(ctx, "invalid job config for custom S3 connection", "error", err)
-			return nil, err
-		}
-		if err := req.JobConfig.ExportMetadataFields.ValidateAndDefault(req.EntityType); err != nil {
-			return nil, err
-		}
-		jobConfig = req.JobConfig
+		jobConfig, err = s.connectionJobConfig(ctx, req)
 	}
-
-	exportStorage, err := s.storageResolver.ForConnectionExport(ctx, req.ConnectionID, jobConfig)
 	if err != nil {
-		s.logger.Error(ctx, "export storage is not resolvable for scheduled task",
-			"error", err, "connection_id", req.ConnectionID)
 		return nil, err
 	}
 
-	// Customer-owned buckets must be reachable and writable with the connection's keys before the export is saved.
-	if !isManaged {
-		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		defer cancel()
-		if err := exportStorage.ValidateConnection(probeCtx); err != nil {
-			s.logger.Error(ctx, "export bucket is not reachable with the connection's credentials",
-				"connection_id", req.ConnectionID,
-				"bucket", jobConfig.Bucket,
-				"region", jobConfig.Region,
-				"error", err)
-			return nil, err
-		}
-
-		// Exports write under <key_prefix>/<entity_type>/, so probe that folder.
-		markerKey := storage.ObjectKey(jobConfig.KeyPrefix, string(req.EntityType), "flexprice-write-check", "txt", false)
-		if err := exportStorage.ValidateWrite(probeCtx, markerKey); err != nil {
-			s.logger.Error(ctx, "export bucket is not writable with the connection's credentials",
-				"connection_id", req.ConnectionID,
-				"bucket", jobConfig.Bucket,
-				"key", markerKey,
-				"error", err)
-			return nil, err
-		}
-	}
-
-	// Generate task ID upfront
-	taskID := types.GenerateUUIDWithPrefix("schtask")
-
-	// Set temporal schedule ID upfront (same as task ID)
+	// Manual exports skip Temporal
 	var temporalScheduleID string
-	if req.Enabled && s.temporalClient != nil {
+	if req.Enabled && s.scheduler != nil && req.Interval != types.ScheduledTaskIntervalManual {
 		temporalScheduleID = taskID
 	}
 
@@ -258,7 +106,9 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		Interval:           req.Interval,
 		Enabled:            req.Enabled,
 		JobConfig:          jobConfig,
-		TemporalScheduleID: temporalScheduleID, // Set upfront!
+		TemporalScheduleID: temporalScheduleID,
+		Name:               req.Name,
+		Schedule:           req.Schedule,
 		Status:             types.StatusPublished,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -281,8 +131,8 @@ func (s *scheduledTaskService) CreateScheduledTask(ctx context.Context, req dto.
 		"interval", task.Interval)
 
 	// Start Temporal schedule if enabled
-	if task.Enabled && s.temporalClient != nil {
-		err = s.startScheduledTask(ctx, task)
+	if temporalScheduleID != "" {
+		err = s.scheduler.Create(ctx, task)
 		if err != nil {
 			s.logger.Error(ctx, "failed to start temporal schedule", "error", err)
 			// Rollback: delete the created task
@@ -367,8 +217,8 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		return nil, err
 	}
 
-	// Get existing task
-	task, err := s.repo.Get(ctx, id)
+	// Writer read keeps updated_at fresh.
+	task, err := s.repo.Get(types.WithForceWriter(ctx), id)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get scheduled task for update", "id", id, "error", err)
 		return nil, ierr.WithError(err).
@@ -376,10 +226,9 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrNotFound)
 	}
 
-	// Check if task is archived
-	if task.Status == types.StatusArchived {
-		return nil, ierr.NewError("cannot update archived scheduled task").
-			WithHint("This scheduled task has been archived and cannot be modified").
+	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
+		return nil, ierr.NewError("cannot update archived or deleted scheduled task").
+			WithHint("This scheduled task has been archived or deleted and cannot be modified").
 			WithReportableDetails(map[string]interface{}{
 				"task_id": id,
 				"status":  task.Status,
@@ -387,7 +236,16 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 			Mark(ierr.ErrValidation)
 	}
 
-	// Track if enabled status changed
+	if req.Name != nil || req.Schedule != nil {
+		if err := s.updateExportSettings(ctx, task, req); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.Enabled == nil {
+		return dto.ToScheduledTaskResponse(task), nil
+	}
+
 	wasEnabled := task.Enabled
 	newEnabled := *req.Enabled
 
@@ -412,11 +270,11 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 	}
 
 	// Handle Temporal schedule pause/resume
-	if s.temporalClient != nil {
+	if s.scheduler != nil {
 		if newEnabled {
 			// Resume/Start the schedule
 			s.logger.Info(ctx, "resuming temporal schedule", "task_id", id)
-			err = s.resumeScheduledTask(ctx, task)
+			err = s.resumeSchedule(ctx, task)
 			if err != nil {
 				s.logger.Error(ctx, "failed to resume temporal schedule", "task_id", id, "error", err)
 				// Rollback the database change
@@ -430,7 +288,7 @@ func (s *scheduledTaskService) UpdateScheduledTask(ctx context.Context, id strin
 		} else {
 			// Pause the schedule
 			s.logger.Info(ctx, "pausing temporal schedule", "task_id", id)
-			err = s.pauseScheduledTask(ctx, task)
+			err = s.scheduler.Pause(ctx, task)
 			if err != nil {
 				s.logger.Error(ctx, "failed to pause temporal schedule", "task_id", id, "error", err)
 				// Rollback the database change
@@ -480,9 +338,9 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 	}
 
 	// Delete the Temporal schedule first
-	if s.temporalClient != nil {
+	if s.scheduler != nil {
 		s.logger.Info(ctx, "deleting temporal schedule", "task_id", id)
-		err = s.deleteTemporalSchedule(ctx, task)
+		err = s.scheduler.Delete(ctx, task)
 		if err != nil {
 			s.logger.Error(ctx, "failed to delete temporal schedule", "task_id", id, "error", err)
 			return ierr.WithError(err).
@@ -515,7 +373,7 @@ func (s *scheduledTaskService) DeleteScheduledTask(ctx context.Context, id strin
 
 // TriggerForceRun triggers a force run export immediately with optional custom time range
 func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error) {
-	if s.temporalClient == nil {
+	if s.scheduler == nil {
 		return nil, ierr.NewError("temporal client not configured").
 			WithHint("Temporal client is not available").
 			Mark(ierr.ErrInternal)
@@ -534,166 +392,29 @@ func (s *scheduledTaskService) TriggerForceRun(ctx context.Context, id string, r
 		"end_time", endTime,
 		"mode", mode)
 
-	return &dto.TriggerForceRunResponse{
+	resp := &dto.TriggerForceRunResponse{
 		WorkflowID: workflowID,
 		Message:    "Force run triggered successfully",
-		StartTime:  startTime,
-		EndTime:    endTime,
 		Mode:       mode,
-	}, nil
+	}
+	if !startTime.IsZero() && !endTime.IsZero() {
+		resp.StartTime, resp.EndTime = &startTime, &endTime
+	}
+	return resp, nil
 }
 
 // ===== PRIVATE HELPER METHODS =====
 
-// startScheduledTask creates a new Temporal schedule for the task (used during creation)
-// This function should only be called when creating a new scheduled task
-func (s *scheduledTaskService) startScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
-	s.logger.Info(ctx, "creating new temporal schedule", "task_id", task.ID)
-
-	scheduleID := task.ID
-	cronExpr := s.getCronExpression(types.ScheduledTaskInterval(task.Interval))
-
-	scheduleSpec := client.ScheduleSpec{
-		CronExpressions: []string{cronExpr},
+// resumeSchedule also records the schedule ID.
+func (s *scheduledTaskService) resumeSchedule(ctx context.Context, task *scheduledtask.ScheduledTask) error {
+	if err := s.scheduler.Resume(ctx, task); err != nil {
+		return err
 	}
-
-	action := &client.ScheduleWorkflowAction{
-		Workflow: exportWorkflows.ExecuteExportWorkflow,
-		Args: []interface{}{
-			exportWorkflows.ExecuteExportWorkflowInput{
-				ScheduledTaskID: task.ID,
-				TenantID:        task.TenantID,
-				EnvID:           task.EnvironmentID,
-				UserID:          task.CreatedBy,
-			},
-		},
-		TaskQueue:                string(types.TemporalTaskQueueExport),
-		WorkflowExecutionTimeout: 60 * time.Minute,
-		WorkflowRunTimeout:       60 * time.Minute,
-		WorkflowTaskTimeout:      60 * time.Minute,
-	}
-
-	scheduleOptions := models.CreateScheduleOptions{
-		ID:     scheduleID,
-		Spec:   scheduleSpec,
-		Action: action,
-		Paused: false,
-	}
-
-	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
-	if err != nil {
-		s.logger.Error(ctx, "failed to create temporal schedule", "error", err)
-		return ierr.WithError(err).
-			WithHint("Failed to create Temporal schedule").
-			Mark(ierr.ErrInternal)
-	}
-
-	s.logger.Info(ctx, "temporal schedule created successfully",
-		"task_id", task.ID,
-		"schedule_id", scheduleID,
-		"cron", cronExpr)
-
-	return nil
-}
-
-// pauseScheduledTask pauses the Temporal schedule for the task
-// This function safely handles cases where the schedule doesn't exist
-func (s *scheduledTaskService) pauseScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
-	if task.TemporalScheduleID == "" {
-		s.logger.Info(ctx, "no temporal schedule to pause", "task_id", task.ID)
+	if task.Interval == types.ScheduledTaskIntervalManual || task.TemporalScheduleID != "" {
 		return nil
 	}
-
-	handle := s.temporalClient.GetScheduleHandle(ctx, task.TemporalScheduleID)
-	err := handle.Pause(ctx, client.SchedulePauseOptions{})
-	if err != nil {
-		s.logger.Error(ctx, "failed to pause schedule", "error", err)
-		return ierr.WithError(err).
-			WithHint("Failed to pause Temporal schedule").
-			Mark(ierr.ErrInternal)
-	}
-
-	s.logger.Info(ctx, "temporal schedule paused successfully", "task_id", task.ID)
-	return nil
-}
-
-// resumeScheduledTask resumes or creates a Temporal schedule for the task
-// This function intelligently handles:
-// - Resuming paused schedules
-// - Creating new schedules if they don't exist
-// - Handling schedules that are already running
-func (s *scheduledTaskService) resumeScheduledTask(ctx context.Context, task *scheduledtask.ScheduledTask) error {
-	if task.TemporalScheduleID == "" {
-		s.logger.Info(ctx, "no temporal schedule ID, creating new schedule", "task_id", task.ID)
-		err := s.startScheduledTask(ctx, task)
-		if err != nil {
-			return err
-		}
-		task.TemporalScheduleID = task.ID
-		err = s.repo.Update(ctx, task)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-
-	scheduleID := task.TemporalScheduleID
-	handle := s.temporalClient.GetScheduleHandle(ctx, scheduleID)
-
-	// Try to get existing schedule to check its state
-	schedule, err := handle.Describe(ctx)
-	if err != nil {
-		// Schedule doesn't exist, create a new one
-		s.logger.Info(ctx, "schedule not found, creating new one", "task_id", task.ID, "schedule_id", scheduleID)
-		return s.startScheduledTask(ctx, task)
-	}
-
-	// Check if schedule is paused
-	if schedule.Schedule.State.Paused {
-		s.logger.Info(ctx, "resuming paused schedule", "task_id", task.ID, "schedule_id", scheduleID)
-		err = handle.Unpause(ctx, client.ScheduleUnpauseOptions{})
-		if err != nil {
-			s.logger.Error(ctx, "failed to unpause schedule", "error", err)
-			return ierr.WithError(err).
-				WithHint("Failed to resume Temporal schedule").
-				Mark(ierr.ErrInternal)
-		}
-		s.logger.Info(ctx, "temporal schedule resumed successfully", "task_id", task.ID)
-		return nil
-	}
-
-	// Schedule exists and is not paused
-	s.logger.Info(ctx, "temporal schedule already running", "task_id", task.ID, "schedule_id", scheduleID)
-	return nil
-}
-
-// deleteTemporalSchedule deletes the Temporal schedule for the task
-func (s *scheduledTaskService) deleteTemporalSchedule(ctx context.Context, task *scheduledtask.ScheduledTask) error {
-	if task.TemporalScheduleID == "" {
-		s.logger.Info(ctx, "no temporal schedule to delete", "task_id", task.ID)
-		return nil
-	}
-
-	handle := s.temporalClient.GetScheduleHandle(ctx, task.TemporalScheduleID)
-	err := handle.Delete(ctx)
-	if err != nil {
-		// Deleting a schedule is allowed to be idempotent. If it's already gone, treat it as success.
-		var notFound *serviceerror.NotFound
-		if errors.As(err, &notFound) {
-			s.logger.Info(ctx, "temporal schedule not found; treating as deleted", "task_id", task.ID, "schedule_id", task.TemporalScheduleID)
-			return nil
-		}
-
-		s.logger.Error(ctx, "failed to delete temporal schedule", "schedule_id", task.TemporalScheduleID, "error", err)
-		return ierr.WithError(err).
-			WithHint("Failed to delete Temporal schedule").
-			Mark(ierr.ErrInternal)
-	}
-
-	s.logger.Info(ctx, "temporal schedule deleted successfully",
-		"task_id", task.ID,
-		"schedule_id", task.TemporalScheduleID)
-	return nil
+	task.TemporalScheduleID = task.ID
+	return s.repo.Update(ctx, task)
 }
 
 // triggerForceRun executes the export workflow immediately (bypasses schedule)
@@ -711,6 +432,23 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 			Mark(ierr.ErrDatabase)
 	}
 
+	if task.Status == types.StatusArchived || task.Status == types.StatusDeleted {
+		return "", time.Time{}, time.Time{}, "", ierr.NewError("cannot run archived or deleted scheduled task").
+			WithHint("This scheduled task has been archived or deleted and cannot be run").
+			WithReportableDetails(map[string]interface{}{
+				"task_id": taskID,
+				"status":  task.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if !task.Enabled {
+		return "", time.Time{}, time.Time{}, "", ierr.NewError("export is paused").
+			WithHint("Turn the export on to run it.").
+			WithReportableDetails(map[string]interface{}{"task_id": taskID}).
+			Mark(ierr.ErrValidation)
+	}
+
 	if len(req.CustomerExternalIDs) > 0 && task.EntityType != types.ScheduledTaskEntityTypeWalletLedger {
 		return "", time.Time{}, time.Time{}, "", ierr.NewError("customer filter is not supported for this export").
 			WithHintf("customer_external_ids can only be used with %s exports", types.ScheduledTaskEntityTypeWalletLedger).
@@ -721,7 +459,12 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 	var startTime, endTime time.Time
 	var mode string
 
-	if customStart != nil && customEnd != nil {
+	noWindow := customStart == nil && customEnd == nil &&
+		(task.Schedule != nil || task.Interval == types.ScheduledTaskIntervalManual)
+
+	if noWindow {
+		mode = "force run"
+	} else if customStart != nil && customEnd != nil {
 		// User provided custom time range
 		startTime = *customStart
 		endTime = *customEnd
@@ -736,7 +479,9 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		currentTime := clock.Now()
 
 		// Calculate interval boundaries for force run
-		startTime, endTime = s.CalculateIntervalBoundaries(currentTime, interval)
+		if startTime, endTime, err = scheduledtask.Bounds(interval, nil, currentTime); err != nil {
+			return "", time.Time{}, time.Time{}, "", err
+		}
 		mode = "force run"
 
 		s.logger.Info(ctx, "using automatic time range based on interval boundaries",
@@ -758,119 +503,27 @@ func (s *scheduledTaskService) triggerForceRun(ctx context.Context, taskID strin
 		"scheduled_task_id", taskID,
 		"mode", mode)
 
-	workflowOptions := models.StartWorkflowOptions{
-		ID:                       workflowID,
-		TaskQueue:                string(types.TemporalTaskQueueExport),
-		WorkflowExecutionTimeout: 60 * time.Minute, // 60 minutes for export tasks
-		WorkflowRunTimeout:       60 * time.Minute, // 60 minutes for single workflow run
-		WorkflowTaskTimeout:      60 * time.Minute, // 60 minutes for workflow task processing
-	}
-
-	input := exportWorkflows.ExecuteExportWorkflowInput{
-		ScheduledTaskID:     taskID,
-		TenantID:            task.TenantID,
-		EnvID:               task.EnvironmentID,
-		UserID:              types.GetUserID(ctx), // Get user ID from context for force runs
-		CustomStartTime:     &startTime,           // Always pass calculated time range for force runs
-		CustomEndTime:       &endTime,
+	run := exportschedule.Run{
+		WorkflowID:          workflowID,
+		UserID:              types.GetUserID(ctx),
 		CustomerExternalIDs: req.CustomerExternalIDs,
 	}
+	if !noWindow {
+		run.Start = &startTime
+		run.End = &endTime
+	}
 
-	workflowRun, err := s.temporalClient.StartWorkflow(ctx, workflowOptions, exportWorkflows.ExecuteExportWorkflow, input)
+	startedID, err := s.scheduler.StartRun(ctx, task, run)
 	if err != nil {
-		s.logger.Error(ctx, "failed to start export workflow", "error", err)
-		return "", time.Time{}, time.Time{}, "", ierr.WithError(err).
-			WithHint("Failed to start export workflow").
-			Mark(ierr.ErrInternal)
+		return "", time.Time{}, time.Time{}, "", err
 	}
 
 	s.logger.Info(ctx, "force run triggered",
 		"scheduled_task_id", taskID,
-		"workflow_id", workflowRun.GetID(),
-		"run_id", workflowRun.GetRunID(),
+		"workflow_id", startedID,
 		"start_time", startTime,
 		"end_time", endTime,
 		"mode", mode)
 
-	return workflowRun.GetID(), startTime, endTime, mode, nil
-}
-
-// getCronExpression converts interval to cron expression
-// All schedules (except testing) include a 15-minute buffer after the interval boundary
-// to allow time for data ingestion into the feature_usage table
-func (s *scheduledTaskService) getCronExpression(interval types.ScheduledTaskInterval) string {
-	switch interval {
-	case types.ScheduledTaskIntervalCustom:
-		return "*/10 * * * *" // Every 10 minutes (for testing, no buffer)
-	case types.ScheduledTaskIntervalEvery15Minutes:
-		return "*/15 * * * *" // Every 15 minutes
-	case types.ScheduledTaskIntervalHourly:
-		return "15 * * * *" // Every hour at 15 minutes past (e.g., 10:15, 11:15, 12:15)
-	case types.ScheduledTaskIntervalDaily:
-		return "15 0 * * *" // Every day at 00:15 AM
-	case types.ScheduledTaskIntervalEvery30Minutes:
-		return "*/30 * * * *" // Every 30 minutes
-	default:
-		return "15 0 * * *" // Default to daily at 00:15
-	}
-}
-
-// CalculateIntervalBoundaries calculates interval boundaries based on current time
-//
-// Returns the interval that aligns with the current time:
-//   - Run at 10:30 → 10:00-11:00 (current interval)
-//   - Run at 11:15 (cron) → 11:00-12:00 (current interval)
-//   - Run at 12:15 (cron) → 12:00-13:00 (current interval)
-//
-// The activity layer uses the start boundary as the end time for exports,
-// then subtracts one interval to calculate the previous completed interval
-func (s *scheduledTaskService) CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time) {
-	switch interval {
-	case types.ScheduledTaskIntervalCustom:
-		// For testing: align to 10-minute intervals
-		// Return the CURRENT 10-minute interval
-		// Example: If current time is 2:07 PM, return 2:00 PM - 2:10 PM
-		minutes := currentTime.Minute() / 10 * 10
-		startTime = time.Date(
-			currentTime.Year(), currentTime.Month(), currentTime.Day(),
-			currentTime.Hour(), minutes, 0, 0, currentTime.Location(),
-		)
-		endTime = startTime.Add(10 * time.Minute)
-
-	case types.ScheduledTaskIntervalHourly:
-		// Return the CURRENT hour
-		// Example: If current time is 10:30 AM, return 10:00 AM → 11:00 AM
-		startTime = time.Date(
-			currentTime.Year(), currentTime.Month(), currentTime.Day(),
-			currentTime.Hour(), 0, 0, 0, currentTime.Location(),
-		)
-		endTime = startTime.Add(1 * time.Hour)
-
-	case types.ScheduledTaskIntervalDaily:
-		// Return the CURRENT day
-		// Example: If run anytime on 16 Oct 2025, return 16 Oct 00:00 → 17 Oct 00:00
-		startTime = time.Date(
-			currentTime.Year(), currentTime.Month(), currentTime.Day(),
-			0, 0, 0, 0, currentTime.Location(),
-		)
-		endTime = startTime.AddDate(0, 0, 1) // Next day
-	case types.ScheduledTaskIntervalEvery15Minutes:
-		// Return the CURRENT 15-minute interval
-		// Example: If current time is 2:07 PM, return 2:00 PM - 2:15 PM
-		minutes := currentTime.Minute() / 15 * 15
-		startTime = time.Date(
-			currentTime.Year(), currentTime.Month(), currentTime.Day(),
-			currentTime.Hour(), minutes, 0, 0, currentTime.Location(),
-		)
-		endTime = startTime.Add(15 * time.Minute)
-	default:
-		// Default to current day
-		startTime = time.Date(
-			currentTime.Year(), currentTime.Month(), currentTime.Day(),
-			0, 0, 0, 0, currentTime.Location(),
-		)
-		endTime = startTime.AddDate(0, 0, 1)
-	}
-
-	return startTime, endTime
+	return startedID, startTime, endTime, mode, nil
 }

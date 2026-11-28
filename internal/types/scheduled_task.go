@@ -1,6 +1,9 @@
 package types
 
 import (
+	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 )
@@ -14,6 +17,9 @@ const (
 	ScheduledTaskIntervalCustom         ScheduledTaskInterval = "custom" // 10 minutes for testing
 	ScheduledTaskIntervalHourly         ScheduledTaskInterval = "hourly"
 	ScheduledTaskIntervalDaily          ScheduledTaskInterval = "daily"
+	ScheduledTaskIntervalWeekly         ScheduledTaskInterval = "weekly"
+	ScheduledTaskIntervalMonthly        ScheduledTaskInterval = "monthly"
+	ScheduledTaskIntervalManual         ScheduledTaskInterval = "manual"
 )
 
 // Validate validates the scheduled task interval
@@ -24,6 +30,9 @@ func (s ScheduledTaskInterval) Validate() error {
 		ScheduledTaskIntervalCustom,
 		ScheduledTaskIntervalHourly,
 		ScheduledTaskIntervalDaily,
+		ScheduledTaskIntervalWeekly,
+		ScheduledTaskIntervalMonthly,
+		ScheduledTaskIntervalManual,
 	}
 	if s == "" {
 		return ierr.NewError("interval is required").
@@ -36,8 +45,130 @@ func (s ScheduledTaskInterval) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid scheduled task interval").
-		WithHint("Interval must be one of: 15MIN, 30MIN, custom, hourly, daily").
+		WithHint("Interval must be one of: 15MIN, 30MIN, custom, hourly, daily, weekly, monthly, manual").
 		Mark(ierr.ErrValidation)
+}
+
+// ExportSchedule is an export's run time.
+type ExportSchedule struct {
+	Hour   int `json:"hour" minimum:"0" maximum:"23"`
+	Minute int `json:"minute" minimum:"0" maximum:"59"`
+	// Required for weekly; 0 is Sunday.
+	DayOfWeek *int `json:"day_of_week,omitempty" minimum:"0" maximum:"6"`
+	// Required for monthly.
+	DayOfMonth *int   `json:"day_of_month,omitempty" minimum:"1" maximum:"28"`
+	Timezone   string `json:"timezone" binding:"required"`
+}
+
+// Validate checks fields for interval.
+func (s *ExportSchedule) Validate(interval ScheduledTaskInterval) error {
+	if s.Hour < 0 || s.Hour > 23 {
+		return ierr.NewError("invalid schedule hour").
+			WithHint("Hour must be between 0 and 23").
+			Mark(ierr.ErrValidation)
+	}
+	if s.Minute < 0 || s.Minute > 59 {
+		return ierr.NewError("invalid schedule minute").
+			WithHint("Minute must be between 0 and 59").
+			Mark(ierr.ErrValidation)
+	}
+	loc, err := s.Location()
+	if err != nil {
+		return ierr.NewError("invalid schedule timezone").
+			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
+			Mark(ierr.ErrValidation)
+	}
+	if interval == ScheduledTaskIntervalWeekly {
+		if s.DayOfWeek == nil || *s.DayOfWeek < 0 || *s.DayOfWeek > 6 {
+			return ierr.NewError("invalid schedule day_of_week").
+				WithHint("Weekly schedules require day_of_week between 0 (Sunday) and 6").
+				Mark(ierr.ErrValidation)
+		}
+	} else if s.DayOfWeek != nil {
+		return ierr.NewError("unexpected schedule day_of_week").
+			WithHint("day_of_week is only allowed for weekly schedules").
+			Mark(ierr.ErrValidation)
+	}
+	if interval == ScheduledTaskIntervalMonthly {
+		if s.DayOfMonth == nil || *s.DayOfMonth < 1 || *s.DayOfMonth > 28 {
+			return ierr.NewError("invalid schedule day_of_month").
+				WithHint("Monthly schedules require day_of_month between 1 and 28").
+				Mark(ierr.ErrValidation)
+		}
+	} else if s.DayOfMonth != nil {
+		return ierr.NewError("unexpected schedule day_of_month").
+			WithHint("day_of_month is only allowed for monthly schedules").
+			Mark(ierr.ErrValidation)
+	}
+	if interval != ScheduledTaskIntervalHourly && s.skippedByDST(loc, interval, clock.Now()) {
+		return ierr.NewError("schedule time is skipped by daylight saving").
+			WithHintf("%02d:%02d does not exist on some run days in %s. Pick a time outside the clock change.", s.Hour, s.Minute, s.Timezone).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// skippedByDST reports a missing run time within two years.
+func (s *ExportSchedule) skippedByDST(loc *time.Location, interval ScheduledTaskInterval, from time.Time) bool {
+	day := from.In(loc)
+	for i := 0; i < 2*366; i++ {
+		date := time.Date(day.Year(), day.Month(), day.Day()+i, 12, 0, 0, 0, loc)
+		if interval == ScheduledTaskIntervalWeekly && int(date.Weekday()) != *s.DayOfWeek {
+			continue
+		}
+		if interval == ScheduledTaskIntervalMonthly && date.Day() != *s.DayOfMonth {
+			continue
+		}
+		t := time.Date(date.Year(), date.Month(), date.Day(), s.Hour, s.Minute, 0, 0, loc)
+		if t.Hour() != s.Hour || t.Minute() != s.Minute {
+			return true
+		}
+	}
+	return false
+}
+
+// Location resolves the timezone.
+func (s *ExportSchedule) Location() (*time.Location, error) {
+	if s.Timezone == "" || s.Timezone == "Local" {
+		return nil, ierr.NewError("timezone is required").
+			WithHint("Schedule timezone must be specified").
+			Mark(ierr.ErrValidation)
+	}
+	loc, err := time.LoadLocation(s.Timezone)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Timezone must be a valid IANA name such as Asia/Kolkata").
+			Mark(ierr.ErrValidation)
+	}
+	return loc, nil
+}
+
+// ValidateExportSchedule checks schedule presence.
+func ValidateExportSchedule(interval ScheduledTaskInterval, s *ExportSchedule) error {
+	switch interval {
+	case ScheduledTaskIntervalWeekly, ScheduledTaskIntervalMonthly:
+		if s == nil {
+			return ierr.NewError("schedule is required").
+				WithHint("Weekly and monthly exports require a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	case ScheduledTaskIntervalManual:
+		if s != nil {
+			return ierr.NewError("schedule not allowed").
+				WithHint("Manual exports do not take a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	case ScheduledTaskIntervalEvery15Minutes, ScheduledTaskIntervalEvery30Minutes, ScheduledTaskIntervalCustom:
+		if s != nil {
+			return ierr.NewError("schedule not allowed").
+				WithHint("Only hourly, daily, weekly and monthly exports take a schedule").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if s == nil {
+		return nil
+	}
+	return s.Validate(interval)
 }
 
 // ScheduledTaskEntityType represents the entity type for scheduled tasks
@@ -194,8 +325,8 @@ func (s *StorageExportConfig) ValidateForProvider(providerType SecretProvider) e
 // S3JobConfig represents the configuration for an S3 export job
 // This is stored in the job_config JSON field of scheduled_tasks table
 type S3JobConfig struct {
-	Bucket               string               `json:"bucket"`                           // S3 bucket name
-	Region               string               `json:"region"`                           // AWS region (e.g., "us-west-2")
+	Bucket               string               `json:"bucket,omitempty"`                 // S3 bucket name
+	Region               string               `json:"region,omitempty"`                 // AWS region (e.g., "us-west-2")
 	KeyPrefix            string               `json:"key_prefix,omitempty"`             // Optional prefix for S3 keys (e.g., "flexprice-exports/")
 	Compression          S3CompressionType    `json:"compression,omitempty"`            // Compression type: "gzip", "none" (default: "none")
 	Encryption           S3EncryptionType     `json:"encryption,omitempty"`             // Encryption type: "AES256", "aws:kms", "aws:kms:dsse" (default: "AES256")

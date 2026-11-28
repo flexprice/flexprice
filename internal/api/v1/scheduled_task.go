@@ -29,6 +29,9 @@ func NewScheduledTaskHandler(
 // @Summary Create scheduled task
 // @ID createScheduledTask
 // @Description Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
+// @Description connection_id is optional. Without it the export is written to a Flexprice-managed bucket (managed_copy=true) and downloaded from the console; job_config may then only set export_metadata_fields and compression. job_config is required when connection_id is set.
+// @Description interval is hourly, daily, weekly, monthly or manual; exports run hourly at most, so 15MIN and 30MIN are rejected. Existing exports may still report 15MIN or 30MIN. Clients should tolerate new values. schedule ({hour, minute, day_of_week 0 (Sunday) to 6 (Saturday), day_of_month 1-28, timezone}) is required for weekly and monthly, optional for hourly and daily, and not allowed for manual; timezone is an IANA name and is required inside schedule. Weekly schedules require day_of_week and monthly schedules require day_of_month; each is rejected for other intervals. A schedule time that daylight saving skips in its timezone (for example 02:30 America/Los_Angeles) is rejected for daily, weekly and monthly exports.
+// @Description Window = the previous full period before the scheduled time, in the schedule's timezone; weekly = the previous full ISO week (Monday 00:00 to the following Monday 00:00) whatever day_of_week is, so a Sunday run covers the week that ended six days earlier; monthly = previous calendar month; manual = previous UTC day unless a window is given.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -86,7 +89,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 
 // @Summary List scheduled tasks
 // @ID listScheduledTasks
-// @Description Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.
+// @Description Use when listing or managing scheduled tasks in an admin UI. Returns all exports, including those without a connection; supports filtering and pagination.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
@@ -139,13 +142,14 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 
 // @Summary Update a scheduled task
 // @ID updateScheduledTask
-// @Description Use when pausing or resuming a scheduled task. Only the enabled field can be changed.
+// @Description Use when pausing, resuming, renaming or rescheduling a scheduled task. Send at least one of enabled, name or schedule.
+// @Description Changing schedule.timezone (an export without a schedule runs in UTC) is rejected once the export has a completed run; create a new export instead. A schedule time that daylight saving skips in its timezone is rejected for daily, weekly and monthly exports.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Scheduled Task ID"
-// @Param scheduled_task body dto.UpdateScheduledTaskRequest true "Update request (enabled: true/false to pause/resume)"
+// @Param scheduled_task body dto.UpdateScheduledTaskRequest true "Update request (enabled, name, schedule)"
 // @Success 200 {object} dto.ScheduledTaskResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request or task is archived"
 // @Failure 404 {object} ierr.ErrorResponse "Scheduled task not found"
@@ -206,6 +210,8 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Summary Trigger force run
 // @ID triggerScheduledTaskRun
 // @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
+// @Description Without a requested time range, manual exports and exports with a schedule omit start_time and end_time from the response; other exports return the calculated range.
+// @Description Returns 400 when the export is paused (enabled is false); turn it on first.
 // @Tags Scheduled Tasks
 // @Accept json
 // @Produce json

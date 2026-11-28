@@ -112,15 +112,18 @@ type CreateScheduleOptions struct {
 	Overlap enumspb.ScheduleOverlapPolicy
 	Action  *client.ScheduleWorkflowAction
 	Paused  bool
+	// CatchupWindow limits missed-run replay.
+	CatchupWindow time.Duration
 }
 
 // ToSDKOptions converts CreateScheduleOptions to Temporal SDK client.ScheduleOptions
 func (o *CreateScheduleOptions) ToSDKOptions() client.ScheduleOptions {
 	return client.ScheduleOptions{
-		ID:      o.ID,
-		Spec:    o.Spec,
-		Overlap: o.Overlap,
-		Action:  o.Action,
-		Paused:  o.Paused,
+		ID:            o.ID,
+		Spec:          o.Spec,
+		Overlap:       o.Overlap,
+		Action:        o.Action,
+		Paused:        o.Paused,
+		CatchupWindow: o.CatchupWindow,
 	}
 }

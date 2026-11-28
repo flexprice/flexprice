@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
 	"github.com/flexprice/flexprice/internal/types"
@@ -41,9 +42,9 @@ func (c *workflowStarter) StartWorkflow(_ context.Context, _ models.StartWorkflo
 }
 
 func TestTriggerForceRunPassesCustomerFilterToTheLedgerExport(t *testing.T) {
-	task := &scheduledtask.ScheduledTask{ID: "st_1", EntityType: types.ScheduledTaskEntityTypeWalletLedger, Interval: types.ScheduledTaskIntervalDaily}
+	task := &scheduledtask.ScheduledTask{ID: "st_1", EntityType: types.ScheduledTaskEntityTypeWalletLedger, Interval: types.ScheduledTaskIntervalDaily, Enabled: true}
 	starter := &workflowStarter{}
-	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, temporalClient: starter, logger: logger.NewNoopLogger()}
+	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, scheduler: exportschedule.NewScheduler(starter, logger.NewNoopLogger()), logger: logger.NewNoopLogger()}
 
 	_, _, _, _, err := s.triggerForceRun(context.Background(), task.ID, dto.TriggerForceRunRequest{CustomerExternalIDs: []string{"acme"}})
 	require.NoError(t, err)
@@ -54,7 +55,7 @@ func TestTriggerForceRunPassesCustomerFilterToTheLedgerExport(t *testing.T) {
 }
 
 func TestTriggerForceRunRejectsCustomerFilterOutsideTheLedger(t *testing.T) {
-	task := &scheduledtask.ScheduledTask{ID: "st_1", EntityType: types.ScheduledTaskEntityTypeWalletDebits, Interval: types.ScheduledTaskIntervalDaily}
+	task := &scheduledtask.ScheduledTask{ID: "st_1", EntityType: types.ScheduledTaskEntityTypeWalletDebits, Interval: types.ScheduledTaskIntervalDaily, Enabled: true}
 	s := &scheduledTaskService{repo: scheduledTaskGetter{task: task}, logger: logger.NewNoopLogger()}
 
 	_, _, _, _, err := s.triggerForceRun(context.Background(), task.ID, dto.TriggerForceRunRequest{CustomerExternalIDs: []string{"acme"}})

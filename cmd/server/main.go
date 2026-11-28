@@ -47,6 +47,7 @@ import (
 	"github.com/flexprice/flexprice/internal/telemetry"
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
+	"github.com/flexprice/flexprice/internal/temporal/exportschedule"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/temporal/queries"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
@@ -383,6 +384,7 @@ func main() {
 			provideTemporalWorkerManager,
 			provideTemporalService,
 			provideWorkflowQuerier,
+			exportschedule.NewScheduler,
 
 			// API components
 			provideHandlers,
