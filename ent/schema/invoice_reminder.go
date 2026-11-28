@@ -57,6 +57,13 @@ func (InvoiceReminder) Fields() []ent.Field {
 			SchemaType(text),
 		field.String("body").
 			SchemaType(text),
+		// playbook_id and playbook_step_id name the playbook step that last wrote this reminder.
+		field.String("playbook_id").
+			SchemaType(varchar("50")).
+			Optional(),
+		field.String("playbook_step_id").
+			SchemaType(varchar("50")).
+			Optional(),
 	}
 }
 

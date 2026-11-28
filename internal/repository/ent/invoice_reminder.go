@@ -144,7 +144,8 @@ const listOverdueSQL = `
 SELECT i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency),
        0::numeric, i.amount_remaining, i.due_date, NULL::timestamptz,
        r.id, r.reminder_status, r.status_reason, r.approved_at, r.metadata,
-       r.tone, r.subject, r.body, r.created_at, r.updated_at, r.created_by, r.updated_by
+       r.tone, r.subject, r.body, r.created_at, r.updated_at, r.created_by, r.updated_by,
+       r.playbook_id, r.playbook_step_id
 FROM invoices i
 LEFT JOIN invoice_reminders r
   ON r.tenant_id = i.tenant_id AND r.environment_id = i.environment_id AND r.invoice_id = i.id AND r.status = $3
@@ -195,7 +196,8 @@ const invoicesWithRemindersSQL = `
 SELECT i.id, coalesce(i.invoice_number, ''), i.customer_id, lower(i.currency),
        i.amount_due, i.amount_remaining, i.due_date, i.paid_at,
        r.id, r.reminder_status, r.status_reason, r.approved_at, r.metadata,
-       r.tone, r.subject, r.body, r.created_at, r.updated_at, r.created_by, r.updated_by
+       r.tone, r.subject, r.body, r.created_at, r.updated_at, r.created_by, r.updated_by,
+       r.playbook_id, r.playbook_step_id
 FROM invoices i
 LEFT JOIN invoice_reminders r
   ON r.tenant_id = i.tenant_id AND r.environment_id = i.environment_id AND r.invoice_id = i.id AND r.status = $3
@@ -345,11 +347,12 @@ func scanInvoicesWithReminders(ctx context.Context, rows *sql.Rows) ([]collectio
 			reminderID, status, reason       sql.NullString
 			tone, subject, body              sql.NullString
 			createdBy, updatedBy             sql.NullString
+			playbookID, playbookStepID       sql.NullString
 			approvedAt, createdAt, updatedAt sql.NullTime
 			metadata                         []byte
 		)
 		if err := rows.Scan(&id, &number, &customerID, &currency, &amountDue, &amountRemaining, &dueDate, &paidAt,
-			&reminderID, &status, &reason, &approvedAt, &metadata, &tone, &subject, &body, &createdAt, &updatedAt, &createdBy, &updatedBy); err != nil {
+			&reminderID, &status, &reason, &approvedAt, &metadata, &tone, &subject, &body, &createdAt, &updatedAt, &createdBy, &updatedBy, &playbookID, &playbookStepID); err != nil {
 			return err
 		}
 
@@ -375,6 +378,7 @@ func scanInvoicesWithReminders(ctx context.Context, rows *sql.Rows) ([]collectio
 				WithStatus(types.ReminderStatus(status.String), reason.String, nullTime(approvedAt)).
 				WithMetadata(decodeMetadata(metadata)).
 				WithText(types.ReminderTone(tone.String), subject.String, body.String).
+				WithPlaybook(playbookID.String, playbookStepID.String).
 				Build()
 			row = row.WithReminder(reminder)
 		}
@@ -708,6 +712,8 @@ func (r *invoiceReminderRepository) createBuilder(ctx context.Context, d *collec
 		SetTone(d.Tone).
 		SetSubject(d.Subject).
 		SetBody(d.Body).
+		SetPlaybookID(d.PlaybookID).
+		SetPlaybookStepID(d.PlaybookStepID).
 		SetTenantID(d.TenantID).
 		SetEnvironmentID(d.EnvironmentID).
 		SetStatus(string(types.StatusPublished)).
@@ -778,6 +784,8 @@ func (r *invoiceReminderRepository) Update(ctx context.Context, d *collections.I
 		SetTone(d.Tone).
 		SetSubject(d.Subject).
 		SetBody(d.Body).
+		SetPlaybookID(d.PlaybookID).
+		SetPlaybookStepID(d.PlaybookStepID).
 		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx))
 	if d.ApprovedAt == nil {
@@ -813,5 +821,6 @@ func reminderFromEnt(e *ent.InvoiceReminder) *collections.InvoiceReminder {
 		WithStatus(e.ReminderStatus, e.StatusReason, e.ApprovedAt).
 		WithMetadata(e.Metadata).
 		WithText(e.Tone, e.Subject, e.Body).
+		WithPlaybook(e.PlaybookID, e.PlaybookStepID).
 		Build()
 }

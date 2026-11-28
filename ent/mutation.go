@@ -23,6 +23,10 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/collectionplaybook"
+	"github.com/flexprice/flexprice/ent/collectionplaybookrun"
+	"github.com/flexprice/flexprice/ent/collectionplaybooksteprun"
+	"github.com/flexprice/flexprice/ent/collectiontask"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/contract"
@@ -113,6 +117,10 @@ const (
 	TypeBillingSequence                  = "BillingSequence"
 	TypeBillingTerm                      = "BillingTerm"
 	TypeCheckoutSession                  = "CheckoutSession"
+	TypeCollectionPlaybook               = "CollectionPlaybook"
+	TypeCollectionPlaybookRun            = "CollectionPlaybookRun"
+	TypeCollectionPlaybookStepRun        = "CollectionPlaybookStepRun"
+	TypeCollectionTask                   = "CollectionTask"
 	TypeCommitment                       = "Commitment"
 	TypeConnection                       = "Connection"
 	TypeContract                         = "Contract"
@@ -14598,6 +14606,5971 @@ func (m *CheckoutSessionMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CheckoutSessionMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CheckoutSession edge %s", name)
+}
+
+// CollectionPlaybookMutation represents an operation that mutates the CollectionPlaybook nodes in the graph.
+type CollectionPlaybookMutation struct {
+	config
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	name            *string
+	description     *string
+	state           *types.PlaybookState
+	priority        *int
+	addpriority     *int
+	trigger         *types.PlaybookTrigger
+	audience        *types.PlaybookAudience
+	steps           *[]types.PlaybookStep
+	appendsteps     []types.PlaybookStep
+	stops           *[]types.PlaybookStopCondition
+	appendstops     []types.PlaybookStopCondition
+	min_gap_days    *int
+	addmin_gap_days *int
+	skip_weekends   *bool
+	template_id     *string
+	version         *int
+	addversion      *int
+	activated_at    *time.Time
+	clearedFields   map[string]struct{}
+	runs            map[string]struct{}
+	removedruns     map[string]struct{}
+	clearedruns     bool
+	done            bool
+	oldValue        func(context.Context) (*CollectionPlaybook, error)
+	predicates      []predicate.CollectionPlaybook
+}
+
+var _ ent.Mutation = (*CollectionPlaybookMutation)(nil)
+
+// collectionplaybookOption allows management of the mutation configuration using functional options.
+type collectionplaybookOption func(*CollectionPlaybookMutation)
+
+// newCollectionPlaybookMutation creates new mutation for the CollectionPlaybook entity.
+func newCollectionPlaybookMutation(c config, op Op, opts ...collectionplaybookOption) *CollectionPlaybookMutation {
+	m := &CollectionPlaybookMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCollectionPlaybook,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCollectionPlaybookID sets the ID field of the mutation.
+func withCollectionPlaybookID(id string) collectionplaybookOption {
+	return func(m *CollectionPlaybookMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CollectionPlaybook
+		)
+		m.oldValue = func(ctx context.Context) (*CollectionPlaybook, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CollectionPlaybook.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCollectionPlaybook sets the old CollectionPlaybook of the mutation.
+func withCollectionPlaybook(node *CollectionPlaybook) collectionplaybookOption {
+	return func(m *CollectionPlaybookMutation) {
+		m.oldValue = func(context.Context) (*CollectionPlaybook, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CollectionPlaybookMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CollectionPlaybookMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CollectionPlaybook entities.
+func (m *CollectionPlaybookMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CollectionPlaybookMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CollectionPlaybookMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CollectionPlaybook.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CollectionPlaybookMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CollectionPlaybookMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CollectionPlaybookMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CollectionPlaybookMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CollectionPlaybookMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CollectionPlaybookMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CollectionPlaybookMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CollectionPlaybookMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CollectionPlaybookMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CollectionPlaybookMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CollectionPlaybookMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CollectionPlaybookMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CollectionPlaybookMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CollectionPlaybookMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CollectionPlaybookMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[collectionplaybook.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CollectionPlaybookMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, collectionplaybook.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CollectionPlaybookMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CollectionPlaybookMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CollectionPlaybookMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[collectionplaybook.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CollectionPlaybookMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, collectionplaybook.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CollectionPlaybookMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CollectionPlaybookMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CollectionPlaybookMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[collectionplaybook.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CollectionPlaybookMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, collectionplaybook.FieldEnvironmentID)
+}
+
+// SetName sets the "name" field.
+func (m *CollectionPlaybookMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *CollectionPlaybookMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *CollectionPlaybookMutation) ResetName() {
+	m.name = nil
+}
+
+// SetDescription sets the "description" field.
+func (m *CollectionPlaybookMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *CollectionPlaybookMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ClearDescription clears the value of the "description" field.
+func (m *CollectionPlaybookMutation) ClearDescription() {
+	m.description = nil
+	m.clearedFields[collectionplaybook.FieldDescription] = struct{}{}
+}
+
+// DescriptionCleared returns if the "description" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) DescriptionCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldDescription]
+	return ok
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *CollectionPlaybookMutation) ResetDescription() {
+	m.description = nil
+	delete(m.clearedFields, collectionplaybook.FieldDescription)
+}
+
+// SetState sets the "state" field.
+func (m *CollectionPlaybookMutation) SetState(ts types.PlaybookState) {
+	m.state = &ts
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *CollectionPlaybookMutation) State() (r types.PlaybookState, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldState(ctx context.Context) (v types.PlaybookState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *CollectionPlaybookMutation) ResetState() {
+	m.state = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *CollectionPlaybookMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *CollectionPlaybookMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *CollectionPlaybookMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *CollectionPlaybookMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *CollectionPlaybookMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// SetTrigger sets the "trigger" field.
+func (m *CollectionPlaybookMutation) SetTrigger(tt types.PlaybookTrigger) {
+	m.trigger = &tt
+}
+
+// Trigger returns the value of the "trigger" field in the mutation.
+func (m *CollectionPlaybookMutation) Trigger() (r types.PlaybookTrigger, exists bool) {
+	v := m.trigger
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTrigger returns the old "trigger" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldTrigger(ctx context.Context) (v types.PlaybookTrigger, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTrigger is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTrigger requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTrigger: %w", err)
+	}
+	return oldValue.Trigger, nil
+}
+
+// ResetTrigger resets all changes to the "trigger" field.
+func (m *CollectionPlaybookMutation) ResetTrigger() {
+	m.trigger = nil
+}
+
+// SetAudience sets the "audience" field.
+func (m *CollectionPlaybookMutation) SetAudience(ta types.PlaybookAudience) {
+	m.audience = &ta
+}
+
+// Audience returns the value of the "audience" field in the mutation.
+func (m *CollectionPlaybookMutation) Audience() (r types.PlaybookAudience, exists bool) {
+	v := m.audience
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAudience returns the old "audience" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldAudience(ctx context.Context) (v types.PlaybookAudience, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAudience is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAudience requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAudience: %w", err)
+	}
+	return oldValue.Audience, nil
+}
+
+// ResetAudience resets all changes to the "audience" field.
+func (m *CollectionPlaybookMutation) ResetAudience() {
+	m.audience = nil
+}
+
+// SetSteps sets the "steps" field.
+func (m *CollectionPlaybookMutation) SetSteps(ts []types.PlaybookStep) {
+	m.steps = &ts
+	m.appendsteps = nil
+}
+
+// Steps returns the value of the "steps" field in the mutation.
+func (m *CollectionPlaybookMutation) Steps() (r []types.PlaybookStep, exists bool) {
+	v := m.steps
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSteps returns the old "steps" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldSteps(ctx context.Context) (v []types.PlaybookStep, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSteps is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSteps requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSteps: %w", err)
+	}
+	return oldValue.Steps, nil
+}
+
+// AppendSteps adds ts to the "steps" field.
+func (m *CollectionPlaybookMutation) AppendSteps(ts []types.PlaybookStep) {
+	m.appendsteps = append(m.appendsteps, ts...)
+}
+
+// AppendedSteps returns the list of values that were appended to the "steps" field in this mutation.
+func (m *CollectionPlaybookMutation) AppendedSteps() ([]types.PlaybookStep, bool) {
+	if len(m.appendsteps) == 0 {
+		return nil, false
+	}
+	return m.appendsteps, true
+}
+
+// ResetSteps resets all changes to the "steps" field.
+func (m *CollectionPlaybookMutation) ResetSteps() {
+	m.steps = nil
+	m.appendsteps = nil
+}
+
+// SetStops sets the "stops" field.
+func (m *CollectionPlaybookMutation) SetStops(tsc []types.PlaybookStopCondition) {
+	m.stops = &tsc
+	m.appendstops = nil
+}
+
+// Stops returns the value of the "stops" field in the mutation.
+func (m *CollectionPlaybookMutation) Stops() (r []types.PlaybookStopCondition, exists bool) {
+	v := m.stops
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStops returns the old "stops" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldStops(ctx context.Context) (v []types.PlaybookStopCondition, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStops is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStops requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStops: %w", err)
+	}
+	return oldValue.Stops, nil
+}
+
+// AppendStops adds tsc to the "stops" field.
+func (m *CollectionPlaybookMutation) AppendStops(tsc []types.PlaybookStopCondition) {
+	m.appendstops = append(m.appendstops, tsc...)
+}
+
+// AppendedStops returns the list of values that were appended to the "stops" field in this mutation.
+func (m *CollectionPlaybookMutation) AppendedStops() ([]types.PlaybookStopCondition, bool) {
+	if len(m.appendstops) == 0 {
+		return nil, false
+	}
+	return m.appendstops, true
+}
+
+// ResetStops resets all changes to the "stops" field.
+func (m *CollectionPlaybookMutation) ResetStops() {
+	m.stops = nil
+	m.appendstops = nil
+}
+
+// SetMinGapDays sets the "min_gap_days" field.
+func (m *CollectionPlaybookMutation) SetMinGapDays(i int) {
+	m.min_gap_days = &i
+	m.addmin_gap_days = nil
+}
+
+// MinGapDays returns the value of the "min_gap_days" field in the mutation.
+func (m *CollectionPlaybookMutation) MinGapDays() (r int, exists bool) {
+	v := m.min_gap_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMinGapDays returns the old "min_gap_days" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldMinGapDays(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMinGapDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMinGapDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMinGapDays: %w", err)
+	}
+	return oldValue.MinGapDays, nil
+}
+
+// AddMinGapDays adds i to the "min_gap_days" field.
+func (m *CollectionPlaybookMutation) AddMinGapDays(i int) {
+	if m.addmin_gap_days != nil {
+		*m.addmin_gap_days += i
+	} else {
+		m.addmin_gap_days = &i
+	}
+}
+
+// AddedMinGapDays returns the value that was added to the "min_gap_days" field in this mutation.
+func (m *CollectionPlaybookMutation) AddedMinGapDays() (r int, exists bool) {
+	v := m.addmin_gap_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetMinGapDays resets all changes to the "min_gap_days" field.
+func (m *CollectionPlaybookMutation) ResetMinGapDays() {
+	m.min_gap_days = nil
+	m.addmin_gap_days = nil
+}
+
+// SetSkipWeekends sets the "skip_weekends" field.
+func (m *CollectionPlaybookMutation) SetSkipWeekends(b bool) {
+	m.skip_weekends = &b
+}
+
+// SkipWeekends returns the value of the "skip_weekends" field in the mutation.
+func (m *CollectionPlaybookMutation) SkipWeekends() (r bool, exists bool) {
+	v := m.skip_weekends
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSkipWeekends returns the old "skip_weekends" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldSkipWeekends(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSkipWeekends is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSkipWeekends requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSkipWeekends: %w", err)
+	}
+	return oldValue.SkipWeekends, nil
+}
+
+// ResetSkipWeekends resets all changes to the "skip_weekends" field.
+func (m *CollectionPlaybookMutation) ResetSkipWeekends() {
+	m.skip_weekends = nil
+}
+
+// SetTemplateID sets the "template_id" field.
+func (m *CollectionPlaybookMutation) SetTemplateID(s string) {
+	m.template_id = &s
+}
+
+// TemplateID returns the value of the "template_id" field in the mutation.
+func (m *CollectionPlaybookMutation) TemplateID() (r string, exists bool) {
+	v := m.template_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTemplateID returns the old "template_id" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldTemplateID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTemplateID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTemplateID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTemplateID: %w", err)
+	}
+	return oldValue.TemplateID, nil
+}
+
+// ClearTemplateID clears the value of the "template_id" field.
+func (m *CollectionPlaybookMutation) ClearTemplateID() {
+	m.template_id = nil
+	m.clearedFields[collectionplaybook.FieldTemplateID] = struct{}{}
+}
+
+// TemplateIDCleared returns if the "template_id" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) TemplateIDCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldTemplateID]
+	return ok
+}
+
+// ResetTemplateID resets all changes to the "template_id" field.
+func (m *CollectionPlaybookMutation) ResetTemplateID() {
+	m.template_id = nil
+	delete(m.clearedFields, collectionplaybook.FieldTemplateID)
+}
+
+// SetVersion sets the "version" field.
+func (m *CollectionPlaybookMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *CollectionPlaybookMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *CollectionPlaybookMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *CollectionPlaybookMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *CollectionPlaybookMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// SetActivatedAt sets the "activated_at" field.
+func (m *CollectionPlaybookMutation) SetActivatedAt(t time.Time) {
+	m.activated_at = &t
+}
+
+// ActivatedAt returns the value of the "activated_at" field in the mutation.
+func (m *CollectionPlaybookMutation) ActivatedAt() (r time.Time, exists bool) {
+	v := m.activated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActivatedAt returns the old "activated_at" field's value of the CollectionPlaybook entity.
+// If the CollectionPlaybook object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookMutation) OldActivatedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActivatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActivatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActivatedAt: %w", err)
+	}
+	return oldValue.ActivatedAt, nil
+}
+
+// ClearActivatedAt clears the value of the "activated_at" field.
+func (m *CollectionPlaybookMutation) ClearActivatedAt() {
+	m.activated_at = nil
+	m.clearedFields[collectionplaybook.FieldActivatedAt] = struct{}{}
+}
+
+// ActivatedAtCleared returns if the "activated_at" field was cleared in this mutation.
+func (m *CollectionPlaybookMutation) ActivatedAtCleared() bool {
+	_, ok := m.clearedFields[collectionplaybook.FieldActivatedAt]
+	return ok
+}
+
+// ResetActivatedAt resets all changes to the "activated_at" field.
+func (m *CollectionPlaybookMutation) ResetActivatedAt() {
+	m.activated_at = nil
+	delete(m.clearedFields, collectionplaybook.FieldActivatedAt)
+}
+
+// AddRunIDs adds the "runs" edge to the CollectionPlaybookRun entity by ids.
+func (m *CollectionPlaybookMutation) AddRunIDs(ids ...string) {
+	if m.runs == nil {
+		m.runs = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.runs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRuns clears the "runs" edge to the CollectionPlaybookRun entity.
+func (m *CollectionPlaybookMutation) ClearRuns() {
+	m.clearedruns = true
+}
+
+// RunsCleared reports if the "runs" edge to the CollectionPlaybookRun entity was cleared.
+func (m *CollectionPlaybookMutation) RunsCleared() bool {
+	return m.clearedruns
+}
+
+// RemoveRunIDs removes the "runs" edge to the CollectionPlaybookRun entity by IDs.
+func (m *CollectionPlaybookMutation) RemoveRunIDs(ids ...string) {
+	if m.removedruns == nil {
+		m.removedruns = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.runs, ids[i])
+		m.removedruns[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRuns returns the removed IDs of the "runs" edge to the CollectionPlaybookRun entity.
+func (m *CollectionPlaybookMutation) RemovedRunsIDs() (ids []string) {
+	for id := range m.removedruns {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RunsIDs returns the "runs" edge IDs in the mutation.
+func (m *CollectionPlaybookMutation) RunsIDs() (ids []string) {
+	for id := range m.runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRuns resets all changes to the "runs" edge.
+func (m *CollectionPlaybookMutation) ResetRuns() {
+	m.runs = nil
+	m.clearedruns = false
+	m.removedruns = nil
+}
+
+// Where appends a list predicates to the CollectionPlaybookMutation builder.
+func (m *CollectionPlaybookMutation) Where(ps ...predicate.CollectionPlaybook) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CollectionPlaybookMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CollectionPlaybookMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CollectionPlaybook, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CollectionPlaybookMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CollectionPlaybookMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CollectionPlaybook).
+func (m *CollectionPlaybookMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CollectionPlaybookMutation) Fields() []string {
+	fields := make([]string, 0, 20)
+	if m.tenant_id != nil {
+		fields = append(fields, collectionplaybook.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, collectionplaybook.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, collectionplaybook.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, collectionplaybook.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, collectionplaybook.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, collectionplaybook.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, collectionplaybook.FieldEnvironmentID)
+	}
+	if m.name != nil {
+		fields = append(fields, collectionplaybook.FieldName)
+	}
+	if m.description != nil {
+		fields = append(fields, collectionplaybook.FieldDescription)
+	}
+	if m.state != nil {
+		fields = append(fields, collectionplaybook.FieldState)
+	}
+	if m.priority != nil {
+		fields = append(fields, collectionplaybook.FieldPriority)
+	}
+	if m.trigger != nil {
+		fields = append(fields, collectionplaybook.FieldTrigger)
+	}
+	if m.audience != nil {
+		fields = append(fields, collectionplaybook.FieldAudience)
+	}
+	if m.steps != nil {
+		fields = append(fields, collectionplaybook.FieldSteps)
+	}
+	if m.stops != nil {
+		fields = append(fields, collectionplaybook.FieldStops)
+	}
+	if m.min_gap_days != nil {
+		fields = append(fields, collectionplaybook.FieldMinGapDays)
+	}
+	if m.skip_weekends != nil {
+		fields = append(fields, collectionplaybook.FieldSkipWeekends)
+	}
+	if m.template_id != nil {
+		fields = append(fields, collectionplaybook.FieldTemplateID)
+	}
+	if m.version != nil {
+		fields = append(fields, collectionplaybook.FieldVersion)
+	}
+	if m.activated_at != nil {
+		fields = append(fields, collectionplaybook.FieldActivatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CollectionPlaybookMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case collectionplaybook.FieldTenantID:
+		return m.TenantID()
+	case collectionplaybook.FieldStatus:
+		return m.Status()
+	case collectionplaybook.FieldCreatedAt:
+		return m.CreatedAt()
+	case collectionplaybook.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case collectionplaybook.FieldCreatedBy:
+		return m.CreatedBy()
+	case collectionplaybook.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case collectionplaybook.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case collectionplaybook.FieldName:
+		return m.Name()
+	case collectionplaybook.FieldDescription:
+		return m.Description()
+	case collectionplaybook.FieldState:
+		return m.State()
+	case collectionplaybook.FieldPriority:
+		return m.Priority()
+	case collectionplaybook.FieldTrigger:
+		return m.Trigger()
+	case collectionplaybook.FieldAudience:
+		return m.Audience()
+	case collectionplaybook.FieldSteps:
+		return m.Steps()
+	case collectionplaybook.FieldStops:
+		return m.Stops()
+	case collectionplaybook.FieldMinGapDays:
+		return m.MinGapDays()
+	case collectionplaybook.FieldSkipWeekends:
+		return m.SkipWeekends()
+	case collectionplaybook.FieldTemplateID:
+		return m.TemplateID()
+	case collectionplaybook.FieldVersion:
+		return m.Version()
+	case collectionplaybook.FieldActivatedAt:
+		return m.ActivatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CollectionPlaybookMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case collectionplaybook.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case collectionplaybook.FieldStatus:
+		return m.OldStatus(ctx)
+	case collectionplaybook.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case collectionplaybook.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case collectionplaybook.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case collectionplaybook.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case collectionplaybook.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case collectionplaybook.FieldName:
+		return m.OldName(ctx)
+	case collectionplaybook.FieldDescription:
+		return m.OldDescription(ctx)
+	case collectionplaybook.FieldState:
+		return m.OldState(ctx)
+	case collectionplaybook.FieldPriority:
+		return m.OldPriority(ctx)
+	case collectionplaybook.FieldTrigger:
+		return m.OldTrigger(ctx)
+	case collectionplaybook.FieldAudience:
+		return m.OldAudience(ctx)
+	case collectionplaybook.FieldSteps:
+		return m.OldSteps(ctx)
+	case collectionplaybook.FieldStops:
+		return m.OldStops(ctx)
+	case collectionplaybook.FieldMinGapDays:
+		return m.OldMinGapDays(ctx)
+	case collectionplaybook.FieldSkipWeekends:
+		return m.OldSkipWeekends(ctx)
+	case collectionplaybook.FieldTemplateID:
+		return m.OldTemplateID(ctx)
+	case collectionplaybook.FieldVersion:
+		return m.OldVersion(ctx)
+	case collectionplaybook.FieldActivatedAt:
+		return m.OldActivatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CollectionPlaybook field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case collectionplaybook.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case collectionplaybook.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case collectionplaybook.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case collectionplaybook.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case collectionplaybook.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case collectionplaybook.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case collectionplaybook.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case collectionplaybook.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case collectionplaybook.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	case collectionplaybook.FieldState:
+		v, ok := value.(types.PlaybookState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case collectionplaybook.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	case collectionplaybook.FieldTrigger:
+		v, ok := value.(types.PlaybookTrigger)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTrigger(v)
+		return nil
+	case collectionplaybook.FieldAudience:
+		v, ok := value.(types.PlaybookAudience)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAudience(v)
+		return nil
+	case collectionplaybook.FieldSteps:
+		v, ok := value.([]types.PlaybookStep)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSteps(v)
+		return nil
+	case collectionplaybook.FieldStops:
+		v, ok := value.([]types.PlaybookStopCondition)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStops(v)
+		return nil
+	case collectionplaybook.FieldMinGapDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMinGapDays(v)
+		return nil
+	case collectionplaybook.FieldSkipWeekends:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSkipWeekends(v)
+		return nil
+	case collectionplaybook.FieldTemplateID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTemplateID(v)
+		return nil
+	case collectionplaybook.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	case collectionplaybook.FieldActivatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActivatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybook field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CollectionPlaybookMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, collectionplaybook.FieldPriority)
+	}
+	if m.addmin_gap_days != nil {
+		fields = append(fields, collectionplaybook.FieldMinGapDays)
+	}
+	if m.addversion != nil {
+		fields = append(fields, collectionplaybook.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CollectionPlaybookMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case collectionplaybook.FieldPriority:
+		return m.AddedPriority()
+	case collectionplaybook.FieldMinGapDays:
+		return m.AddedMinGapDays()
+	case collectionplaybook.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case collectionplaybook.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	case collectionplaybook.FieldMinGapDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMinGapDays(v)
+		return nil
+	case collectionplaybook.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybook numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CollectionPlaybookMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(collectionplaybook.FieldCreatedBy) {
+		fields = append(fields, collectionplaybook.FieldCreatedBy)
+	}
+	if m.FieldCleared(collectionplaybook.FieldUpdatedBy) {
+		fields = append(fields, collectionplaybook.FieldUpdatedBy)
+	}
+	if m.FieldCleared(collectionplaybook.FieldEnvironmentID) {
+		fields = append(fields, collectionplaybook.FieldEnvironmentID)
+	}
+	if m.FieldCleared(collectionplaybook.FieldDescription) {
+		fields = append(fields, collectionplaybook.FieldDescription)
+	}
+	if m.FieldCleared(collectionplaybook.FieldTemplateID) {
+		fields = append(fields, collectionplaybook.FieldTemplateID)
+	}
+	if m.FieldCleared(collectionplaybook.FieldActivatedAt) {
+		fields = append(fields, collectionplaybook.FieldActivatedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CollectionPlaybookMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CollectionPlaybookMutation) ClearField(name string) error {
+	switch name {
+	case collectionplaybook.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case collectionplaybook.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case collectionplaybook.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case collectionplaybook.FieldDescription:
+		m.ClearDescription()
+		return nil
+	case collectionplaybook.FieldTemplateID:
+		m.ClearTemplateID()
+		return nil
+	case collectionplaybook.FieldActivatedAt:
+		m.ClearActivatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybook nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CollectionPlaybookMutation) ResetField(name string) error {
+	switch name {
+	case collectionplaybook.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case collectionplaybook.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case collectionplaybook.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case collectionplaybook.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case collectionplaybook.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case collectionplaybook.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case collectionplaybook.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case collectionplaybook.FieldName:
+		m.ResetName()
+		return nil
+	case collectionplaybook.FieldDescription:
+		m.ResetDescription()
+		return nil
+	case collectionplaybook.FieldState:
+		m.ResetState()
+		return nil
+	case collectionplaybook.FieldPriority:
+		m.ResetPriority()
+		return nil
+	case collectionplaybook.FieldTrigger:
+		m.ResetTrigger()
+		return nil
+	case collectionplaybook.FieldAudience:
+		m.ResetAudience()
+		return nil
+	case collectionplaybook.FieldSteps:
+		m.ResetSteps()
+		return nil
+	case collectionplaybook.FieldStops:
+		m.ResetStops()
+		return nil
+	case collectionplaybook.FieldMinGapDays:
+		m.ResetMinGapDays()
+		return nil
+	case collectionplaybook.FieldSkipWeekends:
+		m.ResetSkipWeekends()
+		return nil
+	case collectionplaybook.FieldTemplateID:
+		m.ResetTemplateID()
+		return nil
+	case collectionplaybook.FieldVersion:
+		m.ResetVersion()
+		return nil
+	case collectionplaybook.FieldActivatedAt:
+		m.ResetActivatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybook field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CollectionPlaybookMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.runs != nil {
+		edges = append(edges, collectionplaybook.EdgeRuns)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CollectionPlaybookMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case collectionplaybook.EdgeRuns:
+		ids := make([]ent.Value, 0, len(m.runs))
+		for id := range m.runs {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CollectionPlaybookMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.removedruns != nil {
+		edges = append(edges, collectionplaybook.EdgeRuns)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CollectionPlaybookMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case collectionplaybook.EdgeRuns:
+		ids := make([]ent.Value, 0, len(m.removedruns))
+		for id := range m.removedruns {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CollectionPlaybookMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedruns {
+		edges = append(edges, collectionplaybook.EdgeRuns)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CollectionPlaybookMutation) EdgeCleared(name string) bool {
+	switch name {
+	case collectionplaybook.EdgeRuns:
+		return m.clearedruns
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CollectionPlaybookMutation) ClearEdge(name string) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CollectionPlaybook unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CollectionPlaybookMutation) ResetEdge(name string) error {
+	switch name {
+	case collectionplaybook.EdgeRuns:
+		m.ResetRuns()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybook edge %s", name)
+}
+
+// CollectionPlaybookRunMutation represents an operation that mutates the CollectionPlaybookRun nodes in the graph.
+type CollectionPlaybookRunMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	invoice_id       *string
+	customer_id      *string
+	state            *types.PlaybookRunState
+	stop_reason      *types.PlaybookStopReason
+	paused_reason    *string
+	invoice_due_date *time.Time
+	next_step_at     *time.Time
+	started_at       *time.Time
+	ended_at         *time.Time
+	clearedFields    map[string]struct{}
+	playbook         *string
+	clearedplaybook  bool
+	step_runs        map[string]struct{}
+	removedstep_runs map[string]struct{}
+	clearedstep_runs bool
+	done             bool
+	oldValue         func(context.Context) (*CollectionPlaybookRun, error)
+	predicates       []predicate.CollectionPlaybookRun
+}
+
+var _ ent.Mutation = (*CollectionPlaybookRunMutation)(nil)
+
+// collectionplaybookrunOption allows management of the mutation configuration using functional options.
+type collectionplaybookrunOption func(*CollectionPlaybookRunMutation)
+
+// newCollectionPlaybookRunMutation creates new mutation for the CollectionPlaybookRun entity.
+func newCollectionPlaybookRunMutation(c config, op Op, opts ...collectionplaybookrunOption) *CollectionPlaybookRunMutation {
+	m := &CollectionPlaybookRunMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCollectionPlaybookRun,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCollectionPlaybookRunID sets the ID field of the mutation.
+func withCollectionPlaybookRunID(id string) collectionplaybookrunOption {
+	return func(m *CollectionPlaybookRunMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CollectionPlaybookRun
+		)
+		m.oldValue = func(ctx context.Context) (*CollectionPlaybookRun, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CollectionPlaybookRun.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCollectionPlaybookRun sets the old CollectionPlaybookRun of the mutation.
+func withCollectionPlaybookRun(node *CollectionPlaybookRun) collectionplaybookrunOption {
+	return func(m *CollectionPlaybookRunMutation) {
+		m.oldValue = func(context.Context) (*CollectionPlaybookRun, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CollectionPlaybookRunMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CollectionPlaybookRunMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CollectionPlaybookRun entities.
+func (m *CollectionPlaybookRunMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CollectionPlaybookRunMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CollectionPlaybookRunMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CollectionPlaybookRun.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CollectionPlaybookRunMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CollectionPlaybookRunMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CollectionPlaybookRunMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CollectionPlaybookRunMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CollectionPlaybookRunMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CollectionPlaybookRunMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CollectionPlaybookRunMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CollectionPlaybookRunMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CollectionPlaybookRunMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CollectionPlaybookRunMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CollectionPlaybookRunMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CollectionPlaybookRunMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CollectionPlaybookRunMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CollectionPlaybookRunMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CollectionPlaybookRunMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[collectionplaybookrun.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CollectionPlaybookRunMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CollectionPlaybookRunMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CollectionPlaybookRunMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CollectionPlaybookRunMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[collectionplaybookrun.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CollectionPlaybookRunMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CollectionPlaybookRunMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CollectionPlaybookRunMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CollectionPlaybookRunMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[collectionplaybookrun.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CollectionPlaybookRunMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldEnvironmentID)
+}
+
+// SetPlaybookID sets the "playbook_id" field.
+func (m *CollectionPlaybookRunMutation) SetPlaybookID(s string) {
+	m.playbook = &s
+}
+
+// PlaybookID returns the value of the "playbook_id" field in the mutation.
+func (m *CollectionPlaybookRunMutation) PlaybookID() (r string, exists bool) {
+	v := m.playbook
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlaybookID returns the old "playbook_id" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldPlaybookID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlaybookID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlaybookID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlaybookID: %w", err)
+	}
+	return oldValue.PlaybookID, nil
+}
+
+// ResetPlaybookID resets all changes to the "playbook_id" field.
+func (m *CollectionPlaybookRunMutation) ResetPlaybookID() {
+	m.playbook = nil
+}
+
+// SetInvoiceID sets the "invoice_id" field.
+func (m *CollectionPlaybookRunMutation) SetInvoiceID(s string) {
+	m.invoice_id = &s
+}
+
+// InvoiceID returns the value of the "invoice_id" field in the mutation.
+func (m *CollectionPlaybookRunMutation) InvoiceID() (r string, exists bool) {
+	v := m.invoice_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceID returns the old "invoice_id" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldInvoiceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceID: %w", err)
+	}
+	return oldValue.InvoiceID, nil
+}
+
+// ResetInvoiceID resets all changes to the "invoice_id" field.
+func (m *CollectionPlaybookRunMutation) ResetInvoiceID() {
+	m.invoice_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *CollectionPlaybookRunMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *CollectionPlaybookRunMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *CollectionPlaybookRunMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetState sets the "state" field.
+func (m *CollectionPlaybookRunMutation) SetState(trs types.PlaybookRunState) {
+	m.state = &trs
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *CollectionPlaybookRunMutation) State() (r types.PlaybookRunState, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldState(ctx context.Context) (v types.PlaybookRunState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *CollectionPlaybookRunMutation) ResetState() {
+	m.state = nil
+}
+
+// SetStopReason sets the "stop_reason" field.
+func (m *CollectionPlaybookRunMutation) SetStopReason(tsr types.PlaybookStopReason) {
+	m.stop_reason = &tsr
+}
+
+// StopReason returns the value of the "stop_reason" field in the mutation.
+func (m *CollectionPlaybookRunMutation) StopReason() (r types.PlaybookStopReason, exists bool) {
+	v := m.stop_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStopReason returns the old "stop_reason" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldStopReason(ctx context.Context) (v types.PlaybookStopReason, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStopReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStopReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStopReason: %w", err)
+	}
+	return oldValue.StopReason, nil
+}
+
+// ClearStopReason clears the value of the "stop_reason" field.
+func (m *CollectionPlaybookRunMutation) ClearStopReason() {
+	m.stop_reason = nil
+	m.clearedFields[collectionplaybookrun.FieldStopReason] = struct{}{}
+}
+
+// StopReasonCleared returns if the "stop_reason" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) StopReasonCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldStopReason]
+	return ok
+}
+
+// ResetStopReason resets all changes to the "stop_reason" field.
+func (m *CollectionPlaybookRunMutation) ResetStopReason() {
+	m.stop_reason = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldStopReason)
+}
+
+// SetPausedReason sets the "paused_reason" field.
+func (m *CollectionPlaybookRunMutation) SetPausedReason(s string) {
+	m.paused_reason = &s
+}
+
+// PausedReason returns the value of the "paused_reason" field in the mutation.
+func (m *CollectionPlaybookRunMutation) PausedReason() (r string, exists bool) {
+	v := m.paused_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPausedReason returns the old "paused_reason" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldPausedReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPausedReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPausedReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPausedReason: %w", err)
+	}
+	return oldValue.PausedReason, nil
+}
+
+// ClearPausedReason clears the value of the "paused_reason" field.
+func (m *CollectionPlaybookRunMutation) ClearPausedReason() {
+	m.paused_reason = nil
+	m.clearedFields[collectionplaybookrun.FieldPausedReason] = struct{}{}
+}
+
+// PausedReasonCleared returns if the "paused_reason" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) PausedReasonCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldPausedReason]
+	return ok
+}
+
+// ResetPausedReason resets all changes to the "paused_reason" field.
+func (m *CollectionPlaybookRunMutation) ResetPausedReason() {
+	m.paused_reason = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldPausedReason)
+}
+
+// SetInvoiceDueDate sets the "invoice_due_date" field.
+func (m *CollectionPlaybookRunMutation) SetInvoiceDueDate(t time.Time) {
+	m.invoice_due_date = &t
+}
+
+// InvoiceDueDate returns the value of the "invoice_due_date" field in the mutation.
+func (m *CollectionPlaybookRunMutation) InvoiceDueDate() (r time.Time, exists bool) {
+	v := m.invoice_due_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceDueDate returns the old "invoice_due_date" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldInvoiceDueDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceDueDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceDueDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceDueDate: %w", err)
+	}
+	return oldValue.InvoiceDueDate, nil
+}
+
+// ResetInvoiceDueDate resets all changes to the "invoice_due_date" field.
+func (m *CollectionPlaybookRunMutation) ResetInvoiceDueDate() {
+	m.invoice_due_date = nil
+}
+
+// SetNextStepAt sets the "next_step_at" field.
+func (m *CollectionPlaybookRunMutation) SetNextStepAt(t time.Time) {
+	m.next_step_at = &t
+}
+
+// NextStepAt returns the value of the "next_step_at" field in the mutation.
+func (m *CollectionPlaybookRunMutation) NextStepAt() (r time.Time, exists bool) {
+	v := m.next_step_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNextStepAt returns the old "next_step_at" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldNextStepAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNextStepAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNextStepAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNextStepAt: %w", err)
+	}
+	return oldValue.NextStepAt, nil
+}
+
+// ClearNextStepAt clears the value of the "next_step_at" field.
+func (m *CollectionPlaybookRunMutation) ClearNextStepAt() {
+	m.next_step_at = nil
+	m.clearedFields[collectionplaybookrun.FieldNextStepAt] = struct{}{}
+}
+
+// NextStepAtCleared returns if the "next_step_at" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) NextStepAtCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldNextStepAt]
+	return ok
+}
+
+// ResetNextStepAt resets all changes to the "next_step_at" field.
+func (m *CollectionPlaybookRunMutation) ResetNextStepAt() {
+	m.next_step_at = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldNextStepAt)
+}
+
+// SetStartedAt sets the "started_at" field.
+func (m *CollectionPlaybookRunMutation) SetStartedAt(t time.Time) {
+	m.started_at = &t
+}
+
+// StartedAt returns the value of the "started_at" field in the mutation.
+func (m *CollectionPlaybookRunMutation) StartedAt() (r time.Time, exists bool) {
+	v := m.started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartedAt returns the old "started_at" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldStartedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartedAt: %w", err)
+	}
+	return oldValue.StartedAt, nil
+}
+
+// ResetStartedAt resets all changes to the "started_at" field.
+func (m *CollectionPlaybookRunMutation) ResetStartedAt() {
+	m.started_at = nil
+}
+
+// SetEndedAt sets the "ended_at" field.
+func (m *CollectionPlaybookRunMutation) SetEndedAt(t time.Time) {
+	m.ended_at = &t
+}
+
+// EndedAt returns the value of the "ended_at" field in the mutation.
+func (m *CollectionPlaybookRunMutation) EndedAt() (r time.Time, exists bool) {
+	v := m.ended_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndedAt returns the old "ended_at" field's value of the CollectionPlaybookRun entity.
+// If the CollectionPlaybookRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookRunMutation) OldEndedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndedAt: %w", err)
+	}
+	return oldValue.EndedAt, nil
+}
+
+// ClearEndedAt clears the value of the "ended_at" field.
+func (m *CollectionPlaybookRunMutation) ClearEndedAt() {
+	m.ended_at = nil
+	m.clearedFields[collectionplaybookrun.FieldEndedAt] = struct{}{}
+}
+
+// EndedAtCleared returns if the "ended_at" field was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) EndedAtCleared() bool {
+	_, ok := m.clearedFields[collectionplaybookrun.FieldEndedAt]
+	return ok
+}
+
+// ResetEndedAt resets all changes to the "ended_at" field.
+func (m *CollectionPlaybookRunMutation) ResetEndedAt() {
+	m.ended_at = nil
+	delete(m.clearedFields, collectionplaybookrun.FieldEndedAt)
+}
+
+// ClearPlaybook clears the "playbook" edge to the CollectionPlaybook entity.
+func (m *CollectionPlaybookRunMutation) ClearPlaybook() {
+	m.clearedplaybook = true
+	m.clearedFields[collectionplaybookrun.FieldPlaybookID] = struct{}{}
+}
+
+// PlaybookCleared reports if the "playbook" edge to the CollectionPlaybook entity was cleared.
+func (m *CollectionPlaybookRunMutation) PlaybookCleared() bool {
+	return m.clearedplaybook
+}
+
+// PlaybookIDs returns the "playbook" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PlaybookID instead. It exists only for internal usage by the builders.
+func (m *CollectionPlaybookRunMutation) PlaybookIDs() (ids []string) {
+	if id := m.playbook; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPlaybook resets all changes to the "playbook" edge.
+func (m *CollectionPlaybookRunMutation) ResetPlaybook() {
+	m.playbook = nil
+	m.clearedplaybook = false
+}
+
+// AddStepRunIDs adds the "step_runs" edge to the CollectionPlaybookStepRun entity by ids.
+func (m *CollectionPlaybookRunMutation) AddStepRunIDs(ids ...string) {
+	if m.step_runs == nil {
+		m.step_runs = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.step_runs[ids[i]] = struct{}{}
+	}
+}
+
+// ClearStepRuns clears the "step_runs" edge to the CollectionPlaybookStepRun entity.
+func (m *CollectionPlaybookRunMutation) ClearStepRuns() {
+	m.clearedstep_runs = true
+}
+
+// StepRunsCleared reports if the "step_runs" edge to the CollectionPlaybookStepRun entity was cleared.
+func (m *CollectionPlaybookRunMutation) StepRunsCleared() bool {
+	return m.clearedstep_runs
+}
+
+// RemoveStepRunIDs removes the "step_runs" edge to the CollectionPlaybookStepRun entity by IDs.
+func (m *CollectionPlaybookRunMutation) RemoveStepRunIDs(ids ...string) {
+	if m.removedstep_runs == nil {
+		m.removedstep_runs = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.step_runs, ids[i])
+		m.removedstep_runs[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedStepRuns returns the removed IDs of the "step_runs" edge to the CollectionPlaybookStepRun entity.
+func (m *CollectionPlaybookRunMutation) RemovedStepRunsIDs() (ids []string) {
+	for id := range m.removedstep_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// StepRunsIDs returns the "step_runs" edge IDs in the mutation.
+func (m *CollectionPlaybookRunMutation) StepRunsIDs() (ids []string) {
+	for id := range m.step_runs {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetStepRuns resets all changes to the "step_runs" edge.
+func (m *CollectionPlaybookRunMutation) ResetStepRuns() {
+	m.step_runs = nil
+	m.clearedstep_runs = false
+	m.removedstep_runs = nil
+}
+
+// Where appends a list predicates to the CollectionPlaybookRunMutation builder.
+func (m *CollectionPlaybookRunMutation) Where(ps ...predicate.CollectionPlaybookRun) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CollectionPlaybookRunMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CollectionPlaybookRunMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CollectionPlaybookRun, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CollectionPlaybookRunMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CollectionPlaybookRunMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CollectionPlaybookRun).
+func (m *CollectionPlaybookRunMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CollectionPlaybookRunMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.tenant_id != nil {
+		fields = append(fields, collectionplaybookrun.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, collectionplaybookrun.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, collectionplaybookrun.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, collectionplaybookrun.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, collectionplaybookrun.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, collectionplaybookrun.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, collectionplaybookrun.FieldEnvironmentID)
+	}
+	if m.playbook != nil {
+		fields = append(fields, collectionplaybookrun.FieldPlaybookID)
+	}
+	if m.invoice_id != nil {
+		fields = append(fields, collectionplaybookrun.FieldInvoiceID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, collectionplaybookrun.FieldCustomerID)
+	}
+	if m.state != nil {
+		fields = append(fields, collectionplaybookrun.FieldState)
+	}
+	if m.stop_reason != nil {
+		fields = append(fields, collectionplaybookrun.FieldStopReason)
+	}
+	if m.paused_reason != nil {
+		fields = append(fields, collectionplaybookrun.FieldPausedReason)
+	}
+	if m.invoice_due_date != nil {
+		fields = append(fields, collectionplaybookrun.FieldInvoiceDueDate)
+	}
+	if m.next_step_at != nil {
+		fields = append(fields, collectionplaybookrun.FieldNextStepAt)
+	}
+	if m.started_at != nil {
+		fields = append(fields, collectionplaybookrun.FieldStartedAt)
+	}
+	if m.ended_at != nil {
+		fields = append(fields, collectionplaybookrun.FieldEndedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CollectionPlaybookRunMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case collectionplaybookrun.FieldTenantID:
+		return m.TenantID()
+	case collectionplaybookrun.FieldStatus:
+		return m.Status()
+	case collectionplaybookrun.FieldCreatedAt:
+		return m.CreatedAt()
+	case collectionplaybookrun.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case collectionplaybookrun.FieldCreatedBy:
+		return m.CreatedBy()
+	case collectionplaybookrun.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case collectionplaybookrun.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case collectionplaybookrun.FieldPlaybookID:
+		return m.PlaybookID()
+	case collectionplaybookrun.FieldInvoiceID:
+		return m.InvoiceID()
+	case collectionplaybookrun.FieldCustomerID:
+		return m.CustomerID()
+	case collectionplaybookrun.FieldState:
+		return m.State()
+	case collectionplaybookrun.FieldStopReason:
+		return m.StopReason()
+	case collectionplaybookrun.FieldPausedReason:
+		return m.PausedReason()
+	case collectionplaybookrun.FieldInvoiceDueDate:
+		return m.InvoiceDueDate()
+	case collectionplaybookrun.FieldNextStepAt:
+		return m.NextStepAt()
+	case collectionplaybookrun.FieldStartedAt:
+		return m.StartedAt()
+	case collectionplaybookrun.FieldEndedAt:
+		return m.EndedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CollectionPlaybookRunMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case collectionplaybookrun.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case collectionplaybookrun.FieldStatus:
+		return m.OldStatus(ctx)
+	case collectionplaybookrun.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case collectionplaybookrun.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case collectionplaybookrun.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case collectionplaybookrun.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case collectionplaybookrun.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case collectionplaybookrun.FieldPlaybookID:
+		return m.OldPlaybookID(ctx)
+	case collectionplaybookrun.FieldInvoiceID:
+		return m.OldInvoiceID(ctx)
+	case collectionplaybookrun.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case collectionplaybookrun.FieldState:
+		return m.OldState(ctx)
+	case collectionplaybookrun.FieldStopReason:
+		return m.OldStopReason(ctx)
+	case collectionplaybookrun.FieldPausedReason:
+		return m.OldPausedReason(ctx)
+	case collectionplaybookrun.FieldInvoiceDueDate:
+		return m.OldInvoiceDueDate(ctx)
+	case collectionplaybookrun.FieldNextStepAt:
+		return m.OldNextStepAt(ctx)
+	case collectionplaybookrun.FieldStartedAt:
+		return m.OldStartedAt(ctx)
+	case collectionplaybookrun.FieldEndedAt:
+		return m.OldEndedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CollectionPlaybookRun field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookRunMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case collectionplaybookrun.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case collectionplaybookrun.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case collectionplaybookrun.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case collectionplaybookrun.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case collectionplaybookrun.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case collectionplaybookrun.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case collectionplaybookrun.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case collectionplaybookrun.FieldPlaybookID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlaybookID(v)
+		return nil
+	case collectionplaybookrun.FieldInvoiceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceID(v)
+		return nil
+	case collectionplaybookrun.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case collectionplaybookrun.FieldState:
+		v, ok := value.(types.PlaybookRunState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case collectionplaybookrun.FieldStopReason:
+		v, ok := value.(types.PlaybookStopReason)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStopReason(v)
+		return nil
+	case collectionplaybookrun.FieldPausedReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPausedReason(v)
+		return nil
+	case collectionplaybookrun.FieldInvoiceDueDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceDueDate(v)
+		return nil
+	case collectionplaybookrun.FieldNextStepAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNextStepAt(v)
+		return nil
+	case collectionplaybookrun.FieldStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartedAt(v)
+		return nil
+	case collectionplaybookrun.FieldEndedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CollectionPlaybookRunMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CollectionPlaybookRunMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookRunMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CollectionPlaybookRunMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(collectionplaybookrun.FieldCreatedBy) {
+		fields = append(fields, collectionplaybookrun.FieldCreatedBy)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldUpdatedBy) {
+		fields = append(fields, collectionplaybookrun.FieldUpdatedBy)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldEnvironmentID) {
+		fields = append(fields, collectionplaybookrun.FieldEnvironmentID)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldStopReason) {
+		fields = append(fields, collectionplaybookrun.FieldStopReason)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldPausedReason) {
+		fields = append(fields, collectionplaybookrun.FieldPausedReason)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldNextStepAt) {
+		fields = append(fields, collectionplaybookrun.FieldNextStepAt)
+	}
+	if m.FieldCleared(collectionplaybookrun.FieldEndedAt) {
+		fields = append(fields, collectionplaybookrun.FieldEndedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CollectionPlaybookRunMutation) ClearField(name string) error {
+	switch name {
+	case collectionplaybookrun.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case collectionplaybookrun.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case collectionplaybookrun.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case collectionplaybookrun.FieldStopReason:
+		m.ClearStopReason()
+		return nil
+	case collectionplaybookrun.FieldPausedReason:
+		m.ClearPausedReason()
+		return nil
+	case collectionplaybookrun.FieldNextStepAt:
+		m.ClearNextStepAt()
+		return nil
+	case collectionplaybookrun.FieldEndedAt:
+		m.ClearEndedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CollectionPlaybookRunMutation) ResetField(name string) error {
+	switch name {
+	case collectionplaybookrun.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case collectionplaybookrun.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case collectionplaybookrun.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case collectionplaybookrun.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case collectionplaybookrun.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case collectionplaybookrun.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case collectionplaybookrun.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case collectionplaybookrun.FieldPlaybookID:
+		m.ResetPlaybookID()
+		return nil
+	case collectionplaybookrun.FieldInvoiceID:
+		m.ResetInvoiceID()
+		return nil
+	case collectionplaybookrun.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case collectionplaybookrun.FieldState:
+		m.ResetState()
+		return nil
+	case collectionplaybookrun.FieldStopReason:
+		m.ResetStopReason()
+		return nil
+	case collectionplaybookrun.FieldPausedReason:
+		m.ResetPausedReason()
+		return nil
+	case collectionplaybookrun.FieldInvoiceDueDate:
+		m.ResetInvoiceDueDate()
+		return nil
+	case collectionplaybookrun.FieldNextStepAt:
+		m.ResetNextStepAt()
+		return nil
+	case collectionplaybookrun.FieldStartedAt:
+		m.ResetStartedAt()
+		return nil
+	case collectionplaybookrun.FieldEndedAt:
+		m.ResetEndedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CollectionPlaybookRunMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.playbook != nil {
+		edges = append(edges, collectionplaybookrun.EdgePlaybook)
+	}
+	if m.step_runs != nil {
+		edges = append(edges, collectionplaybookrun.EdgeStepRuns)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CollectionPlaybookRunMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case collectionplaybookrun.EdgePlaybook:
+		if id := m.playbook; id != nil {
+			return []ent.Value{*id}
+		}
+	case collectionplaybookrun.EdgeStepRuns:
+		ids := make([]ent.Value, 0, len(m.step_runs))
+		for id := range m.step_runs {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CollectionPlaybookRunMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.removedstep_runs != nil {
+		edges = append(edges, collectionplaybookrun.EdgeStepRuns)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CollectionPlaybookRunMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case collectionplaybookrun.EdgeStepRuns:
+		ids := make([]ent.Value, 0, len(m.removedstep_runs))
+		for id := range m.removedstep_runs {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedplaybook {
+		edges = append(edges, collectionplaybookrun.EdgePlaybook)
+	}
+	if m.clearedstep_runs {
+		edges = append(edges, collectionplaybookrun.EdgeStepRuns)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CollectionPlaybookRunMutation) EdgeCleared(name string) bool {
+	switch name {
+	case collectionplaybookrun.EdgePlaybook:
+		return m.clearedplaybook
+	case collectionplaybookrun.EdgeStepRuns:
+		return m.clearedstep_runs
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CollectionPlaybookRunMutation) ClearEdge(name string) error {
+	switch name {
+	case collectionplaybookrun.EdgePlaybook:
+		m.ClearPlaybook()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CollectionPlaybookRunMutation) ResetEdge(name string) error {
+	switch name {
+	case collectionplaybookrun.EdgePlaybook:
+		m.ResetPlaybook()
+		return nil
+	case collectionplaybookrun.EdgeStepRuns:
+		m.ResetStepRuns()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookRun edge %s", name)
+}
+
+// CollectionPlaybookStepRunMutation represents an operation that mutates the CollectionPlaybookStepRun nodes in the graph.
+type CollectionPlaybookStepRunMutation struct {
+	config
+	op             Op
+	typ            string
+	id             *string
+	tenant_id      *string
+	status         *string
+	created_at     *time.Time
+	updated_at     *time.Time
+	created_by     *string
+	updated_by     *string
+	environment_id *string
+	step_id        *string
+	kind           *types.PlaybookStepKind
+	due_at         *time.Time
+	state          *types.PlaybookStepRunState
+	skip_reason    *types.PlaybookStepSkipReason
+	result_ref     *string
+	attempts       *int
+	addattempts    *int
+	error          *string
+	executed_at    *time.Time
+	clearedFields  map[string]struct{}
+	run            *string
+	clearedrun     bool
+	done           bool
+	oldValue       func(context.Context) (*CollectionPlaybookStepRun, error)
+	predicates     []predicate.CollectionPlaybookStepRun
+}
+
+var _ ent.Mutation = (*CollectionPlaybookStepRunMutation)(nil)
+
+// collectionplaybooksteprunOption allows management of the mutation configuration using functional options.
+type collectionplaybooksteprunOption func(*CollectionPlaybookStepRunMutation)
+
+// newCollectionPlaybookStepRunMutation creates new mutation for the CollectionPlaybookStepRun entity.
+func newCollectionPlaybookStepRunMutation(c config, op Op, opts ...collectionplaybooksteprunOption) *CollectionPlaybookStepRunMutation {
+	m := &CollectionPlaybookStepRunMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCollectionPlaybookStepRun,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCollectionPlaybookStepRunID sets the ID field of the mutation.
+func withCollectionPlaybookStepRunID(id string) collectionplaybooksteprunOption {
+	return func(m *CollectionPlaybookStepRunMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CollectionPlaybookStepRun
+		)
+		m.oldValue = func(ctx context.Context) (*CollectionPlaybookStepRun, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CollectionPlaybookStepRun.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCollectionPlaybookStepRun sets the old CollectionPlaybookStepRun of the mutation.
+func withCollectionPlaybookStepRun(node *CollectionPlaybookStepRun) collectionplaybooksteprunOption {
+	return func(m *CollectionPlaybookStepRunMutation) {
+		m.oldValue = func(context.Context) (*CollectionPlaybookStepRun, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CollectionPlaybookStepRunMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CollectionPlaybookStepRunMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CollectionPlaybookStepRun entities.
+func (m *CollectionPlaybookStepRunMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CollectionPlaybookStepRunMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CollectionPlaybookStepRunMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CollectionPlaybookStepRun.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CollectionPlaybookStepRunMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CollectionPlaybookStepRunMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CollectionPlaybookStepRunMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CollectionPlaybookStepRunMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CollectionPlaybookStepRunMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CollectionPlaybookStepRunMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CollectionPlaybookStepRunMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CollectionPlaybookStepRunMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CollectionPlaybookStepRunMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CollectionPlaybookStepRunMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[collectionplaybooksteprun.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CollectionPlaybookStepRunMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CollectionPlaybookStepRunMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CollectionPlaybookStepRunMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[collectionplaybooksteprun.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CollectionPlaybookStepRunMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CollectionPlaybookStepRunMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CollectionPlaybookStepRunMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[collectionplaybooksteprun.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CollectionPlaybookStepRunMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldEnvironmentID)
+}
+
+// SetRunID sets the "run_id" field.
+func (m *CollectionPlaybookStepRunMutation) SetRunID(s string) {
+	m.run = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) RunID() (r string, exists bool) {
+	v := m.run
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *CollectionPlaybookStepRunMutation) ResetRunID() {
+	m.run = nil
+}
+
+// SetStepID sets the "step_id" field.
+func (m *CollectionPlaybookStepRunMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *CollectionPlaybookStepRunMutation) ResetStepID() {
+	m.step_id = nil
+}
+
+// SetKind sets the "kind" field.
+func (m *CollectionPlaybookStepRunMutation) SetKind(tsk types.PlaybookStepKind) {
+	m.kind = &tsk
+}
+
+// Kind returns the value of the "kind" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) Kind() (r types.PlaybookStepKind, exists bool) {
+	v := m.kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldKind returns the old "kind" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldKind(ctx context.Context) (v types.PlaybookStepKind, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldKind: %w", err)
+	}
+	return oldValue.Kind, nil
+}
+
+// ResetKind resets all changes to the "kind" field.
+func (m *CollectionPlaybookStepRunMutation) ResetKind() {
+	m.kind = nil
+}
+
+// SetDueAt sets the "due_at" field.
+func (m *CollectionPlaybookStepRunMutation) SetDueAt(t time.Time) {
+	m.due_at = &t
+}
+
+// DueAt returns the value of the "due_at" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) DueAt() (r time.Time, exists bool) {
+	v := m.due_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDueAt returns the old "due_at" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldDueAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDueAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDueAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDueAt: %w", err)
+	}
+	return oldValue.DueAt, nil
+}
+
+// ResetDueAt resets all changes to the "due_at" field.
+func (m *CollectionPlaybookStepRunMutation) ResetDueAt() {
+	m.due_at = nil
+}
+
+// SetState sets the "state" field.
+func (m *CollectionPlaybookStepRunMutation) SetState(tsrs types.PlaybookStepRunState) {
+	m.state = &tsrs
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) State() (r types.PlaybookStepRunState, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldState(ctx context.Context) (v types.PlaybookStepRunState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *CollectionPlaybookStepRunMutation) ResetState() {
+	m.state = nil
+}
+
+// SetSkipReason sets the "skip_reason" field.
+func (m *CollectionPlaybookStepRunMutation) SetSkipReason(tssr types.PlaybookStepSkipReason) {
+	m.skip_reason = &tssr
+}
+
+// SkipReason returns the value of the "skip_reason" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) SkipReason() (r types.PlaybookStepSkipReason, exists bool) {
+	v := m.skip_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSkipReason returns the old "skip_reason" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldSkipReason(ctx context.Context) (v types.PlaybookStepSkipReason, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSkipReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSkipReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSkipReason: %w", err)
+	}
+	return oldValue.SkipReason, nil
+}
+
+// ClearSkipReason clears the value of the "skip_reason" field.
+func (m *CollectionPlaybookStepRunMutation) ClearSkipReason() {
+	m.skip_reason = nil
+	m.clearedFields[collectionplaybooksteprun.FieldSkipReason] = struct{}{}
+}
+
+// SkipReasonCleared returns if the "skip_reason" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) SkipReasonCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldSkipReason]
+	return ok
+}
+
+// ResetSkipReason resets all changes to the "skip_reason" field.
+func (m *CollectionPlaybookStepRunMutation) ResetSkipReason() {
+	m.skip_reason = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldSkipReason)
+}
+
+// SetResultRef sets the "result_ref" field.
+func (m *CollectionPlaybookStepRunMutation) SetResultRef(s string) {
+	m.result_ref = &s
+}
+
+// ResultRef returns the value of the "result_ref" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) ResultRef() (r string, exists bool) {
+	v := m.result_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultRef returns the old "result_ref" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldResultRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultRef: %w", err)
+	}
+	return oldValue.ResultRef, nil
+}
+
+// ClearResultRef clears the value of the "result_ref" field.
+func (m *CollectionPlaybookStepRunMutation) ClearResultRef() {
+	m.result_ref = nil
+	m.clearedFields[collectionplaybooksteprun.FieldResultRef] = struct{}{}
+}
+
+// ResultRefCleared returns if the "result_ref" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) ResultRefCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldResultRef]
+	return ok
+}
+
+// ResetResultRef resets all changes to the "result_ref" field.
+func (m *CollectionPlaybookStepRunMutation) ResetResultRef() {
+	m.result_ref = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldResultRef)
+}
+
+// SetAttempts sets the "attempts" field.
+func (m *CollectionPlaybookStepRunMutation) SetAttempts(i int) {
+	m.attempts = &i
+	m.addattempts = nil
+}
+
+// Attempts returns the value of the "attempts" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) Attempts() (r int, exists bool) {
+	v := m.attempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAttempts returns the old "attempts" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldAttempts(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAttempts is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAttempts requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAttempts: %w", err)
+	}
+	return oldValue.Attempts, nil
+}
+
+// AddAttempts adds i to the "attempts" field.
+func (m *CollectionPlaybookStepRunMutation) AddAttempts(i int) {
+	if m.addattempts != nil {
+		*m.addattempts += i
+	} else {
+		m.addattempts = &i
+	}
+}
+
+// AddedAttempts returns the value that was added to the "attempts" field in this mutation.
+func (m *CollectionPlaybookStepRunMutation) AddedAttempts() (r int, exists bool) {
+	v := m.addattempts
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetAttempts resets all changes to the "attempts" field.
+func (m *CollectionPlaybookStepRunMutation) ResetAttempts() {
+	m.attempts = nil
+	m.addattempts = nil
+}
+
+// SetError sets the "error" field.
+func (m *CollectionPlaybookStepRunMutation) SetError(s string) {
+	m.error = &s
+}
+
+// Error returns the value of the "error" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) Error() (r string, exists bool) {
+	v := m.error
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldError returns the old "error" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldError(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldError is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldError requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldError: %w", err)
+	}
+	return oldValue.Error, nil
+}
+
+// ClearError clears the value of the "error" field.
+func (m *CollectionPlaybookStepRunMutation) ClearError() {
+	m.error = nil
+	m.clearedFields[collectionplaybooksteprun.FieldError] = struct{}{}
+}
+
+// ErrorCleared returns if the "error" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) ErrorCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldError]
+	return ok
+}
+
+// ResetError resets all changes to the "error" field.
+func (m *CollectionPlaybookStepRunMutation) ResetError() {
+	m.error = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldError)
+}
+
+// SetExecutedAt sets the "executed_at" field.
+func (m *CollectionPlaybookStepRunMutation) SetExecutedAt(t time.Time) {
+	m.executed_at = &t
+}
+
+// ExecutedAt returns the value of the "executed_at" field in the mutation.
+func (m *CollectionPlaybookStepRunMutation) ExecutedAt() (r time.Time, exists bool) {
+	v := m.executed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutedAt returns the old "executed_at" field's value of the CollectionPlaybookStepRun entity.
+// If the CollectionPlaybookStepRun object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionPlaybookStepRunMutation) OldExecutedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutedAt: %w", err)
+	}
+	return oldValue.ExecutedAt, nil
+}
+
+// ClearExecutedAt clears the value of the "executed_at" field.
+func (m *CollectionPlaybookStepRunMutation) ClearExecutedAt() {
+	m.executed_at = nil
+	m.clearedFields[collectionplaybooksteprun.FieldExecutedAt] = struct{}{}
+}
+
+// ExecutedAtCleared returns if the "executed_at" field was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) ExecutedAtCleared() bool {
+	_, ok := m.clearedFields[collectionplaybooksteprun.FieldExecutedAt]
+	return ok
+}
+
+// ResetExecutedAt resets all changes to the "executed_at" field.
+func (m *CollectionPlaybookStepRunMutation) ResetExecutedAt() {
+	m.executed_at = nil
+	delete(m.clearedFields, collectionplaybooksteprun.FieldExecutedAt)
+}
+
+// ClearRun clears the "run" edge to the CollectionPlaybookRun entity.
+func (m *CollectionPlaybookStepRunMutation) ClearRun() {
+	m.clearedrun = true
+	m.clearedFields[collectionplaybooksteprun.FieldRunID] = struct{}{}
+}
+
+// RunCleared reports if the "run" edge to the CollectionPlaybookRun entity was cleared.
+func (m *CollectionPlaybookStepRunMutation) RunCleared() bool {
+	return m.clearedrun
+}
+
+// RunIDs returns the "run" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RunID instead. It exists only for internal usage by the builders.
+func (m *CollectionPlaybookStepRunMutation) RunIDs() (ids []string) {
+	if id := m.run; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRun resets all changes to the "run" edge.
+func (m *CollectionPlaybookStepRunMutation) ResetRun() {
+	m.run = nil
+	m.clearedrun = false
+}
+
+// Where appends a list predicates to the CollectionPlaybookStepRunMutation builder.
+func (m *CollectionPlaybookStepRunMutation) Where(ps ...predicate.CollectionPlaybookStepRun) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CollectionPlaybookStepRunMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CollectionPlaybookStepRunMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CollectionPlaybookStepRun, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CollectionPlaybookStepRunMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CollectionPlaybookStepRunMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CollectionPlaybookStepRun).
+func (m *CollectionPlaybookStepRunMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CollectionPlaybookStepRunMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.tenant_id != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldEnvironmentID)
+	}
+	if m.run != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldRunID)
+	}
+	if m.step_id != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldStepID)
+	}
+	if m.kind != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldKind)
+	}
+	if m.due_at != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldDueAt)
+	}
+	if m.state != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldState)
+	}
+	if m.skip_reason != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldSkipReason)
+	}
+	if m.result_ref != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldResultRef)
+	}
+	if m.attempts != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldAttempts)
+	}
+	if m.error != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldError)
+	}
+	if m.executed_at != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldExecutedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CollectionPlaybookStepRunMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case collectionplaybooksteprun.FieldTenantID:
+		return m.TenantID()
+	case collectionplaybooksteprun.FieldStatus:
+		return m.Status()
+	case collectionplaybooksteprun.FieldCreatedAt:
+		return m.CreatedAt()
+	case collectionplaybooksteprun.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case collectionplaybooksteprun.FieldCreatedBy:
+		return m.CreatedBy()
+	case collectionplaybooksteprun.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case collectionplaybooksteprun.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case collectionplaybooksteprun.FieldRunID:
+		return m.RunID()
+	case collectionplaybooksteprun.FieldStepID:
+		return m.StepID()
+	case collectionplaybooksteprun.FieldKind:
+		return m.Kind()
+	case collectionplaybooksteprun.FieldDueAt:
+		return m.DueAt()
+	case collectionplaybooksteprun.FieldState:
+		return m.State()
+	case collectionplaybooksteprun.FieldSkipReason:
+		return m.SkipReason()
+	case collectionplaybooksteprun.FieldResultRef:
+		return m.ResultRef()
+	case collectionplaybooksteprun.FieldAttempts:
+		return m.Attempts()
+	case collectionplaybooksteprun.FieldError:
+		return m.Error()
+	case collectionplaybooksteprun.FieldExecutedAt:
+		return m.ExecutedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CollectionPlaybookStepRunMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case collectionplaybooksteprun.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case collectionplaybooksteprun.FieldStatus:
+		return m.OldStatus(ctx)
+	case collectionplaybooksteprun.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case collectionplaybooksteprun.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case collectionplaybooksteprun.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case collectionplaybooksteprun.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case collectionplaybooksteprun.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case collectionplaybooksteprun.FieldRunID:
+		return m.OldRunID(ctx)
+	case collectionplaybooksteprun.FieldStepID:
+		return m.OldStepID(ctx)
+	case collectionplaybooksteprun.FieldKind:
+		return m.OldKind(ctx)
+	case collectionplaybooksteprun.FieldDueAt:
+		return m.OldDueAt(ctx)
+	case collectionplaybooksteprun.FieldState:
+		return m.OldState(ctx)
+	case collectionplaybooksteprun.FieldSkipReason:
+		return m.OldSkipReason(ctx)
+	case collectionplaybooksteprun.FieldResultRef:
+		return m.OldResultRef(ctx)
+	case collectionplaybooksteprun.FieldAttempts:
+		return m.OldAttempts(ctx)
+	case collectionplaybooksteprun.FieldError:
+		return m.OldError(ctx)
+	case collectionplaybooksteprun.FieldExecutedAt:
+		return m.OldExecutedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CollectionPlaybookStepRun field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookStepRunMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case collectionplaybooksteprun.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case collectionplaybooksteprun.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case collectionplaybooksteprun.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case collectionplaybooksteprun.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case collectionplaybooksteprun.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case collectionplaybooksteprun.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case collectionplaybooksteprun.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case collectionplaybooksteprun.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case collectionplaybooksteprun.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
+		return nil
+	case collectionplaybooksteprun.FieldKind:
+		v, ok := value.(types.PlaybookStepKind)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetKind(v)
+		return nil
+	case collectionplaybooksteprun.FieldDueAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDueAt(v)
+		return nil
+	case collectionplaybooksteprun.FieldState:
+		v, ok := value.(types.PlaybookStepRunState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case collectionplaybooksteprun.FieldSkipReason:
+		v, ok := value.(types.PlaybookStepSkipReason)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSkipReason(v)
+		return nil
+	case collectionplaybooksteprun.FieldResultRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultRef(v)
+		return nil
+	case collectionplaybooksteprun.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAttempts(v)
+		return nil
+	case collectionplaybooksteprun.FieldError:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetError(v)
+		return nil
+	case collectionplaybooksteprun.FieldExecutedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CollectionPlaybookStepRunMutation) AddedFields() []string {
+	var fields []string
+	if m.addattempts != nil {
+		fields = append(fields, collectionplaybooksteprun.FieldAttempts)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CollectionPlaybookStepRunMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case collectionplaybooksteprun.FieldAttempts:
+		return m.AddedAttempts()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionPlaybookStepRunMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case collectionplaybooksteprun.FieldAttempts:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAttempts(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CollectionPlaybookStepRunMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(collectionplaybooksteprun.FieldCreatedBy) {
+		fields = append(fields, collectionplaybooksteprun.FieldCreatedBy)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldUpdatedBy) {
+		fields = append(fields, collectionplaybooksteprun.FieldUpdatedBy)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldEnvironmentID) {
+		fields = append(fields, collectionplaybooksteprun.FieldEnvironmentID)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldSkipReason) {
+		fields = append(fields, collectionplaybooksteprun.FieldSkipReason)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldResultRef) {
+		fields = append(fields, collectionplaybooksteprun.FieldResultRef)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldError) {
+		fields = append(fields, collectionplaybooksteprun.FieldError)
+	}
+	if m.FieldCleared(collectionplaybooksteprun.FieldExecutedAt) {
+		fields = append(fields, collectionplaybooksteprun.FieldExecutedAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CollectionPlaybookStepRunMutation) ClearField(name string) error {
+	switch name {
+	case collectionplaybooksteprun.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case collectionplaybooksteprun.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case collectionplaybooksteprun.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case collectionplaybooksteprun.FieldSkipReason:
+		m.ClearSkipReason()
+		return nil
+	case collectionplaybooksteprun.FieldResultRef:
+		m.ClearResultRef()
+		return nil
+	case collectionplaybooksteprun.FieldError:
+		m.ClearError()
+		return nil
+	case collectionplaybooksteprun.FieldExecutedAt:
+		m.ClearExecutedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CollectionPlaybookStepRunMutation) ResetField(name string) error {
+	switch name {
+	case collectionplaybooksteprun.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case collectionplaybooksteprun.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case collectionplaybooksteprun.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case collectionplaybooksteprun.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case collectionplaybooksteprun.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case collectionplaybooksteprun.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case collectionplaybooksteprun.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case collectionplaybooksteprun.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case collectionplaybooksteprun.FieldStepID:
+		m.ResetStepID()
+		return nil
+	case collectionplaybooksteprun.FieldKind:
+		m.ResetKind()
+		return nil
+	case collectionplaybooksteprun.FieldDueAt:
+		m.ResetDueAt()
+		return nil
+	case collectionplaybooksteprun.FieldState:
+		m.ResetState()
+		return nil
+	case collectionplaybooksteprun.FieldSkipReason:
+		m.ResetSkipReason()
+		return nil
+	case collectionplaybooksteprun.FieldResultRef:
+		m.ResetResultRef()
+		return nil
+	case collectionplaybooksteprun.FieldAttempts:
+		m.ResetAttempts()
+		return nil
+	case collectionplaybooksteprun.FieldError:
+		m.ResetError()
+		return nil
+	case collectionplaybooksteprun.FieldExecutedAt:
+		m.ResetExecutedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CollectionPlaybookStepRunMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.run != nil {
+		edges = append(edges, collectionplaybooksteprun.EdgeRun)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CollectionPlaybookStepRunMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case collectionplaybooksteprun.EdgeRun:
+		if id := m.run; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CollectionPlaybookStepRunMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CollectionPlaybookStepRunMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedrun {
+		edges = append(edges, collectionplaybooksteprun.EdgeRun)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CollectionPlaybookStepRunMutation) EdgeCleared(name string) bool {
+	switch name {
+	case collectionplaybooksteprun.EdgeRun:
+		return m.clearedrun
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CollectionPlaybookStepRunMutation) ClearEdge(name string) error {
+	switch name {
+	case collectionplaybooksteprun.EdgeRun:
+		m.ClearRun()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CollectionPlaybookStepRunMutation) ResetEdge(name string) error {
+	switch name {
+	case collectionplaybooksteprun.EdgeRun:
+		m.ResetRun()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionPlaybookStepRun edge %s", name)
+}
+
+// CollectionTaskMutation represents an operation that mutates the CollectionTask nodes in the graph.
+type CollectionTaskMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	invoice_id       *string
+	customer_id      *string
+	run_id           *string
+	step_id          *string
+	assignee_user_id *string
+	assignee_email   *string
+	note             *string
+	state            *types.CollectionTaskState
+	done_at          *time.Time
+	done_by          *string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*CollectionTask, error)
+	predicates       []predicate.CollectionTask
+}
+
+var _ ent.Mutation = (*CollectionTaskMutation)(nil)
+
+// collectiontaskOption allows management of the mutation configuration using functional options.
+type collectiontaskOption func(*CollectionTaskMutation)
+
+// newCollectionTaskMutation creates new mutation for the CollectionTask entity.
+func newCollectionTaskMutation(c config, op Op, opts ...collectiontaskOption) *CollectionTaskMutation {
+	m := &CollectionTaskMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCollectionTask,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCollectionTaskID sets the ID field of the mutation.
+func withCollectionTaskID(id string) collectiontaskOption {
+	return func(m *CollectionTaskMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CollectionTask
+		)
+		m.oldValue = func(ctx context.Context) (*CollectionTask, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CollectionTask.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCollectionTask sets the old CollectionTask of the mutation.
+func withCollectionTask(node *CollectionTask) collectiontaskOption {
+	return func(m *CollectionTaskMutation) {
+		m.oldValue = func(context.Context) (*CollectionTask, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CollectionTaskMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CollectionTaskMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CollectionTask entities.
+func (m *CollectionTaskMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CollectionTaskMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CollectionTaskMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CollectionTask.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *CollectionTaskMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *CollectionTaskMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *CollectionTaskMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *CollectionTaskMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *CollectionTaskMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *CollectionTaskMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CollectionTaskMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CollectionTaskMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CollectionTaskMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CollectionTaskMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CollectionTaskMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CollectionTaskMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *CollectionTaskMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *CollectionTaskMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *CollectionTaskMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[collectiontask.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *CollectionTaskMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *CollectionTaskMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, collectiontask.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *CollectionTaskMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *CollectionTaskMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *CollectionTaskMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[collectiontask.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *CollectionTaskMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *CollectionTaskMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, collectiontask.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *CollectionTaskMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *CollectionTaskMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *CollectionTaskMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[collectiontask.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *CollectionTaskMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *CollectionTaskMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, collectiontask.FieldEnvironmentID)
+}
+
+// SetInvoiceID sets the "invoice_id" field.
+func (m *CollectionTaskMutation) SetInvoiceID(s string) {
+	m.invoice_id = &s
+}
+
+// InvoiceID returns the value of the "invoice_id" field in the mutation.
+func (m *CollectionTaskMutation) InvoiceID() (r string, exists bool) {
+	v := m.invoice_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceID returns the old "invoice_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldInvoiceID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceID: %w", err)
+	}
+	return oldValue.InvoiceID, nil
+}
+
+// ResetInvoiceID resets all changes to the "invoice_id" field.
+func (m *CollectionTaskMutation) ResetInvoiceID() {
+	m.invoice_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *CollectionTaskMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *CollectionTaskMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *CollectionTaskMutation) ResetCustomerID() {
+	m.customer_id = nil
+}
+
+// SetRunID sets the "run_id" field.
+func (m *CollectionTaskMutation) SetRunID(s string) {
+	m.run_id = &s
+}
+
+// RunID returns the value of the "run_id" field in the mutation.
+func (m *CollectionTaskMutation) RunID() (r string, exists bool) {
+	v := m.run_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRunID returns the old "run_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldRunID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRunID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRunID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRunID: %w", err)
+	}
+	return oldValue.RunID, nil
+}
+
+// ClearRunID clears the value of the "run_id" field.
+func (m *CollectionTaskMutation) ClearRunID() {
+	m.run_id = nil
+	m.clearedFields[collectiontask.FieldRunID] = struct{}{}
+}
+
+// RunIDCleared returns if the "run_id" field was cleared in this mutation.
+func (m *CollectionTaskMutation) RunIDCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldRunID]
+	return ok
+}
+
+// ResetRunID resets all changes to the "run_id" field.
+func (m *CollectionTaskMutation) ResetRunID() {
+	m.run_id = nil
+	delete(m.clearedFields, collectiontask.FieldRunID)
+}
+
+// SetStepID sets the "step_id" field.
+func (m *CollectionTaskMutation) SetStepID(s string) {
+	m.step_id = &s
+}
+
+// StepID returns the value of the "step_id" field in the mutation.
+func (m *CollectionTaskMutation) StepID() (r string, exists bool) {
+	v := m.step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStepID returns the old "step_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStepID: %w", err)
+	}
+	return oldValue.StepID, nil
+}
+
+// ClearStepID clears the value of the "step_id" field.
+func (m *CollectionTaskMutation) ClearStepID() {
+	m.step_id = nil
+	m.clearedFields[collectiontask.FieldStepID] = struct{}{}
+}
+
+// StepIDCleared returns if the "step_id" field was cleared in this mutation.
+func (m *CollectionTaskMutation) StepIDCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldStepID]
+	return ok
+}
+
+// ResetStepID resets all changes to the "step_id" field.
+func (m *CollectionTaskMutation) ResetStepID() {
+	m.step_id = nil
+	delete(m.clearedFields, collectiontask.FieldStepID)
+}
+
+// SetAssigneeUserID sets the "assignee_user_id" field.
+func (m *CollectionTaskMutation) SetAssigneeUserID(s string) {
+	m.assignee_user_id = &s
+}
+
+// AssigneeUserID returns the value of the "assignee_user_id" field in the mutation.
+func (m *CollectionTaskMutation) AssigneeUserID() (r string, exists bool) {
+	v := m.assignee_user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssigneeUserID returns the old "assignee_user_id" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldAssigneeUserID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssigneeUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssigneeUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssigneeUserID: %w", err)
+	}
+	return oldValue.AssigneeUserID, nil
+}
+
+// ClearAssigneeUserID clears the value of the "assignee_user_id" field.
+func (m *CollectionTaskMutation) ClearAssigneeUserID() {
+	m.assignee_user_id = nil
+	m.clearedFields[collectiontask.FieldAssigneeUserID] = struct{}{}
+}
+
+// AssigneeUserIDCleared returns if the "assignee_user_id" field was cleared in this mutation.
+func (m *CollectionTaskMutation) AssigneeUserIDCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldAssigneeUserID]
+	return ok
+}
+
+// ResetAssigneeUserID resets all changes to the "assignee_user_id" field.
+func (m *CollectionTaskMutation) ResetAssigneeUserID() {
+	m.assignee_user_id = nil
+	delete(m.clearedFields, collectiontask.FieldAssigneeUserID)
+}
+
+// SetAssigneeEmail sets the "assignee_email" field.
+func (m *CollectionTaskMutation) SetAssigneeEmail(s string) {
+	m.assignee_email = &s
+}
+
+// AssigneeEmail returns the value of the "assignee_email" field in the mutation.
+func (m *CollectionTaskMutation) AssigneeEmail() (r string, exists bool) {
+	v := m.assignee_email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssigneeEmail returns the old "assignee_email" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldAssigneeEmail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssigneeEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssigneeEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssigneeEmail: %w", err)
+	}
+	return oldValue.AssigneeEmail, nil
+}
+
+// ClearAssigneeEmail clears the value of the "assignee_email" field.
+func (m *CollectionTaskMutation) ClearAssigneeEmail() {
+	m.assignee_email = nil
+	m.clearedFields[collectiontask.FieldAssigneeEmail] = struct{}{}
+}
+
+// AssigneeEmailCleared returns if the "assignee_email" field was cleared in this mutation.
+func (m *CollectionTaskMutation) AssigneeEmailCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldAssigneeEmail]
+	return ok
+}
+
+// ResetAssigneeEmail resets all changes to the "assignee_email" field.
+func (m *CollectionTaskMutation) ResetAssigneeEmail() {
+	m.assignee_email = nil
+	delete(m.clearedFields, collectiontask.FieldAssigneeEmail)
+}
+
+// SetNote sets the "note" field.
+func (m *CollectionTaskMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *CollectionTaskMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *CollectionTaskMutation) ResetNote() {
+	m.note = nil
+}
+
+// SetState sets the "state" field.
+func (m *CollectionTaskMutation) SetState(tts types.CollectionTaskState) {
+	m.state = &tts
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *CollectionTaskMutation) State() (r types.CollectionTaskState, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldState(ctx context.Context) (v types.CollectionTaskState, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *CollectionTaskMutation) ResetState() {
+	m.state = nil
+}
+
+// SetDoneAt sets the "done_at" field.
+func (m *CollectionTaskMutation) SetDoneAt(t time.Time) {
+	m.done_at = &t
+}
+
+// DoneAt returns the value of the "done_at" field in the mutation.
+func (m *CollectionTaskMutation) DoneAt() (r time.Time, exists bool) {
+	v := m.done_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDoneAt returns the old "done_at" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldDoneAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDoneAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDoneAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDoneAt: %w", err)
+	}
+	return oldValue.DoneAt, nil
+}
+
+// ClearDoneAt clears the value of the "done_at" field.
+func (m *CollectionTaskMutation) ClearDoneAt() {
+	m.done_at = nil
+	m.clearedFields[collectiontask.FieldDoneAt] = struct{}{}
+}
+
+// DoneAtCleared returns if the "done_at" field was cleared in this mutation.
+func (m *CollectionTaskMutation) DoneAtCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldDoneAt]
+	return ok
+}
+
+// ResetDoneAt resets all changes to the "done_at" field.
+func (m *CollectionTaskMutation) ResetDoneAt() {
+	m.done_at = nil
+	delete(m.clearedFields, collectiontask.FieldDoneAt)
+}
+
+// SetDoneBy sets the "done_by" field.
+func (m *CollectionTaskMutation) SetDoneBy(s string) {
+	m.done_by = &s
+}
+
+// DoneBy returns the value of the "done_by" field in the mutation.
+func (m *CollectionTaskMutation) DoneBy() (r string, exists bool) {
+	v := m.done_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDoneBy returns the old "done_by" field's value of the CollectionTask entity.
+// If the CollectionTask object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CollectionTaskMutation) OldDoneBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDoneBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDoneBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDoneBy: %w", err)
+	}
+	return oldValue.DoneBy, nil
+}
+
+// ClearDoneBy clears the value of the "done_by" field.
+func (m *CollectionTaskMutation) ClearDoneBy() {
+	m.done_by = nil
+	m.clearedFields[collectiontask.FieldDoneBy] = struct{}{}
+}
+
+// DoneByCleared returns if the "done_by" field was cleared in this mutation.
+func (m *CollectionTaskMutation) DoneByCleared() bool {
+	_, ok := m.clearedFields[collectiontask.FieldDoneBy]
+	return ok
+}
+
+// ResetDoneBy resets all changes to the "done_by" field.
+func (m *CollectionTaskMutation) ResetDoneBy() {
+	m.done_by = nil
+	delete(m.clearedFields, collectiontask.FieldDoneBy)
+}
+
+// Where appends a list predicates to the CollectionTaskMutation builder.
+func (m *CollectionTaskMutation) Where(ps ...predicate.CollectionTask) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CollectionTaskMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CollectionTaskMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CollectionTask, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CollectionTaskMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CollectionTaskMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CollectionTask).
+func (m *CollectionTaskMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CollectionTaskMutation) Fields() []string {
+	fields := make([]string, 0, 17)
+	if m.tenant_id != nil {
+		fields = append(fields, collectiontask.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, collectiontask.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, collectiontask.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, collectiontask.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, collectiontask.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, collectiontask.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, collectiontask.FieldEnvironmentID)
+	}
+	if m.invoice_id != nil {
+		fields = append(fields, collectiontask.FieldInvoiceID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, collectiontask.FieldCustomerID)
+	}
+	if m.run_id != nil {
+		fields = append(fields, collectiontask.FieldRunID)
+	}
+	if m.step_id != nil {
+		fields = append(fields, collectiontask.FieldStepID)
+	}
+	if m.assignee_user_id != nil {
+		fields = append(fields, collectiontask.FieldAssigneeUserID)
+	}
+	if m.assignee_email != nil {
+		fields = append(fields, collectiontask.FieldAssigneeEmail)
+	}
+	if m.note != nil {
+		fields = append(fields, collectiontask.FieldNote)
+	}
+	if m.state != nil {
+		fields = append(fields, collectiontask.FieldState)
+	}
+	if m.done_at != nil {
+		fields = append(fields, collectiontask.FieldDoneAt)
+	}
+	if m.done_by != nil {
+		fields = append(fields, collectiontask.FieldDoneBy)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CollectionTaskMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case collectiontask.FieldTenantID:
+		return m.TenantID()
+	case collectiontask.FieldStatus:
+		return m.Status()
+	case collectiontask.FieldCreatedAt:
+		return m.CreatedAt()
+	case collectiontask.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case collectiontask.FieldCreatedBy:
+		return m.CreatedBy()
+	case collectiontask.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case collectiontask.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case collectiontask.FieldInvoiceID:
+		return m.InvoiceID()
+	case collectiontask.FieldCustomerID:
+		return m.CustomerID()
+	case collectiontask.FieldRunID:
+		return m.RunID()
+	case collectiontask.FieldStepID:
+		return m.StepID()
+	case collectiontask.FieldAssigneeUserID:
+		return m.AssigneeUserID()
+	case collectiontask.FieldAssigneeEmail:
+		return m.AssigneeEmail()
+	case collectiontask.FieldNote:
+		return m.Note()
+	case collectiontask.FieldState:
+		return m.State()
+	case collectiontask.FieldDoneAt:
+		return m.DoneAt()
+	case collectiontask.FieldDoneBy:
+		return m.DoneBy()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CollectionTaskMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case collectiontask.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case collectiontask.FieldStatus:
+		return m.OldStatus(ctx)
+	case collectiontask.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case collectiontask.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case collectiontask.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case collectiontask.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case collectiontask.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case collectiontask.FieldInvoiceID:
+		return m.OldInvoiceID(ctx)
+	case collectiontask.FieldCustomerID:
+		return m.OldCustomerID(ctx)
+	case collectiontask.FieldRunID:
+		return m.OldRunID(ctx)
+	case collectiontask.FieldStepID:
+		return m.OldStepID(ctx)
+	case collectiontask.FieldAssigneeUserID:
+		return m.OldAssigneeUserID(ctx)
+	case collectiontask.FieldAssigneeEmail:
+		return m.OldAssigneeEmail(ctx)
+	case collectiontask.FieldNote:
+		return m.OldNote(ctx)
+	case collectiontask.FieldState:
+		return m.OldState(ctx)
+	case collectiontask.FieldDoneAt:
+		return m.OldDoneAt(ctx)
+	case collectiontask.FieldDoneBy:
+		return m.OldDoneBy(ctx)
+	}
+	return nil, fmt.Errorf("unknown CollectionTask field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionTaskMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case collectiontask.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case collectiontask.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case collectiontask.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case collectiontask.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case collectiontask.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case collectiontask.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case collectiontask.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case collectiontask.FieldInvoiceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceID(v)
+		return nil
+	case collectiontask.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case collectiontask.FieldRunID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRunID(v)
+		return nil
+	case collectiontask.FieldStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStepID(v)
+		return nil
+	case collectiontask.FieldAssigneeUserID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssigneeUserID(v)
+		return nil
+	case collectiontask.FieldAssigneeEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssigneeEmail(v)
+		return nil
+	case collectiontask.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	case collectiontask.FieldState:
+		v, ok := value.(types.CollectionTaskState)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case collectiontask.FieldDoneAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDoneAt(v)
+		return nil
+	case collectiontask.FieldDoneBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDoneBy(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionTask field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CollectionTaskMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CollectionTaskMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CollectionTaskMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown CollectionTask numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CollectionTaskMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(collectiontask.FieldCreatedBy) {
+		fields = append(fields, collectiontask.FieldCreatedBy)
+	}
+	if m.FieldCleared(collectiontask.FieldUpdatedBy) {
+		fields = append(fields, collectiontask.FieldUpdatedBy)
+	}
+	if m.FieldCleared(collectiontask.FieldEnvironmentID) {
+		fields = append(fields, collectiontask.FieldEnvironmentID)
+	}
+	if m.FieldCleared(collectiontask.FieldRunID) {
+		fields = append(fields, collectiontask.FieldRunID)
+	}
+	if m.FieldCleared(collectiontask.FieldStepID) {
+		fields = append(fields, collectiontask.FieldStepID)
+	}
+	if m.FieldCleared(collectiontask.FieldAssigneeUserID) {
+		fields = append(fields, collectiontask.FieldAssigneeUserID)
+	}
+	if m.FieldCleared(collectiontask.FieldAssigneeEmail) {
+		fields = append(fields, collectiontask.FieldAssigneeEmail)
+	}
+	if m.FieldCleared(collectiontask.FieldDoneAt) {
+		fields = append(fields, collectiontask.FieldDoneAt)
+	}
+	if m.FieldCleared(collectiontask.FieldDoneBy) {
+		fields = append(fields, collectiontask.FieldDoneBy)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CollectionTaskMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CollectionTaskMutation) ClearField(name string) error {
+	switch name {
+	case collectiontask.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case collectiontask.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case collectiontask.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case collectiontask.FieldRunID:
+		m.ClearRunID()
+		return nil
+	case collectiontask.FieldStepID:
+		m.ClearStepID()
+		return nil
+	case collectiontask.FieldAssigneeUserID:
+		m.ClearAssigneeUserID()
+		return nil
+	case collectiontask.FieldAssigneeEmail:
+		m.ClearAssigneeEmail()
+		return nil
+	case collectiontask.FieldDoneAt:
+		m.ClearDoneAt()
+		return nil
+	case collectiontask.FieldDoneBy:
+		m.ClearDoneBy()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionTask nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CollectionTaskMutation) ResetField(name string) error {
+	switch name {
+	case collectiontask.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case collectiontask.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case collectiontask.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case collectiontask.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case collectiontask.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case collectiontask.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case collectiontask.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case collectiontask.FieldInvoiceID:
+		m.ResetInvoiceID()
+		return nil
+	case collectiontask.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
+	case collectiontask.FieldRunID:
+		m.ResetRunID()
+		return nil
+	case collectiontask.FieldStepID:
+		m.ResetStepID()
+		return nil
+	case collectiontask.FieldAssigneeUserID:
+		m.ResetAssigneeUserID()
+		return nil
+	case collectiontask.FieldAssigneeEmail:
+		m.ResetAssigneeEmail()
+		return nil
+	case collectiontask.FieldNote:
+		m.ResetNote()
+		return nil
+	case collectiontask.FieldState:
+		m.ResetState()
+		return nil
+	case collectiontask.FieldDoneAt:
+		m.ResetDoneAt()
+		return nil
+	case collectiontask.FieldDoneBy:
+		m.ResetDoneBy()
+		return nil
+	}
+	return fmt.Errorf("unknown CollectionTask field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CollectionTaskMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CollectionTaskMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CollectionTaskMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CollectionTaskMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CollectionTaskMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CollectionTaskMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CollectionTaskMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CollectionTask unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CollectionTaskMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CollectionTask edge %s", name)
 }
 
 // CommitmentMutation represents an operation that mutates the Commitment nodes in the graph.
@@ -56498,28 +62471,30 @@ func (m *InvoiceLineItemMutation) ResetEdge(name string) error {
 // InvoiceReminderMutation represents an operation that mutates the InvoiceReminder nodes in the graph.
 type InvoiceReminderMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	invoice_id      *string
-	reminder_status *types.ReminderStatus
-	status_reason   *string
-	approved_at     *time.Time
-	metadata        *map[string]interface{}
-	tone            *types.ReminderTone
-	subject         *string
-	body            *string
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*InvoiceReminder, error)
-	predicates      []predicate.InvoiceReminder
+	op               Op
+	typ              string
+	id               *string
+	tenant_id        *string
+	status           *string
+	created_at       *time.Time
+	updated_at       *time.Time
+	created_by       *string
+	updated_by       *string
+	environment_id   *string
+	invoice_id       *string
+	reminder_status  *types.ReminderStatus
+	status_reason    *string
+	approved_at      *time.Time
+	metadata         *map[string]interface{}
+	tone             *types.ReminderTone
+	subject          *string
+	body             *string
+	playbook_id      *string
+	playbook_step_id *string
+	clearedFields    map[string]struct{}
+	done             bool
+	oldValue         func(context.Context) (*InvoiceReminder, error)
+	predicates       []predicate.InvoiceReminder
 }
 
 var _ ent.Mutation = (*InvoiceReminderMutation)(nil)
@@ -57244,6 +63219,104 @@ func (m *InvoiceReminderMutation) ResetBody() {
 	m.body = nil
 }
 
+// SetPlaybookID sets the "playbook_id" field.
+func (m *InvoiceReminderMutation) SetPlaybookID(s string) {
+	m.playbook_id = &s
+}
+
+// PlaybookID returns the value of the "playbook_id" field in the mutation.
+func (m *InvoiceReminderMutation) PlaybookID() (r string, exists bool) {
+	v := m.playbook_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlaybookID returns the old "playbook_id" field's value of the InvoiceReminder entity.
+// If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceReminderMutation) OldPlaybookID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlaybookID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlaybookID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlaybookID: %w", err)
+	}
+	return oldValue.PlaybookID, nil
+}
+
+// ClearPlaybookID clears the value of the "playbook_id" field.
+func (m *InvoiceReminderMutation) ClearPlaybookID() {
+	m.playbook_id = nil
+	m.clearedFields[invoicereminder.FieldPlaybookID] = struct{}{}
+}
+
+// PlaybookIDCleared returns if the "playbook_id" field was cleared in this mutation.
+func (m *InvoiceReminderMutation) PlaybookIDCleared() bool {
+	_, ok := m.clearedFields[invoicereminder.FieldPlaybookID]
+	return ok
+}
+
+// ResetPlaybookID resets all changes to the "playbook_id" field.
+func (m *InvoiceReminderMutation) ResetPlaybookID() {
+	m.playbook_id = nil
+	delete(m.clearedFields, invoicereminder.FieldPlaybookID)
+}
+
+// SetPlaybookStepID sets the "playbook_step_id" field.
+func (m *InvoiceReminderMutation) SetPlaybookStepID(s string) {
+	m.playbook_step_id = &s
+}
+
+// PlaybookStepID returns the value of the "playbook_step_id" field in the mutation.
+func (m *InvoiceReminderMutation) PlaybookStepID() (r string, exists bool) {
+	v := m.playbook_step_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlaybookStepID returns the old "playbook_step_id" field's value of the InvoiceReminder entity.
+// If the InvoiceReminder object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceReminderMutation) OldPlaybookStepID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlaybookStepID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlaybookStepID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlaybookStepID: %w", err)
+	}
+	return oldValue.PlaybookStepID, nil
+}
+
+// ClearPlaybookStepID clears the value of the "playbook_step_id" field.
+func (m *InvoiceReminderMutation) ClearPlaybookStepID() {
+	m.playbook_step_id = nil
+	m.clearedFields[invoicereminder.FieldPlaybookStepID] = struct{}{}
+}
+
+// PlaybookStepIDCleared returns if the "playbook_step_id" field was cleared in this mutation.
+func (m *InvoiceReminderMutation) PlaybookStepIDCleared() bool {
+	_, ok := m.clearedFields[invoicereminder.FieldPlaybookStepID]
+	return ok
+}
+
+// ResetPlaybookStepID resets all changes to the "playbook_step_id" field.
+func (m *InvoiceReminderMutation) ResetPlaybookStepID() {
+	m.playbook_step_id = nil
+	delete(m.clearedFields, invoicereminder.FieldPlaybookStepID)
+}
+
 // Where appends a list predicates to the InvoiceReminderMutation builder.
 func (m *InvoiceReminderMutation) Where(ps ...predicate.InvoiceReminder) {
 	m.predicates = append(m.predicates, ps...)
@@ -57278,7 +63351,7 @@ func (m *InvoiceReminderMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceReminderMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicereminder.FieldTenantID)
 	}
@@ -57324,6 +63397,12 @@ func (m *InvoiceReminderMutation) Fields() []string {
 	if m.body != nil {
 		fields = append(fields, invoicereminder.FieldBody)
 	}
+	if m.playbook_id != nil {
+		fields = append(fields, invoicereminder.FieldPlaybookID)
+	}
+	if m.playbook_step_id != nil {
+		fields = append(fields, invoicereminder.FieldPlaybookStepID)
+	}
 	return fields
 }
 
@@ -57362,6 +63441,10 @@ func (m *InvoiceReminderMutation) Field(name string) (ent.Value, bool) {
 		return m.Subject()
 	case invoicereminder.FieldBody:
 		return m.Body()
+	case invoicereminder.FieldPlaybookID:
+		return m.PlaybookID()
+	case invoicereminder.FieldPlaybookStepID:
+		return m.PlaybookStepID()
 	}
 	return nil, false
 }
@@ -57401,6 +63484,10 @@ func (m *InvoiceReminderMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSubject(ctx)
 	case invoicereminder.FieldBody:
 		return m.OldBody(ctx)
+	case invoicereminder.FieldPlaybookID:
+		return m.OldPlaybookID(ctx)
+	case invoicereminder.FieldPlaybookStepID:
+		return m.OldPlaybookStepID(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceReminder field %s", name)
 }
@@ -57515,6 +63602,20 @@ func (m *InvoiceReminderMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBody(v)
 		return nil
+	case invoicereminder.FieldPlaybookID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlaybookID(v)
+		return nil
+	case invoicereminder.FieldPlaybookStepID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlaybookStepID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder field %s", name)
 }
@@ -57563,6 +63664,12 @@ func (m *InvoiceReminderMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicereminder.FieldMetadata) {
 		fields = append(fields, invoicereminder.FieldMetadata)
 	}
+	if m.FieldCleared(invoicereminder.FieldPlaybookID) {
+		fields = append(fields, invoicereminder.FieldPlaybookID)
+	}
+	if m.FieldCleared(invoicereminder.FieldPlaybookStepID) {
+		fields = append(fields, invoicereminder.FieldPlaybookStepID)
+	}
 	return fields
 }
 
@@ -57594,6 +63701,12 @@ func (m *InvoiceReminderMutation) ClearField(name string) error {
 		return nil
 	case invoicereminder.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case invoicereminder.FieldPlaybookID:
+		m.ClearPlaybookID()
+		return nil
+	case invoicereminder.FieldPlaybookStepID:
+		m.ClearPlaybookStepID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder nullable field %s", name)
@@ -57647,6 +63760,12 @@ func (m *InvoiceReminderMutation) ResetField(name string) error {
 		return nil
 	case invoicereminder.FieldBody:
 		m.ResetBody()
+		return nil
+	case invoicereminder.FieldPlaybookID:
+		m.ResetPlaybookID()
+		return nil
+	case invoicereminder.FieldPlaybookStepID:
+		m.ResetPlaybookStepID()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceReminder field %s", name)

@@ -21,6 +21,10 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/collectionplaybook"
+	"github.com/flexprice/flexprice/ent/collectionplaybookrun"
+	"github.com/flexprice/flexprice/ent/collectionplaybooksteprun"
+	"github.com/flexprice/flexprice/ent/collectiontask"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/contract"
@@ -904,6 +908,254 @@ func scanReturningCheckoutSession(rows *sql.Rows) ([]*CheckoutSession, error) {
 	var out []*CheckoutSession
 	for rows.Next() {
 		node := &CheckoutSession{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CollectionPlaybook.
+func (_u *CollectionPlaybookUpdate) SaveReturning(ctx context.Context) ([]*CollectionPlaybook, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CollectionPlaybookUpdate) sqlSaveReturning(ctx context.Context) ([]*CollectionPlaybook, error) {
+	var out []*CollectionPlaybook
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", collectionplaybook.Table, collectionplaybook.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybook(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CollectionPlaybook.
+func (_d *CollectionPlaybookDelete) ExecReturning(ctx context.Context) ([]*CollectionPlaybook, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CollectionPlaybookDelete) sqlExecReturning(ctx context.Context) ([]*CollectionPlaybook, error) {
+	var out []*CollectionPlaybook
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", collectionplaybook.Table, collectionplaybook.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybook(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCollectionPlaybook(rows *sql.Rows) ([]*CollectionPlaybook, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CollectionPlaybook
+	for rows.Next() {
+		node := &CollectionPlaybook{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CollectionPlaybookRun.
+func (_u *CollectionPlaybookRunUpdate) SaveReturning(ctx context.Context) ([]*CollectionPlaybookRun, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CollectionPlaybookRunUpdate) sqlSaveReturning(ctx context.Context) ([]*CollectionPlaybookRun, error) {
+	var out []*CollectionPlaybookRun
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", collectionplaybookrun.Table, collectionplaybookrun.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybookRun(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CollectionPlaybookRun.
+func (_d *CollectionPlaybookRunDelete) ExecReturning(ctx context.Context) ([]*CollectionPlaybookRun, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CollectionPlaybookRunDelete) sqlExecReturning(ctx context.Context) ([]*CollectionPlaybookRun, error) {
+	var out []*CollectionPlaybookRun
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", collectionplaybookrun.Table, collectionplaybookrun.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybookRun(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCollectionPlaybookRun(rows *sql.Rows) ([]*CollectionPlaybookRun, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CollectionPlaybookRun
+	for rows.Next() {
+		node := &CollectionPlaybookRun{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CollectionPlaybookStepRun.
+func (_u *CollectionPlaybookStepRunUpdate) SaveReturning(ctx context.Context) ([]*CollectionPlaybookStepRun, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CollectionPlaybookStepRunUpdate) sqlSaveReturning(ctx context.Context) ([]*CollectionPlaybookStepRun, error) {
+	var out []*CollectionPlaybookStepRun
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", collectionplaybooksteprun.Table, collectionplaybooksteprun.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybookStepRun(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CollectionPlaybookStepRun.
+func (_d *CollectionPlaybookStepRunDelete) ExecReturning(ctx context.Context) ([]*CollectionPlaybookStepRun, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CollectionPlaybookStepRunDelete) sqlExecReturning(ctx context.Context) ([]*CollectionPlaybookStepRun, error) {
+	var out []*CollectionPlaybookStepRun
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", collectionplaybooksteprun.Table, collectionplaybooksteprun.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionPlaybookStepRun(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCollectionPlaybookStepRun(rows *sql.Rows) ([]*CollectionPlaybookStepRun, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CollectionPlaybookStepRun
+	for rows.Next() {
+		node := &CollectionPlaybookStepRun{}
+		values, err := node.scanValues(cols)
+		if err != nil {
+			return nil, err
+		}
+		if err := rows.Scan(values...); err != nil {
+			return nil, err
+		}
+		if err := node.assignValues(cols, values); err != nil {
+			return nil, err
+		}
+		out = append(out, node)
+	}
+	return out, rows.Err()
+}
+
+// SaveReturning is like Save but returns the updated rows. Hooks receive []*CollectionTask.
+func (_u *CollectionTaskUpdate) SaveReturning(ctx context.Context) ([]*CollectionTask, error) {
+	_u.defaults()
+	return withHooks(ctx, _u.sqlSaveReturning, _u.mutation, _u.hooks)
+}
+
+func (_u *CollectionTaskUpdate) sqlSaveReturning(ctx context.Context) ([]*CollectionTask, error) {
+	var out []*CollectionTask
+	c := *_u
+	c.driver = newReturning(_u.driver, "UPDATE", collectiontask.Table, collectiontask.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionTask(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlSave(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ExecReturning is like Exec but returns the deleted rows. Hooks receive []*CollectionTask.
+func (_d *CollectionTaskDelete) ExecReturning(ctx context.Context) ([]*CollectionTask, error) {
+	return withHooks(ctx, _d.sqlExecReturning, _d.mutation, _d.hooks)
+}
+
+func (_d *CollectionTaskDelete) sqlExecReturning(ctx context.Context) ([]*CollectionTask, error) {
+	var out []*CollectionTask
+	c := *_d
+	c.driver = newReturning(_d.driver, "DELETE FROM", collectiontask.Table, collectiontask.Columns, func(rows *sql.Rows) (int, error) {
+		var err error
+		out, err = scanReturningCollectionTask(rows)
+		return len(out), err
+	})
+	if _, err := c.sqlExec(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func scanReturningCollectionTask(rows *sql.Rows) ([]*CollectionTask, error) {
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	var out []*CollectionTask
+	for rows.Next() {
+		node := &CollectionTask{}
 		values, err := node.scanValues(cols)
 		if err != nil {
 			return nil, err

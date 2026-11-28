@@ -79,10 +79,12 @@ type EmailTemplateKey string
 const (
 	EmailTemplateInvoiceFinalized       EmailTemplateKey = "invoice_finalized"
 	EmailTemplateInvoicePaymentReminder EmailTemplateKey = "invoice_payment_reminder"
+	// EmailTemplateCollectionsTeamNotice is an internal alert or task a collection playbook sends to the merchant's team.
+	EmailTemplateCollectionsTeamNotice EmailTemplateKey = "collections_team_notice"
 )
 
 func (k EmailTemplateKey) Validate() error {
-	return validateEnum("template_key", k, []EmailTemplateKey{EmailTemplateInvoiceFinalized, EmailTemplateInvoicePaymentReminder})
+	return validateEnum("template_key", k, []EmailTemplateKey{EmailTemplateInvoiceFinalized, EmailTemplateInvoicePaymentReminder, EmailTemplateCollectionsTeamNotice})
 }
 
 // EmailProvider names the service that delivers an email.

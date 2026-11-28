@@ -42,6 +42,18 @@ type BillingTerm func(*sql.Selector)
 // CheckoutSession is the predicate function for checkoutsession builders.
 type CheckoutSession func(*sql.Selector)
 
+// CollectionPlaybook is the predicate function for collectionplaybook builders.
+type CollectionPlaybook func(*sql.Selector)
+
+// CollectionPlaybookRun is the predicate function for collectionplaybookrun builders.
+type CollectionPlaybookRun func(*sql.Selector)
+
+// CollectionPlaybookStepRun is the predicate function for collectionplaybooksteprun builders.
+type CollectionPlaybookStepRun func(*sql.Selector)
+
+// CollectionTask is the predicate function for collectiontask builders.
+type CollectionTask func(*sql.Selector)
+
 // Commitment is the predicate function for commitment builders.
 type Commitment func(*sql.Selector)
 

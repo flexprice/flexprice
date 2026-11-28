@@ -267,6 +267,10 @@ type InvoiceReminderResponse struct {
 	// CreatedAt and UpdatedAt are omitted until a person acts on the reminder.
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	// PlaybookID and PlaybookStepID name the playbook step that wrote this reminder; absent for a reminder rendered
+	// from the invoice's age.
+	PlaybookID     string `json:"playbook_id,omitempty"`
+	PlaybookStepID string `json:"playbook_step_id,omitempty"`
 }
 
 // ReminderEmailStatus is the latest email of an approved reminder; To is who it actually went to.

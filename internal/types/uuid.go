@@ -153,6 +153,12 @@ const (
 	UUID_PREFIX_BILLING_ENTITY     = "be"
 	UUID_PREFIX_INVOICE_REMINDER   = "irem"
 
+	// Collection playbooks, the runs that take an invoice through one, their scheduled steps and the tasks they create.
+	UUID_PREFIX_COLLECTION_PLAYBOOK          = "cpb"
+	UUID_PREFIX_COLLECTION_PLAYBOOK_RUN      = "cpr"
+	UUID_PREFIX_COLLECTION_PLAYBOOK_STEP_RUN = "cpsr"
+	UUID_PREFIX_COLLECTION_TASK              = "ctask"
+
 	// UUID_PREFIX_EMAIL_LOG prefixes customer email log ids, also used as the provider idempotency key.
 	UUID_PREFIX_EMAIL_LOG = "email"
 

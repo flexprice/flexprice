@@ -60,6 +60,7 @@ const (
 	TemporalSubscriptionOverdueInvoicesWorkflow            TemporalWorkflowType = "SubscriptionOverdueInvoicesWorkflow"
 	TemporalBillingInstalmentsDueWorkflow                  TemporalWorkflowType = "BillingInstalmentsDueWorkflow"
 	TemporalEmailDispatchWorkflow                          TemporalWorkflowType = "EmailDispatchWorkflow"
+	TemporalCollectionPlaybooksWorkflow                    TemporalWorkflowType = "CollectionPlaybooksWorkflow"
 	TemporalWalletCreditExpiryWorkflow                     TemporalWorkflowType = "WalletCreditExpiryWorkflow"
 	TemporalSubscriptionBillingPeriodsWorkflow             TemporalWorkflowType = "SubscriptionBillingPeriodsWorkflow"
 	TemporalSubscriptionRenewalDueAlertsWorkflow           TemporalWorkflowType = "SubscriptionRenewalDueAlertsWorkflow"
@@ -129,6 +130,7 @@ var temporalCronWorkflowTypes = []TemporalWorkflowType{
 	TemporalSubscriptionOverdueInvoicesWorkflow,
 	TemporalBillingInstalmentsDueWorkflow,
 	TemporalEmailDispatchWorkflow,
+	TemporalCollectionPlaybooksWorkflow,
 	TemporalWalletCreditExpiryWorkflow,
 	TemporalSubscriptionBillingPeriodsWorkflow,
 	TemporalSubscriptionRenewalDueAlertsWorkflow,

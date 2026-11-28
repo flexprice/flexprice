@@ -44,6 +44,7 @@ type Handlers struct {
 	Activity                 *v1.ActivityHandler
 	Collections              *v1.CollectionsHandler
 	Reminders                *v1.ReminderHandler
+	Playbooks                *v1.PlaybookHandler
 	Entitlement              *v1.EntitlementHandler
 	CreditGrant              *v1.CreditGrantHandler
 	Payment                  *v1.PaymentHandler
@@ -574,6 +575,28 @@ func NewRouter(
 			collectionsRoutes.GET("/reminders/:id", read(types.EntityCollections, types.ActionRead), handlers.Reminders.GetReminder)
 			collectionsRoutes.PUT("/reminders/update/:id", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.UpdateReminder)
 			collectionsRoutes.PUT("/reminders/bulk-update", write(types.EntityCollections, types.ActionWrite), handlers.Reminders.BulkUpdateReminders)
+
+			collectionsRoutes.GET("/playbook-templates", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.ListTemplates)
+			collectionsRoutes.GET("/playbooks", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.ListPlaybooks)
+			collectionsRoutes.POST("/playbooks", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.CreatePlaybook)
+			collectionsRoutes.PUT("/playbooks/reorder", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ReorderPlaybooks)
+			collectionsRoutes.POST("/playbooks/run", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.RunPlaybooks)
+			collectionsRoutes.GET("/playbooks/:id", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.GetPlaybook)
+			collectionsRoutes.PUT("/playbooks/:id", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.UpdatePlaybook)
+			collectionsRoutes.DELETE("/playbooks/:id", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.DeletePlaybook)
+			collectionsRoutes.POST("/playbooks/:id/duplicate", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.DuplicatePlaybook)
+			collectionsRoutes.POST("/playbooks/:id/activate", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ActivatePlaybook)
+			collectionsRoutes.POST("/playbooks/:id/pause", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.PausePlaybook)
+			collectionsRoutes.POST("/playbooks/:id/resume", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ResumePlaybook)
+			collectionsRoutes.GET("/playbooks/:id/preview", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.PreviewPlaybook)
+			collectionsRoutes.GET("/playbooks/:id/runs", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.ListPlaybookRuns)
+			collectionsRoutes.POST("/playbook-runs/:id/pause", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.PausePlaybookRun)
+			collectionsRoutes.POST("/playbook-runs/:id/resume", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ResumePlaybookRun)
+			collectionsRoutes.POST("/customers/:id/pause", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.PauseCustomerCollections)
+			collectionsRoutes.POST("/customers/:id/resume", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ResumeCustomerCollections)
+			collectionsRoutes.GET("/tasks", read(types.EntityCollections, types.ActionRead), handlers.Playbooks.ListCollectionTasks)
+			collectionsRoutes.POST("/tasks/:id/complete", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.CompleteCollectionTask)
+			collectionsRoutes.POST("/tasks/:id/reopen", write(types.EntityCollections, types.ActionWrite), handlers.Playbooks.ReopenCollectionTask)
 		}
 
 		checkoutSessions := v1Private.Group("/checkout/sessions")

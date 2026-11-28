@@ -38,6 +38,14 @@ type Tx struct {
 	BillingTerm *BillingTermClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
+	// CollectionPlaybook is the client for interacting with the CollectionPlaybook builders.
+	CollectionPlaybook *CollectionPlaybookClient
+	// CollectionPlaybookRun is the client for interacting with the CollectionPlaybookRun builders.
+	CollectionPlaybookRun *CollectionPlaybookRunClient
+	// CollectionPlaybookStepRun is the client for interacting with the CollectionPlaybookStepRun builders.
+	CollectionPlaybookStepRun *CollectionPlaybookStepRunClient
+	// CollectionTask is the client for interacting with the CollectionTask builders.
+	CollectionTask *CollectionTaskClient
 	// Commitment is the client for interacting with the Commitment builders.
 	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
@@ -305,6 +313,10 @@ func (tx *Tx) init() {
 	tx.BillingSequence = NewBillingSequenceClient(tx.config)
 	tx.BillingTerm = NewBillingTermClient(tx.config)
 	tx.CheckoutSession = NewCheckoutSessionClient(tx.config)
+	tx.CollectionPlaybook = NewCollectionPlaybookClient(tx.config)
+	tx.CollectionPlaybookRun = NewCollectionPlaybookRunClient(tx.config)
+	tx.CollectionPlaybookStepRun = NewCollectionPlaybookStepRunClient(tx.config)
+	tx.CollectionTask = NewCollectionTaskClient(tx.config)
 	tx.Commitment = NewCommitmentClient(tx.config)
 	tx.Connection = NewConnectionClient(tx.config)
 	tx.Contract = NewContractClient(tx.config)

@@ -183,6 +183,34 @@ func (_c *InvoiceReminderCreate) SetBody(v string) *InvoiceReminderCreate {
 	return _c
 }
 
+// SetPlaybookID sets the "playbook_id" field.
+func (_c *InvoiceReminderCreate) SetPlaybookID(v string) *InvoiceReminderCreate {
+	_c.mutation.SetPlaybookID(v)
+	return _c
+}
+
+// SetNillablePlaybookID sets the "playbook_id" field if the given value is not nil.
+func (_c *InvoiceReminderCreate) SetNillablePlaybookID(v *string) *InvoiceReminderCreate {
+	if v != nil {
+		_c.SetPlaybookID(*v)
+	}
+	return _c
+}
+
+// SetPlaybookStepID sets the "playbook_step_id" field.
+func (_c *InvoiceReminderCreate) SetPlaybookStepID(v string) *InvoiceReminderCreate {
+	_c.mutation.SetPlaybookStepID(v)
+	return _c
+}
+
+// SetNillablePlaybookStepID sets the "playbook_step_id" field if the given value is not nil.
+func (_c *InvoiceReminderCreate) SetNillablePlaybookStepID(v *string) *InvoiceReminderCreate {
+	if v != nil {
+		_c.SetPlaybookStepID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *InvoiceReminderCreate) SetID(v string) *InvoiceReminderCreate {
 	_c.mutation.SetID(v)
@@ -379,6 +407,14 @@ func (_c *InvoiceReminderCreate) createSpec() (*InvoiceReminder, *sqlgraph.Creat
 	if value, ok := _c.mutation.Body(); ok {
 		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
 		_node.Body = value
+	}
+	if value, ok := _c.mutation.PlaybookID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookID, field.TypeString, value)
+		_node.PlaybookID = value
+	}
+	if value, ok := _c.mutation.PlaybookStepID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookStepID, field.TypeString, value)
+		_node.PlaybookStepID = value
 	}
 	return _node, _spec
 }

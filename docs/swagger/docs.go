@@ -2339,6 +2339,1111 @@ const docTemplate = `{
                 "x-scope": "read"
             }
         },
+        "/collections/customers/{id}/pause": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when outreach to a customer should stop for now: pauses every active playbook run of the customer. Invoices that enrol later are not paused.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Pause a customer's playbooks",
+                "operationId": "pauseCustomerCollections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional reason",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/PausePlaybookRunRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CustomerPlaybookRunsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/customers/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when outreach to a customer should continue: resumes every paused playbook run of the customer.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Resume a customer's playbooks",
+                "operationId": "resumeCustomerCollections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CustomerPlaybookRunsResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbook-runs/{id}/pause": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when outreach for one invoice should stop for now. Only allowed when the playbook has the manually_paused stop condition. Its steps wait until resumed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Pause an invoice's playbook",
+                "operationId": "pausePlaybookRun",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional reason",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/PausePlaybookRunRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookRunResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Pausing is off for this playbook",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Run is not active",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbook-runs/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when outreach for a paused invoice should continue. Steps missed while paused are skipped except those on the latest due day.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Resume an invoice's playbook",
+                "operationId": "resumePlaybookRun",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook run ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookRunResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Run is not paused",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbook-templates": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the starter playbooks a new playbook can be created from. Each template carries its trigger, audience and steps; creating from one copies them.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "List playbook templates",
+                "operationId": "listPlaybookTemplates",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPlaybookTemplatesResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/playbooks": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the environment's collection playbooks in priority order (1 is checked first), each with its readiness problems and its stats for the last 30 days.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "List playbooks",
+                "operationId": "listPlaybooks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated draft, live, paused; empty lists every playbook",
+                        "name": "state",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPlaybooksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you want a new draft playbook, blank (one friendly reminder on day 3) or copied from a template. It is placed last in priority order. Drafts run nothing until activated.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Create playbook",
+                "operationId": "createPlaybook",
+                "parameters": [
+                    {
+                        "description": "Name and optional template",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/CreatePlaybookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or unknown template",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/reorder": {
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when changing which playbook is checked first. Send every playbook id of the environment once, highest priority first. New enrolments follow the new order; invoices already in a playbook stay in it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Reorder playbooks",
+                "operationId": "reorderPlaybooks",
+                "parameters": [
+                    {
+                        "description": "Every playbook id, highest priority first",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReorderPlaybooksRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPlaybooksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Ids missing, unknown or repeated",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/run": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use to run the playbook scheduler for this environment now instead of waiting for the daily pass (09:00 UTC): stops runs whose invoice was paid or voided, enrols matching invoices and runs due steps. Safe to repeat: a step runs at most once per invoice.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Run playbooks now",
+                "operationId": "runPlaybooks",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/RunPlaybooksResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need one playbook with its steps (ordered by day), readiness problems, version and stats.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Get playbook",
+                "operationId": "getPlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when saving the whole playbook from the builder. Send the version you loaded; a playbook saved by someone else since is a 409. A draft may be incomplete; a live playbook must stay ready (400 invalid_operation with details.problems). Invoices already in a live playbook follow the edit for steps that have not run yet: removed steps are skipped, moved steps rescheduled (never into the past), new steps scheduled when their day is still ahead.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Update playbook",
+                "operationId": "updatePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The whole playbook",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/UpdatePlaybookRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid playbook, or a live playbook left incomplete",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Saved by someone else since it was loaded",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when removing a playbook. Invoices in it leave it (their pending steps are skipped) and the scheduler offers them to the next live playbook they match. Reminders already written are not changed. Remaining playbooks are renumbered.",
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Delete playbook",
+                "operationId": "deletePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "delete"
+            }
+        },
+        "/collections/playbooks/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a draft or paused playbook should go live. Readiness is checked: a name, at least one reminder email, every step complete, before-due emails sent without review. A playbook that is not ready is 400 invalid_operation with details.problems ([{step_id, field, message}]). From the next scheduler pass it enrols matching invoices, scheduling only steps whose day is today or later.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Activate playbook",
+                "operationId": "activatePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The version you loaded",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookVersionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Not ready (details.problems)",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Changed since loaded, or already live",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/{id}/duplicate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when starting a new playbook from an existing one. The copy is a draft named \"\u003cname\u003e (copy)\", placed last, with no stats.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Duplicate playbook",
+                "operationId": "duplicatePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/{id}/pause": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a live playbook should stop running steps and enrolling invoices. Invoices keep their place; on resume only steps due on the latest day run, never a burst of missed ones.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Pause playbook",
+                "operationId": "pausePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The version you loaded",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookVersionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Changed since loaded, or not live",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/{id}/preview": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use before activating: which open invoices the saved playbook would enrol today, how many a higher-priority live playbook takes first, and the first step each would get. Read-only.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Preview playbook",
+                "operationId": "previewPlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookPreviewResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/playbooks/{id}/resume": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when a paused playbook should go live again. Readiness is checked as on activate. Steps that fell due while paused are skipped except those on each invoice's latest due day.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Resume playbook",
+                "operationId": "resumePlaybook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The version you loaded",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookVersionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/PlaybookResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Not ready (details.problems)",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Changed since loaded, or not paused",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/playbooks/{id}/runs": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the invoices in a playbook, oldest due date first, each with its next pending step.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "List a playbook's invoices",
+                "operationId": "listPlaybookRuns",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Playbook ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated active, paused, stopped, completed (default active,paused)",
+                        "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 25)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListPlaybookRunsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
         "/collections/reminders": {
             "get": {
                 "security": [
@@ -2629,6 +3734,207 @@ const docTemplate = `{
                     }
                 },
                 "x-scope": "read"
+            }
+        },
+        "/collections/tasks": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when you need the to-dos playbook task steps created, newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "List collection tasks",
+                "operationId": "listCollectionTasks",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "invoice_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Assignee user ID",
+                        "name": "assignee_user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "open or done",
+                        "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size (1-100, default 25)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/ListCollectionTasksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "read"
+            }
+        },
+        "/collections/tasks/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Complete collection task",
+                "operationId": "completeCollectionTask",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CollectionTaskResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Already done",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
+            }
+        },
+        "/collections/tasks/{id}/reopen": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Collections"
+                ],
+                "summary": "Reopen collection task",
+                "operationId": "reopenCollectionTask",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/CollectionTaskResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Collections is not enabled for this environment",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Already open",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                },
+                "x-scope": "write"
             }
         },
         "/commitments": {
@@ -21319,6 +22625,47 @@ const docTemplate = `{
                 }
             }
         },
+        "CollectionTaskResponse": {
+            "type": "object",
+            "properties": {
+                "assignee_email": {
+                    "type": "string"
+                },
+                "assignee_user_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "done_at": {
+                    "type": "string"
+                },
+                "done_by": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "state": {
+                    "$ref": "#/definitions/types.CollectionTaskState"
+                },
+                "step_id": {
+                    "type": "string"
+                }
+            }
+        },
         "CollectionsBoardColumn": {
             "type": "object",
             "properties": {
@@ -23549,6 +24896,19 @@ const docTemplate = `{
                 }
             }
         },
+        "CreatePlaybookRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name of the playbook; defaults to the template's name, or \"Untitled playbook\".",
+                    "type": "string"
+                },
+                "template_id": {
+                    "description": "TemplateID starts the playbook from a template (GET /collections/playbook-templates).",
+                    "type": "string"
+                }
+            }
+        },
         "CreatePriceRequest": {
             "type": "object",
             "required": [
@@ -24915,6 +26275,20 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/CustomerInvoiceSummary"
                     }
+                }
+            }
+        },
+        "CustomerPlaybookRunsResponse": {
+            "type": "object",
+            "properties": {
+                "runs": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PlaybookRunResponse"
+                    }
+                },
+                "runs_affected": {
+                    "type": "integer"
                 }
             }
         },
@@ -27278,6 +28652,13 @@ const docTemplate = `{
                 "original_tone": {
                     "$ref": "#/definitions/types.ReminderTone"
                 },
+                "playbook_id": {
+                    "description": "PlaybookID and PlaybookStepID name the playbook step that wrote this reminder; absent for a reminder rendered\nfrom the invoice's age.",
+                    "type": "string"
+                },
+                "playbook_step_id": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.ReminderStatus"
                 },
@@ -27920,6 +29301,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ListCollectionTasksResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionTaskResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "ListCostsheetResponse": {
             "type": "object",
             "properties": {
@@ -28012,6 +29407,42 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListPlaybookRunsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PlaybookRunResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "ListPlaybookTemplatesResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PlaybookTemplateResponse"
+                    }
+                }
+            }
+        },
+        "ListPlaybooksResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PlaybookResponse"
+                    }
                 }
             }
         },
@@ -28369,6 +29800,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/price.TransformQuantity"
                         }
                     ]
+                }
+            }
+        },
+        "PausePlaybookRunRequest": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string"
                 }
             }
         },
@@ -28787,6 +30226,308 @@ const docTemplate = `{
                 "name": {
                     "description": "name of the plan",
                     "type": "string"
+                }
+            }
+        },
+        "PlaybookPreviewInvoice": {
+            "type": "object",
+            "properties": {
+                "amount_remaining": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "days_overdue": {
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "first_step": {
+                    "description": "FirstStep is the first step this invoice would get, with its day; null when every step is already past.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/PlaybookPreviewStep"
+                        }
+                    ]
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_number": {
+                    "type": "string"
+                }
+            }
+        },
+        "PlaybookPreviewResponse": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string"
+                },
+                "matching_count": {
+                    "description": "MatchingCount counts invoices that match the trigger and audience and are in no playbook now.",
+                    "type": "integer"
+                },
+                "sample": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/PlaybookPreviewInvoice"
+                    }
+                },
+                "taken_by_higher_priority": {
+                    "description": "TakenByHigherPriority counts those a live playbook higher in the list would take first.",
+                    "type": "integer"
+                },
+                "truncated": {
+                    "description": "Truncated is true when more invoices match than were counted (the count stops at 1000).",
+                    "type": "boolean"
+                }
+            }
+        },
+        "PlaybookPreviewStep": {
+            "type": "object",
+            "properties": {
+                "due_at": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.PlaybookStepKind"
+                },
+                "step_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "PlaybookResponse": {
+            "type": "object",
+            "properties": {
+                "activated_at": {
+                    "type": "string"
+                },
+                "audience": {
+                    "$ref": "#/definitions/types.PlaybookAudience"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "min_gap_days": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "problems": {
+                    "description": "Problems lists what keeps the playbook from going live; empty when it is ready.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookProblem"
+                    }
+                },
+                "skip_weekends": {
+                    "type": "boolean"
+                },
+                "state": {
+                    "$ref": "#/definitions/types.PlaybookState"
+                },
+                "stats": {
+                    "$ref": "#/definitions/PlaybookStatsResponse"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookStep"
+                    }
+                },
+                "stops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookStopCondition"
+                    }
+                },
+                "template_id": {
+                    "type": "string"
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.PlaybookTrigger"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "PlaybookRunResponse": {
+            "type": "object",
+            "properties": {
+                "amount_remaining": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "days_overdue": {
+                    "type": "integer"
+                },
+                "ended_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_due_date": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_number": {
+                    "type": "string"
+                },
+                "next_step": {
+                    "$ref": "#/definitions/PlaybookStepRunResponse"
+                },
+                "paused_reason": {
+                    "type": "string"
+                },
+                "playbook_id": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "state": {
+                    "$ref": "#/definitions/types.PlaybookRunState"
+                },
+                "stop_reason": {
+                    "$ref": "#/definitions/types.PlaybookStopReason"
+                }
+            }
+        },
+        "PlaybookStatsResponse": {
+            "type": "object",
+            "properties": {
+                "in_progress": {
+                    "description": "InProgress counts invoices in the playbook now (active or paused runs).",
+                    "type": "integer"
+                },
+                "paid_within_7d_rate": {
+                    "description": "PaidWithin7dRate is the share of reminded invoices paid within 7 days of a reminder; null when none were reminded.",
+                    "type": "number"
+                },
+                "recovered_30d": {
+                    "description": "Recovered30d is what was paid, per currency, on invoices within 7 days after one of the playbook's reminders.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/CollectionsCurrencyTotal"
+                    }
+                },
+                "reminders_sent_30d": {
+                    "description": "RemindersSent30d counts reminder emails the playbook's steps sent or approved in the last 30 days.",
+                    "type": "integer"
+                }
+            }
+        },
+        "PlaybookStepRunResponse": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "type": "integer"
+                },
+                "due_at": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "executed_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.PlaybookStepKind"
+                },
+                "result_ref": {
+                    "description": "ResultRef is what the step made: a reminder id, a task id or an email log id.",
+                    "type": "string"
+                },
+                "skip_reason": {
+                    "$ref": "#/definitions/types.PlaybookStepSkipReason"
+                },
+                "state": {
+                    "$ref": "#/definitions/types.PlaybookStepRunState"
+                },
+                "step_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "PlaybookTemplateResponse": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "$ref": "#/definitions/types.PlaybookAudience"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookStep"
+                    }
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.PlaybookTrigger"
+                }
+            }
+        },
+        "PlaybookVersionRequest": {
+            "type": "object",
+            "required": [
+                "version"
+            ],
+            "properties": {
+                "version": {
+                    "type": "integer"
                 }
             }
         },
@@ -29497,6 +31238,20 @@ const docTemplate = `{
                 }
             }
         },
+        "ReorderPlaybooksRequest": {
+            "type": "object",
+            "required": [
+                "ids"
+            ],
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "ReplaceBillingTermsRequest": {
             "type": "object",
             "required": [
@@ -30074,6 +31829,29 @@ const docTemplate = `{
                 },
                 "pob_id": {
                     "type": "string"
+                }
+            }
+        },
+        "RunPlaybooksResponse": {
+            "type": "object",
+            "properties": {
+                "runs_enrolled": {
+                    "type": "integer"
+                },
+                "runs_stopped": {
+                    "type": "integer"
+                },
+                "steps_deferred": {
+                    "type": "integer"
+                },
+                "steps_executed": {
+                    "type": "integer"
+                },
+                "steps_failed": {
+                    "type": "integer"
+                },
+                "steps_skipped": {
+                    "type": "integer"
                 }
             }
         },
@@ -33623,6 +35401,48 @@ const docTemplate = `{
                 }
             }
         },
+        "UpdatePlaybookRequest": {
+            "type": "object",
+            "required": [
+                "trigger",
+                "version"
+            ],
+            "properties": {
+                "audience": {
+                    "$ref": "#/definitions/types.PlaybookAudience"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "min_gap_days": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "skip_weekends": {
+                    "type": "boolean"
+                },
+                "steps": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookStep"
+                    }
+                },
+                "stops": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.PlaybookStopCondition"
+                    }
+                },
+                "trigger": {
+                    "$ref": "#/definitions/types.PlaybookTrigger"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
         "UpdatePriceRequest": {
             "type": "object",
             "properties": {
@@ -37061,8 +38881,8 @@ const docTemplate = `{
         "types.Duration": {
             "type": "object",
             "enum": [
-                3600000000000,
-                604800000000000
+                604800000000000,
+                3600000000000
             ],
             "properties": {
                 "unit": {
@@ -37073,8 +38893,8 @@ const docTemplate = `{
                 }
             },
             "x-enum-varnames": [
-                "EntitlementGrantMinDuration",
-                "CollectionsPaidWindow"
+                "CollectionsPaidWindow",
+                "EntitlementGrantMinDuration"
             ]
         },
         "types.DurationUnit": {
@@ -37195,11 +39015,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "invoice_finalized",
-                "invoice_payment_reminder"
+                "invoice_payment_reminder",
+                "collections_team_notice"
             ],
             "x-enum-varnames": [
                 "EmailTemplateInvoiceFinalized",
-                "EmailTemplateInvoicePaymentReminder"
+                "EmailTemplateInvoicePaymentReminder",
+                "EmailTemplateCollectionsTeamNotice"
             ]
         },
         "types.EmailTrigger": {
@@ -38302,7 +40124,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "skip_line_items": {
-                    "description": "SkipLineItems if true, will not include line items in the response",
+                    "description": "SkipLineItems if true, will not include line items in the response.\nPages that include line items are limited to MaxInvoiceListLimitWithLineItems invoices.",
                     "type": "boolean"
                 },
                 "sort": {
@@ -40121,6 +41943,14 @@ const docTemplate = `{
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.AWSMarketplaceSyncConfig"
+                        }
+                    ]
+                },
+                "credit_note": {
+                    "description": "Credit note sync (Zoho Books only), outbound only",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EntitySyncConfig"
                         }
                     ]
                 },
@@ -42399,6 +44229,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.CollectionTaskState": {
+            "type": "string",
+            "enum": [
+                "open",
+                "done"
+            ],
+            "x-enum-varnames": [
+                "CollectionTaskOpen",
+                "CollectionTaskDone"
+            ]
+        },
         "types.CollectionsColumnKey": {
             "type": "string",
             "enum": [
@@ -42518,6 +44359,253 @@ const docTemplate = `{
                 "PaymentTermsTypeDueOnReceipt",
                 "PaymentTermsTypeEndOfMonth",
                 "PaymentTermsTypeEndOfNextMonth"
+            ]
+        },
+        "types.PlaybookAudience": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "description": "Amount and Currency match invoices in Currency whose remaining balance is above Amount (kind amount_over).",
+                    "type": "number"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "days": {
+                    "description": "Days matches invoices more than Days days past due (kind days_overdue_over).",
+                    "type": "integer"
+                },
+                "key": {
+                    "description": "Key and Value match customers whose metadata[Key] equals Value, ignoring case (kind segment).",
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.PlaybookAudienceKind"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PlaybookAudienceKind": {
+            "type": "string",
+            "enum": [
+                "all",
+                "segment",
+                "amount_over",
+                "days_overdue_over"
+            ],
+            "x-enum-varnames": [
+                "PlaybookAudienceAll",
+                "PlaybookAudienceSegment",
+                "PlaybookAudienceAmountOver",
+                "PlaybookAudienceDaysOverdueOver"
+            ]
+        },
+        "types.PlaybookInternalChannel": {
+            "type": "string",
+            "enum": [
+                "email",
+                "slack"
+            ],
+            "x-enum-varnames": [
+                "PlaybookChannelEmail",
+                "PlaybookChannelSlack"
+            ]
+        },
+        "types.PlaybookProblem": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "step_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PlaybookRunState": {
+            "type": "string",
+            "enum": [
+                "active",
+                "paused",
+                "stopped",
+                "completed"
+            ],
+            "x-enum-varnames": [
+                "PlaybookRunActive",
+                "PlaybookRunPaused",
+                "PlaybookRunStopped",
+                "PlaybookRunCompleted"
+            ]
+        },
+        "types.PlaybookState": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "live",
+                "paused"
+            ],
+            "x-enum-varnames": [
+                "PlaybookStateDraft",
+                "PlaybookStateLive",
+                "PlaybookStatePaused"
+            ]
+        },
+        "types.PlaybookStep": {
+            "type": "object",
+            "properties": {
+                "assignee": {
+                    "description": "Task steps.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PlaybookTaskAssignee"
+                        }
+                    ]
+                },
+                "body": {
+                    "type": "string"
+                },
+                "channel": {
+                    "description": "Internal alert steps.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PlaybookInternalChannel"
+                        }
+                    ]
+                },
+                "day": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/types.PlaybookStepKind"
+                },
+                "note": {
+                    "description": "Note is the text of an internal alert or a task.",
+                    "type": "string"
+                },
+                "send_without_review": {
+                    "type": "boolean"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                },
+                "tone": {
+                    "description": "Email steps.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReminderTone"
+                        }
+                    ]
+                }
+            }
+        },
+        "types.PlaybookStepKind": {
+            "type": "string",
+            "enum": [
+                "email",
+                "internal",
+                "task"
+            ],
+            "x-enum-varnames": [
+                "PlaybookStepEmail",
+                "PlaybookStepInternal",
+                "PlaybookStepTask"
+            ]
+        },
+        "types.PlaybookStepRunState": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "done",
+                "skipped",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "PlaybookStepRunPending",
+                "PlaybookStepRunDone",
+                "PlaybookStepRunSkipped",
+                "PlaybookStepRunFailed"
+            ]
+        },
+        "types.PlaybookStepSkipReason": {
+            "type": "string",
+            "enum": [
+                "run_stopped",
+                "edited_out",
+                "superseded",
+                "reminder_held",
+                "no_recipient",
+                "slack_not_connected",
+                "emails_unavailable"
+            ],
+            "x-enum-varnames": [
+                "PlaybookSkipRunStopped",
+                "PlaybookSkipEditedOut",
+                "PlaybookSkipSuperseded",
+                "PlaybookSkipReminderHeld",
+                "PlaybookSkipNoRecipient",
+                "PlaybookSkipSlackNotConnected",
+                "PlaybookSkipEmailsUnavailable"
+            ]
+        },
+        "types.PlaybookStopCondition": {
+            "type": "string",
+            "enum": [
+                "invoice_paid",
+                "manually_paused",
+                "customer_replied",
+                "dispute_filed"
+            ],
+            "x-enum-varnames": [
+                "PlaybookStopInvoicePaid",
+                "PlaybookStopManuallyPaused",
+                "PlaybookStopCustomerReplied",
+                "PlaybookStopDisputeFiled"
+            ]
+        },
+        "types.PlaybookStopReason": {
+            "type": "string",
+            "enum": [
+                "paid",
+                "voided",
+                "playbook_deleted"
+            ],
+            "x-enum-varnames": [
+                "PlaybookStopReasonPaid",
+                "PlaybookStopReasonVoided",
+                "PlaybookStopReasonPlaybookDeleted"
+            ]
+        },
+        "types.PlaybookTaskAssignee": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "types.PlaybookTrigger": {
+            "type": "string",
+            "enum": [
+                "overdue",
+                "before_due"
+            ],
+            "x-enum-varnames": [
+                "PlaybookTriggerOverdue",
+                "PlaybookTriggerBeforeDue"
             ]
         },
         "types.ReminderStatus": {

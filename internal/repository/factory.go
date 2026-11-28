@@ -217,6 +217,14 @@ func NewCollectionsRepository(p RepositoryParams) collections.CollectionsReposit
 	return entRepo.NewCollectionsRepository(p.EntClient, p.Logger)
 }
 
+func NewPlaybookRepository(p RepositoryParams) collections.PlaybookRepository {
+	return entRepo.NewPlaybookRepository(p.EntClient, p.Logger)
+}
+
+func NewPlaybookRunRepository(p RepositoryParams) collections.PlaybookRunRepository {
+	return entRepo.NewPlaybookRunRepository(p.EntClient, p.Logger)
+}
+
 func NewEntitlementGrantRepository(p RepositoryParams) entitlementgrant.Repository {
 	return entRepo.NewEntitlementGrantRepository(p.EntClient, p.Logger)
 }

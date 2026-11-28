@@ -17,6 +17,10 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/collectionplaybook"
+	"github.com/flexprice/flexprice/ent/collectionplaybookrun"
+	"github.com/flexprice/flexprice/ent/collectionplaybooksteprun"
+	"github.com/flexprice/flexprice/ent/collectiontask"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/contract"
@@ -586,6 +590,190 @@ func init() {
 	checkoutsessionDescPaymentProvider := checkoutsessionFields[4].Descriptor()
 	// checkoutsession.PaymentProviderValidator is a validator for the "payment_provider" field. It is called by the builders before save.
 	checkoutsession.PaymentProviderValidator = checkoutsessionDescPaymentProvider.Validators[0].(func(string) error)
+	collectionplaybookMixin := schema.CollectionPlaybook{}.Mixin()
+	collectionplaybookMixinFields0 := collectionplaybookMixin[0].Fields()
+	_ = collectionplaybookMixinFields0
+	collectionplaybookMixinFields1 := collectionplaybookMixin[1].Fields()
+	_ = collectionplaybookMixinFields1
+	collectionplaybookFields := schema.CollectionPlaybook{}.Fields()
+	_ = collectionplaybookFields
+	// collectionplaybookDescTenantID is the schema descriptor for tenant_id field.
+	collectionplaybookDescTenantID := collectionplaybookMixinFields0[0].Descriptor()
+	// collectionplaybook.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	collectionplaybook.TenantIDValidator = collectionplaybookDescTenantID.Validators[0].(func(string) error)
+	// collectionplaybookDescStatus is the schema descriptor for status field.
+	collectionplaybookDescStatus := collectionplaybookMixinFields0[1].Descriptor()
+	// collectionplaybook.DefaultStatus holds the default value on creation for the status field.
+	collectionplaybook.DefaultStatus = collectionplaybookDescStatus.Default.(string)
+	// collectionplaybookDescCreatedAt is the schema descriptor for created_at field.
+	collectionplaybookDescCreatedAt := collectionplaybookMixinFields0[2].Descriptor()
+	// collectionplaybook.DefaultCreatedAt holds the default value on creation for the created_at field.
+	collectionplaybook.DefaultCreatedAt = collectionplaybookDescCreatedAt.Default.(func() time.Time)
+	// collectionplaybookDescUpdatedAt is the schema descriptor for updated_at field.
+	collectionplaybookDescUpdatedAt := collectionplaybookMixinFields0[3].Descriptor()
+	// collectionplaybook.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	collectionplaybook.DefaultUpdatedAt = collectionplaybookDescUpdatedAt.Default.(func() time.Time)
+	// collectionplaybook.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	collectionplaybook.UpdateDefaultUpdatedAt = collectionplaybookDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// collectionplaybookDescEnvironmentID is the schema descriptor for environment_id field.
+	collectionplaybookDescEnvironmentID := collectionplaybookMixinFields1[0].Descriptor()
+	// collectionplaybook.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	collectionplaybook.DefaultEnvironmentID = collectionplaybookDescEnvironmentID.Default.(string)
+	// collectionplaybookDescName is the schema descriptor for name field.
+	collectionplaybookDescName := collectionplaybookFields[1].Descriptor()
+	// collectionplaybook.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	collectionplaybook.NameValidator = collectionplaybookDescName.Validators[0].(func(string) error)
+	// collectionplaybookDescState is the schema descriptor for state field.
+	collectionplaybookDescState := collectionplaybookFields[3].Descriptor()
+	// collectionplaybook.DefaultState holds the default value on creation for the state field.
+	collectionplaybook.DefaultState = types.PlaybookState(collectionplaybookDescState.Default.(string))
+	// collectionplaybookDescTrigger is the schema descriptor for trigger field.
+	collectionplaybookDescTrigger := collectionplaybookFields[5].Descriptor()
+	// collectionplaybook.DefaultTrigger holds the default value on creation for the trigger field.
+	collectionplaybook.DefaultTrigger = types.PlaybookTrigger(collectionplaybookDescTrigger.Default.(string))
+	// collectionplaybookDescMinGapDays is the schema descriptor for min_gap_days field.
+	collectionplaybookDescMinGapDays := collectionplaybookFields[9].Descriptor()
+	// collectionplaybook.DefaultMinGapDays holds the default value on creation for the min_gap_days field.
+	collectionplaybook.DefaultMinGapDays = collectionplaybookDescMinGapDays.Default.(int)
+	// collectionplaybookDescSkipWeekends is the schema descriptor for skip_weekends field.
+	collectionplaybookDescSkipWeekends := collectionplaybookFields[10].Descriptor()
+	// collectionplaybook.DefaultSkipWeekends holds the default value on creation for the skip_weekends field.
+	collectionplaybook.DefaultSkipWeekends = collectionplaybookDescSkipWeekends.Default.(bool)
+	// collectionplaybookDescVersion is the schema descriptor for version field.
+	collectionplaybookDescVersion := collectionplaybookFields[12].Descriptor()
+	// collectionplaybook.DefaultVersion holds the default value on creation for the version field.
+	collectionplaybook.DefaultVersion = collectionplaybookDescVersion.Default.(int)
+	collectionplaybookrunMixin := schema.CollectionPlaybookRun{}.Mixin()
+	collectionplaybookrunMixinFields0 := collectionplaybookrunMixin[0].Fields()
+	_ = collectionplaybookrunMixinFields0
+	collectionplaybookrunMixinFields1 := collectionplaybookrunMixin[1].Fields()
+	_ = collectionplaybookrunMixinFields1
+	collectionplaybookrunFields := schema.CollectionPlaybookRun{}.Fields()
+	_ = collectionplaybookrunFields
+	// collectionplaybookrunDescTenantID is the schema descriptor for tenant_id field.
+	collectionplaybookrunDescTenantID := collectionplaybookrunMixinFields0[0].Descriptor()
+	// collectionplaybookrun.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	collectionplaybookrun.TenantIDValidator = collectionplaybookrunDescTenantID.Validators[0].(func(string) error)
+	// collectionplaybookrunDescStatus is the schema descriptor for status field.
+	collectionplaybookrunDescStatus := collectionplaybookrunMixinFields0[1].Descriptor()
+	// collectionplaybookrun.DefaultStatus holds the default value on creation for the status field.
+	collectionplaybookrun.DefaultStatus = collectionplaybookrunDescStatus.Default.(string)
+	// collectionplaybookrunDescCreatedAt is the schema descriptor for created_at field.
+	collectionplaybookrunDescCreatedAt := collectionplaybookrunMixinFields0[2].Descriptor()
+	// collectionplaybookrun.DefaultCreatedAt holds the default value on creation for the created_at field.
+	collectionplaybookrun.DefaultCreatedAt = collectionplaybookrunDescCreatedAt.Default.(func() time.Time)
+	// collectionplaybookrunDescUpdatedAt is the schema descriptor for updated_at field.
+	collectionplaybookrunDescUpdatedAt := collectionplaybookrunMixinFields0[3].Descriptor()
+	// collectionplaybookrun.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	collectionplaybookrun.DefaultUpdatedAt = collectionplaybookrunDescUpdatedAt.Default.(func() time.Time)
+	// collectionplaybookrun.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	collectionplaybookrun.UpdateDefaultUpdatedAt = collectionplaybookrunDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// collectionplaybookrunDescEnvironmentID is the schema descriptor for environment_id field.
+	collectionplaybookrunDescEnvironmentID := collectionplaybookrunMixinFields1[0].Descriptor()
+	// collectionplaybookrun.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	collectionplaybookrun.DefaultEnvironmentID = collectionplaybookrunDescEnvironmentID.Default.(string)
+	// collectionplaybookrunDescPlaybookID is the schema descriptor for playbook_id field.
+	collectionplaybookrunDescPlaybookID := collectionplaybookrunFields[1].Descriptor()
+	// collectionplaybookrun.PlaybookIDValidator is a validator for the "playbook_id" field. It is called by the builders before save.
+	collectionplaybookrun.PlaybookIDValidator = collectionplaybookrunDescPlaybookID.Validators[0].(func(string) error)
+	// collectionplaybookrunDescInvoiceID is the schema descriptor for invoice_id field.
+	collectionplaybookrunDescInvoiceID := collectionplaybookrunFields[2].Descriptor()
+	// collectionplaybookrun.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	collectionplaybookrun.InvoiceIDValidator = collectionplaybookrunDescInvoiceID.Validators[0].(func(string) error)
+	// collectionplaybookrunDescCustomerID is the schema descriptor for customer_id field.
+	collectionplaybookrunDescCustomerID := collectionplaybookrunFields[3].Descriptor()
+	// collectionplaybookrun.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	collectionplaybookrun.CustomerIDValidator = collectionplaybookrunDescCustomerID.Validators[0].(func(string) error)
+	// collectionplaybookrunDescState is the schema descriptor for state field.
+	collectionplaybookrunDescState := collectionplaybookrunFields[4].Descriptor()
+	// collectionplaybookrun.DefaultState holds the default value on creation for the state field.
+	collectionplaybookrun.DefaultState = types.PlaybookRunState(collectionplaybookrunDescState.Default.(string))
+	collectionplaybooksteprunMixin := schema.CollectionPlaybookStepRun{}.Mixin()
+	collectionplaybooksteprunMixinFields0 := collectionplaybooksteprunMixin[0].Fields()
+	_ = collectionplaybooksteprunMixinFields0
+	collectionplaybooksteprunMixinFields1 := collectionplaybooksteprunMixin[1].Fields()
+	_ = collectionplaybooksteprunMixinFields1
+	collectionplaybooksteprunFields := schema.CollectionPlaybookStepRun{}.Fields()
+	_ = collectionplaybooksteprunFields
+	// collectionplaybooksteprunDescTenantID is the schema descriptor for tenant_id field.
+	collectionplaybooksteprunDescTenantID := collectionplaybooksteprunMixinFields0[0].Descriptor()
+	// collectionplaybooksteprun.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	collectionplaybooksteprun.TenantIDValidator = collectionplaybooksteprunDescTenantID.Validators[0].(func(string) error)
+	// collectionplaybooksteprunDescStatus is the schema descriptor for status field.
+	collectionplaybooksteprunDescStatus := collectionplaybooksteprunMixinFields0[1].Descriptor()
+	// collectionplaybooksteprun.DefaultStatus holds the default value on creation for the status field.
+	collectionplaybooksteprun.DefaultStatus = collectionplaybooksteprunDescStatus.Default.(string)
+	// collectionplaybooksteprunDescCreatedAt is the schema descriptor for created_at field.
+	collectionplaybooksteprunDescCreatedAt := collectionplaybooksteprunMixinFields0[2].Descriptor()
+	// collectionplaybooksteprun.DefaultCreatedAt holds the default value on creation for the created_at field.
+	collectionplaybooksteprun.DefaultCreatedAt = collectionplaybooksteprunDescCreatedAt.Default.(func() time.Time)
+	// collectionplaybooksteprunDescUpdatedAt is the schema descriptor for updated_at field.
+	collectionplaybooksteprunDescUpdatedAt := collectionplaybooksteprunMixinFields0[3].Descriptor()
+	// collectionplaybooksteprun.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	collectionplaybooksteprun.DefaultUpdatedAt = collectionplaybooksteprunDescUpdatedAt.Default.(func() time.Time)
+	// collectionplaybooksteprun.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	collectionplaybooksteprun.UpdateDefaultUpdatedAt = collectionplaybooksteprunDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// collectionplaybooksteprunDescEnvironmentID is the schema descriptor for environment_id field.
+	collectionplaybooksteprunDescEnvironmentID := collectionplaybooksteprunMixinFields1[0].Descriptor()
+	// collectionplaybooksteprun.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	collectionplaybooksteprun.DefaultEnvironmentID = collectionplaybooksteprunDescEnvironmentID.Default.(string)
+	// collectionplaybooksteprunDescRunID is the schema descriptor for run_id field.
+	collectionplaybooksteprunDescRunID := collectionplaybooksteprunFields[1].Descriptor()
+	// collectionplaybooksteprun.RunIDValidator is a validator for the "run_id" field. It is called by the builders before save.
+	collectionplaybooksteprun.RunIDValidator = collectionplaybooksteprunDescRunID.Validators[0].(func(string) error)
+	// collectionplaybooksteprunDescStepID is the schema descriptor for step_id field.
+	collectionplaybooksteprunDescStepID := collectionplaybooksteprunFields[2].Descriptor()
+	// collectionplaybooksteprun.StepIDValidator is a validator for the "step_id" field. It is called by the builders before save.
+	collectionplaybooksteprun.StepIDValidator = collectionplaybooksteprunDescStepID.Validators[0].(func(string) error)
+	// collectionplaybooksteprunDescState is the schema descriptor for state field.
+	collectionplaybooksteprunDescState := collectionplaybooksteprunFields[5].Descriptor()
+	// collectionplaybooksteprun.DefaultState holds the default value on creation for the state field.
+	collectionplaybooksteprun.DefaultState = types.PlaybookStepRunState(collectionplaybooksteprunDescState.Default.(string))
+	// collectionplaybooksteprunDescAttempts is the schema descriptor for attempts field.
+	collectionplaybooksteprunDescAttempts := collectionplaybooksteprunFields[8].Descriptor()
+	// collectionplaybooksteprun.DefaultAttempts holds the default value on creation for the attempts field.
+	collectionplaybooksteprun.DefaultAttempts = collectionplaybooksteprunDescAttempts.Default.(int)
+	collectiontaskMixin := schema.CollectionTask{}.Mixin()
+	collectiontaskMixinFields0 := collectiontaskMixin[0].Fields()
+	_ = collectiontaskMixinFields0
+	collectiontaskMixinFields1 := collectiontaskMixin[1].Fields()
+	_ = collectiontaskMixinFields1
+	collectiontaskFields := schema.CollectionTask{}.Fields()
+	_ = collectiontaskFields
+	// collectiontaskDescTenantID is the schema descriptor for tenant_id field.
+	collectiontaskDescTenantID := collectiontaskMixinFields0[0].Descriptor()
+	// collectiontask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	collectiontask.TenantIDValidator = collectiontaskDescTenantID.Validators[0].(func(string) error)
+	// collectiontaskDescStatus is the schema descriptor for status field.
+	collectiontaskDescStatus := collectiontaskMixinFields0[1].Descriptor()
+	// collectiontask.DefaultStatus holds the default value on creation for the status field.
+	collectiontask.DefaultStatus = collectiontaskDescStatus.Default.(string)
+	// collectiontaskDescCreatedAt is the schema descriptor for created_at field.
+	collectiontaskDescCreatedAt := collectiontaskMixinFields0[2].Descriptor()
+	// collectiontask.DefaultCreatedAt holds the default value on creation for the created_at field.
+	collectiontask.DefaultCreatedAt = collectiontaskDescCreatedAt.Default.(func() time.Time)
+	// collectiontaskDescUpdatedAt is the schema descriptor for updated_at field.
+	collectiontaskDescUpdatedAt := collectiontaskMixinFields0[3].Descriptor()
+	// collectiontask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	collectiontask.DefaultUpdatedAt = collectiontaskDescUpdatedAt.Default.(func() time.Time)
+	// collectiontask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	collectiontask.UpdateDefaultUpdatedAt = collectiontaskDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// collectiontaskDescEnvironmentID is the schema descriptor for environment_id field.
+	collectiontaskDescEnvironmentID := collectiontaskMixinFields1[0].Descriptor()
+	// collectiontask.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	collectiontask.DefaultEnvironmentID = collectiontaskDescEnvironmentID.Default.(string)
+	// collectiontaskDescInvoiceID is the schema descriptor for invoice_id field.
+	collectiontaskDescInvoiceID := collectiontaskFields[1].Descriptor()
+	// collectiontask.InvoiceIDValidator is a validator for the "invoice_id" field. It is called by the builders before save.
+	collectiontask.InvoiceIDValidator = collectiontaskDescInvoiceID.Validators[0].(func(string) error)
+	// collectiontaskDescCustomerID is the schema descriptor for customer_id field.
+	collectiontaskDescCustomerID := collectiontaskFields[2].Descriptor()
+	// collectiontask.CustomerIDValidator is a validator for the "customer_id" field. It is called by the builders before save.
+	collectiontask.CustomerIDValidator = collectiontaskDescCustomerID.Validators[0].(func(string) error)
+	// collectiontaskDescState is the schema descriptor for state field.
+	collectiontaskDescState := collectiontaskFields[8].Descriptor()
+	// collectiontask.DefaultState holds the default value on creation for the state field.
+	collectiontask.DefaultState = types.CollectionTaskState(collectiontaskDescState.Default.(string))
 	commitmentMixin := schema.Commitment{}.Mixin()
 	commitmentMixinFields0 := commitmentMixin[0].Fields()
 	_ = commitmentMixinFields0

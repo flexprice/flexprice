@@ -27,6 +27,10 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/collectionplaybook"
+	"github.com/flexprice/flexprice/ent/collectionplaybookrun"
+	"github.com/flexprice/flexprice/ent/collectionplaybooksteprun"
+	"github.com/flexprice/flexprice/ent/collectiontask"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/contract"
@@ -122,6 +126,14 @@ type Client struct {
 	BillingTerm *BillingTermClient
 	// CheckoutSession is the client for interacting with the CheckoutSession builders.
 	CheckoutSession *CheckoutSessionClient
+	// CollectionPlaybook is the client for interacting with the CollectionPlaybook builders.
+	CollectionPlaybook *CollectionPlaybookClient
+	// CollectionPlaybookRun is the client for interacting with the CollectionPlaybookRun builders.
+	CollectionPlaybookRun *CollectionPlaybookRunClient
+	// CollectionPlaybookStepRun is the client for interacting with the CollectionPlaybookStepRun builders.
+	CollectionPlaybookStepRun *CollectionPlaybookStepRunClient
+	// CollectionTask is the client for interacting with the CollectionTask builders.
+	CollectionTask *CollectionTaskClient
 	// Commitment is the client for interacting with the Commitment builders.
 	Commitment *CommitmentClient
 	// Connection is the client for interacting with the Connection builders.
@@ -269,6 +281,10 @@ func (c *Client) init() {
 	c.BillingSequence = NewBillingSequenceClient(c.config)
 	c.BillingTerm = NewBillingTermClient(c.config)
 	c.CheckoutSession = NewCheckoutSessionClient(c.config)
+	c.CollectionPlaybook = NewCollectionPlaybookClient(c.config)
+	c.CollectionPlaybookRun = NewCollectionPlaybookRunClient(c.config)
+	c.CollectionPlaybookStepRun = NewCollectionPlaybookStepRunClient(c.config)
+	c.CollectionTask = NewCollectionTaskClient(c.config)
 	c.Commitment = NewCommitmentClient(c.config)
 	c.Connection = NewConnectionClient(c.config)
 	c.Contract = NewContractClient(c.config)
@@ -435,6 +451,10 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		BillingSequence:                  NewBillingSequenceClient(cfg),
 		BillingTerm:                      NewBillingTermClient(cfg),
 		CheckoutSession:                  NewCheckoutSessionClient(cfg),
+		CollectionPlaybook:               NewCollectionPlaybookClient(cfg),
+		CollectionPlaybookRun:            NewCollectionPlaybookRunClient(cfg),
+		CollectionPlaybookStepRun:        NewCollectionPlaybookStepRunClient(cfg),
+		CollectionTask:                   NewCollectionTaskClient(cfg),
 		Commitment:                       NewCommitmentClient(cfg),
 		Connection:                       NewConnectionClient(cfg),
 		Contract:                         NewContractClient(cfg),
@@ -528,6 +548,10 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		BillingSequence:                  NewBillingSequenceClient(cfg),
 		BillingTerm:                      NewBillingTermClient(cfg),
 		CheckoutSession:                  NewCheckoutSessionClient(cfg),
+		CollectionPlaybook:               NewCollectionPlaybookClient(cfg),
+		CollectionPlaybookRun:            NewCollectionPlaybookRunClient(cfg),
+		CollectionPlaybookStepRun:        NewCollectionPlaybookStepRunClient(cfg),
+		CollectionTask:                   NewCollectionTaskClient(cfg),
 		Commitment:                       NewCommitmentClient(cfg),
 		Connection:                       NewConnectionClient(cfg),
 		Contract:                         NewContractClient(cfg),
@@ -621,9 +645,10 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.AccountingPeriod, c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings,
 		c.AnalyticsView, c.Auth, c.BillingEntity, c.BillingInstalment,
-		c.BillingSequence, c.BillingTerm, c.CheckoutSession, c.Commitment,
-		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
-		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.BillingSequence, c.BillingTerm, c.CheckoutSession, c.CollectionPlaybook,
+		c.CollectionPlaybookRun, c.CollectionPlaybookStepRun, c.CollectionTask,
+		c.Commitment, c.Connection, c.Contract, c.ContractAssociation, c.Costsheet,
+		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
 		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
@@ -647,9 +672,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.AccountingPeriod, c.Addon, c.AddonAssociation, c.AlertLogs, c.AlertSettings,
 		c.AnalyticsView, c.Auth, c.BillingEntity, c.BillingInstalment,
-		c.BillingSequence, c.BillingTerm, c.CheckoutSession, c.Commitment,
-		c.Connection, c.Contract, c.ContractAssociation, c.Costsheet, c.Coupon,
-		c.CouponApplication, c.CouponAssociation, c.CreditGrant,
+		c.BillingSequence, c.BillingTerm, c.CheckoutSession, c.CollectionPlaybook,
+		c.CollectionPlaybookRun, c.CollectionPlaybookStepRun, c.CollectionTask,
+		c.Commitment, c.Connection, c.Contract, c.ContractAssociation, c.Costsheet,
+		c.Coupon, c.CouponApplication, c.CouponAssociation, c.CreditGrant,
 		c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem, c.Customer,
 		c.EmailLog, c.Entitlement, c.EntitlementGrant, c.EntityIntegrationMapping,
 		c.Environment, c.EventDeletionRequest, c.FXRate, c.Feature, c.Group,
@@ -694,6 +720,14 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.BillingTerm.mutate(ctx, m)
 	case *CheckoutSessionMutation:
 		return c.CheckoutSession.mutate(ctx, m)
+	case *CollectionPlaybookMutation:
+		return c.CollectionPlaybook.mutate(ctx, m)
+	case *CollectionPlaybookRunMutation:
+		return c.CollectionPlaybookRun.mutate(ctx, m)
+	case *CollectionPlaybookStepRunMutation:
+		return c.CollectionPlaybookStepRun.mutate(ctx, m)
+	case *CollectionTaskMutation:
+		return c.CollectionTask.mutate(ctx, m)
 	case *CommitmentMutation:
 		return c.Commitment.mutate(ctx, m)
 	case *ConnectionMutation:
@@ -2448,6 +2482,602 @@ func (c *CheckoutSessionClient) mutate(ctx context.Context, m *CheckoutSessionMu
 		return (&CheckoutSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CheckoutSession mutation op: %q", m.Op())
+	}
+}
+
+// CollectionPlaybookClient is a client for the CollectionPlaybook schema.
+type CollectionPlaybookClient struct {
+	config
+}
+
+// NewCollectionPlaybookClient returns a client for the CollectionPlaybook from the given config.
+func NewCollectionPlaybookClient(c config) *CollectionPlaybookClient {
+	return &CollectionPlaybookClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `collectionplaybook.Hooks(f(g(h())))`.
+func (c *CollectionPlaybookClient) Use(hooks ...Hook) {
+	c.hooks.CollectionPlaybook = append(c.hooks.CollectionPlaybook, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `collectionplaybook.Intercept(f(g(h())))`.
+func (c *CollectionPlaybookClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CollectionPlaybook = append(c.inters.CollectionPlaybook, interceptors...)
+}
+
+// Create returns a builder for creating a CollectionPlaybook entity.
+func (c *CollectionPlaybookClient) Create() *CollectionPlaybookCreate {
+	mutation := newCollectionPlaybookMutation(c.config, OpCreate)
+	return &CollectionPlaybookCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CollectionPlaybook entities.
+func (c *CollectionPlaybookClient) CreateBulk(builders ...*CollectionPlaybookCreate) *CollectionPlaybookCreateBulk {
+	return &CollectionPlaybookCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CollectionPlaybookClient) MapCreateBulk(slice any, setFunc func(*CollectionPlaybookCreate, int)) *CollectionPlaybookCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CollectionPlaybookCreateBulk{err: fmt.Errorf("calling to CollectionPlaybookClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CollectionPlaybookCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CollectionPlaybookCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CollectionPlaybook.
+func (c *CollectionPlaybookClient) Update() *CollectionPlaybookUpdate {
+	mutation := newCollectionPlaybookMutation(c.config, OpUpdate)
+	return &CollectionPlaybookUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CollectionPlaybookClient) UpdateOne(_m *CollectionPlaybook) *CollectionPlaybookUpdateOne {
+	mutation := newCollectionPlaybookMutation(c.config, OpUpdateOne, withCollectionPlaybook(_m))
+	return &CollectionPlaybookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CollectionPlaybookClient) UpdateOneID(id string) *CollectionPlaybookUpdateOne {
+	mutation := newCollectionPlaybookMutation(c.config, OpUpdateOne, withCollectionPlaybookID(id))
+	return &CollectionPlaybookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CollectionPlaybook.
+func (c *CollectionPlaybookClient) Delete() *CollectionPlaybookDelete {
+	mutation := newCollectionPlaybookMutation(c.config, OpDelete)
+	return &CollectionPlaybookDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CollectionPlaybookClient) DeleteOne(_m *CollectionPlaybook) *CollectionPlaybookDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CollectionPlaybookClient) DeleteOneID(id string) *CollectionPlaybookDeleteOne {
+	builder := c.Delete().Where(collectionplaybook.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CollectionPlaybookDeleteOne{builder}
+}
+
+// Query returns a query builder for CollectionPlaybook.
+func (c *CollectionPlaybookClient) Query() *CollectionPlaybookQuery {
+	return &CollectionPlaybookQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCollectionPlaybook},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CollectionPlaybook entity by its id.
+func (c *CollectionPlaybookClient) Get(ctx context.Context, id string) (*CollectionPlaybook, error) {
+	return c.Query().Where(collectionplaybook.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CollectionPlaybookClient) GetX(ctx context.Context, id string) *CollectionPlaybook {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRuns queries the runs edge of a CollectionPlaybook.
+func (c *CollectionPlaybookClient) QueryRuns(_m *CollectionPlaybook) *CollectionPlaybookRunQuery {
+	query := (&CollectionPlaybookRunClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectionplaybook.Table, collectionplaybook.FieldID, id),
+			sqlgraph.To(collectionplaybookrun.Table, collectionplaybookrun.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, collectionplaybook.RunsTable, collectionplaybook.RunsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CollectionPlaybookClient) Hooks() []Hook {
+	return c.hooks.CollectionPlaybook
+}
+
+// Interceptors returns the client interceptors.
+func (c *CollectionPlaybookClient) Interceptors() []Interceptor {
+	return c.inters.CollectionPlaybook
+}
+
+func (c *CollectionPlaybookClient) mutate(ctx context.Context, m *CollectionPlaybookMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CollectionPlaybookCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CollectionPlaybookUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CollectionPlaybookUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CollectionPlaybookDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CollectionPlaybook mutation op: %q", m.Op())
+	}
+}
+
+// CollectionPlaybookRunClient is a client for the CollectionPlaybookRun schema.
+type CollectionPlaybookRunClient struct {
+	config
+}
+
+// NewCollectionPlaybookRunClient returns a client for the CollectionPlaybookRun from the given config.
+func NewCollectionPlaybookRunClient(c config) *CollectionPlaybookRunClient {
+	return &CollectionPlaybookRunClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `collectionplaybookrun.Hooks(f(g(h())))`.
+func (c *CollectionPlaybookRunClient) Use(hooks ...Hook) {
+	c.hooks.CollectionPlaybookRun = append(c.hooks.CollectionPlaybookRun, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `collectionplaybookrun.Intercept(f(g(h())))`.
+func (c *CollectionPlaybookRunClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CollectionPlaybookRun = append(c.inters.CollectionPlaybookRun, interceptors...)
+}
+
+// Create returns a builder for creating a CollectionPlaybookRun entity.
+func (c *CollectionPlaybookRunClient) Create() *CollectionPlaybookRunCreate {
+	mutation := newCollectionPlaybookRunMutation(c.config, OpCreate)
+	return &CollectionPlaybookRunCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CollectionPlaybookRun entities.
+func (c *CollectionPlaybookRunClient) CreateBulk(builders ...*CollectionPlaybookRunCreate) *CollectionPlaybookRunCreateBulk {
+	return &CollectionPlaybookRunCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CollectionPlaybookRunClient) MapCreateBulk(slice any, setFunc func(*CollectionPlaybookRunCreate, int)) *CollectionPlaybookRunCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CollectionPlaybookRunCreateBulk{err: fmt.Errorf("calling to CollectionPlaybookRunClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CollectionPlaybookRunCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CollectionPlaybookRunCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CollectionPlaybookRun.
+func (c *CollectionPlaybookRunClient) Update() *CollectionPlaybookRunUpdate {
+	mutation := newCollectionPlaybookRunMutation(c.config, OpUpdate)
+	return &CollectionPlaybookRunUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CollectionPlaybookRunClient) UpdateOne(_m *CollectionPlaybookRun) *CollectionPlaybookRunUpdateOne {
+	mutation := newCollectionPlaybookRunMutation(c.config, OpUpdateOne, withCollectionPlaybookRun(_m))
+	return &CollectionPlaybookRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CollectionPlaybookRunClient) UpdateOneID(id string) *CollectionPlaybookRunUpdateOne {
+	mutation := newCollectionPlaybookRunMutation(c.config, OpUpdateOne, withCollectionPlaybookRunID(id))
+	return &CollectionPlaybookRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CollectionPlaybookRun.
+func (c *CollectionPlaybookRunClient) Delete() *CollectionPlaybookRunDelete {
+	mutation := newCollectionPlaybookRunMutation(c.config, OpDelete)
+	return &CollectionPlaybookRunDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CollectionPlaybookRunClient) DeleteOne(_m *CollectionPlaybookRun) *CollectionPlaybookRunDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CollectionPlaybookRunClient) DeleteOneID(id string) *CollectionPlaybookRunDeleteOne {
+	builder := c.Delete().Where(collectionplaybookrun.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CollectionPlaybookRunDeleteOne{builder}
+}
+
+// Query returns a query builder for CollectionPlaybookRun.
+func (c *CollectionPlaybookRunClient) Query() *CollectionPlaybookRunQuery {
+	return &CollectionPlaybookRunQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCollectionPlaybookRun},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CollectionPlaybookRun entity by its id.
+func (c *CollectionPlaybookRunClient) Get(ctx context.Context, id string) (*CollectionPlaybookRun, error) {
+	return c.Query().Where(collectionplaybookrun.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CollectionPlaybookRunClient) GetX(ctx context.Context, id string) *CollectionPlaybookRun {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryPlaybook queries the playbook edge of a CollectionPlaybookRun.
+func (c *CollectionPlaybookRunClient) QueryPlaybook(_m *CollectionPlaybookRun) *CollectionPlaybookQuery {
+	query := (&CollectionPlaybookClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectionplaybookrun.Table, collectionplaybookrun.FieldID, id),
+			sqlgraph.To(collectionplaybook.Table, collectionplaybook.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, collectionplaybookrun.PlaybookTable, collectionplaybookrun.PlaybookColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryStepRuns queries the step_runs edge of a CollectionPlaybookRun.
+func (c *CollectionPlaybookRunClient) QueryStepRuns(_m *CollectionPlaybookRun) *CollectionPlaybookStepRunQuery {
+	query := (&CollectionPlaybookStepRunClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectionplaybookrun.Table, collectionplaybookrun.FieldID, id),
+			sqlgraph.To(collectionplaybooksteprun.Table, collectionplaybooksteprun.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, collectionplaybookrun.StepRunsTable, collectionplaybookrun.StepRunsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CollectionPlaybookRunClient) Hooks() []Hook {
+	return c.hooks.CollectionPlaybookRun
+}
+
+// Interceptors returns the client interceptors.
+func (c *CollectionPlaybookRunClient) Interceptors() []Interceptor {
+	return c.inters.CollectionPlaybookRun
+}
+
+func (c *CollectionPlaybookRunClient) mutate(ctx context.Context, m *CollectionPlaybookRunMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CollectionPlaybookRunCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CollectionPlaybookRunUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CollectionPlaybookRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CollectionPlaybookRunDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CollectionPlaybookRun mutation op: %q", m.Op())
+	}
+}
+
+// CollectionPlaybookStepRunClient is a client for the CollectionPlaybookStepRun schema.
+type CollectionPlaybookStepRunClient struct {
+	config
+}
+
+// NewCollectionPlaybookStepRunClient returns a client for the CollectionPlaybookStepRun from the given config.
+func NewCollectionPlaybookStepRunClient(c config) *CollectionPlaybookStepRunClient {
+	return &CollectionPlaybookStepRunClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `collectionplaybooksteprun.Hooks(f(g(h())))`.
+func (c *CollectionPlaybookStepRunClient) Use(hooks ...Hook) {
+	c.hooks.CollectionPlaybookStepRun = append(c.hooks.CollectionPlaybookStepRun, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `collectionplaybooksteprun.Intercept(f(g(h())))`.
+func (c *CollectionPlaybookStepRunClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CollectionPlaybookStepRun = append(c.inters.CollectionPlaybookStepRun, interceptors...)
+}
+
+// Create returns a builder for creating a CollectionPlaybookStepRun entity.
+func (c *CollectionPlaybookStepRunClient) Create() *CollectionPlaybookStepRunCreate {
+	mutation := newCollectionPlaybookStepRunMutation(c.config, OpCreate)
+	return &CollectionPlaybookStepRunCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CollectionPlaybookStepRun entities.
+func (c *CollectionPlaybookStepRunClient) CreateBulk(builders ...*CollectionPlaybookStepRunCreate) *CollectionPlaybookStepRunCreateBulk {
+	return &CollectionPlaybookStepRunCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CollectionPlaybookStepRunClient) MapCreateBulk(slice any, setFunc func(*CollectionPlaybookStepRunCreate, int)) *CollectionPlaybookStepRunCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CollectionPlaybookStepRunCreateBulk{err: fmt.Errorf("calling to CollectionPlaybookStepRunClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CollectionPlaybookStepRunCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CollectionPlaybookStepRunCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CollectionPlaybookStepRun.
+func (c *CollectionPlaybookStepRunClient) Update() *CollectionPlaybookStepRunUpdate {
+	mutation := newCollectionPlaybookStepRunMutation(c.config, OpUpdate)
+	return &CollectionPlaybookStepRunUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CollectionPlaybookStepRunClient) UpdateOne(_m *CollectionPlaybookStepRun) *CollectionPlaybookStepRunUpdateOne {
+	mutation := newCollectionPlaybookStepRunMutation(c.config, OpUpdateOne, withCollectionPlaybookStepRun(_m))
+	return &CollectionPlaybookStepRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CollectionPlaybookStepRunClient) UpdateOneID(id string) *CollectionPlaybookStepRunUpdateOne {
+	mutation := newCollectionPlaybookStepRunMutation(c.config, OpUpdateOne, withCollectionPlaybookStepRunID(id))
+	return &CollectionPlaybookStepRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CollectionPlaybookStepRun.
+func (c *CollectionPlaybookStepRunClient) Delete() *CollectionPlaybookStepRunDelete {
+	mutation := newCollectionPlaybookStepRunMutation(c.config, OpDelete)
+	return &CollectionPlaybookStepRunDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CollectionPlaybookStepRunClient) DeleteOne(_m *CollectionPlaybookStepRun) *CollectionPlaybookStepRunDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CollectionPlaybookStepRunClient) DeleteOneID(id string) *CollectionPlaybookStepRunDeleteOne {
+	builder := c.Delete().Where(collectionplaybooksteprun.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CollectionPlaybookStepRunDeleteOne{builder}
+}
+
+// Query returns a query builder for CollectionPlaybookStepRun.
+func (c *CollectionPlaybookStepRunClient) Query() *CollectionPlaybookStepRunQuery {
+	return &CollectionPlaybookStepRunQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCollectionPlaybookStepRun},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CollectionPlaybookStepRun entity by its id.
+func (c *CollectionPlaybookStepRunClient) Get(ctx context.Context, id string) (*CollectionPlaybookStepRun, error) {
+	return c.Query().Where(collectionplaybooksteprun.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CollectionPlaybookStepRunClient) GetX(ctx context.Context, id string) *CollectionPlaybookStepRun {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRun queries the run edge of a CollectionPlaybookStepRun.
+func (c *CollectionPlaybookStepRunClient) QueryRun(_m *CollectionPlaybookStepRun) *CollectionPlaybookRunQuery {
+	query := (&CollectionPlaybookRunClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(collectionplaybooksteprun.Table, collectionplaybooksteprun.FieldID, id),
+			sqlgraph.To(collectionplaybookrun.Table, collectionplaybookrun.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, collectionplaybooksteprun.RunTable, collectionplaybooksteprun.RunColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CollectionPlaybookStepRunClient) Hooks() []Hook {
+	return c.hooks.CollectionPlaybookStepRun
+}
+
+// Interceptors returns the client interceptors.
+func (c *CollectionPlaybookStepRunClient) Interceptors() []Interceptor {
+	return c.inters.CollectionPlaybookStepRun
+}
+
+func (c *CollectionPlaybookStepRunClient) mutate(ctx context.Context, m *CollectionPlaybookStepRunMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CollectionPlaybookStepRunCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CollectionPlaybookStepRunUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CollectionPlaybookStepRunUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CollectionPlaybookStepRunDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CollectionPlaybookStepRun mutation op: %q", m.Op())
+	}
+}
+
+// CollectionTaskClient is a client for the CollectionTask schema.
+type CollectionTaskClient struct {
+	config
+}
+
+// NewCollectionTaskClient returns a client for the CollectionTask from the given config.
+func NewCollectionTaskClient(c config) *CollectionTaskClient {
+	return &CollectionTaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `collectiontask.Hooks(f(g(h())))`.
+func (c *CollectionTaskClient) Use(hooks ...Hook) {
+	c.hooks.CollectionTask = append(c.hooks.CollectionTask, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `collectiontask.Intercept(f(g(h())))`.
+func (c *CollectionTaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CollectionTask = append(c.inters.CollectionTask, interceptors...)
+}
+
+// Create returns a builder for creating a CollectionTask entity.
+func (c *CollectionTaskClient) Create() *CollectionTaskCreate {
+	mutation := newCollectionTaskMutation(c.config, OpCreate)
+	return &CollectionTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CollectionTask entities.
+func (c *CollectionTaskClient) CreateBulk(builders ...*CollectionTaskCreate) *CollectionTaskCreateBulk {
+	return &CollectionTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CollectionTaskClient) MapCreateBulk(slice any, setFunc func(*CollectionTaskCreate, int)) *CollectionTaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CollectionTaskCreateBulk{err: fmt.Errorf("calling to CollectionTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CollectionTaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CollectionTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CollectionTask.
+func (c *CollectionTaskClient) Update() *CollectionTaskUpdate {
+	mutation := newCollectionTaskMutation(c.config, OpUpdate)
+	return &CollectionTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CollectionTaskClient) UpdateOne(_m *CollectionTask) *CollectionTaskUpdateOne {
+	mutation := newCollectionTaskMutation(c.config, OpUpdateOne, withCollectionTask(_m))
+	return &CollectionTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CollectionTaskClient) UpdateOneID(id string) *CollectionTaskUpdateOne {
+	mutation := newCollectionTaskMutation(c.config, OpUpdateOne, withCollectionTaskID(id))
+	return &CollectionTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CollectionTask.
+func (c *CollectionTaskClient) Delete() *CollectionTaskDelete {
+	mutation := newCollectionTaskMutation(c.config, OpDelete)
+	return &CollectionTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CollectionTaskClient) DeleteOne(_m *CollectionTask) *CollectionTaskDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CollectionTaskClient) DeleteOneID(id string) *CollectionTaskDeleteOne {
+	builder := c.Delete().Where(collectiontask.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CollectionTaskDeleteOne{builder}
+}
+
+// Query returns a query builder for CollectionTask.
+func (c *CollectionTaskClient) Query() *CollectionTaskQuery {
+	return &CollectionTaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCollectionTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CollectionTask entity by its id.
+func (c *CollectionTaskClient) Get(ctx context.Context, id string) (*CollectionTask, error) {
+	return c.Query().Where(collectiontask.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CollectionTaskClient) GetX(ctx context.Context, id string) *CollectionTask {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CollectionTaskClient) Hooks() []Hook {
+	return c.hooks.CollectionTask
+}
+
+// Interceptors returns the client interceptors.
+func (c *CollectionTaskClient) Interceptors() []Interceptor {
+	return c.inters.CollectionTask
+}
+
+func (c *CollectionTaskClient) mutate(ctx context.Context, m *CollectionTaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CollectionTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CollectionTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CollectionTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CollectionTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CollectionTask mutation op: %q", m.Op())
 	}
 }
 
@@ -11326,7 +11956,8 @@ type (
 	hooks struct {
 		AccountingPeriod, Addon, AddonAssociation, AlertLogs, AlertSettings,
 		AnalyticsView, Auth, BillingEntity, BillingInstalment, BillingSequence,
-		BillingTerm, CheckoutSession, Commitment, Connection, Contract,
+		BillingTerm, CheckoutSession, CollectionPlaybook, CollectionPlaybookRun,
+		CollectionPlaybookStepRun, CollectionTask, Commitment, Connection, Contract,
 		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
 		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,
@@ -11344,7 +11975,8 @@ type (
 	inters struct {
 		AccountingPeriod, Addon, AddonAssociation, AlertLogs, AlertSettings,
 		AnalyticsView, Auth, BillingEntity, BillingInstalment, BillingSequence,
-		BillingTerm, CheckoutSession, Commitment, Connection, Contract,
+		BillingTerm, CheckoutSession, CollectionPlaybook, CollectionPlaybookRun,
+		CollectionPlaybookStepRun, CollectionTask, Commitment, Connection, Contract,
 		ContractAssociation, Costsheet, Coupon, CouponApplication, CouponAssociation,
 		CreditGrant, CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer,
 		EmailLog, Entitlement, EntitlementGrant, EntityIntegrationMapping, Environment,

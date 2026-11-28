@@ -317,7 +317,7 @@ func (s *reminderService) plan(ctx context.Context, row collections.InvoiceWithR
 		return nil, nil
 	}
 
-	if cur == nil || (target == types.ReminderStatusApproved && !cur.Edited()) {
+	if cur == nil || (target == types.ReminderStatusApproved && !cur.Edited() && !cur.FromPlaybook()) {
 		written, err := s.render(row, c, rc, "")
 		if err != nil {
 			return nil, err
@@ -471,14 +471,14 @@ func (s *reminderService) render(r collections.InvoiceWithReminder, c *customer.
 }
 
 func (s *reminderService) shown(r collections.InvoiceWithReminder, c *customer.Customer, rc reminderCtx) (reminderMail, error) {
-	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.ReminderStatus == types.ReminderStatusApproved) {
+	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.FromPlaybook() || rem.ReminderStatus == types.ReminderStatusApproved) {
 		return reminderMail{tone: rem.Tone, subject: rem.Subject, body: rem.Body}, nil
 	}
 	return s.render(r, c, rc, "")
 }
 
 func shownTone(r collections.InvoiceWithReminder, days int) types.ReminderTone {
-	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.ReminderStatus == types.ReminderStatusApproved) {
+	if rem := r.Reminder; rem != nil && (rem.Edited() || rem.FromPlaybook() || rem.ReminderStatus == types.ReminderStatusApproved) {
 		return rem.Tone
 	}
 	return reminderToneForDays(days)
@@ -517,6 +517,8 @@ func (s *reminderService) view(r collections.InvoiceWithReminder, c *customer.Cu
 		view.CreatedAt = &rem.CreatedAt
 		view.UpdatedAt = &rem.UpdatedAt
 
+		view.PlaybookID, view.PlaybookStepID = rem.PlaybookID, rem.PlaybookStepID
+
 		view.Edited = rem.Edited()
 		if view.Edited {
 			original := rem.Original()
@@ -545,6 +547,9 @@ func toneReason(v dto.InvoiceReminderResponse, days int) string {
 
 	case v.Edited && v.Tone != v.OriginalTone:
 		return fmt.Sprintf("Tone set to %s by you (%s).", reminderToneLabel(v.Tone), age)
+
+	case v.PlaybookStepID != "":
+		return fmt.Sprintf("Tone set to %s by the playbook step (%s).", reminderToneLabel(v.Tone), age)
 	}
 
 	return fmt.Sprintf("%s, so a %s tone.", strings.ToUpper(age[:1])+age[1:], reminderToneLabel(reminderToneForDays(days)))
@@ -560,4 +565,65 @@ func (s *reminderService) tenantName(ctx context.Context) string {
 
 func reminderConflict(hint string, args ...any) error {
 	return ierr.NewErrorf("reminder cannot change").WithHintf(hint, args...).Mark(ierr.ErrVersionConflict)
+}
+
+// applyPlaybookStep writes a playbook step's reminder for an overdue invoice into the invoice's reminder, reopening
+// it if a person or an earlier step had approved it. With autoApprove, and an email provider and a recipient to send
+// to, the reminder is approved and its email queued in the same transaction; otherwise it waits in the queue for
+// review. A reminder a person held is left alone and held is true: holding stops outreach for the invoice.
+// A retried step finds its own reminder and returns it unchanged.
+func (s *reminderService) applyPlaybookStep(ctx context.Context, invoiceID string, c *customer.Customer, mail reminderMail, playbookID, stepID string, autoApprove bool) (*collections.InvoiceReminder, bool, error) {
+	now := clock.Now()
+	rows, err := s.InvoiceReminderRepo.GetInvoicesWithReminders(ctx, now, []string{invoiceID})
+	if err != nil {
+		return nil, false, err
+	}
+	if len(rows) == 0 {
+		return nil, false, ierr.NewErrorf("invoice %s is not open and overdue", invoiceID).
+			WithHint("The invoice is no longer open and overdue").
+			Mark(ierr.ErrNotFound)
+	}
+	row := rows[0]
+	cur := row.Reminder
+	switch {
+	case cur != nil && cur.ReminderStatus == types.ReminderStatusHeld:
+		return nil, true, nil
+	case cur != nil && cur.PlaybookID == playbookID && cur.PlaybookStepID == stepID:
+		return cur, false, nil
+	}
+
+	approve := autoApprove && s.Config.Email.IsProviderConfigured() && c != nil &&
+		len(c.EmailRecipients(types.EmailTypeInvoicePaymentReminder)) > 0
+	status, approvedAt := types.ReminderStatusPending, (*time.Time)(nil)
+	if approve {
+		status, approvedAt = types.ReminderStatusApproved, lo.ToPtr(now)
+	}
+	base := cur
+	if base == nil {
+		base = &collections.InvoiceReminder{
+			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_REMINDER),
+			InvoiceID: invoiceID,
+			BaseModel: types.GetDefaultBaseModel(ctx),
+		}
+	}
+	next := collections.NewInvoiceReminderBuilder(base).
+		WithOriginal(mail.tone, mail.subject, mail.body).
+		WithText(mail.tone, mail.subject, mail.body).
+		WithStatus(status, "", approvedAt).
+		WithPlaybook(playbookID, stepID).
+		Build()
+
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.store(txCtx, row, next); err != nil {
+			return err
+		}
+		if approve {
+			return s.queueEmail(txCtx, row, c, next)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return next, false, nil
 }

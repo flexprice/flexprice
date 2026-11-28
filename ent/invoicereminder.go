@@ -48,8 +48,12 @@ type InvoiceReminder struct {
 	// Subject holds the value of the "subject" field.
 	Subject string `json:"subject,omitempty"`
 	// Body holds the value of the "body" field.
-	Body         string `json:"body,omitempty"`
-	selectValues sql.SelectValues
+	Body string `json:"body,omitempty"`
+	// PlaybookID holds the value of the "playbook_id" field.
+	PlaybookID string `json:"playbook_id,omitempty"`
+	// PlaybookStepID holds the value of the "playbook_step_id" field.
+	PlaybookStepID string `json:"playbook_step_id,omitempty"`
+	selectValues   sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -59,7 +63,7 @@ func (*InvoiceReminder) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoicereminder.FieldMetadata:
 			values[i] = new([]byte)
-		case invoicereminder.FieldID, invoicereminder.FieldTenantID, invoicereminder.FieldStatus, invoicereminder.FieldCreatedBy, invoicereminder.FieldUpdatedBy, invoicereminder.FieldEnvironmentID, invoicereminder.FieldInvoiceID, invoicereminder.FieldReminderStatus, invoicereminder.FieldStatusReason, invoicereminder.FieldTone, invoicereminder.FieldSubject, invoicereminder.FieldBody:
+		case invoicereminder.FieldID, invoicereminder.FieldTenantID, invoicereminder.FieldStatus, invoicereminder.FieldCreatedBy, invoicereminder.FieldUpdatedBy, invoicereminder.FieldEnvironmentID, invoicereminder.FieldInvoiceID, invoicereminder.FieldReminderStatus, invoicereminder.FieldStatusReason, invoicereminder.FieldTone, invoicereminder.FieldSubject, invoicereminder.FieldBody, invoicereminder.FieldPlaybookID, invoicereminder.FieldPlaybookStepID:
 			values[i] = new(sql.NullString)
 		case invoicereminder.FieldCreatedAt, invoicereminder.FieldUpdatedAt, invoicereminder.FieldApprovedAt:
 			values[i] = new(sql.NullTime)
@@ -177,6 +181,18 @@ func (_m *InvoiceReminder) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Body = value.String
 			}
+		case invoicereminder.FieldPlaybookID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field playbook_id", values[i])
+			} else if value.Valid {
+				_m.PlaybookID = value.String
+			}
+		case invoicereminder.FieldPlaybookStepID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field playbook_step_id", values[i])
+			} else if value.Valid {
+				_m.PlaybookStepID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -259,6 +275,12 @@ func (_m *InvoiceReminder) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("body=")
 	builder.WriteString(_m.Body)
+	builder.WriteString(", ")
+	builder.WriteString("playbook_id=")
+	builder.WriteString(_m.PlaybookID)
+	builder.WriteString(", ")
+	builder.WriteString("playbook_step_id=")
+	builder.WriteString(_m.PlaybookStepID)
 	builder.WriteByte(')')
 	return builder.String()
 }
