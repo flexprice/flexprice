@@ -2436,6 +2436,12 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionSubscriberRejectedWhenC
 	s.NoError(err)
 	s.NotNil(resp)
 	s.Equal(child.ID, resp.CustomerID)
+
+	req.Inheritance = &dto.SubscriptionInheritanceConfig{ParentSubscriptionID: parentSub.ID}
+	direct, err := s.service.CreateSubscription(ctx, req)
+	s.Require().NoError(err)
+	s.Equal(types.SubscriptionTypeInherited, direct.SubscriptionType)
+	s.Equal(parentSub.ID, lo.FromPtr(direct.ParentSubscriptionID))
 }
 
 func (s *SubscriptionServiceSuite) TestGetMeterUsageBySubscription_ParentAggregatesChildCustomerMeterUsage() {

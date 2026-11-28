@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -20,6 +21,263 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
+
+func (s *SubscriptionServiceSuite) TestTrialEndActivatesInheritedSubscription() {
+	ctx := s.GetContext()
+	now := s.GetNow()
+	trialEnd := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	trialStart := trialEnd.AddDate(0, 0, -14)
+	firstPeriodEnd := trialEnd.AddDate(0, 1, 0)
+	subscriptions := s.service.(*subscriptionService)
+	invoices := NewInvoiceService(subscriptions.ServiceParams)
+
+	cases := []struct {
+		name             string
+		monthlyFee       int64
+		legacyLink       bool
+		sameOwnerOverdue bool
+		voidInvoice      bool
+	}{
+		{name: "paid plan activates after the parent invoice is paid", monthlyFee: 30},
+		{name: "zero-dollar plan activates at trial end"},
+		{name: "payment preserves a previously assigned second parent", monthlyFee: 30, legacyLink: true},
+		{name: "an overdue subscription of the same owner does not block trial activation", monthlyFee: 30, sameOwnerOverdue: true},
+		{name: "voiding the unpaid invoice releases the child for reassignment", monthlyFee: 30, voidInvoice: true},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			fee := decimal.NewFromInt(tc.monthlyFee)
+			plan := s.seedFixedPricePlan("plan_"+s.GetUUID(), fee, 14)
+			if tc.legacyLink {
+				usagePrice := *s.testData.prices.apiCalls
+				usagePrice.ID = "usage_" + plan.ID
+				usagePrice.EntityID = plan.ID
+				s.Require().NoError(s.GetStores().PriceRepo.Create(ctx, &usagePrice))
+			}
+			childCustomer := &customer.Customer{
+				ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+				ExternalID: "child_" + s.GetUUID(),
+				Name:       "Child workspace",
+				BaseModel:  types.GetDefaultBaseModel(ctx),
+			}
+			s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, childCustomer))
+
+			parent, err := subscriptions.CreateSubscription(ctx, dto.CreateSubscriptionRequest{
+				CustomerID:       s.testData.customer.ID,
+				PlanID:           plan.ID,
+				StartDate:        &trialStart,
+				Currency:         "usd",
+				BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+				BillingCycle:     types.BillingCycleAnniversary,
+				CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice),
+				PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultIncomplete),
+				Inheritance: &dto.SubscriptionInheritanceConfig{
+					ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+				},
+			})
+			s.Require().NoError(err)
+			s.Require().Equal(types.SubscriptionStatusTrialing, parent.SubscriptionStatus)
+
+			filter := types.NewNoLimitSubscriptionFilter()
+			filter.ParentSubscriptionIDs = []string{parent.ID}
+			filter.SubscriptionTypes = []types.SubscriptionType{types.SubscriptionTypeInherited}
+			filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusTrialing}
+			children, err := s.GetStores().SubscriptionRepo.List(ctx, filter)
+			s.Require().NoError(err)
+			s.Require().Len(children, 1)
+			child := children[0]
+			s.Require().Equal(childCustomer.ID, child.CustomerID)
+
+			inv, err := subscriptions.ProcessSingleSubscriptionTrialEnd(ctx, parent.Subscription, now)
+			s.Require().NoError(err)
+			if fee.IsPositive() {
+				s.Require().NotNil(inv)
+				s.Equal(types.InvoiceStatusFinalized, inv.InvoiceStatus)
+				s.Equal(types.InvoiceBillingReasonSubscriptionTrialEnd, types.InvoiceBillingReason(inv.BillingReason))
+				s.True(fee.Equal(inv.AmountDue), "amount due: %s", inv.AmountDue)
+				for _, id := range []string{parent.ID, child.ID} {
+					sub, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+					s.Require().NoError(err)
+					s.Equal(types.SubscriptionStatusIncomplete, sub.SubscriptionStatus, id)
+				}
+
+				secondCustomerID := parent.CustomerID
+				if !tc.sameOwnerOverdue {
+					secondCustomer := &customer.Customer{
+						ID:         types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CUSTOMER),
+						ExternalID: "second_" + s.GetUUID(),
+						Name:       "Second parent",
+						BaseModel:  types.GetDefaultBaseModel(ctx),
+					}
+					s.Require().NoError(s.GetStores().CustomerRepo.Create(ctx, secondCustomer))
+					secondCustomerID = secondCustomer.ID
+				}
+				secondRequest := dto.CreateSubscriptionRequest{
+					CustomerID:       secondCustomerID,
+					PlanID:           plan.ID,
+					StartDate:        &trialEnd,
+					Currency:         "usd",
+					BillingPeriod:    types.BILLING_PERIOD_MONTHLY,
+					BillingCycle:     types.BillingCycleAnniversary,
+					CollectionMethod: lo.ToPtr(types.CollectionMethodSendInvoice),
+					PaymentBehavior:  lo.ToPtr(types.PaymentBehaviorDefaultActive),
+					SubscriptionCreationConfig: dto.SubscriptionCreationConfig{
+						TrialPeriodDays: lo.ToPtr(0),
+					},
+				}
+				secondParent, err := subscriptions.CreateSubscription(ctx, secondRequest)
+				s.Require().NoError(err)
+				s.Require().Equal(types.SubscriptionStatusActive, secondParent.SubscriptionStatus)
+				modify := NewSubscriptionModificationService(subscriptions.ServiceParams)
+				inheritRequest := dto.ExecuteSubscriptionModifyRequest{
+					Type: dto.SubscriptionModifyTypeInheritance,
+					InheritanceParams: &dto.SubModifyInheritanceRequest{
+						ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+					},
+				}
+				if tc.voidInvoice {
+					_, err := modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.Require().ErrorContains(err, "already has a parent subscription")
+					voided, err := invoices.VoidInvoice(ctx, inv.ID, dto.InvoiceVoidRequest{})
+					s.Require().NoError(err)
+					s.Equal(types.InvoiceStatusVoided, voided.InvoiceStatus)
+					_, err = modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.Require().NoError(err)
+					reassigned, err := s.GetStores().SubscriptionRepo.Get(ctx, secondParent.ID)
+					s.Require().NoError(err)
+					usageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, reassigned)
+					s.Require().NoError(err)
+					s.Contains(usageCustomers, childCustomer.ExternalID)
+					oldChild, err := s.GetStores().SubscriptionRepo.Get(ctx, child.ID)
+					s.Require().NoError(err)
+					s.Equal(types.SubscriptionStatusIncomplete, oldChild.SubscriptionStatus)
+					usageCustomers, err = subscriptions.ExternalCustomerIDsForSubscription(ctx, parent.Subscription)
+					s.Require().NoError(err)
+					s.NotContains(usageCustomers, childCustomer.ExternalID)
+					return
+				}
+				if tc.legacyLink {
+					// Persist the conflicting link that older versions could create while payment was pending.
+					secondParent.SubscriptionType = types.SubscriptionTypeParent
+					s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, secondParent.Subscription))
+					s.Require().NoError(subscriptions.createInheritedSubscriptions(ctx, secondParent.Subscription, childCustomer.ID))
+				} else if tc.sameOwnerOverdue {
+					_, err := modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.Require().NoError(err)
+					storedSecondParent, err := s.GetStores().SubscriptionRepo.Get(ctx, secondParent.ID)
+					s.Require().NoError(err)
+					storedSecondParent.PaymentBehavior = string(types.PaymentBehaviorDefaultIncomplete)
+					s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, storedSecondParent))
+					renewal := &invoice.Invoice{
+						ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+						CustomerID:      storedSecondParent.CustomerID,
+						SubscriptionID:  &secondParent.ID,
+						InvoiceType:     types.InvoiceTypeSubscription,
+						InvoiceStatus:   types.InvoiceStatusFinalized,
+						PaymentStatus:   types.PaymentStatusPending,
+						BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
+						DueDate:         lo.ToPtr(now.Add(-time.Hour)),
+						Currency:        storedSecondParent.Currency,
+						AmountDue:       fee,
+						AmountRemaining: fee,
+						BaseModel:       types.GetDefaultBaseModel(ctx),
+					}
+					s.Require().NoError(s.GetStores().InvoiceRepo.Create(ctx, renewal))
+					s.Require().NoError(subscriptions.MarkSubscriptionIncomplete(ctx, renewal.ID))
+					overdue, err := s.GetStores().SubscriptionRepo.Get(ctx, secondParent.ID)
+					s.Require().NoError(err)
+					s.Require().Equal(types.SubscriptionStatusIncomplete, overdue.SubscriptionStatus)
+				} else {
+					secondRequest.Inheritance = &dto.SubscriptionInheritanceConfig{
+						ExternalCustomerIDsToInheritSubscription: []string{childCustomer.ExternalID},
+					}
+					_, err := subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "already has a parent subscription")
+					_, err = modify.Execute(ctx, secondParent.ID, inheritRequest)
+					s.ErrorContains(err, "already has a parent subscription")
+					secondRequest.CustomerID = childCustomer.ID
+					secondRequest.Inheritance = nil
+					_, err = subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "customer already has an inherited subscription")
+					secondRequest.Inheritance = &dto.SubscriptionInheritanceConfig{ParentSubscriptionID: secondParent.ID}
+					_, err = subscriptions.CreateSubscription(ctx, secondRequest)
+					s.ErrorContains(err, "already has a parent subscription")
+				}
+
+				s.Require().NoError(invoices.UpdatePaymentStatus(ctx, inv.ID, types.PaymentStatusSucceeded, nil))
+				paid, err := s.GetStores().InvoiceRepo.Get(ctx, inv.ID)
+				s.Require().NoError(err)
+				s.Equal(types.PaymentStatusSucceeded, paid.PaymentStatus)
+				s.True(fee.Equal(paid.AmountPaid), "amount paid: %s", paid.AmountPaid)
+				s.True(paid.AmountRemaining.IsZero(), "amount remaining: %s", paid.AmountRemaining)
+
+				firstUsageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, parent.Subscription)
+				s.Require().NoError(err)
+				secondUsageCustomers, err := subscriptions.ExternalCustomerIDsForSubscription(ctx, secondParent.Subscription)
+				s.Require().NoError(err)
+				if tc.legacyLink {
+					s.NotContains(firstUsageCustomers, childCustomer.ExternalID)
+					s.Contains(secondUsageCustomers, childCustomer.ExternalID)
+
+					meter := s.testData.meters.apiCalls
+					eventID := s.GetUUID()
+					usageTime := trialEnd.Add(time.Minute)
+					s.Require().NoError(s.GetStores().MeterUsageRepo.BulkInsertMeterUsage(ctx, []*events.MeterUsage{{
+						Event: events.Event{
+							ID:                 eventID,
+							TenantID:           parent.TenantID,
+							EnvironmentID:      parent.EnvironmentID,
+							EventName:          meter.EventName,
+							CustomerID:         childCustomer.ID,
+							ExternalCustomerID: childCustomer.ExternalID,
+							Timestamp:          usageTime,
+							IngestedAt:         usageTime,
+						},
+						MeterID:    meter.ID,
+						QtyTotal:   decimal.NewFromInt(1),
+						UniqueHash: eventID,
+					}}))
+					for id, want := range map[string]float64{parent.ID: 0, secondParent.ID: 1} {
+						usage, err := subscriptions.GetMeterUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+							SubscriptionID: id,
+							Source:         string(types.UsageSourceAnalytics),
+							StartTime:      trialEnd,
+							EndTime:        firstPeriodEnd,
+						})
+						s.Require().NoError(err)
+						var quantity float64
+						for _, charge := range usage.Charges {
+							if charge.MeterID == meter.ID {
+								quantity += charge.Quantity
+							}
+						}
+						s.Equal(want, quantity, "billable usage for subscription %s", id)
+					}
+				} else {
+					s.Contains(firstUsageCustomers, childCustomer.ExternalID)
+					if !tc.sameOwnerOverdue {
+						s.NotContains(secondUsageCustomers, childCustomer.ExternalID)
+					}
+				}
+			} else {
+				s.Nil(inv, "a zero-dollar trial conversion has no invoice to collect")
+			}
+
+			for _, id := range []string{parent.ID, child.ID} {
+				sub, err := s.GetStores().SubscriptionRepo.Get(ctx, id)
+				s.Require().NoError(err)
+				want := types.SubscriptionStatusActive
+				if tc.legacyLink && id == child.ID {
+					want = types.SubscriptionStatusIncomplete
+				}
+				s.Equal(want, sub.SubscriptionStatus, id)
+				s.Equal(trialEnd, sub.CurrentPeriodStart, id)
+				s.Equal(firstPeriodEnd, sub.CurrentPeriodEnd, id)
+			}
+		})
+	}
+}
 
 func TestSetCreateSubscriptionTrialWindow_UniformRecurringFixedFromPlan(t *testing.T) {
 	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
