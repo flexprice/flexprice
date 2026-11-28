@@ -50,6 +50,17 @@ type ZohoClient interface {
 	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
 	// GetZohoBooksSyncConfig loads the published connection and returns the
 	GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error)
+	// CreateCreditNote creates a credit note against the given Zoho invoice.
+	CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error)
+	// RefundCreditNote records a refund paid out of the credit note.
+	RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error)
+	// ApplyCreditNoteToInvoices applies the credit note's credit to the given invoices.
+	ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error
+	GetCreditNote(ctx context.Context, zohoCreditNoteID string) (*CreditNoteResponse, error)
+	VoidCreditNote(ctx context.Context, zohoCreditNoteID string) error
+	ListInvoiceCreditsApplied(ctx context.Context, zohoInvoiceID string) ([]InvoiceCreditApplied, error)
+	// DeleteInvoiceAppliedCredit removes one applied credit from the invoice, by its creditnotes_invoice_id.
+	DeleteInvoiceAppliedCredit(ctx context.Context, zohoInvoiceID, creditNotesInvoiceID string) error
 }
 
 type Client struct {
@@ -554,4 +565,63 @@ func (c *Client) GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig,
 			Mark(ierr.ErrNotFound)
 	}
 	return conn.GetSyncConfig(), nil
+}
+
+func (c *Client) CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error) {
+	var resp struct {
+		CreditNote CreditNoteResponse `json:"creditnote"`
+	}
+	query := map[string]string{"invoice_id": zohoInvoiceID}
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/creditnotes", query, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNote, nil
+}
+
+func (c *Client) RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error) {
+	var resp struct {
+		CreditNoteRefund CreditNoteRefundResponse `json:"creditnote_refund"`
+	}
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/refunds", url.PathEscape(zohoCreditNoteID))
+	if err := c.doBooksRequest(ctx, http.MethodPost, path, nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNoteRefund, nil
+}
+
+func (c *Client) ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error {
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/invoices", url.PathEscape(zohoCreditNoteID))
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, req, nil)
+}
+
+func (c *Client) GetCreditNote(ctx context.Context, zohoCreditNoteID string) (*CreditNoteResponse, error) {
+	var resp struct {
+		CreditNote CreditNoteResponse `json:"creditnote"`
+	}
+	path := fmt.Sprintf("/books/v3/creditnotes/%s", url.PathEscape(zohoCreditNoteID))
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNote, nil
+}
+
+func (c *Client) VoidCreditNote(ctx context.Context, zohoCreditNoteID string) error {
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/status/void", url.PathEscape(zohoCreditNoteID))
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, nil, nil)
+}
+
+func (c *Client) ListInvoiceCreditsApplied(ctx context.Context, zohoInvoiceID string) ([]InvoiceCreditApplied, error) {
+	var resp struct {
+		Credits []InvoiceCreditApplied `json:"credits"`
+	}
+	path := fmt.Sprintf("/books/v3/invoices/%s/creditsapplied", url.PathEscape(zohoInvoiceID))
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Credits, nil
+}
+
+func (c *Client) DeleteInvoiceAppliedCredit(ctx context.Context, zohoInvoiceID, creditNotesInvoiceID string) error {
+	path := fmt.Sprintf("/books/v3/invoices/%s/creditsapplied/%s", url.PathEscape(zohoInvoiceID), url.PathEscape(creditNotesInvoiceID))
+	return c.doBooksRequest(ctx, http.MethodDelete, path, nil, nil, nil)
 }

@@ -72,6 +72,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		return nil
 	}
 
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: chargebeeTransactionID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"chargebee_transaction_id", chargebeeTransactionID)
+	}
+
 	refundID, err := s.ensureRefunded(ctx, chargebeeTransactionID,
 		amountToMinorUnits(existingPayment.Amount, existingPayment.Currency), flexpricePaymentID)
 	if err != nil {
@@ -82,6 +92,41 @@ func (s *PaymentService) RefundLateCapturedPayment(
 				"chargebee_transaction_id": chargebeeTransactionID,
 			}).
 			Mark(ierr.ErrInternal)
+	}
+
+	// The lifecycle only refunds a settled payment, so an unsettled one is settled first.
+	switch existingPayment.PaymentStatus {
+	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
+			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+			SucceededAt:      lo.ToPtr(clock.Now()),
+			GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+		}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Chargebee but failed to record the capture on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":          flexpricePaymentID,
+					"chargebee_refund_id": refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+	case types.PaymentStatusFailed, types.PaymentStatusVoided:
+		// A FAILED or VOIDED payment can't move again, so only the refund is recorded.
+		if refundID == "" {
+			return nil
+		}
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{Metadata: &metadata}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Chargebee but failed to record it on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":               flexpricePaymentID,
+					"chargebee_transaction_id": chargebeeTransactionID,
+					"chargebee_refund_id":      refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		return nil
 	}
 
 	updateReq := dto.UpdatePaymentRequest{

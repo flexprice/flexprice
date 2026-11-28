@@ -488,6 +488,8 @@ var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
 	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
 
 	types.TemporalRazorpayInvoiceSyncWorkflow: "razorpay_invoice_sync",
+
+	types.TemporalZohoBooksCreditNoteSyncWorkflow: "zoho_credit_note_sync",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
@@ -577,6 +579,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 	case types.TemporalZohoBooksInvoiceMarkPaidWorkflow:
 		if input, ok := params.(models.ZohoBooksInvoiceMarkPaidWorkflowInput); ok {
 			return input.InvoiceID()
+		}
+	case types.TemporalZohoBooksCreditNoteSyncWorkflow:
+		if input, ok := params.(models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+			return input.CreditNoteID
 		}
 
 	// Vendor customer sync workflows — deterministic IDs prevent duplicate concurrent syncs.
@@ -733,6 +739,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildZohoBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalZohoBooksInvoiceMarkPaidWorkflow:
 		return s.buildZohoBooksInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
+	case types.TemporalZohoBooksCreditNoteSyncWorkflow:
+		return s.buildZohoBooksCreditNoteSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalTabsInvoiceSyncWorkflow:
 		return s.buildTabsInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -1211,6 +1219,24 @@ func (s *temporalService) buildZohoBooksInvoiceMarkPaidInput(_ context.Context, 
 
 	return nil, errors.NewError("invalid input for Zoho Books mark-paid workflow").
 		WithHint("Provide ZohoBooksInvoiceMarkPaidWorkflowInput with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildZohoBooksCreditNoteSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Zoho Books credit note sync workflow").
+		WithHint("Provide ZohoBooksCreditNoteSyncWorkflowInput with credit_note_id").
 		Mark(errors.ErrValidation)
 }
 

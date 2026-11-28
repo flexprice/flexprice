@@ -141,6 +141,12 @@ type fakePaymentService struct {
 	payment    *dto.PaymentResponse
 	getErr     error
 	updateReqs []dto.UpdatePaymentRequest
+	attempts   []dto.RecordAttemptRequest
+}
+
+func (s *fakePaymentService) RecordAttempt(_ context.Context, _ string, req dto.RecordAttemptRequest) error {
+	s.attempts = append(s.attempts, req)
+	return nil
 }
 
 func (s *fakePaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
@@ -209,7 +215,7 @@ func (s *ChargebeeWebhookCheckoutSuite) SetupTest() {
 		ID:            testFlexpricePaymentID,
 		Amount:        decimal.NewFromInt(100),
 		Currency:      "USD",
-		PaymentStatus: types.PaymentStatusSucceeded,
+		PaymentStatus: types.PaymentStatusPending,
 	}}
 	s.services = &ServiceDependencies{CheckoutSessionService: s.checkoutSvc, PaymentService: s.paymentSvc}
 }
@@ -302,9 +308,28 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionIsRef
 	s.Empty(s.checkoutSvc.completeCalls)
 	s.Equal([]int64{10000}, s.client.refundCalls, "the full payment amount, in minor units")
 
+	s.Require().Len(s.paymentSvc.attempts, 1)
+	s.Equal(types.PaymentStatusSucceeded, s.paymentSvc.attempts[0].PaymentStatus)
+	s.Equal(testChargebeeTxnID, s.paymentSvc.attempts[0].GatewayAttemptID)
+
+	s.Require().Len(s.paymentSvc.updateReqs, 2, "a pending payment is settled before it is refunded")
+	s.Equal(string(types.PaymentStatusSucceeded), *s.paymentSvc.updateReqs[0].PaymentStatus)
+	s.Equal(string(types.PaymentStatusRefunded), *s.paymentSvc.updateReqs[1].PaymentStatus)
+	s.Require().NotNil(s.paymentSvc.updateReqs[1].RefundedAt)
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[1].Metadata)["chargebee_refund_id"])
+}
+
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_ExpiredSessionVoidedPaymentIsRefundedAndStaysVoided() {
+	s.seedSession(types.CheckoutStatusExpired)
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusVoided
+
+	handled, err := s.handler.handleCheckoutSessionForPayment(s.ctx, testFlexpricePaymentID, testFlexpriceInvoiceID, testChargebeeInvoiceID, testChargebeeTxnID, s.services)
+
+	s.Require().NoError(err)
+	s.True(handled)
+	s.Equal([]int64{10000}, s.client.refundCalls)
 	s.Require().Len(s.paymentSvc.updateReqs, 1)
-	s.Equal(string(types.PaymentStatusRefunded), *s.paymentSvc.updateReqs[0].PaymentStatus)
-	s.Require().NotNil(s.paymentSvc.updateReqs[0].RefundedAt)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a VOIDED payment keeps its status")
 	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
 }
 
@@ -332,8 +357,8 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FullyRefundedTransa
 	s.Require().NoError(err)
 	s.True(handled)
 	s.Empty(s.client.refundCalls)
-	s.Require().Len(s.paymentSvc.updateReqs, 1, "the FlexPrice payment still has to be marked refunded")
-	s.Nil(s.paymentSvc.updateReqs[0].Metadata, "no refund id to record when nothing was submitted")
+	s.Require().Len(s.paymentSvc.updateReqs, 2, "the FlexPrice payment still has to be marked refunded")
+	s.Nil(s.paymentSvc.updateReqs[1].Metadata, "no refund id to record when nothing was submitted")
 }
 
 // A lookup failure must not silently fall through to the double-counting path.
@@ -439,6 +464,23 @@ func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_LinkPaymentIsSettle
 	s.Equal(string(types.PaymentStatusSucceeded), *s.paymentSvc.updateReqs[0].PaymentStatus)
 	s.Equal(testChargebeeTxnID, *s.paymentSvc.updateReqs[0].GatewayPaymentID)
 	s.Equal([]string{testFlexpriceInvoiceID}, invoiceSvc.reconciled)
+}
+
+func (s *ChargebeeWebhookCheckoutSuite) TestPaymentSucceeded_FailedLinkPaymentIsRefundedAndStaysFailed() {
+	invoiceSvc := &fakeInvoiceService{}
+	s.services.InvoiceService = invoiceSvc
+	s.paymentSvc.payment.PaymentStatus = types.PaymentStatusFailed
+
+	event := s.event(EventPaymentSucceeded)
+	event.Content = s.contentForInvoice("cb_inv_unmapped")
+
+	s.Require().NoError(s.handler.handlePaymentSucceeded(s.ctx, event, s.services))
+
+	s.Equal([]int64{10000}, s.client.refundCalls)
+	s.Require().Len(s.paymentSvc.updateReqs, 1)
+	s.Nil(s.paymentSvc.updateReqs[0].PaymentStatus, "a FAILED payment keeps its status")
+	s.Equal("txn_refund_001", (*s.paymentSvc.updateReqs[0].Metadata)["chargebee_refund_id"])
+	s.Empty(invoiceSvc.reconciled)
 }
 
 // A tenant's own general notes land in the same array, so anything that is not one

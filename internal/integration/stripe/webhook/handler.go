@@ -217,6 +217,10 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			return nil
 		}
 
+		if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+			return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, paymentIntent.ID, services.PaymentService)
+		}
+
 		// Skip card payments - they're handled synchronously by charge API
 		if payment.PaymentMethodType == types.PaymentMethodTypeCard || payment.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 			h.logger.Info(ctx, "payment is a card payment or payment link, skipping the webhook processing",
@@ -1039,6 +1043,14 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
 		return nil
+	}
+
+	// A delayed method completes the session before the capture; payment_intent.succeeded refunds it then.
+	if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+		if checkoutSession.PaymentStatus != stripeapi.CheckoutSessionPaymentStatusPaid {
+			return nil
+		}
+		return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, piID, services.PaymentService)
 	}
 
 	// Get payment intent if it exists

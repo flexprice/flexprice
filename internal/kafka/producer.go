@@ -1,6 +1,8 @@
 package kafka
 
 import (
+	"time"
+
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/flexprice/flexprice/internal/config"
@@ -53,6 +55,10 @@ func newProducerForCluster(kafkaCfg *config.KafkaConfig, enableDebugLogs bool) (
 	// add producer configs
 	saramaConfig.Producer.Return.Successes = true
 	saramaConfig.Producer.Return.Errors = true
+	saramaConfig.Producer.Retry.Max = 10
+	saramaConfig.Producer.Retry.Backoff = 500 * time.Millisecond
+	saramaConfig.Metadata.Retry.Max = 5
+	saramaConfig.Metadata.Retry.Backoff = 500 * time.Millisecond
 
 	publisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{

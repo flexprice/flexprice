@@ -201,7 +201,7 @@ func (h *Handler) handlePaymentCaptured(ctx context.Context, event *RazorpayWebh
 	}
 
 	// We already gave up on this payment, so the late capture is refunded rather than applied.
-	if paymentRecord.PaymentStatus == types.PaymentStatusFailed {
+	if paymentRecord.PaymentStatus == types.PaymentStatusFailed || paymentRecord.PaymentStatus == types.PaymentStatusVoided {
 		if err := h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, payment.ID, services.PaymentService); err != nil {
 			h.logger.Error(ctx, "failed to refund payment captured after it failed",
 				"error", err,

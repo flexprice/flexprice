@@ -55,6 +55,7 @@ func NewEventsHandler(eventService service.EventService, rawEventsReprocessingSe
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 503 {object} ierr.ErrorResponse "May be accepted; assign event_id before the first request and reuse it on retry"
 // @Router /events [post]
 func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -95,8 +96,9 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param event body dto.BulkIngestEventRequest true "Event data"
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request or oversize event; others may be accepted"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Failure 503 {object} ierr.ErrorResponse "May be partly accepted; assign event_id to every event before the first request and reuse those IDs on retry"
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()

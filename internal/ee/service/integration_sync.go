@@ -59,6 +59,13 @@ func (s *integrationSyncService) SyncEntity(ctx context.Context, req dto.Integra
 		return s.syncInvoice(ctx, req.EntityID, req.Resync, opts...)
 	case types.IntegrationEntityTypeCustomer:
 		return s.syncCustomer(ctx, req.EntityID, opts...)
+	case types.IntegrationEntityTypeCreditNote:
+		if req.Method == dto.IntegrationSyncMethodPull {
+			return ierr.NewError("credit notes cannot be pulled").
+				WithHint("Credit notes sync one way, from Flexprice to the provider").
+				Mark(ierr.ErrValidation)
+		}
+		return s.syncCreditNote(ctx, req.EntityID, opts...)
 	default:
 		return ierr.NewError("unsupported entity_type").Mark(ierr.ErrValidation)
 	}
@@ -139,6 +146,29 @@ func (s *integrationSyncService) syncInvoice(ctx context.Context, invoiceID stri
 	if ierr.IsAlreadyExists(err) {
 		return ierr.WithError(err).
 			WithHint("A sync of this invoice is already running. Try again once it finishes.").
+			Mark(ierr.ErrAlreadyExists)
+	}
+	return err
+}
+
+func (s *integrationSyncService) syncCreditNote(ctx context.Context, creditNoteID string, opts ...integrationevents.DispatchOption) error {
+	cn, err := s.CreditNoteRepo.Get(ctx, creditNoteID)
+	if err != nil {
+		return err
+	}
+
+	event := &types.WebhookEvent{
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+	}
+	billingEntityService := NewBillingEntityService(s.ServiceParams)
+	err = integrationevents.PushCreditNoteVendorSync(
+		ctx, s.ConnectionRepo, s.EntityIntegrationMappingRepo, s.RefundRepo, billingEntityService, s.Logger, cn, event, opts...,
+	)
+	if ierr.IsAlreadyExists(err) {
+		return ierr.WithError(err).
+			WithHint("A sync of this credit note is already running. Try again once it finishes.").
 			Mark(ierr.ErrAlreadyExists)
 	}
 	return err
