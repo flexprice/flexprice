@@ -24,6 +24,10 @@ import (
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/billingterm"
 	"github.com/flexprice/flexprice/ent/checkoutsession"
+	"github.com/flexprice/flexprice/ent/collectionplaybook"
+	"github.com/flexprice/flexprice/ent/collectionplaybookrun"
+	"github.com/flexprice/flexprice/ent/collectionplaybooksteprun"
+	"github.com/flexprice/flexprice/ent/collectiontask"
 	"github.com/flexprice/flexprice/ent/commitment"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/contract"
@@ -158,6 +162,10 @@ func checkColumn(t, c string) error {
 			billingsequence.Table:                  billingsequence.ValidColumn,
 			billingterm.Table:                      billingterm.ValidColumn,
 			checkoutsession.Table:                  checkoutsession.ValidColumn,
+			collectionplaybook.Table:               collectionplaybook.ValidColumn,
+			collectionplaybookrun.Table:            collectionplaybookrun.ValidColumn,
+			collectionplaybooksteprun.Table:        collectionplaybooksteprun.ValidColumn,
+			collectiontask.Table:                   collectiontask.ValidColumn,
 			commitment.Table:                       commitment.ValidColumn,
 			connection.Table:                       connection.ValidColumn,
 			contract.Table:                         contract.ValidColumn,

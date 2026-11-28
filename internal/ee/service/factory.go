@@ -170,6 +170,8 @@ type ServiceParams struct {
 	BillingEntityRepo            billingentity.Repository
 	InvoiceReminderRepo          collections.InvoiceReminderRepository
 	CollectionsRepo              collections.CollectionsRepository
+	PlaybookRepo                 collections.PlaybookRepository
+	PlaybookRunRepo              collections.PlaybookRunRepository
 	EventDeletionRequestRepo     events.DeletionRequestRepository
 	EventDeletionLogRepo         events.DeletedEventsLogRepository
 
@@ -304,6 +306,8 @@ func NewServiceParams(
 	billingEntityRepo billingentity.Repository,
 	invoiceReminderRepo collections.InvoiceReminderRepository,
 	collectionsRepo collections.CollectionsRepository,
+	playbookRepo collections.PlaybookRepository,
+	playbookRunRepo collections.PlaybookRunRepository,
 	eventDeletionRequestRepo events.DeletionRequestRepository,
 	eventDeletionLogRepo events.DeletedEventsLogRepository,
 ) ServiceParams {
@@ -401,6 +405,8 @@ func NewServiceParams(
 		BillingEntityRepo:            billingEntityRepo,
 		InvoiceReminderRepo:          invoiceReminderRepo,
 		CollectionsRepo:              collectionsRepo,
+		PlaybookRepo:                 playbookRepo,
+		PlaybookRunRepo:              playbookRunRepo,
 		EventDeletionRequestRepo:     eventDeletionRequestRepo,
 		EventDeletionLogRepo:         eventDeletionLogRepo,
 	}

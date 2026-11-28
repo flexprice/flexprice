@@ -157,6 +157,11 @@ type SelfBillingHourlyWorkflowInput struct{}
 // BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.
 type BillingInstalmentsDueWorkflowInput struct{}
 
+// ===================== Collection Playbooks =====================
+
+// CollectionPlaybooksWorkflowInput is the input for CollectionPlaybooksWorkflow.
+type CollectionPlaybooksWorkflowInput struct{}
+
 // ===================== Email Dispatch =====================
 
 // EmailDispatchWorkflowInput is the input for EmailDispatchWorkflow.

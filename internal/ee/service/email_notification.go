@@ -54,6 +54,9 @@ type EmailNotificationService interface {
 	// QueueReminderEmail queues the email of an approved payment reminder with its text frozen at approval.
 	// It fails when emails are off for the deployment or environment, or the tenant has no reply-to email.
 	QueueReminderEmail(ctx context.Context, reminder ReminderEmail) (*emaillog.EmailLog, error)
+	// QueueTeamNotice queues an internal alert or task a collection playbook step emails to the merchant's team. A
+	// retried step returns the email it already queued.
+	QueueTeamNotice(ctx context.Context, notice TeamNotice) (*emaillog.EmailLog, error)
 
 	// CancelReminderEmail withdraws the email of a reminder approval being undone. An email that already went
 	// out cannot be withdrawn and returns a version conflict.
@@ -555,6 +558,8 @@ func (s *emailNotificationService) compose(ctx context.Context, e *emaillog.Emai
 		return s.composeInvoiceEmail(ctx, e, allowMissingAttachments)
 	case types.EmailTemplateInvoicePaymentReminder:
 		return s.composeReminderEmail(ctx, e)
+	case types.EmailTemplateCollectionsTeamNotice:
+		return s.composeTeamNotice(ctx, e)
 	default:
 		return nil, ierr.NewErrorf("no composer for email template %s", e.TemplateKey).
 			WithHint("This email type cannot be sent").

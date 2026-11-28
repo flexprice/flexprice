@@ -44,6 +44,10 @@ const (
 	FieldSubject = "subject"
 	// FieldBody holds the string denoting the body field in the database.
 	FieldBody = "body"
+	// FieldPlaybookID holds the string denoting the playbook_id field in the database.
+	FieldPlaybookID = "playbook_id"
+	// FieldPlaybookStepID holds the string denoting the playbook_step_id field in the database.
+	FieldPlaybookStepID = "playbook_step_id"
 	// Table holds the table name of the invoicereminder in the database.
 	Table = "invoice_reminders"
 )
@@ -66,6 +70,8 @@ var Columns = []string{
 	FieldTone,
 	FieldSubject,
 	FieldBody,
+	FieldPlaybookID,
+	FieldPlaybookStepID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -173,4 +179,14 @@ func BySubject(opts ...sql.OrderTermOption) OrderOption {
 // ByBody orders the results by the body field.
 func ByBody(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBody, opts...).ToFunc()
+}
+
+// ByPlaybookID orders the results by the playbook_id field.
+func ByPlaybookID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlaybookID, opts...).ToFunc()
+}
+
+// ByPlaybookStepID orders the results by the playbook_step_id field.
+func ByPlaybookStepID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlaybookStepID, opts...).ToFunc()
 }

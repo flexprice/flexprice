@@ -490,6 +490,203 @@ var (
 			},
 		},
 	}
+	// CollectionPlaybooksColumns holds the columns for the "collection_playbooks" table.
+	CollectionPlaybooksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "state", Type: field.TypeString, Default: "draft", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "priority", Type: field.TypeInt},
+		{Name: "trigger", Type: field.TypeString, Default: "overdue", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "audience", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "steps", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "stops", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "min_gap_days", Type: field.TypeInt, Default: 3},
+		{Name: "skip_weekends", Type: field.TypeBool, Default: true},
+		{Name: "template_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "activated_at", Type: field.TypeTime, Nullable: true},
+	}
+	// CollectionPlaybooksTable holds the schema information for the "collection_playbooks" table.
+	CollectionPlaybooksTable = &schema.Table{
+		Name:       "collection_playbooks",
+		Columns:    CollectionPlaybooksColumns,
+		PrimaryKey: []*schema.Column{CollectionPlaybooksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "collectionplaybook_tenant_id_environment_id_state_priority",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionPlaybooksColumns[1], CollectionPlaybooksColumns[7], CollectionPlaybooksColumns[10], CollectionPlaybooksColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((status)::text = 'published'::text)",
+				},
+			},
+		},
+	}
+	// CollectionPlaybookRunsColumns holds the columns for the "collection_playbook_runs" table.
+	CollectionPlaybookRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "state", Type: field.TypeString, Default: "active", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "stop_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "paused_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "invoice_due_date", Type: field.TypeTime},
+		{Name: "next_step_at", Type: field.TypeTime, Nullable: true},
+		{Name: "started_at", Type: field.TypeTime},
+		{Name: "ended_at", Type: field.TypeTime, Nullable: true},
+		{Name: "playbook_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CollectionPlaybookRunsTable holds the schema information for the "collection_playbook_runs" table.
+	CollectionPlaybookRunsTable = &schema.Table{
+		Name:       "collection_playbook_runs",
+		Columns:    CollectionPlaybookRunsColumns,
+		PrimaryKey: []*schema.Column{CollectionPlaybookRunsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "collection_playbook_runs_collection_playbooks_runs",
+				Columns:    []*schema.Column{CollectionPlaybookRunsColumns[17]},
+				RefColumns: []*schema.Column{CollectionPlaybooksColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_collection_playbook_run_live_invoice",
+				Unique:  true,
+				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(((status)::text = 'published'::text) AND ((state)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying])::text[])))",
+				},
+			},
+			{
+				Name:    "idx_collection_playbook_run_playbook_state",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[17], CollectionPlaybookRunsColumns[10]},
+			},
+			{
+				Name:    "idx_collection_playbook_run_customer_state",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[9], CollectionPlaybookRunsColumns[10]},
+			},
+			{
+				Name:    "collectionplaybookrun_tenant_id_environment_id_next_step_at",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[14]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "((state)::text = 'active'::text)",
+				},
+			},
+		},
+	}
+	// CollectionPlaybookStepRunsColumns holds the columns for the "collection_playbook_step_runs" table.
+	CollectionPlaybookStepRunsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "step_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "kind", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "due_at", Type: field.TypeTime},
+		{Name: "state", Type: field.TypeString, Default: "pending", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "skip_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(30)"}},
+		{Name: "result_ref", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "attempts", Type: field.TypeInt, Default: 0},
+		{Name: "error", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "run_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CollectionPlaybookStepRunsTable holds the schema information for the "collection_playbook_step_runs" table.
+	CollectionPlaybookStepRunsTable = &schema.Table{
+		Name:       "collection_playbook_step_runs",
+		Columns:    CollectionPlaybookStepRunsColumns,
+		PrimaryKey: []*schema.Column{CollectionPlaybookStepRunsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "collection_playbook_step_runs_collection_playbook_runs_step_runs",
+				Columns:    []*schema.Column{CollectionPlaybookStepRunsColumns[17]},
+				RefColumns: []*schema.Column{CollectionPlaybookRunsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_collection_playbook_step_run_run_step",
+				Unique:  true,
+				Columns: []*schema.Column{CollectionPlaybookStepRunsColumns[17], CollectionPlaybookStepRunsColumns[8]},
+			},
+			{
+				Name:    "collectionplaybooksteprun_tenant_id_environment_id_state_due_at",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionPlaybookStepRunsColumns[1], CollectionPlaybookStepRunsColumns[7], CollectionPlaybookStepRunsColumns[11], CollectionPlaybookStepRunsColumns[10]},
+			},
+		},
+	}
+	// CollectionTasksColumns holds the columns for the "collection_tasks" table.
+	CollectionTasksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "run_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "step_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "assignee_user_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "assignee_email", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "note", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "state", Type: field.TypeString, Default: "open", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "done_at", Type: field.TypeTime, Nullable: true},
+		{Name: "done_by", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// CollectionTasksTable holds the schema information for the "collection_tasks" table.
+	CollectionTasksTable = &schema.Table{
+		Name:       "collection_tasks",
+		Columns:    CollectionTasksColumns,
+		PrimaryKey: []*schema.Column{CollectionTasksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "collectiontask_tenant_id_environment_id_invoice_id",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionTasksColumns[1], CollectionTasksColumns[7], CollectionTasksColumns[8]},
+			},
+			{
+				Name:    "collectiontask_tenant_id_environment_id_state_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{CollectionTasksColumns[1], CollectionTasksColumns[7], CollectionTasksColumns[15], CollectionTasksColumns[3]},
+			},
+			{
+				Name:    "idx_collection_task_run_step",
+				Unique:  true,
+				Columns: []*schema.Column{CollectionTasksColumns[10], CollectionTasksColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "(run_id IS NOT NULL)",
+				},
+			},
+		},
+	}
 	// CommitmentsColumns holds the columns for the "commitments" table.
 	CommitmentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2040,6 +2237,8 @@ var (
 		{Name: "tone", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "body", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "playbook_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "playbook_step_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// InvoiceRemindersTable holds the schema information for the "invoice_reminders" table.
 	InvoiceRemindersTable = &schema.Table{
@@ -3837,6 +4036,10 @@ var (
 		BillingSequencesTable,
 		BillingTermsTable,
 		CheckoutSessionsTable,
+		CollectionPlaybooksTable,
+		CollectionPlaybookRunsTable,
+		CollectionPlaybookStepRunsTable,
+		CollectionTasksTable,
 		CommitmentsTable,
 		ConnectionsTable,
 		ContractsTable,
@@ -3904,6 +4107,8 @@ var (
 )
 
 func init() {
+	CollectionPlaybookRunsTable.ForeignKeys[0].RefTable = CollectionPlaybooksTable
+	CollectionPlaybookStepRunsTable.ForeignKeys[0].RefTable = CollectionPlaybookRunsTable
 	CostsheetsTable.ForeignKeys[0].RefTable = PricesTable
 	CouponApplicationsTable.ForeignKeys[0].RefTable = CouponsTable
 	CouponApplicationsTable.ForeignKeys[1].RefTable = InvoicesTable

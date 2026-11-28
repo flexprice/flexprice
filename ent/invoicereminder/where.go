@@ -137,6 +137,16 @@ func Body(v string) predicate.InvoiceReminder {
 	return predicate.InvoiceReminder(sql.FieldEQ(FieldBody, v))
 }
 
+// PlaybookID applies equality check predicate on the "playbook_id" field. It's identical to PlaybookIDEQ.
+func PlaybookID(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldPlaybookID, v))
+}
+
+// PlaybookStepID applies equality check predicate on the "playbook_step_id" field. It's identical to PlaybookStepIDEQ.
+func PlaybookStepID(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldPlaybookStepID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceReminder {
 	return predicate.InvoiceReminder(sql.FieldEQ(FieldTenantID, v))
@@ -1068,6 +1078,156 @@ func BodyEqualFold(v string) predicate.InvoiceReminder {
 // BodyContainsFold applies the ContainsFold predicate on the "body" field.
 func BodyContainsFold(v string) predicate.InvoiceReminder {
 	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldBody, v))
+}
+
+// PlaybookIDEQ applies the EQ predicate on the "playbook_id" field.
+func PlaybookIDEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldPlaybookID, v))
+}
+
+// PlaybookIDNEQ applies the NEQ predicate on the "playbook_id" field.
+func PlaybookIDNEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldPlaybookID, v))
+}
+
+// PlaybookIDIn applies the In predicate on the "playbook_id" field.
+func PlaybookIDIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIn(FieldPlaybookID, vs...))
+}
+
+// PlaybookIDNotIn applies the NotIn predicate on the "playbook_id" field.
+func PlaybookIDNotIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldPlaybookID, vs...))
+}
+
+// PlaybookIDGT applies the GT predicate on the "playbook_id" field.
+func PlaybookIDGT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGT(FieldPlaybookID, v))
+}
+
+// PlaybookIDGTE applies the GTE predicate on the "playbook_id" field.
+func PlaybookIDGTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldPlaybookID, v))
+}
+
+// PlaybookIDLT applies the LT predicate on the "playbook_id" field.
+func PlaybookIDLT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLT(FieldPlaybookID, v))
+}
+
+// PlaybookIDLTE applies the LTE predicate on the "playbook_id" field.
+func PlaybookIDLTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldPlaybookID, v))
+}
+
+// PlaybookIDContains applies the Contains predicate on the "playbook_id" field.
+func PlaybookIDContains(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContains(FieldPlaybookID, v))
+}
+
+// PlaybookIDHasPrefix applies the HasPrefix predicate on the "playbook_id" field.
+func PlaybookIDHasPrefix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldPlaybookID, v))
+}
+
+// PlaybookIDHasSuffix applies the HasSuffix predicate on the "playbook_id" field.
+func PlaybookIDHasSuffix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldPlaybookID, v))
+}
+
+// PlaybookIDIsNil applies the IsNil predicate on the "playbook_id" field.
+func PlaybookIDIsNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIsNull(FieldPlaybookID))
+}
+
+// PlaybookIDNotNil applies the NotNil predicate on the "playbook_id" field.
+func PlaybookIDNotNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotNull(FieldPlaybookID))
+}
+
+// PlaybookIDEqualFold applies the EqualFold predicate on the "playbook_id" field.
+func PlaybookIDEqualFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldPlaybookID, v))
+}
+
+// PlaybookIDContainsFold applies the ContainsFold predicate on the "playbook_id" field.
+func PlaybookIDContainsFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldPlaybookID, v))
+}
+
+// PlaybookStepIDEQ applies the EQ predicate on the "playbook_step_id" field.
+func PlaybookStepIDEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEQ(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDNEQ applies the NEQ predicate on the "playbook_step_id" field.
+func PlaybookStepIDNEQ(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNEQ(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDIn applies the In predicate on the "playbook_step_id" field.
+func PlaybookStepIDIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIn(FieldPlaybookStepID, vs...))
+}
+
+// PlaybookStepIDNotIn applies the NotIn predicate on the "playbook_step_id" field.
+func PlaybookStepIDNotIn(vs ...string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotIn(FieldPlaybookStepID, vs...))
+}
+
+// PlaybookStepIDGT applies the GT predicate on the "playbook_step_id" field.
+func PlaybookStepIDGT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGT(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDGTE applies the GTE predicate on the "playbook_step_id" field.
+func PlaybookStepIDGTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldGTE(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDLT applies the LT predicate on the "playbook_step_id" field.
+func PlaybookStepIDLT(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLT(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDLTE applies the LTE predicate on the "playbook_step_id" field.
+func PlaybookStepIDLTE(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldLTE(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDContains applies the Contains predicate on the "playbook_step_id" field.
+func PlaybookStepIDContains(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContains(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDHasPrefix applies the HasPrefix predicate on the "playbook_step_id" field.
+func PlaybookStepIDHasPrefix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasPrefix(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDHasSuffix applies the HasSuffix predicate on the "playbook_step_id" field.
+func PlaybookStepIDHasSuffix(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldHasSuffix(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDIsNil applies the IsNil predicate on the "playbook_step_id" field.
+func PlaybookStepIDIsNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldIsNull(FieldPlaybookStepID))
+}
+
+// PlaybookStepIDNotNil applies the NotNil predicate on the "playbook_step_id" field.
+func PlaybookStepIDNotNil() predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldNotNull(FieldPlaybookStepID))
+}
+
+// PlaybookStepIDEqualFold applies the EqualFold predicate on the "playbook_step_id" field.
+func PlaybookStepIDEqualFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldEqualFold(FieldPlaybookStepID, v))
+}
+
+// PlaybookStepIDContainsFold applies the ContainsFold predicate on the "playbook_step_id" field.
+func PlaybookStepIDContainsFold(v string) predicate.InvoiceReminder {
+	return predicate.InvoiceReminder(sql.FieldContainsFold(FieldPlaybookStepID, v))
 }
 
 // And groups predicates with the AND operator between them.

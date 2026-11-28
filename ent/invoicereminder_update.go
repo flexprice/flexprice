@@ -177,6 +177,46 @@ func (_u *InvoiceReminderUpdate) SetNillableBody(v *string) *InvoiceReminderUpda
 	return _u
 }
 
+// SetPlaybookID sets the "playbook_id" field.
+func (_u *InvoiceReminderUpdate) SetPlaybookID(v string) *InvoiceReminderUpdate {
+	_u.mutation.SetPlaybookID(v)
+	return _u
+}
+
+// SetNillablePlaybookID sets the "playbook_id" field if the given value is not nil.
+func (_u *InvoiceReminderUpdate) SetNillablePlaybookID(v *string) *InvoiceReminderUpdate {
+	if v != nil {
+		_u.SetPlaybookID(*v)
+	}
+	return _u
+}
+
+// ClearPlaybookID clears the value of the "playbook_id" field.
+func (_u *InvoiceReminderUpdate) ClearPlaybookID() *InvoiceReminderUpdate {
+	_u.mutation.ClearPlaybookID()
+	return _u
+}
+
+// SetPlaybookStepID sets the "playbook_step_id" field.
+func (_u *InvoiceReminderUpdate) SetPlaybookStepID(v string) *InvoiceReminderUpdate {
+	_u.mutation.SetPlaybookStepID(v)
+	return _u
+}
+
+// SetNillablePlaybookStepID sets the "playbook_step_id" field if the given value is not nil.
+func (_u *InvoiceReminderUpdate) SetNillablePlaybookStepID(v *string) *InvoiceReminderUpdate {
+	if v != nil {
+		_u.SetPlaybookStepID(*v)
+	}
+	return _u
+}
+
+// ClearPlaybookStepID clears the value of the "playbook_step_id" field.
+func (_u *InvoiceReminderUpdate) ClearPlaybookStepID() *InvoiceReminderUpdate {
+	_u.mutation.ClearPlaybookStepID()
+	return _u
+}
+
 // Mutation returns the InvoiceReminderMutation object of the builder.
 func (_u *InvoiceReminderUpdate) Mutation() *InvoiceReminderMutation {
 	return _u.mutation
@@ -274,6 +314,18 @@ func (_u *InvoiceReminderUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.Body(); ok {
 		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlaybookID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookID, field.TypeString, value)
+	}
+	if _u.mutation.PlaybookIDCleared() {
+		_spec.ClearField(invoicereminder.FieldPlaybookID, field.TypeString)
+	}
+	if value, ok := _u.mutation.PlaybookStepID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookStepID, field.TypeString, value)
+	}
+	if _u.mutation.PlaybookStepIDCleared() {
+		_spec.ClearField(invoicereminder.FieldPlaybookStepID, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -443,6 +495,46 @@ func (_u *InvoiceReminderUpdateOne) SetNillableBody(v *string) *InvoiceReminderU
 	return _u
 }
 
+// SetPlaybookID sets the "playbook_id" field.
+func (_u *InvoiceReminderUpdateOne) SetPlaybookID(v string) *InvoiceReminderUpdateOne {
+	_u.mutation.SetPlaybookID(v)
+	return _u
+}
+
+// SetNillablePlaybookID sets the "playbook_id" field if the given value is not nil.
+func (_u *InvoiceReminderUpdateOne) SetNillablePlaybookID(v *string) *InvoiceReminderUpdateOne {
+	if v != nil {
+		_u.SetPlaybookID(*v)
+	}
+	return _u
+}
+
+// ClearPlaybookID clears the value of the "playbook_id" field.
+func (_u *InvoiceReminderUpdateOne) ClearPlaybookID() *InvoiceReminderUpdateOne {
+	_u.mutation.ClearPlaybookID()
+	return _u
+}
+
+// SetPlaybookStepID sets the "playbook_step_id" field.
+func (_u *InvoiceReminderUpdateOne) SetPlaybookStepID(v string) *InvoiceReminderUpdateOne {
+	_u.mutation.SetPlaybookStepID(v)
+	return _u
+}
+
+// SetNillablePlaybookStepID sets the "playbook_step_id" field if the given value is not nil.
+func (_u *InvoiceReminderUpdateOne) SetNillablePlaybookStepID(v *string) *InvoiceReminderUpdateOne {
+	if v != nil {
+		_u.SetPlaybookStepID(*v)
+	}
+	return _u
+}
+
+// ClearPlaybookStepID clears the value of the "playbook_step_id" field.
+func (_u *InvoiceReminderUpdateOne) ClearPlaybookStepID() *InvoiceReminderUpdateOne {
+	_u.mutation.ClearPlaybookStepID()
+	return _u
+}
+
 // Mutation returns the InvoiceReminderMutation object of the builder.
 func (_u *InvoiceReminderUpdateOne) Mutation() *InvoiceReminderMutation {
 	return _u.mutation
@@ -570,6 +662,18 @@ func (_u *InvoiceReminderUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	}
 	if value, ok := _u.mutation.Body(); ok {
 		_spec.SetField(invoicereminder.FieldBody, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlaybookID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookID, field.TypeString, value)
+	}
+	if _u.mutation.PlaybookIDCleared() {
+		_spec.ClearField(invoicereminder.FieldPlaybookID, field.TypeString)
+	}
+	if value, ok := _u.mutation.PlaybookStepID(); ok {
+		_spec.SetField(invoicereminder.FieldPlaybookStepID, field.TypeString, value)
+	}
+	if _u.mutation.PlaybookStepIDCleared() {
+		_spec.ClearField(invoicereminder.FieldPlaybookStepID, field.TypeString)
 	}
 	_node = &InvoiceReminder{config: _u.config}
 	_spec.Assign = _node.assignValues

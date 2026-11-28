@@ -28,8 +28,17 @@ type InvoiceReminder struct {
 	Tone           types.ReminderTone
 	Subject        string
 	Body           string
+	// PlaybookID and PlaybookStepID name the playbook step that wrote this reminder; empty for a reminder a person
+	// started from the rendered draft.
+	PlaybookID     string
+	PlaybookStepID string
 	EnvironmentID  string
 	types.BaseModel
+}
+
+// FromPlaybook reports a reminder written by a playbook step, whose text is the step's and is not re-rendered.
+func (r *InvoiceReminder) FromPlaybook() bool {
+	return r != nil && r.PlaybookStepID != ""
 }
 
 // Original returns what the system wrote, read from the metadata map.
@@ -73,6 +82,12 @@ func (b *invoiceReminderBuilder) WithText(tone types.ReminderTone, subject, body
 // WithOriginal records what the system wrote in the metadata; the text is set separately.
 func (b *invoiceReminderBuilder) WithOriginal(tone types.ReminderTone, subject, body string) *invoiceReminderBuilder {
 	b.r.Metadata = map[string]interface{}{"original_tone": string(tone), "original_subject": subject, "original_body": body}
+	return b
+}
+
+// WithPlaybook records the playbook step that wrote the reminder; empty ids clear it.
+func (b *invoiceReminderBuilder) WithPlaybook(playbookID, stepID string) *invoiceReminderBuilder {
+	b.r.PlaybookID, b.r.PlaybookStepID = playbookID, stepID
 	return b
 }
 

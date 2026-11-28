@@ -2066,6 +2066,33 @@ definitions:
           name
         type: string
     type: object
+  CollectionTaskResponse:
+    properties:
+      assignee_email:
+        type: string
+      assignee_user_id:
+        type: string
+      created_at:
+        type: string
+      customer_id:
+        type: string
+      done_at:
+        type: string
+      done_by:
+        type: string
+      id:
+        type: string
+      invoice_id:
+        type: string
+      note:
+        type: string
+      run_id:
+        type: string
+      state:
+        $ref: '#/definitions/types.CollectionTaskState'
+      step_id:
+        type: string
+    type: object
   CollectionsBoardColumn:
     properties:
       cards:
@@ -3688,6 +3715,16 @@ definitions:
     required:
     - name
     type: object
+  CreatePlaybookRequest:
+    properties:
+      name:
+        description: Name of the playbook; defaults to the template's name, or "Untitled
+          playbook".
+        type: string
+      template_id:
+        description: TemplateID starts the playbook from a template (GET /collections/playbook-templates).
+        type: string
+    type: object
   CreatePriceRequest:
     properties:
       amount:
@@ -4713,6 +4750,15 @@ definitions:
         items:
           $ref: '#/definitions/CustomerInvoiceSummary'
         type: array
+    type: object
+  CustomerPlaybookRunsResponse:
+    properties:
+      runs:
+        items:
+          $ref: '#/definitions/PlaybookRunResponse'
+        type: array
+      runs_affected:
+        type: integer
     type: object
   CustomerResponse:
     description: Customer response object containing all customer information
@@ -6433,6 +6479,13 @@ definitions:
         type: string
       original_tone:
         $ref: '#/definitions/types.ReminderTone'
+      playbook_id:
+        description: |-
+          PlaybookID and PlaybookStepID name the playbook step that wrote this reminder; absent for a reminder rendered
+          from the invoice's age.
+        type: string
+      playbook_step_id:
+        type: string
       status:
         $ref: '#/definitions/types.ReminderStatus'
       status_reason:
@@ -6915,6 +6968,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  ListCollectionTasksResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/CollectionTaskResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   ListCostsheetResponse:
     properties:
       items:
@@ -6975,6 +7037,29 @@ definitions:
         type: array
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPlaybookRunsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PlaybookRunResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
+  ListPlaybookTemplatesResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PlaybookTemplateResponse'
+        type: array
+    type: object
+  ListPlaybooksResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/PlaybookResponse'
+        type: array
     type: object
   ListRefundsResponse:
     properties:
@@ -7220,6 +7305,11 @@ definitions:
           this line item
     required:
     - price_id
+    type: object
+  PausePlaybookRunRequest:
+    properties:
+      reason:
+        type: string
     type: object
   PauseSubscriptionRequest:
     description: Pauses an active subscription now. Usage and arrear fixed charges
@@ -7511,6 +7601,216 @@ definitions:
       name:
         description: name of the plan
         type: string
+    type: object
+  PlaybookPreviewInvoice:
+    properties:
+      amount_remaining:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      days_overdue:
+        type: integer
+      due_date:
+        type: string
+      first_step:
+        allOf:
+        - $ref: '#/definitions/PlaybookPreviewStep'
+        description: FirstStep is the first step this invoice would get, with its
+          day; null when every step is already past.
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+    type: object
+  PlaybookPreviewResponse:
+    properties:
+      as_of:
+        type: string
+      matching_count:
+        description: MatchingCount counts invoices that match the trigger and audience
+          and are in no playbook now.
+        type: integer
+      sample:
+        items:
+          $ref: '#/definitions/PlaybookPreviewInvoice'
+        type: array
+      taken_by_higher_priority:
+        description: TakenByHigherPriority counts those a live playbook higher in
+          the list would take first.
+        type: integer
+      truncated:
+        description: Truncated is true when more invoices match than were counted
+          (the count stops at 1000).
+        type: boolean
+    type: object
+  PlaybookPreviewStep:
+    properties:
+      due_at:
+        type: string
+      kind:
+        $ref: '#/definitions/types.PlaybookStepKind'
+      step_id:
+        type: string
+    type: object
+  PlaybookResponse:
+    properties:
+      activated_at:
+        type: string
+      audience:
+        $ref: '#/definitions/types.PlaybookAudience'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      min_gap_days:
+        type: integer
+      name:
+        type: string
+      priority:
+        type: integer
+      problems:
+        description: Problems lists what keeps the playbook from going live; empty
+          when it is ready.
+        items:
+          $ref: '#/definitions/types.PlaybookProblem'
+        type: array
+      skip_weekends:
+        type: boolean
+      state:
+        $ref: '#/definitions/types.PlaybookState'
+      stats:
+        $ref: '#/definitions/PlaybookStatsResponse'
+      steps:
+        items:
+          $ref: '#/definitions/types.PlaybookStep'
+        type: array
+      stops:
+        items:
+          $ref: '#/definitions/types.PlaybookStopCondition'
+        type: array
+      template_id:
+        type: string
+      trigger:
+        $ref: '#/definitions/types.PlaybookTrigger'
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      version:
+        type: integer
+    type: object
+  PlaybookRunResponse:
+    properties:
+      amount_remaining:
+        type: string
+      currency:
+        type: string
+      customer_id:
+        type: string
+      customer_name:
+        type: string
+      days_overdue:
+        type: integer
+      ended_at:
+        type: string
+      id:
+        type: string
+      invoice_due_date:
+        type: string
+      invoice_id:
+        type: string
+      invoice_number:
+        type: string
+      next_step:
+        $ref: '#/definitions/PlaybookStepRunResponse'
+      paused_reason:
+        type: string
+      playbook_id:
+        type: string
+      started_at:
+        type: string
+      state:
+        $ref: '#/definitions/types.PlaybookRunState'
+      stop_reason:
+        $ref: '#/definitions/types.PlaybookStopReason'
+    type: object
+  PlaybookStatsResponse:
+    properties:
+      in_progress:
+        description: InProgress counts invoices in the playbook now (active or paused
+          runs).
+        type: integer
+      paid_within_7d_rate:
+        description: PaidWithin7dRate is the share of reminded invoices paid within
+          7 days of a reminder; null when none were reminded.
+        type: number
+      recovered_30d:
+        description: Recovered30d is what was paid, per currency, on invoices within
+          7 days after one of the playbook's reminders.
+        items:
+          $ref: '#/definitions/CollectionsCurrencyTotal'
+        type: array
+      reminders_sent_30d:
+        description: RemindersSent30d counts reminder emails the playbook's steps
+          sent or approved in the last 30 days.
+        type: integer
+    type: object
+  PlaybookStepRunResponse:
+    properties:
+      attempts:
+        type: integer
+      due_at:
+        type: string
+      error:
+        type: string
+      executed_at:
+        type: string
+      id:
+        type: string
+      kind:
+        $ref: '#/definitions/types.PlaybookStepKind'
+      result_ref:
+        description: 'ResultRef is what the step made: a reminder id, a task id or
+          an email log id.'
+        type: string
+      skip_reason:
+        $ref: '#/definitions/types.PlaybookStepSkipReason'
+      state:
+        $ref: '#/definitions/types.PlaybookStepRunState'
+      step_id:
+        type: string
+    type: object
+  PlaybookTemplateResponse:
+    properties:
+      audience:
+        $ref: '#/definitions/types.PlaybookAudience'
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      steps:
+        items:
+          $ref: '#/definitions/types.PlaybookStep'
+        type: array
+      trigger:
+        $ref: '#/definitions/types.PlaybookTrigger'
+    type: object
+  PlaybookVersionRequest:
+    properties:
+      version:
+        type: integer
+    required:
+    - version
     type: object
   PointBucket:
     properties:
@@ -8006,6 +8306,15 @@ definitions:
     required:
     - addon_association_id
     type: object
+  ReorderPlaybooksRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    required:
+    - ids
+    type: object
   ReplaceBillingTermsRequest:
     properties:
       billing_terms:
@@ -8428,6 +8737,21 @@ definitions:
         type: string
       pob_id:
         type: string
+    type: object
+  RunPlaybooksResponse:
+    properties:
+      runs_enrolled:
+        type: integer
+      runs_stopped:
+        type: integer
+      steps_deferred:
+        type: integer
+      steps_executed:
+        type: integer
+      steps_failed:
+        type: integer
+      steps_skipped:
+        type: integer
     type: object
   SavedPaymentMethod:
     properties:
@@ -10985,6 +11309,34 @@ definitions:
       name:
         type: string
     type: object
+  UpdatePlaybookRequest:
+    properties:
+      audience:
+        $ref: '#/definitions/types.PlaybookAudience'
+      description:
+        type: string
+      min_gap_days:
+        type: integer
+      name:
+        type: string
+      skip_weekends:
+        type: boolean
+      steps:
+        items:
+          $ref: '#/definitions/types.PlaybookStep'
+        type: array
+      stops:
+        items:
+          $ref: '#/definitions/types.PlaybookStopCondition'
+        type: array
+      trigger:
+        $ref: '#/definitions/types.PlaybookTrigger'
+      version:
+        type: integer
+    required:
+    - trigger
+    - version
+    type: object
   UpdatePriceRequest:
     properties:
       amount:
@@ -13460,8 +13812,8 @@ definitions:
     - DebugTrackerStatusAttributed
   types.Duration:
     enum:
-    - 3600000000000
     - 604800000000000
+    - 3600000000000
     properties:
       unit:
         $ref: '#/definitions/types.DurationUnit'
@@ -13469,8 +13821,8 @@ definitions:
         type: integer
     type: object
     x-enum-varnames:
-    - EntitlementGrantMinDuration
     - CollectionsPaidWindow
+    - EntitlementGrantMinDuration
   types.DurationUnit:
     enum:
     - second
@@ -13560,10 +13912,12 @@ definitions:
     enum:
     - invoice_finalized
     - invoice_payment_reminder
+    - collections_team_notice
     type: string
     x-enum-varnames:
     - EmailTemplateInvoiceFinalized
     - EmailTemplateInvoicePaymentReminder
+    - EmailTemplateCollectionsTeamNotice
   types.EmailTrigger:
     enum:
     - auto
@@ -14409,7 +14763,9 @@ definitions:
         description: period_start_lte filters invoices with period_start <= value
         type: string
       skip_line_items:
-        description: SkipLineItems if true, will not include line items in the response
+        description: |-
+          SkipLineItems if true, will not include line items in the response.
+          Pages that include line items are limited to MaxInvoiceListLimitWithLineItems invoices.
         type: boolean
       sort:
         items:
@@ -15808,6 +16164,10 @@ definitions:
         allOf:
         - $ref: '#/definitions/types.AWSMarketplaceSyncConfig'
         description: AWSMarketplace connection metadata
+      credit_note:
+        allOf:
+        - $ref: '#/definitions/types.EntitySyncConfig'
+        description: Credit note sync (Zoho Books only), outbound only
       customer:
         $ref: '#/definitions/types.EntitySyncConfig'
       deal:
@@ -17527,6 +17887,14 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
     type: object
+  types.CollectionTaskState:
+    enum:
+    - open
+    - done
+    type: string
+    x-enum-varnames:
+    - CollectionTaskOpen
+    - CollectionTaskDone
   types.CollectionsColumnKey:
     enum:
     - not_due
@@ -17618,6 +17986,186 @@ definitions:
     - PaymentTermsTypeDueOnReceipt
     - PaymentTermsTypeEndOfMonth
     - PaymentTermsTypeEndOfNextMonth
+  types.PlaybookAudience:
+    properties:
+      amount:
+        description: Amount and Currency match invoices in Currency whose remaining
+          balance is above Amount (kind amount_over).
+        type: number
+      currency:
+        type: string
+      days:
+        description: Days matches invoices more than Days days past due (kind days_overdue_over).
+        type: integer
+      key:
+        description: Key and Value match customers whose metadata[Key] equals Value,
+          ignoring case (kind segment).
+        type: string
+      kind:
+        $ref: '#/definitions/types.PlaybookAudienceKind'
+      value:
+        type: string
+    type: object
+  types.PlaybookAudienceKind:
+    enum:
+    - all
+    - segment
+    - amount_over
+    - days_overdue_over
+    type: string
+    x-enum-varnames:
+    - PlaybookAudienceAll
+    - PlaybookAudienceSegment
+    - PlaybookAudienceAmountOver
+    - PlaybookAudienceDaysOverdueOver
+  types.PlaybookInternalChannel:
+    enum:
+    - email
+    - slack
+    type: string
+    x-enum-varnames:
+    - PlaybookChannelEmail
+    - PlaybookChannelSlack
+  types.PlaybookProblem:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+      step_id:
+        type: string
+    type: object
+  types.PlaybookRunState:
+    enum:
+    - active
+    - paused
+    - stopped
+    - completed
+    type: string
+    x-enum-varnames:
+    - PlaybookRunActive
+    - PlaybookRunPaused
+    - PlaybookRunStopped
+    - PlaybookRunCompleted
+  types.PlaybookState:
+    enum:
+    - draft
+    - live
+    - paused
+    type: string
+    x-enum-varnames:
+    - PlaybookStateDraft
+    - PlaybookStateLive
+    - PlaybookStatePaused
+  types.PlaybookStep:
+    properties:
+      assignee:
+        allOf:
+        - $ref: '#/definitions/types.PlaybookTaskAssignee'
+        description: Task steps.
+      body:
+        type: string
+      channel:
+        allOf:
+        - $ref: '#/definitions/types.PlaybookInternalChannel'
+        description: Internal alert steps.
+      day:
+        type: integer
+      id:
+        type: string
+      kind:
+        $ref: '#/definitions/types.PlaybookStepKind'
+      note:
+        description: Note is the text of an internal alert or a task.
+        type: string
+      send_without_review:
+        type: boolean
+      subject:
+        type: string
+      to:
+        type: string
+      tone:
+        allOf:
+        - $ref: '#/definitions/types.ReminderTone'
+        description: Email steps.
+    type: object
+  types.PlaybookStepKind:
+    enum:
+    - email
+    - internal
+    - task
+    type: string
+    x-enum-varnames:
+    - PlaybookStepEmail
+    - PlaybookStepInternal
+    - PlaybookStepTask
+  types.PlaybookStepRunState:
+    enum:
+    - pending
+    - done
+    - skipped
+    - failed
+    type: string
+    x-enum-varnames:
+    - PlaybookStepRunPending
+    - PlaybookStepRunDone
+    - PlaybookStepRunSkipped
+    - PlaybookStepRunFailed
+  types.PlaybookStepSkipReason:
+    enum:
+    - run_stopped
+    - edited_out
+    - superseded
+    - reminder_held
+    - no_recipient
+    - slack_not_connected
+    - emails_unavailable
+    type: string
+    x-enum-varnames:
+    - PlaybookSkipRunStopped
+    - PlaybookSkipEditedOut
+    - PlaybookSkipSuperseded
+    - PlaybookSkipReminderHeld
+    - PlaybookSkipNoRecipient
+    - PlaybookSkipSlackNotConnected
+    - PlaybookSkipEmailsUnavailable
+  types.PlaybookStopCondition:
+    enum:
+    - invoice_paid
+    - manually_paused
+    - customer_replied
+    - dispute_filed
+    type: string
+    x-enum-varnames:
+    - PlaybookStopInvoicePaid
+    - PlaybookStopManuallyPaused
+    - PlaybookStopCustomerReplied
+    - PlaybookStopDisputeFiled
+  types.PlaybookStopReason:
+    enum:
+    - paid
+    - voided
+    - playbook_deleted
+    type: string
+    x-enum-varnames:
+    - PlaybookStopReasonPaid
+    - PlaybookStopReasonVoided
+    - PlaybookStopReasonPlaybookDeleted
+  types.PlaybookTaskAssignee:
+    properties:
+      email:
+        type: string
+      user_id:
+        type: string
+    type: object
+  types.PlaybookTrigger:
+    enum:
+    - overdue
+    - before_due
+    type: string
+    x-enum-varnames:
+    - PlaybookTriggerOverdue
+    - PlaybookTriggerBeforeDue
   types.ReminderStatus:
     enum:
     - pending
@@ -20253,6 +20801,762 @@ paths:
       tags:
       - Collections
       x-scope: read
+  /collections/customers/{id}/pause:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when outreach to a customer should stop for now: pauses every
+        active playbook run of the customer. Invoices that enrol later are not paused.'
+      operationId: pauseCustomerCollections
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Optional reason
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/PausePlaybookRunRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CustomerPlaybookRunsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Pause a customer's playbooks
+      tags:
+      - Collections
+      x-scope: write
+  /collections/customers/{id}/resume:
+    post:
+      description: 'Use when outreach to a customer should continue: resumes every
+        paused playbook run of the customer.'
+      operationId: resumeCustomerCollections
+      parameters:
+      - description: Customer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CustomerPlaybookRunsResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Customer not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Resume a customer's playbooks
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbook-runs/{id}/pause:
+    post:
+      consumes:
+      - application/json
+      description: Use when outreach for one invoice should stop for now. Only allowed
+        when the playbook has the manually_paused stop condition. Its steps wait until
+        resumed.
+      operationId: pausePlaybookRun
+      parameters:
+      - description: Playbook run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Optional reason
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/PausePlaybookRunRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookRunResponse'
+        "400":
+          description: Pausing is off for this playbook
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Run is not active
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Pause an invoice's playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbook-runs/{id}/resume:
+    post:
+      description: Use when outreach for a paused invoice should continue. Steps missed
+        while paused are skipped except those on the latest due day.
+      operationId: resumePlaybookRun
+      parameters:
+      - description: Playbook run ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookRunResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Run is not paused
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Resume an invoice's playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbook-templates:
+    get:
+      description: Use when you need the starter playbooks a new playbook can be created
+        from. Each template carries its trigger, audience and steps; creating from
+        one copies them.
+      operationId: listPlaybookTemplates
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPlaybookTemplatesResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List playbook templates
+      tags:
+      - Collections
+      x-scope: read
+  /collections/playbooks:
+    get:
+      description: Use when you need the environment's collection playbooks in priority
+        order (1 is checked first), each with its readiness problems and its stats
+        for the last 30 days.
+      operationId: listPlaybooks
+      parameters:
+      - description: Comma-separated draft, live, paused; empty lists every playbook
+        in: query
+        name: state
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPlaybooksResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List playbooks
+      tags:
+      - Collections
+      x-scope: read
+    post:
+      consumes:
+      - application/json
+      description: Use when you want a new draft playbook, blank (one friendly reminder
+        on day 3) or copied from a template. It is placed last in priority order.
+        Drafts run nothing until activated.
+      operationId: createPlaybook
+      parameters:
+      - description: Name and optional template
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreatePlaybookRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "400":
+          description: Invalid request or unknown template
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}:
+    delete:
+      description: Use when removing a playbook. Invoices in it leave it (their pending
+        steps are skipped) and the scheduler offers them to the next live playbook
+        they match. Reminders already written are not changed. Remaining playbooks
+        are renumbered.
+      operationId: deletePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete playbook
+      tags:
+      - Collections
+      x-scope: delete
+    get:
+      description: Use when you need one playbook with its steps (ordered by day),
+        readiness problems, version and stats.
+      operationId: getPlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get playbook
+      tags:
+      - Collections
+      x-scope: read
+    put:
+      consumes:
+      - application/json
+      description: 'Use when saving the whole playbook from the builder. Send the
+        version you loaded; a playbook saved by someone else since is a 409. A draft
+        may be incomplete; a live playbook must stay ready (400 invalid_operation
+        with details.problems). Invoices already in a live playbook follow the edit
+        for steps that have not run yet: removed steps are skipped, moved steps rescheduled
+        (never into the past), new steps scheduled when their day is still ahead.'
+      operationId: updatePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The whole playbook
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/UpdatePlaybookRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "400":
+          description: Invalid playbook, or a live playbook left incomplete
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Saved by someone else since it was loaded
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}/activate:
+    post:
+      consumes:
+      - application/json
+      description: 'Use when a draft or paused playbook should go live. Readiness
+        is checked: a name, at least one reminder email, every step complete, before-due
+        emails sent without review. A playbook that is not ready is 400 invalid_operation
+        with details.problems ([{step_id, field, message}]). From the next scheduler
+        pass it enrols matching invoices, scheduling only steps whose day is today
+        or later.'
+      operationId: activatePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The version you loaded
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/PlaybookVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "400":
+          description: Not ready (details.problems)
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Changed since loaded, or already live
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Activate playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}/duplicate:
+    post:
+      description: Use when starting a new playbook from an existing one. The copy
+        is a draft named "<name> (copy)", placed last, with no stats.
+      operationId: duplicatePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Duplicate playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}/pause:
+    post:
+      consumes:
+      - application/json
+      description: Use when a live playbook should stop running steps and enrolling
+        invoices. Invoices keep their place; on resume only steps due on the latest
+        day run, never a burst of missed ones.
+      operationId: pausePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The version you loaded
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/PlaybookVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Changed since loaded, or not live
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Pause playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}/preview:
+    get:
+      description: 'Use before activating: which open invoices the saved playbook
+        would enrol today, how many a higher-priority live playbook takes first, and
+        the first step each would get. Read-only.'
+      operationId: previewPlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookPreviewResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Preview playbook
+      tags:
+      - Collections
+      x-scope: read
+  /collections/playbooks/{id}/resume:
+    post:
+      consumes:
+      - application/json
+      description: Use when a paused playbook should go live again. Readiness is checked
+        as on activate. Steps that fell due while paused are skipped except those
+        on each invoice's latest due day.
+      operationId: resumePlaybook
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: The version you loaded
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/PlaybookVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/PlaybookResponse'
+        "400":
+          description: Not ready (details.problems)
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Changed since loaded, or not paused
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Resume playbook
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/{id}/runs:
+    get:
+      description: Use when you need the invoices in a playbook, oldest due date first,
+        each with its next pending step.
+      operationId: listPlaybookRuns
+      parameters:
+      - description: Playbook ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comma-separated active, paused, stopped, completed (default active,paused)
+        in: query
+        name: state
+        type: string
+      - description: Page size (1-100, default 25)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPlaybookRunsResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List a playbook's invoices
+      tags:
+      - Collections
+      x-scope: read
+  /collections/playbooks/reorder:
+    put:
+      consumes:
+      - application/json
+      description: Use when changing which playbook is checked first. Send every playbook
+        id of the environment once, highest priority first. New enrolments follow
+        the new order; invoices already in a playbook stay in it.
+      operationId: reorderPlaybooks
+      parameters:
+      - description: Every playbook id, highest priority first
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ReorderPlaybooksRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListPlaybooksResponse'
+        "400":
+          description: Ids missing, unknown or repeated
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Reorder playbooks
+      tags:
+      - Collections
+      x-scope: write
+  /collections/playbooks/run:
+    post:
+      description: 'Use to run the playbook scheduler for this environment now instead
+        of waiting for the daily pass (09:00 UTC): stops runs whose invoice was paid
+        or voided, enrols matching invoices and runs due steps. Safe to repeat: a
+        step runs at most once per invoice.'
+      operationId: runPlaybooks
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/RunPlaybooksResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Run playbooks now
+      tags:
+      - Collections
+      x-scope: write
   /collections/reminders:
     get:
       description: 'Use when you need the payment reminder of each overdue invoice
@@ -20475,6 +21779,137 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update reminder
+      tags:
+      - Collections
+      x-scope: write
+  /collections/tasks:
+    get:
+      description: Use when you need the to-dos playbook task steps created, newest
+        first.
+      operationId: listCollectionTasks
+      parameters:
+      - description: Invoice ID
+        in: query
+        name: invoice_id
+        type: string
+      - description: Customer ID
+        in: query
+        name: customer_id
+        type: string
+      - description: Assignee user ID
+        in: query
+        name: assignee_user_id
+        type: string
+      - description: open or done
+        in: query
+        name: state
+        type: string
+      - description: Page size (1-100, default 25)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ListCollectionTasksResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List collection tasks
+      tags:
+      - Collections
+      x-scope: read
+  /collections/tasks/{id}/complete:
+    post:
+      operationId: completeCollectionTask
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CollectionTaskResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Already done
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Complete collection task
+      tags:
+      - Collections
+      x-scope: write
+  /collections/tasks/{id}/reopen:
+    post:
+      operationId: reopenCollectionTask
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/CollectionTaskResponse'
+        "403":
+          description: Collections is not enabled for this environment
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Already open
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Reopen collection task
       tags:
       - Collections
       x-scope: write

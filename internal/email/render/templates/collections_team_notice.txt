@@ -1,0 +1,6 @@
+{{define "body"}}{{if .Heading}}{{.Heading}}
+
+{{end}}{{.Body}}
+{{if .ViewURL}}
+View invoice: {{.ViewURL}}
+{{end}}{{end}}

@@ -153,6 +153,54 @@ func (f CheckoutSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CheckoutSessionMutation", m)
 }
 
+// The CollectionPlaybookFunc type is an adapter to allow the use of ordinary
+// function as CollectionPlaybook mutator.
+type CollectionPlaybookFunc func(context.Context, *ent.CollectionPlaybookMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CollectionPlaybookFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CollectionPlaybookMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CollectionPlaybookMutation", m)
+}
+
+// The CollectionPlaybookRunFunc type is an adapter to allow the use of ordinary
+// function as CollectionPlaybookRun mutator.
+type CollectionPlaybookRunFunc func(context.Context, *ent.CollectionPlaybookRunMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CollectionPlaybookRunFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CollectionPlaybookRunMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CollectionPlaybookRunMutation", m)
+}
+
+// The CollectionPlaybookStepRunFunc type is an adapter to allow the use of ordinary
+// function as CollectionPlaybookStepRun mutator.
+type CollectionPlaybookStepRunFunc func(context.Context, *ent.CollectionPlaybookStepRunMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CollectionPlaybookStepRunFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CollectionPlaybookStepRunMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CollectionPlaybookStepRunMutation", m)
+}
+
+// The CollectionTaskFunc type is an adapter to allow the use of ordinary
+// function as CollectionTask mutator.
+type CollectionTaskFunc func(context.Context, *ent.CollectionTaskMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CollectionTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CollectionTaskMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CollectionTaskMutation", m)
+}
+
 // The CommitmentFunc type is an adapter to allow the use of ordinary
 // function as Commitment mutator.
 type CommitmentFunc func(context.Context, *ent.CommitmentMutation) (ent.Value, error)

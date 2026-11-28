@@ -193,6 +193,15 @@ func AllTemporalScheduleConfigs() []types.ScheduleConfig {
 		},
 		{
 			// Always declared; a no-op unless customer emails are on (email.enabled and email.provider).
+			// Always declared; a no-op unless an environment has a live collection playbook. Daily at 09:00 UTC.
+			ID:        types.ScheduleIDCollectionPlaybooks,
+			Interval:  24 * time.Hour,
+			Offset:    9 * time.Hour,
+			Workflow:  cronWorkflows.CollectionPlaybooksWorkflow,
+			Input:     models.CollectionPlaybooksWorkflowInput{},
+			TaskQueue: types.TemporalTaskQueueCron,
+		},
+		{
 			ID:        types.ScheduleIDEmailDispatch,
 			Interval:  1 * time.Minute,
 			Workflow:  cronWorkflows.EmailDispatchWorkflow,
