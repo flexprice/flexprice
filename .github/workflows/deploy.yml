@@ -75,7 +75,7 @@ jobs:
         # the GHCR :<sha> this pushes (promoted to :main post-approval), so a GHCR
         # failure on main must fail the build, not slip through silently.
         continue-on-error: ${{ github.ref_name != 'main' }}
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -142,7 +142,7 @@ jobs:
       # Empty digest = best-effort GHCR login failed, nothing pushed to sign.
       - name: Install cosign
         if: ${{ steps.build.outputs.digest != '' }}
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       # Signs the digest; every tag on it inherits the signature.
       - name: Sign image (keyless)
@@ -430,7 +430,7 @@ jobs:
       packages: write
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -487,7 +487,7 @@ jobs:
           aws-region: ${{ fromJson(vars.K8S_PREPROD_CHECK).region }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
@@ -626,7 +626,7 @@ jobs:
       packages: write # GHCR imagetools push
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
           registry: ghcr.io
           username: ${{ vars.GHCR_USERNAME || github.actor }}
