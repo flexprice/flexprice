@@ -370,7 +370,7 @@ func buildInvoiceItemParams(
 	productIDByPriceID map[string]string,
 ) *stripe.InvoiceItemCreateParams {
 	currency := strings.ToLower(lineItem.Currency)
-	amountCents := types.ToSmallestUnit(lineItem.Amount, currency)
+	amountCents := types.ToSignedSmallestUnit(lineItem.Amount, currency)
 
 	params := &stripe.InvoiceItemCreateParams{
 		Customer:    stripe.String(customerID),
@@ -383,7 +383,7 @@ func buildInvoiceItemParams(
 		},
 	}
 
-	if lineItem.PriceID != nil {
+	if amountCents >= 0 && lineItem.PriceID != nil {
 		if productID, ok := productIDByPriceID[*lineItem.PriceID]; ok {
 			params.PriceData = &stripe.InvoiceItemCreatePriceDataParams{
 				Product:    stripe.String(productID),
@@ -829,7 +829,7 @@ func (s *InvoiceSyncService) updateStripeInvoiceMetadata(ctx context.Context, st
 		}
 	}
 
-	// Add new payment amount (convert to cents as decimal for precision)
+	// Add new payment amount (convert to smallest unit as decimal for precision)
 	paymentAmountCents := decimal.NewFromInt(types.ToSmallestUnit(paymentAmount, string(currentInvoice.Currency)))
 	newTotalCredits := currentCredits.Add(paymentAmountCents)
 

@@ -420,7 +420,7 @@ func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
 
 			require.NoError(t, s.CreateExternalPaymentRecord(context.Background(), pi, "inv_1", types.PaymentStatusSucceeded, "evt_1", paymentSvc))
 
-			require.True(t, decimal.RequireFromString(tc.want).Equal(paymentSvc.createReq.Amount), "got %s", paymentSvc.createReq.Amount)
+			require.True(t, decimal.RequireFromString(tc.want).Equal(paymentSvc.createReq.Amount), "got %s want %s", paymentSvc.createReq.Amount, tc.want)
 		})
 	}
 }
