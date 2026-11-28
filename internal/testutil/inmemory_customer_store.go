@@ -179,6 +179,17 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
+	// Mirror the search_query OR group: name, email, or external id contains (case-insensitive), or id equals.
+	if term := strings.TrimSpace(f.SearchQuery); term != "" {
+		lower := strings.ToLower(term)
+		if !strings.Contains(strings.ToLower(c.Name), lower) &&
+			!strings.Contains(strings.ToLower(c.Email), lower) &&
+			!strings.Contains(strings.ToLower(c.ExternalID), lower) &&
+			c.ID != term {
+			return false
+		}
+	}
+
 	// Apply metadata filter (all key-value pairs must match — AND semantics, mirrors @> JSONB semantics)
 	if !f.MetadataFilter.Match(c.Metadata) {
 		return false

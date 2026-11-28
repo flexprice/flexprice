@@ -37875,6 +37875,10 @@
               "desc"
             ]
           },
+          "search_query": {
+            "type": "string",
+            "description": "search_query matches customers whose name, email, or external_id contains the\ntext (case-insensitive), or whose id equals it. ANDed with the other filters."
+          },
           "sort": {
             "type": "array",
             "items": {

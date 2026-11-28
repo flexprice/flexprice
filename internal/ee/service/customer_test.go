@@ -271,6 +271,49 @@ func (s *CustomerServiceSuite) TestGetCustomers() {
 	}
 }
 
+func (s *CustomerServiceSuite) TestGetCustomersSearchQuery() {
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:         "cust_search_acme",
+		Name:       "Acme Robotics",
+		ExternalID: "usw1:tenant_ABC123",
+		Email:      "acme@example.com",
+	})
+	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
+		ID:         "cust_search_globex",
+		Name:       "Globex",
+		ExternalID: "globex-001",
+		Email:      "globex@example.com",
+	})
+
+	search := func(term string) []string {
+		resp, err := s.service.GetCustomers(s.ctx, &types.CustomerFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			SearchQuery: term,
+		})
+		s.Require().NoError(err)
+		return lo.Map(resp.Items, func(c *dto.CustomerResponse, _ int) string { return c.ID })
+	}
+
+	s.Run("name_contains_case_insensitive", func() {
+		s.ElementsMatch([]string{"cust_search_acme"}, search("acme rob"))
+	})
+	s.Run("email_contains_case_insensitive", func() {
+		s.ElementsMatch([]string{"cust_search_acme"}, search("ACME@example"))
+	})
+	s.Run("external_id_contains", func() {
+		s.ElementsMatch([]string{"cust_search_acme"}, search("tenant_abc"))
+	})
+	s.Run("id_equals", func() {
+		s.ElementsMatch([]string{"cust_search_globex"}, search("cust_search_globex"))
+	})
+	s.Run("id_is_not_a_contains_match", func() {
+		s.Empty(search("search_glob"))
+	})
+	s.Run("blank_matches_everyone", func() {
+		s.Subset(search("  "), []string{"cust_search_acme", "cust_search_globex"})
+	})
+}
+
 func (s *CustomerServiceSuite) TestGetCustomersStatusFilter() {
 	_ = s.GetStores().CustomerRepo.Create(s.ctx, &domainCustomer.Customer{
 		ID:    "cust-published",
