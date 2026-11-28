@@ -1440,6 +1440,10 @@ func (s *invoiceService) FinalizeInvoice(ctx context.Context, id string, req dto
 	if err != nil {
 		return err
 	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
 
 	if err := s.refreshStaleDraft(ctx, inv, req.InvoiceStateChangeSource); err != nil {
 		return err
@@ -2080,6 +2084,10 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 
 func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
 	if err != nil {
 		return err
 	}
