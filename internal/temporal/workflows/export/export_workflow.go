@@ -21,6 +21,8 @@ type ExecuteExportWorkflowInput struct {
 	// Optional custom time range for force runs
 	CustomStartTime *time.Time
 	CustomEndTime   *time.Time
+	// Optional customer filter for force runs; empty means every customer.
+	CustomerExternalIDs []string
 }
 
 // ExecuteExportWorkflowOutput represents output from the export workflow
@@ -177,13 +179,14 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 	ctx = workflow.WithActivityOptions(ctx, heavyActivityOptions)
 
 	exportInput := export.ExportDataInput{
-		EntityType:   types.ScheduledTaskEntityType(taskDetails.EntityType),
-		ConnectionID: taskDetails.ConnectionID,
-		TenantID:     taskDetails.TenantID,
-		EnvID:        taskDetails.EnvID,
-		StartTime:    taskDetails.StartTime,
-		EndTime:      taskDetails.EndTime,
-		JobConfig:    taskDetails.JobConfig,
+		EntityType:          types.ScheduledTaskEntityType(taskDetails.EntityType),
+		ConnectionID:        taskDetails.ConnectionID,
+		TenantID:            taskDetails.TenantID,
+		EnvID:               taskDetails.EnvID,
+		StartTime:           taskDetails.StartTime,
+		EndTime:             taskDetails.EndTime,
+		JobConfig:           taskDetails.JobConfig,
+		CustomerExternalIDs: input.CustomerExternalIDs,
 	}
 
 	var exportOutput export.ExportDataOutput

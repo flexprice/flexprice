@@ -1,0 +1,63 @@
+package service
+
+import (
+	"context"
+	"errors"
+
+	"github.com/flexprice/flexprice/internal/domain/connection"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+)
+
+// ForEachConnection runs fn for each published connection of the provider with its owner entity in ctx and joins the failures.
+func ForEachConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, fn func(context.Context, *connection.Connection) error) error {
+	all, err := repo.ListAllPublished(ctx)
+	if err != nil {
+		return err
+	}
+	conns := lo.Filter(all, func(c *connection.Connection, _ int) bool { return c.ProviderType == provider })
+	if len(conns) == 0 {
+		return ierr.NewError("connection not found").
+			WithHintf("Connection with provider %s was not found in this environment", provider).
+			Mark(ierr.ErrNotFound)
+	}
+
+	var errs []error
+	for _, c := range conns {
+		if err := fn(connection.WithOwner(ctx, c), c); err != nil {
+			errs = append(errs, ierr.WithError(err).
+				WithReportableDetails(map[string]any{"connection_id": c.ID}).
+				Error())
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// requireNoDuplicateConnection rejects a second published connection of the provider for the owner; storage is exempt.
+func requireNoDuplicateConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider, owner *string) error {
+	if connection.IsStorageProvider(provider) {
+		return nil
+	}
+	existing, err := repo.List(ctx, &types.ConnectionFilter{
+		QueryFilter:     types.NewNoLimitPublishedQueryFilter(),
+		ProviderType:    provider,
+		BillingEntityID: lo.FromPtr(owner),
+	})
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		return errConnectionExists(ctx, existing[0], owner)
+	}
+	return nil
+}
+
+// hasPublishedConnection reports whether the environment has any published connection of the provider.
+func hasPublishedConnection(ctx context.Context, repo connection.Repository, provider types.SecretProvider) (bool, error) {
+	all, err := repo.ListAllPublished(ctx)
+	if err != nil {
+		return false, err
+	}
+	return lo.ContainsBy(all, func(c *connection.Connection) bool { return c.ProviderType == provider }), nil
+}

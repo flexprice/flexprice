@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -331,7 +333,7 @@ func (c *Client) makeRequest(ctx context.Context, method, endpoint string, body 
 	}
 
 	baseURL := c.GetBaseURL(qbConfig.Environment)
-	fullURL := fmt.Sprintf("%s/v3/company/%s/%s?minorversion=%s", baseURL, qbConfig.RealmID, endpoint, c.minorVersion)
+	fullURL := fmt.Sprintf("%s/v3/company/%s/%s?minorversion=%s", baseURL, url.PathEscape(qbConfig.RealmID), endpoint, c.minorVersion)
 
 	var bodyReader io.Reader
 	if body != nil {
@@ -426,7 +428,7 @@ func (c *Client) queryEntitiesWithRetry(ctx context.Context, entityType, query s
 
 	baseURL := c.GetBaseURL(qbConfig.Environment)
 	queryURL := fmt.Sprintf("%s/v3/company/%s/query?minorversion=%s&query=%s",
-		baseURL, qbConfig.RealmID, c.minorVersion, url.QueryEscape(query))
+		baseURL, url.PathEscape(qbConfig.RealmID), c.minorVersion, url.QueryEscape(query))
 
 	req, err := http.NewRequestWithContext(ctx, "GET", queryURL, nil)
 	if err != nil {
@@ -1003,7 +1005,7 @@ func (c *Client) ExchangeAuthCodeForTokens(ctx context.Context) error {
 	conn.EncryptedSecretData.QuickBooks.AuthCode = ""    // Clear auth code after successful exchange
 	conn.EncryptedSecretData.QuickBooks.RedirectURI = "" // Clear redirect URI
 
-	conn.UpdatedAt = time.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
@@ -1184,7 +1186,7 @@ func (c *Client) RefreshAccessToken(ctx context.Context) error {
 	conn.EncryptedSecretData.QuickBooks.RefreshToken = encryptedRefreshToken
 	conn.EncryptedSecretData.QuickBooks.AuthCode = "" // Clear auth code if present
 
-	conn.UpdatedAt = time.Now()
+	conn.UpdatedAt = clock.Now()
 	conn.UpdatedBy = types.GetUserID(ctx)
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {

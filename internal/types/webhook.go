@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 )
 
 // WebhookEventName represents a webhook event name string.
@@ -43,7 +45,7 @@ func NewWebhookEvent(eventName WebhookEventName) *WebhookEventBuilder {
 		event: &WebhookEvent{
 			ID:        GenerateUUIDWithPrefix(UUID_PREFIX_SYSTEM_EVENT),
 			EventName: eventName,
-			Timestamp: time.Now().UTC(),
+			Timestamp: clock.Now(),
 		},
 	}
 }
@@ -128,6 +130,23 @@ const (
 	WebhookEventEntitlementDeleted WebhookEventName = "entitlement.deleted"
 )
 
+// commitment event names
+const (
+	WebhookEventCommitmentCreated    WebhookEventName = "commitment.created"
+	WebhookEventCommitmentUpdated    WebhookEventName = "commitment.updated"
+	WebhookEventCommitmentTerminated WebhookEventName = "commitment.terminated"
+)
+
+// billing term and instalment event names
+const (
+	WebhookEventBillingTermsCreated        WebhookEventName = "billing_terms.created"
+	WebhookEventBillingTermsUpdated        WebhookEventName = "billing_terms.updated"
+	WebhookEventBillingInstalmentCreated   WebhookEventName = "billing_instalment.created"
+	WebhookEventBillingInstalmentUpdated   WebhookEventName = "billing_instalment.updated"
+	WebhookEventBillingInstalmentCancelled WebhookEventName = "billing_instalment.cancelled"
+	WebhookEventBillingInstalmentInvoiced  WebhookEventName = "billing_instalment.invoiced"
+)
+
 // wallet event names
 const (
 	WebhookEventWalletCreated            WebhookEventName = "wallet.created"
@@ -139,11 +158,13 @@ const (
 
 // payment event names
 const (
-	WebhookEventPaymentCreated WebhookEventName = "payment.created"
-	WebhookEventPaymentUpdated WebhookEventName = "payment.updated"
-	WebhookEventPaymentFailed  WebhookEventName = "payment.failed"
-	WebhookEventPaymentSuccess WebhookEventName = "payment.success"
-	WebhookEventPaymentPending WebhookEventName = "payment.pending"
+	WebhookEventPaymentCreated       WebhookEventName = "payment.created"
+	WebhookEventPaymentUpdated       WebhookEventName = "payment.updated"
+	WebhookEventPaymentFailed        WebhookEventName = "payment.failed"
+	WebhookEventPaymentAttemptFailed    WebhookEventName = "payment.attempt.failed"
+	WebhookEventPaymentAttemptSucceeded WebhookEventName = "payment.attempt.succeeded"
+	WebhookEventPaymentSuccess       WebhookEventName = "payment.success"
+	WebhookEventPaymentPending       WebhookEventName = "payment.pending"
 )
 
 // refund event names
@@ -167,6 +188,7 @@ const (
 	WebhookEventInvoiceUpdateVoided    WebhookEventName = "invoice.update.voided"
 	WebhookEventInvoiceUpdate          WebhookEventName = "invoice.update"
 	WebhookEventInvoicePaymentOverdue  WebhookEventName = "invoice.payment.overdue"
+	WebhookEventInvoicePaymentFailed   WebhookEventName = "invoice.payment.failed"
 )
 
 // invoice sync event names
@@ -215,6 +237,17 @@ const (
 	WebhookEventCheckoutSessionCompleted WebhookEventName = "checkout.session.completed"
 	WebhookEventCheckoutSessionFailed    WebhookEventName = "checkout.session.failed"
 	WebhookEventCheckoutSessionExpired   WebhookEventName = "checkout.session.expired"
+	WebhookEventCheckoutSessionCancelled WebhookEventName = "checkout.session.cancelled"
+)
+
+// mandate webhook event names, fired when a gateway confirms, rejects or cancels a saved mandate,
+// or when a mandate setup attempt fails or its link expires
+const (
+	WebhookEventMandateConfirmed          WebhookEventName = "mandate.confirmed"
+	WebhookEventMandateRejected           WebhookEventName = "mandate.rejected"
+	WebhookEventMandateCancelled          WebhookEventName = "mandate.cancelled"
+	WebhookEventMandateSetupAttemptFailed WebhookEventName = "mandate.setup_attempt_failed"
+	WebhookEventMandateSetupExpired       WebhookEventName = "mandate.setup_expired"
 )
 
 // event (usage ingestion) webhook event names

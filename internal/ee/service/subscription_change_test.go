@@ -18,6 +18,7 @@ import (
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,6 +87,9 @@ func (s *SubscriptionChangeServiceTestSuite) setupServices() {
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		SettingsRepo:                 s.GetStores().SettingsRepo,
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
+		BillingTermRepo:              s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:        s.GetStores().BillingInstalmentRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
 		EventPublisher:               s.GetPublisher(),
 		WebhookPublisher:             s.GetWebhookPublisher(),
@@ -571,6 +575,8 @@ func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionUpgrade() {
 	premiumPlan := s.createTestPlan("Premium", decimal.NewFromFloat(20.00))
 	testSub := s.createTestSubscription(basicPlan.ID, customer.ID)
 	originalSubID := testSub.ID
+	testSub.Settings = &types.SettingsOverride{SubscriptionConfig: &types.SubscriptionConfigOverride{GracePeriodDays: lo.ToPtr(10)}}
+	require.NoError(s.T(), s.GetStores().SubscriptionRepo.Update(ctx, testSub))
 
 	// Create execute request
 	req := s.createSubscriptionChangeRequest(premiumPlan.ID, types.ProrationBehaviorCreateProrations)
@@ -600,6 +606,7 @@ func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionUpgrade() {
 	assert.Equal(s.T(), types.SubscriptionStatusActive, newSub.SubscriptionStatus)
 	assert.Equal(s.T(), premiumPlan.ID, newSub.PlanID)
 	assert.Equal(s.T(), customer.ID, newSub.CustomerID)
+	assert.Equal(s.T(), testSub.Settings, newSub.Settings)
 }
 
 func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeWithoutProration() {

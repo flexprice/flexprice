@@ -278,6 +278,8 @@ type DraftAndComputeSubscriptionInvoiceWorkflowInput struct {
 	UserID         string `json:"user_id"`
 	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool `json:"skip_if_already_invoiced,omitempty"`
+	// RecomputePastPeriodDrafts also recomputes the subscription's cycle drafts whose period has ended.
+	RecomputePastPeriodDrafts bool `json:"recompute_past_period_drafts,omitempty"`
 }
 
 // Validate validates the draft-and-compute subscription invoice workflow input.
@@ -343,6 +345,19 @@ type CreateDraftForCurrentSubscriptionPeriodActivityOutput struct {
 	InvoiceID string `json:"invoice_id"`
 	// Skipped means no draft was created.
 	Skipped bool `json:"skipped"`
+}
+
+// ListPastPeriodDraftsActivityInput is the input for ListPastPeriodDraftsActivity.
+type ListPastPeriodDraftsActivityInput struct {
+	SubscriptionID string `json:"subscription_id"`
+	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
+	UserID         string `json:"user_id"`
+}
+
+// ListPastPeriodDraftsActivityOutput is the output of ListPastPeriodDraftsActivity.
+type ListPastPeriodDraftsActivityOutput struct {
+	InvoiceIDs []string `json:"invoice_ids"`
 }
 
 // FinalizeDueDraftsActivityInput represents the input for the finalize due drafts activity

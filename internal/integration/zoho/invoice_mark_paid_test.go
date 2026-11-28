@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -71,6 +72,10 @@ type fakeZohoClient struct {
 	// balanceSequence mirrors statusSequence for the invoice balance, so a test can have
 	// Zoho settle the invoice midway through the approval wait.
 	balanceSequence []decimal.Decimal
+}
+
+func (f *fakeZohoClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderZohoBooks}, nil
 }
 
 func (f *fakeZohoClient) GetInvoice(_ context.Context, _ string) (*InvoiceResponse, error) {
@@ -186,16 +191,16 @@ func TestMarkInvoicePaidInZoho_PositiveBalance_RecordsFullBalance(t *testing.T) 
 
 func markPaidFixtures() (*fakeZohoClient, *fakeMappingRepo) {
 	return &fakeZohoClient{
-			getInvoiceResp: &InvoiceResponse{
-				InvoiceID:  "zoho_inv_1",
-				CustomerID: "zoho_cust_1",
-				Balance:    decimal.NewFromInt(160),
-			},
-		}, &fakeMappingRepo{
-			mappings: []*entityintegrationmapping.EntityIntegrationMapping{
-				{EntityID: "inv_1", ProviderEntityID: "zoho_inv_1"},
-			},
-		}
+		getInvoiceResp: &InvoiceResponse{
+			InvoiceID:  "zoho_inv_1",
+			CustomerID: "zoho_cust_1",
+			Balance:    decimal.NewFromInt(160),
+		},
+	}, &fakeMappingRepo{
+		mappings: []*entityintegrationmapping.EntityIntegrationMapping{
+			{EntityID: "inv_1", ProviderEntityID: "zoho_inv_1"},
+		},
+	}
 }
 
 func succeededPayment(id, gatewayID string, succeededAt time.Time) *payment.Payment {

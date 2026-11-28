@@ -3,7 +3,10 @@ package ent
 import (
 	"context"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/lib/pq"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/settings"
@@ -13,8 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/flexprice/flexprice/internal/utils"
-	"github.com/lib/pq"
 )
 
 type settingsRepository struct {
@@ -103,7 +104,7 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetValue(s.Value).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -146,7 +147,7 @@ func (r *settingsRepository) Delete(ctx context.Context, id string) error {
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)
 
@@ -251,6 +252,26 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	return setting, nil
 }
 
+func (r *settingsRepository) GetByKeyUncached(ctx context.Context, environmentID string, key types.SettingKey) (*domainSettings.Setting, error) {
+	s, err := r.client.Reader(ctx).Settings.Query().
+		Where(
+			settings.Key(string(key)),
+			settings.TenantID(types.GetTenantID(ctx)),
+			settings.EnvironmentID(environmentID),
+			settings.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, notFoundSettingErr(key)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get setting by key").
+			Mark(ierr.ErrDatabase)
+	}
+	return domainSettings.FromEnt(s), nil
+}
+
 // GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
 // This is for settings that apply tenant-wide across all environments
 func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
@@ -331,7 +352,7 @@ func (r *settingsRepository) archiveSetting(ctx context.Context, key types.Setti
 				settings.Status(string(types.StatusPublished)),
 			).
 			SetStatus(string(types.StatusArchived)).
-			SetUpdatedAt(time.Now().UTC()).
+			SetUpdatedAt(clock.Now()).
 			SetUpdatedBy(types.GetUserID(ctx)).
 			Save(ctx)
 
@@ -534,49 +555,4 @@ func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, 
 	}
 
 	return configs, nil
-}
-
-// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
-// Uses simple stateless conversion from map to struct
-func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	// Get all configs for subscription key
-	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert to subscription configs using simple stateless conversion
-	subscriptionConfigs := make([]*types.TenantEnvSubscriptionConfig, 0, len(configs))
-	for _, config := range configs {
-		// Simple conversion: map -> typed struct
-		subscriptionConfig, err := utils.ToStruct[types.SubscriptionConfig](config.Config)
-		if err != nil {
-			r.log.Info(ctx, "failed to convert subscription config",
-				"tenant_id", config.TenantID,
-				"environment_id", config.EnvironmentID,
-				"error", err)
-			continue
-		}
-
-		r.log.Debug(ctx, "processing subscription config",
-			"tenant_id", config.TenantID,
-			"environment_id", config.EnvironmentID,
-			"auto_cancellation_enabled", subscriptionConfig.AutoCancellationEnabled,
-			"grace_period_days", subscriptionConfig.GracePeriodDays)
-
-		// Only include if auto-cancellation is enabled
-		if subscriptionConfig.AutoCancellationEnabled {
-			subscriptionConfigs = append(subscriptionConfigs, &types.TenantEnvSubscriptionConfig{
-				TenantID:           config.TenantID,
-				EnvironmentID:      config.EnvironmentID,
-				SubscriptionConfig: &subscriptionConfig,
-			})
-		} else {
-			r.log.Info(ctx, "skipping subscription config - auto-cancellation disabled",
-				"tenant_id", config.TenantID,
-				"environment_id", config.EnvironmentID)
-		}
-	}
-
-	return subscriptionConfigs, nil
 }

@@ -25,7 +25,7 @@
     str(date.day())
   }
   let month = month-names.at(date.month() - 1)
-  let year = str(date.year()).slice(2) // Get last 2 digits
+  let year = str(date.year())
 
   day + " " + month + " " + year
 }

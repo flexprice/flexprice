@@ -89,7 +89,7 @@ type CreateSubscriptionLineItemRequest struct {
 	PriceID string `json:"price_id,omitempty"`
 	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
 	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
-	Quantity             decimal.Decimal                 `json:"quantity,omitempty"`
+	Quantity             decimal.Decimal                 `json:"quantity,omitempty" swaggertype:"string"`
 	StartDate            *time.Time                      `json:"start_date,omitempty"`
 	EndDate              *time.Time                      `json:"end_date,omitempty"`
 	Metadata             map[string]string               `json:"metadata,omitempty"`
@@ -100,15 +100,22 @@ type CreateSubscriptionLineItemRequest struct {
 	// ProrationBehavior controls mid-period charge creation. Defaults to none.
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior,omitempty"`
 
-	// Commitment fields
-	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod      `json:"commitment_duration,omitempty"`
-	CommitmentTimeBuckets   []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTimeBuckets []CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -120,7 +127,8 @@ type DeleteSubscriptionLineItemRequest struct {
 }
 
 type UpdateSubscriptionLineItemRequest struct {
-	// EffectiveFrom for the existing line item (if not provided, defaults to now)
+	// EffectiveFrom is when the new version starts and the current one ends (defaults to now). A date before
+	// the current version's start_date replaces it from that date instead, and price fields become optional.
 	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
@@ -150,15 +158,23 @@ type UpdateSubscriptionLineItemRequest struct {
 	// Metadata for the new line item
 	Metadata map[string]string `json:"metadata,omitempty"`
 
-	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentType types.CommitmentType `json:"commitment_type,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty" swaggertype:"string"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentTrueUpEnabled *bool `json:"commitment_true_up_enabled,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentWindowed *bool `json:"commitment_windowed,omitempty"`
+	// Deprecated: use POST /commitments instead.
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Pointer so an explicit empty array can clear existing buckets (omission keeps them).
+	//
+	// Deprecated: use POST /commitments instead.
 	CommitmentTimeBuckets *[]CommitmentBucketRequest `json:"commitment_time_buckets,omitempty"`
 }
 
@@ -607,13 +623,6 @@ func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 
 // Validate validates the update subscription line item request
 func (r *UpdateSubscriptionLineItemRequest) Validate() error {
-	// If EffectiveFrom is provided, at least one critical field must be present
-	if r.EffectiveFrom != nil && !r.ShouldCreateNewLineItem() {
-		return ierr.NewError("effective_from requires at least one critical field").
-			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, price_unit_tiers, bucket_size, or commitment fields").
-			Mark(ierr.ErrValidation)
-	}
-
 	// BucketSizeNone is the explicit-clear sentinel, not a window, so it skips the
 	// enum check. Validating here stops a bad window reaching the price layer,
 	// where it surfaces only after the override has already been built.

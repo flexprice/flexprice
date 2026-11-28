@@ -4,6 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -12,8 +17,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type TaxService interface {
@@ -611,6 +614,13 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 			"customer_id", customer.ID)
 	}
 
+	if req.EntityType == types.TaxRateEntityTypeBillingEntity {
+		beService := &billingEntityService{ServiceParams: s.ServiceParams}
+		if _, err := beService.entityInEnvironment(ctx, req.EntityID); err != nil {
+			return nil, err
+		}
+	}
+
 	// validate tax rate exists and is valid
 	taxRate, err := s.TaxRateRepo.GetByCode(ctx, req.TaxRateCode)
 	if err != nil {
@@ -631,7 +641,8 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 	// neither and must not pay for the fetches.
 	var sub *subscription.Subscription
 	if req.EntityType == types.TaxRateEntityTypeSubscription && req.EntityID != "" {
-		sub, err = s.SubRepo.Get(ctx, req.EntityID)
+		// Read from the writer: callers often link a tax rate right after creating the subscription, before the replica has it.
+		sub, err = s.SubRepo.Get(types.WithForceWriter(ctx), req.EntityID)
 		if err != nil {
 			return nil, err
 		}
@@ -666,7 +677,9 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		"auto_apply", tc.AutoApply)
 
 	// Create tax config
-	err = s.TaxAssociationRepo.Create(ctx, tc)
+	err = s.writeTaxLink(ctx, tc.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Create(ctx, tc)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to create tax association",
 			"error", err,
@@ -731,7 +744,6 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 	if err != nil {
 		return nil, err
 	}
-
 	// Update fields if provided
 	if req.Priority != nil {
 		existing.Priority = lo.FromPtr(req.Priority)
@@ -756,7 +768,9 @@ func (s *taxService) UpdateTaxAssociation(ctx context.Context, id string, req *d
 		"entity_id", existing.EntityID)
 
 	// Update tax config
-	err = s.TaxAssociationRepo.Update(ctx, existing)
+	err = s.writeTaxLink(ctx, existing.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Update(ctx, existing)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to update tax association",
 			"error", err,
@@ -786,9 +800,10 @@ func (s *taxService) DeleteTaxAssociation(ctx context.Context, id string) error 
 	if err != nil {
 		return err
 	}
-
 	// Delete tax association
-	err = s.TaxAssociationRepo.Delete(ctx, existing)
+	err = s.writeTaxLink(ctx, existing.EntityType, func(ctx context.Context) error {
+		return s.TaxAssociationRepo.Delete(ctx, existing)
+	})
 	if err != nil {
 		s.Logger.Error(ctx, "failed to delete tax association",
 			"error", err,
@@ -1262,7 +1277,7 @@ func (s *taxService) CalculateTaxesOnInvoice(ctx context.Context, inv *invoice.I
 				TaxAmount:     line.taxAmount,
 				TaxBehavior:   line.taxBehavior,
 				Currency:      inv.Currency,
-				AppliedAt:     time.Now().UTC(),
+				AppliedAt:     clock.Now(),
 			},
 			TaxRate: rate.TaxRateResponse,
 		})
@@ -1533,7 +1548,7 @@ func (s *taxService) PersistTaxResult(ctx context.Context, entityType types.TaxR
 			applied.EntityID = entityID
 			applied.Currency = currency
 			applied.Provider = result.Provider
-			applied.AppliedAt = time.Now().UTC()
+			applied.AppliedAt = clock.Now()
 			applied.EnvironmentID = types.GetEnvironmentID(ctx)
 			applied.BaseModel = types.GetDefaultBaseModel(ctx)
 
@@ -1888,7 +1903,7 @@ func (s *taxService) recordReversal(ctx context.Context, req dto.TaxReversalRequ
 		return nil
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	for _, applied := range filed {
 		details := types.ExternalTaxDetails{}
 		if applied.ExternalTaxDetails != nil {
@@ -1939,4 +1954,20 @@ func (s *taxService) taxIsReversed(ctx context.Context, entityType types.TaxRate
 	return lo.ContainsBy(rows, func(applied *taxapplied.TaxApplied) bool {
 		return applied.IsReversal() && lo.FromPtr(applied.TaxTransactionID) != ""
 	}), nil
+}
+
+// writeTaxLink runs write; a tenant-level link is checked and written under the shared billing entity lock,
+// because new customers take their entity's links once billing entities are enabling or enabled.
+func (s *taxService) writeTaxLink(ctx context.Context, entityType types.TaxRateEntityType, write func(ctx context.Context) error) error {
+	if entityType != types.TaxRateEntityTypeTenant {
+		return write(ctx)
+	}
+	return NewBillingEntityService(s.ServiceParams).WithMode(ctx, func(txCtx context.Context, mode types.BillingEntityMode) error {
+		if mode != types.BillingEntityModeOff {
+			return ierr.NewError("tax defaults are set per billing entity").
+				WithHint("Tax defaults are set per billing entity. Link the tax rate to a billing entity instead.").
+				Mark(ierr.ErrValidation)
+		}
+		return write(txCtx)
+	})
 }

@@ -561,89 +561,6 @@ func (s *InMemoryEventStore) GetEvents(ctx context.Context, params *events.GetEv
 	return filteredEvents, totalCount, nil
 }
 
-func (s *InMemoryEventStore) GetUsageWithFilters(ctx context.Context, params *events.UsageWithFiltersParams) ([]*events.AggregationResult, error) {
-	if params == nil || params.UsageParams == nil {
-		return nil, ierr.NewError("params cannot be nil").
-			WithHint("Params cannot be nil").
-			Mark(ierr.ErrValidation)
-	}
-
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	// Process each filter group and calculate usage
-	var results []*events.AggregationResult
-	for _, group := range params.FilterGroups {
-		// Filter events based on base filters and group filters
-		var filteredEvents []*events.Event
-		for _, event := range s.events {
-			if !s.matchesBaseFilters(ctx, event, params.UsageParams) {
-				continue
-			}
-
-			if !s.matchesFilterGroup(event, group) {
-				continue
-			}
-
-			filteredEvents = append(filteredEvents, event)
-		}
-
-		// Calculate usage for filtered events
-		var value decimal.Decimal
-		switch params.AggregationType {
-		case types.AggregationCount:
-			value = decimal.NewFromInt(int64(len(filteredEvents)))
-		case types.AggregationSum, types.AggregationAvg:
-			var sum decimal.Decimal
-			count := 0
-			for _, event := range filteredEvents {
-				if val, ok := event.Properties[params.PropertyName]; ok {
-					// Try to convert the value to float64
-					var floatVal float64
-					switch v := val.(type) {
-					case float64:
-						floatVal = v
-					case int64:
-						floatVal = float64(v)
-					case int:
-						floatVal = float64(v)
-					case string:
-						var err error
-						floatVal, err = strconv.ParseFloat(v, 64)
-						if err != nil {
-							continue
-						}
-					default:
-						continue
-					}
-					sum = sum.Add(decimal.NewFromFloat(floatVal))
-					count++
-				}
-			}
-			if count > 0 {
-				if params.AggregationType == types.AggregationAvg {
-					value = sum.Div(decimal.NewFromInt(int64(count)))
-				} else {
-					value = sum
-				}
-			}
-			log.Printf("Calculated %s: sum=%v, count=%d, value=%v",
-				params.AggregationType, sum, count, value)
-		}
-		result := &events.AggregationResult{
-			EventName: params.EventName,
-			Type:      params.AggregationType,
-			Metadata: map[string]string{
-				"filter_group_id": group.ID,
-			},
-			Value: value,
-		}
-		results = append(results, result)
-	}
-
-	return results, nil
-}
-
 func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, externalCustomerIDs []string, startTime, endTime time.Time) ([]string, error) {
 	if len(externalCustomerIDs) == 0 {
 		return nil, nil
@@ -760,31 +677,6 @@ func (s *InMemoryEventStore) matchesBaseFilters(ctx context.Context, event *even
 						event.ID, key, propValue, values)
 					return false
 				}
-			}
-		}
-	}
-
-	return true
-}
-
-func (s *InMemoryEventStore) matchesFilterGroup(event *events.Event, group events.FilterGroup) bool {
-	if len(group.Filters) == 0 {
-		return true
-	}
-
-	for key, values := range group.Filters {
-		if propValue, ok := event.Properties[key]; !ok {
-			return false
-		} else {
-			found := false
-			for _, value := range values {
-				if fmt.Sprintf("%v", propValue) == value {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return false
 			}
 		}
 	}

@@ -12,3 +12,4 @@ Narratives for critical paths through the codebase. Maintain these when observab
 | Subscription states & Temporal alignment | [subscription-lifecycle.md](subscription-lifecycle.md) |
 | Inbound PSP + outbound Svix pipelines | [webhook-processing.md](webhook-processing.md) |
 | Watermill retry/DLQ stack | [retry-handling.md](retry-handling.md) |
+| Commitments (v2) and billing terms | [commitments.md](commitments.md) |

@@ -290,6 +290,26 @@ func (_c *CustomerCreate) SetContactPersons(v []*schema.ContactPerson) *Customer
 	return _c
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_c *CustomerCreate) SetBillingEntityID(v string) *CustomerCreate {
+	_c.mutation.SetBillingEntityID(v)
+	return _c
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableBillingEntityID(v *string) *CustomerCreate {
+	if v != nil {
+		_c.SetBillingEntityID(*v)
+	}
+	return _c
+}
+
+// SetSettings sets the "settings" field.
+func (_c *CustomerCreate) SetSettings(v *types.SettingsOverride) *CustomerCreate {
+	_c.mutation.SetSettings(v)
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *CustomerCreate) SetID(v string) *CustomerCreate {
 	_c.mutation.SetID(v)
@@ -522,6 +542,14 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ContactPersons(); ok {
 		_spec.SetField(customer.FieldContactPersons, field.TypeJSON, value)
 		_node.ContactPersons = value
+	}
+	if value, ok := _c.mutation.BillingEntityID(); ok {
+		_spec.SetField(customer.FieldBillingEntityID, field.TypeString, value)
+		_node.BillingEntityID = &value
+	}
+	if value, ok := _c.mutation.Settings(); ok {
+		_spec.SetField(customer.FieldSettings, field.TypeJSON, value)
+		_node.Settings = value
 	}
 	return _node, _spec
 }

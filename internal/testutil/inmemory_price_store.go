@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -55,6 +56,10 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	if f.ParentPriceID != nil && p.ParentPriceID != *f.ParentPriceID {
+		return false
+	}
+
 	// Filter by price IDs
 	if len(f.PriceIDs) > 0 {
 		if !lo.Contains(f.PriceIDs, p.ID) {
@@ -62,8 +67,17 @@ func priceFilterFn(ctx context.Context, p *price.Price, filter interface{}) bool
 		}
 	}
 
+	if len(f.ProductIDs) > 0 && !lo.Contains(f.ProductIDs, p.ProductID) {
+		return false
+	}
+
 	// Filter by status
 	if f.Status != nil && p.Status != *f.Status {
+		return false
+	}
+
+	// Like the ent repository, drop prices ended by now unless expired prices are allowed
+	if !f.AllowExpiredPrices && p.EndDate != nil && !p.EndDate.After(clock.Now()) {
 		return false
 	}
 
@@ -217,14 +231,11 @@ func (s *InMemoryPriceStore) Delete(ctx context.Context, id string) error {
 
 // ListAll returns all prices without pagination
 func (s *InMemoryPriceStore) ListAll(ctx context.Context, filter *types.PriceFilter) ([]*price.Price, error) {
-	// Create an unlimited filter
-	unlimitedFilter := &types.PriceFilter{
-		QueryFilter:     types.NewNoLimitQueryFilter(),
-		TimeRangeFilter: filter.TimeRangeFilter,
-		EntityIDs:       filter.EntityIDs,
-	}
+	// Like the ent repository, keep every filter field and only lift the limit
+	unlimitedFilter := *filter
+	unlimitedFilter.QueryFilter = types.NewNoLimitQueryFilter()
 
-	return s.List(ctx, unlimitedFilter)
+	return s.List(ctx, &unlimitedFilter)
 }
 
 // CreateBulk creates multiple prices in bulk
@@ -249,10 +260,6 @@ func (s *InMemoryPriceStore) DeleteBulk(ctx context.Context, ids []string) error
 		}
 	}
 	return nil
-}
-
-func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]*price.Price, error) {
-	return s.InMemoryStore.List(ctx, types.NewPriceFilter().WithEntityIDs([]string{planID}), priceFilterFn, priceSortFn)
 }
 
 // Clear clears the price store

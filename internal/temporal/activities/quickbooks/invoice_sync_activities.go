@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -12,13 +14,15 @@ import (
 // QuickBooksInvoiceSyncActivities handles QuickBooks invoice sync activities.
 type QuickBooksInvoiceSyncActivities struct {
 	invoiceService service.InvoiceService
+	entityScope    interfaces.BillingEntityScope
 	logger         *logger.Logger
 }
 
 // NewQuickBooksInvoiceSyncActivities creates a new QuickBooks invoice sync activities handler.
-func NewQuickBooksInvoiceSyncActivities(params service.ServiceParams, logger *logger.Logger) *QuickBooksInvoiceSyncActivities {
+func NewQuickBooksInvoiceSyncActivities(params service.ServiceParams, entityScope interfaces.BillingEntityScope, logger *logger.Logger) *QuickBooksInvoiceSyncActivities {
 	return &QuickBooksInvoiceSyncActivities{
 		invoiceService: service.NewInvoiceService(params),
+		entityScope:    entityScope,
 		logger:         logger,
 	}
 }
@@ -33,6 +37,11 @@ func (a *QuickBooksInvoiceSyncActivities) SyncInvoiceToQuickBooks(ctx context.Co
 
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	if err := a.invoiceService.SyncInvoiceToQuickBooksIfEnabled(ctx, input.InvoiceID); err != nil {
 		a.logger.Error(ctx, "failed to sync invoice to QuickBooks",

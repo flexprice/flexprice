@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -182,4 +183,130 @@ func TestSyncConfigValidateRejectsBadMetadataCustomFields(t *testing.T) {
 		},
 	}
 	assert.Error(t, cfg.Validate())
+}
+
+func TestZohoPaymentGatewaySettingsValidate(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *ZohoPaymentGatewaySettings
+		wantErr  bool
+	}{
+		{"nil settings", nil, false},
+		{"disabled with nothing selected", &ZohoPaymentGatewaySettings{}, false},
+		{"disabled keeps a saved selection", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe}}, false},
+		{"enabled with one gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayRazorpay}}, false},
+		{"enabled with every supported gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{
+			ZohoPaymentGatewayPayPal, ZohoPaymentGatewayStripe, ZohoPaymentGatewayAuthorizeNet, ZohoPaymentGatewayPayflowPro,
+			ZohoPaymentGateway2Checkout, ZohoPaymentGatewayBraintree, ZohoPaymentGatewayRazorpay,
+		}, PayPalPaymentMethod: ZohoPayPalPaymentMethodStandard}, false},
+		{"paypal with standard method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: ZohoPayPalPaymentMethodStandard}, false},
+		{"paypal with adaptive method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: ZohoPayPalPaymentMethodAdaptive}, false},
+		{"paypal without a method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}}, true},
+		{"paypal without a method while disabled", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}}, true},
+		{"unsupported paypal method", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayPayPal}, PayPalPaymentMethod: "express"}, true},
+		{"paypal method ignored without paypal", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe}}, false},
+		{"enabled with nothing selected", &ZohoPaymentGatewaySettings{Enabled: true}, true},
+		{"unsupported gateway", &ZohoPaymentGatewaySettings{Enabled: true, Gateways: []ZohoPaymentGateway{ZohoPaymentGatewayStripe, "paytm"}}, true},
+		{"unsupported gateway while disabled", &ZohoPaymentGatewaySettings{Gateways: []ZohoPaymentGateway{"paytm"}}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.settings.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestSyncConfigValidateRejectsBadZohoPaymentGateways(t *testing.T) {
+	cfg := &SyncConfig{
+		InvoiceSyncSettings: &InvoiceSyncSettings{
+			ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{
+				PaymentGateways: &ZohoPaymentGatewaySettings{Enabled: true},
+			},
+		},
+	}
+	assert.Error(t, cfg.Validate())
+}
+
+func TestInvoiceSyncSettings_Stripe(t *testing.T) {
+	cases := []struct {
+		name          string
+		settings      *InvoiceSyncSettings
+		wantAdvance   *bool
+		wantSendEmail bool
+	}{
+		{"nil settings", nil, nil, true},
+		{"unset", &InvoiceSyncSettings{}, nil, true},
+		{"auto advance off", &InvoiceSyncSettings{StripeInvoiceSyncSettings: StripeInvoiceSyncSettings{AutoAdvance: lo.ToPtr(false)}}, lo.ToPtr(false), true},
+		{"email off", &InvoiceSyncSettings{StripeInvoiceSyncSettings: StripeInvoiceSyncSettings{SendInvoiceEmail: lo.ToPtr(false)}}, nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.wantAdvance, tc.settings.StripeAutoAdvance())
+			require.Equal(t, tc.wantSendEmail, tc.settings.IsStripeSendInvoiceEmailEnabled())
+		})
+	}
+}
+
+func TestSyncConfigValidateCreditNoteSync(t *testing.T) {
+	approvalOn := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{SubmitForApproval: true}}
+	approvalOff := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "460000000000358"}}
+	invoiceOn := &EntitySyncConfig{Outbound: true}
+	depositOnly := &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "4069923000000034138"}}
+	tests := []struct {
+		name    string
+		cfg     *SyncConfig
+		wantErr bool
+	}{
+		{"outbound credit note sync with a deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: depositOnly}, false},
+		{"outbound credit note sync with submit for approval off", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: approvalOff}, false},
+		{"outbound credit note sync without invoice sync settings", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}}, true},
+		{"outbound credit note sync with an empty deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: &InvoiceSyncSettings{}}, true},
+		{"outbound credit note sync with a blank deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "  "}}}, true},
+		{"credit note sync off without a deposit account", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{}}, false},
+		{"invoice sync alone without a deposit account", &SyncConfig{Invoice: invoiceOn}, false},
+		{"outbound credit note sync without invoice config", &SyncConfig{CreditNote: &EntitySyncConfig{Outbound: true}}, true},
+		{"outbound credit note sync with invoice outbound off", &SyncConfig{Invoice: &EntitySyncConfig{}, CreditNote: &EntitySyncConfig{Outbound: true}}, true},
+		{"credit note sync off with invoice outbound off", &SyncConfig{Invoice: &EntitySyncConfig{}, CreditNote: &EntitySyncConfig{}}, false},
+		{"inbound credit note sync", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Inbound: true}}, true},
+		{"inbound and outbound credit note sync", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Inbound: true, Outbound: true}}, true},
+		{"outbound credit note sync with submit for approval", &SyncConfig{Invoice: invoiceOn, CreditNote: &EntitySyncConfig{Outbound: true}, InvoiceSyncSettings: approvalOn}, true},
+		{"submit for approval with credit note sync off", &SyncConfig{CreditNote: &EntitySyncConfig{}, InvoiceSyncSettings: approvalOn}, false},
+		{"submit for approval without credit note config", &SyncConfig{InvoiceSyncSettings: approvalOn}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestZohoDepositToAccountID(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *InvoiceSyncSettings
+		want     string
+	}{
+		{"nil settings", nil, ""},
+		{"not set", &InvoiceSyncSettings{}, ""},
+		{"set", &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: "460000000000358"}}, "460000000000358"},
+		{"surrounding spaces trimmed", &InvoiceSyncSettings{ZohoInvoiceSyncSettings: ZohoInvoiceSyncSettings{DepositToAccountID: " 460000000000358 "}}, "460000000000358"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.settings.ZohoDepositToAccountID())
+		})
+	}
 }

@@ -6,11 +6,17 @@ import (
 	"strings"
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/interfaces"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+
+	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/payment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/payments"
+	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // toPaise converts a major-unit decimal (rupees) to paise for Razorpay API calls.
@@ -47,6 +53,9 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 	case "card":
 		pm.Method = types.PaymentMethodTypeCard
 		pm.Card = token.cardDetails()
+	case "emandate":
+		pm.Method = types.PaymentMethodTypeENACH
+		pm.BankAccount = token.bankAccountDetails()
 	default:
 		return nil, nil
 	}
@@ -54,7 +63,8 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 	if token.CreatedAt > 0 {
 		pm.CreatedAt = time.Unix(token.CreatedAt, 0).UTC()
 	}
-	if token.Recurring {
+	// Rejected and cancelled mandates have recurring=false but still carry their status.
+	if token.Recurring || token.RecurringDetails != nil && lo.Contains([]string{"rejected", "cancelled"}, token.RecurringDetails.Status) {
 		pm.Recurring = token.recurringDetails()
 	}
 
@@ -62,17 +72,11 @@ func NormalizeRazorpayToken(raw map[string]interface{}) (*interfaces.ProviderPay
 }
 
 func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
-	status := ""
+	status, failureReason := "", ""
 	if t.RecurringDetails != nil {
-		status = t.RecurringDetails.Status
+		status, failureReason = t.RecurringDetails.Status, t.RecurringDetails.FailureReason
 	}
-	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status)}
-
-	// Razorpay declines charges on a card whose issuer no longer supports recurring,
-	// even while the mandate still reads confirmed.
-	if t.cardRecurringUnsupported() && out.Status == types.RecurringPaymentStatusActive {
-		out.Status = types.RecurringPaymentStatusRejected
-	}
+	out := &interfaces.ProviderRecurringPaymentDetails{Status: toRecurringPaymentStatus(status), FailureReason: failureReason}
 
 	if t.MaxAmount > 0 {
 		major := fromPaise(t.MaxAmount)
@@ -83,7 +87,7 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 		expiresAt := time.Unix(t.ExpiredAt, 0).UTC()
 		out.AutoChargeableTill = &expiresAt
 
-		if time.Now().UTC().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
+		if clock.Now().After(expiresAt) && !lo.Contains([]types.RecurringPaymentStatus{
 			types.RecurringPaymentStatusRejected, types.RecurringPaymentStatusCancelled,
 		}, out.Status) {
 			out.Status = types.RecurringPaymentStatusExpired
@@ -93,16 +97,12 @@ func (t Token) recurringDetails() *interfaces.ProviderRecurringPaymentDetails {
 	return out
 }
 
-func (t Token) cardRecurringUnsupported() bool {
-	return t.Card != nil && t.Card.Flows != nil && t.Card.Flows.Recurring != nil && !*t.Card.Flows.Recurring
-}
-
-func (t Token) cardDetails() *interfaces.ProviderCardDetails {
+func (t Token) cardDetails() *types.CardDetails {
 	if t.Card == nil {
 		return nil
 	}
 
-	return &interfaces.ProviderCardDetails{
+	return &types.CardDetails{
 		Brand:    t.Card.Network,
 		Last4:    t.Card.Last4,
 		ExpMonth: int(t.Card.ExpiryMonth),
@@ -110,11 +110,26 @@ func (t Token) cardDetails() *interfaces.ProviderCardDetails {
 	}
 }
 
-func (t Token) upiDetails() *interfaces.ProviderUPIDetails {
+func (t Token) bankAccountDetails() *types.BankDetails {
+	if t.BankDetails == nil {
+		return nil
+	}
+
+	accountNumber := t.BankDetails.AccountNumber
+	return &types.BankDetails{
+		Bank:        t.Bank,
+		IFSC:        t.BankDetails.IFSC,
+		Last4:       accountNumber[max(0, len(accountNumber)-4):],
+		AccountType: t.BankDetails.AccountType,
+		AuthType:    t.AuthType,
+	}
+}
+
+func (t Token) upiDetails() *types.UPIDetails {
 	if t.VPA == nil || t.VPA.Username == "" || t.VPA.Handle == "" {
 		return nil
 	}
-	return &interfaces.ProviderUPIDetails{VPA: t.VPA.Username + "@" + t.VPA.Handle}
+	return &types.UPIDetails{VPA: t.VPA.Username + "@" + t.VPA.Handle}
 }
 
 func toRecurringPaymentStatus(status string) types.RecurringPaymentStatus {
@@ -143,7 +158,7 @@ func SelectUsableToken(
 	preferredMethod types.PaymentMethodType,
 	invoiceTotal decimal.Decimal,
 ) (*interfaces.ProviderPaymentMethod, bool) {
-	now := time.Now().UTC()
+	now := clock.Now()
 	usable := lo.Filter(methods, func(pm *interfaces.ProviderPaymentMethod, _ int) bool {
 		expiresAt, maxAmount := pm.RecurringAutoChargeableTill(), pm.RecurringMaxAmount()
 
@@ -162,6 +177,20 @@ func SelectUsableToken(
 	}), true
 }
 
+// NoUsableTokenError reports that the customer has no mandate that can pay p.
+func NoUsableTokenError(p *payment.Payment, customerID string) error {
+	return ierr.NewError("no usable razorpay token for payment method").
+		WithHintf("No active %s mandate covering this amount was found at Razorpay, or the customer is not synced to Razorpay. Collect one first, or use payment_method_type PAYMENT_LINK.", p.PaymentMethodType).
+		WithReportableDetails(map[string]interface{}{
+			"payment_id":          p.ID,
+			"invoice_id":          p.DestinationID,
+			"customer_id":         customerID,
+			"payment_method_type": p.PaymentMethodType,
+			"amount":              p.Amount.String(),
+		}).
+		Mark(ierr.ErrValidation)
+}
+
 // razorpaySubscriptionMethod maps a FlexPrice PaymentMethodType to the Razorpay
 // subscription_registration "method" value. Empty input defaults to "upi".
 func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
@@ -175,6 +204,11 @@ func razorpaySubscriptionMethod(pm types.PaymentMethodType) (string, error) {
 			WithHint("Only UPI and Card are supported for Razorpay mandate registration").
 			Mark(ierr.ErrNotImplemented)
 	}
+}
+
+// linkCustomer is the customer block of a registration link; Razorpay matches its customer on these details.
+func linkCustomer(c *customer.Customer) *CustomerInfo {
+	return &CustomerInfo{Name: c.Name, Email: c.Email, Contact: lo.FromPtr(c.Contact)}
 }
 
 // CreateAuthorizationLink registers a UPI Autopay or card recurring-payment
@@ -193,66 +227,38 @@ func (a *CheckoutAdapter) CreateAuthorizationLink(
 		return nil, err
 	}
 
-	customerInfo := map[string]interface{}{
-		"name": c.Name,
-	}
-	if c.Email != "" {
-		customerInfo["email"] = c.Email
-	}
-	// Razorpay requires a contact number for recurring/subscription-registration links.
-	if c.Contact != nil && *c.Contact != "" {
-		customerInfo["contact"] = *c.Contact
-	}
-
-	data := map[string]interface{}{
-		"customer":     customerInfo,
-		"type":         "link",
-		"amount":       toPaise(req.Amount),
-		"currency":     strings.ToUpper(req.Currency),
-		"description":  "Subscription authorization",
-		"receipt":      req.InvoiceID,
-		"email_notify": true,
-		"sms_notify":   true,
-		"notes": map[string]interface{}{
+	linkReq := AuthorizationLinkRequest{
+		Customer: linkCustomer(c),
+		Amount:   toPaise(req.Amount),
+		Currency: strings.ToUpper(req.Currency),
+		Description: linkDescription(c.Name, lo.Map(req.LineItems, func(li interfaces.CheckoutLineItem, _ int) string {
+			return li.Description
+		})),
+		EmailNotify: req.NotifyCustomer,
+		SMSNotify:   req.NotifyCustomer,
+		Notes: map[string]interface{}{
 			"flexprice_customer_id": req.CustomerID,
 			"flexprice_payment_id":  req.PaymentID,
 		},
+		// as_presented allows another debit in the same period, still capped by max_amount.
+		// A fixed frequency rejects a second charge until that window ends.
+		SubscriptionRegistration: SubscriptionRegistration{Method: method, Frequency: "as_presented"},
 	}
 	if req.ExpiresAt != nil {
-		data["expire_by"] = req.ExpiresAt.Unix()
-	}
-
-	// as_presented allows another debit in the same period, still capped by max_amount.
-	// A fixed frequency rejects a second charge until that window ends.
-	subReg := map[string]interface{}{
-		"method":    method,
-		"frequency": "as_presented",
+		linkReq.ExpireBy = clampExpireBy(*req.ExpiresAt).Unix()
 	}
 	if req.MaxAmount != nil {
-		subReg["max_amount"] = toPaise(*req.MaxAmount)
+		linkReq.SubscriptionRegistration.MaxAmount = toPaise(*req.MaxAmount)
 	}
-	data["subscription_registration"] = subReg
 
-	result, err := a.Svc.client.CreateAuthorizationLink(ctx, data)
+	link, err := createCustomerLink(ctx, a.Svc.client, a.Svc.customerSvc, c, linkReq)
 	if err != nil {
 		return nil, err
 	}
 
-	shortURL, _ := result["short_url"].(string)
-	id, _ := result["id"].(string)
-	if shortURL == "" || id == "" {
-		return nil, ierr.NewError("razorpay authorization link response missing short_url or id").
-			WithHint("Razorpay returned an unexpected response for the mandate registration link").
-			WithReportableDetails(map[string]interface{}{
-				"has_short_url": shortURL != "",
-				"has_id":        id != "",
-			}).
-			Mark(ierr.ErrInternal)
-	}
-
 	return &interfaces.CheckoutProviderResponse{
-		ProviderSessionID: id,
-		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: shortURL},
+		ProviderSessionID: link.ID,
+		NextAction:        types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: link.ShortURL},
 	}, nil
 }
 
@@ -272,6 +278,16 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 			"customer_id", req.CustomerID, "error", err)
 		return nil, false, nil
 	}
+
+	lock, err := payments.LockInvoiceCharge(ctx, a.Svc.locker, a.Svc.invoiceSyncSvc.paymentRepo, custResp.Customer.EnvironmentID, req.InvoiceID, req.PaymentID)
+	if err != nil {
+		return nil, false, err
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx); releaseErr != nil {
+			a.Svc.logger.Error(ctx, "failed to release auto-charge lock", "invoice_id", req.InvoiceID, "error", releaseErr)
+		}
+	}()
 
 	result, charged, err := a.Svc.ChargeSavedToken(ctx, ChargeSavedTokenRequest{
 		Customer:           custResp.Customer,
@@ -295,6 +311,7 @@ func (a *CheckoutAdapter) TryAutoChargingSavedMethod(
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID:       sessionID,
 		ProviderPaymentIntentID: result.RazorpayPaymentID,
+		PaymentMethod:           result.Method,
 		// No NextAction — off-session charge; completion via payment webhook.
 	}, true, nil
 }
@@ -321,4 +338,29 @@ func (a *CheckoutAdapter) HasAutoChargeableMethod(ctx context.Context, req inter
 	}
 	_, ok := selectAutoChargeToken(tokens, "", amount)
 	return ok, nil
+}
+
+// createCustomerLink creates a registration link only when Razorpay will attach it to the customer's own
+// Razorpay customer; one it still attaches elsewhere is cancelled.
+func createCustomerLink(ctx context.Context, client RazorpayClient, customerSvc RazorpayCustomerService, c *customer.Customer, req AuthorizationLinkRequest) (*AuthorizationLinkResponse, error) {
+	razorpayCustomerID, err := customerSvc.VerifyLinkCustomer(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	link, err := client.CreateAuthorizationLink(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if link.CustomerID == razorpayCustomerID {
+		return link, nil
+	}
+
+	if _, err := client.CancelInvoice(context.WithoutCancel(ctx), link.ID); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Razorpay attached the link to another customer and it couldn't be cancelled").
+			WithReportableDetails(map[string]interface{}{"customer_id": c.ID, "link_id": link.ID}).
+			Mark(ierr.ErrInternal)
+	}
+	return nil, errLinkCustomerMismatch(c.ID, razorpayCustomerID)
 }

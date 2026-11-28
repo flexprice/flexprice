@@ -876,6 +876,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "May be accepted; assign event_id before the first request and reuse it on retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -899,7 +909,7 @@
           "Events"
         ],
         "summary": "Get usage analytics",
-        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.",
+        "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.\nGroups and regular-meter time-series points contain usage-proportional cost allocations, not independently priced charges.\nSource/property filters return the unfiltered usage charge for the same time range multiplied by filtered quantity / full quantity; groups split that filtered share. Filtered costs exclude commitments and true-up.\nWhen full quantity is zero, no proportional rate is defined; costs retain direct per-group/per-bucket pricing.\nAnalytics are eventually consistent: concurrent ingestion or late events can make filtered allocations approximate across separate reads. These allocations are not an invoice preview.\nFor non-additive meters such as MAX, quantities use the meter's aggregation, so individual group shares can change when filtering or grouping changes.",
         "operationId": "getUsageAnalytics",
         "requestBody": {
           "description": "Request body",
@@ -993,7 +1003,7 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request or oversize event; others may be accepted",
             "content": {
               "application/json": {
                 "schema": {
@@ -1004,6 +1014,16 @@
           },
           "500": {
             "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/errors.ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "May be partly accepted; assign event_id to every event before the first request and reuse those IDs on retry",
             "content": {
               "application/json": {
                 "schema": {

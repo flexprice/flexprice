@@ -39,9 +39,9 @@ type Entitlement struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID string `json:"entity_id,omitempty"`
 	// FeatureID holds the value of the "feature_id" field.
-	FeatureID string `json:"feature_id,omitempty"`
+	FeatureID *string `json:"feature_id,omitempty"`
 	// FeatureType holds the value of the "feature_type" field.
-	FeatureType types.FeatureType `json:"feature_type,omitempty"`
+	FeatureType *types.FeatureType `json:"feature_type,omitempty"`
 	// IsEnabled holds the value of the "is_enabled" field.
 	IsEnabled bool `json:"is_enabled,omitempty"`
 	// UsageLimit holds the value of the "usage_limit" field.
@@ -73,7 +73,9 @@ type Entitlement struct {
 	// GrantQuota holds the value of the "grant_quota" field.
 	GrantQuota *decimal.Decimal `json:"grant_quota,omitempty"`
 	// AggregationMode holds the value of the "aggregation_mode" field.
-	AggregationMode    types.EntitlementAggregationMode `json:"aggregation_mode,omitempty"`
+	AggregationMode types.EntitlementAggregationMode `json:"aggregation_mode,omitempty"`
+	// What the grant meters: one feature, or every usage line on the subscription.
+	GrantScope         types.EntitlementGrantScopeEntityType `json:"grant_scope,omitempty"`
 	addon_entitlements *string
 	selectValues       sql.SelectValues
 }
@@ -91,7 +93,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder, entitlement.FieldGrantDurationValue:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldGrantAllocationBehavior, entitlement.FieldAggregationMode:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID, entitlement.FieldGrantMeasure, entitlement.FieldGrantDurationUnit, entitlement.FieldGrantAllocationBehavior, entitlement.FieldAggregationMode, entitlement.FieldGrantScope:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -176,13 +178,15 @@ func (_m *Entitlement) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field feature_id", values[i])
 			} else if value.Valid {
-				_m.FeatureID = value.String
+				_m.FeatureID = new(string)
+				*_m.FeatureID = value.String
 			}
 		case entitlement.FieldFeatureType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field feature_type", values[i])
 			} else if value.Valid {
-				_m.FeatureType = types.FeatureType(value.String)
+				_m.FeatureType = new(types.FeatureType)
+				*_m.FeatureType = types.FeatureType(value.String)
 			}
 		case entitlement.FieldIsEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -288,6 +292,12 @@ func (_m *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.AggregationMode = types.EntitlementAggregationMode(value.String)
 			}
+		case entitlement.FieldGrantScope:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field grant_scope", values[i])
+			} else if value.Valid {
+				_m.GrantScope = types.EntitlementGrantScopeEntityType(value.String)
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -358,11 +368,15 @@ func (_m *Entitlement) String() string {
 	builder.WriteString("entity_id=")
 	builder.WriteString(_m.EntityID)
 	builder.WriteString(", ")
-	builder.WriteString("feature_id=")
-	builder.WriteString(_m.FeatureID)
+	if v := _m.FeatureID; v != nil {
+		builder.WriteString("feature_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
-	builder.WriteString("feature_type=")
-	builder.WriteString(fmt.Sprintf("%v", _m.FeatureType))
+	if v := _m.FeatureType; v != nil {
+		builder.WriteString("feature_type=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("is_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsEnabled))
@@ -423,6 +437,9 @@ func (_m *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("aggregation_mode=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AggregationMode))
+	builder.WriteString(", ")
+	builder.WriteString("grant_scope=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GrantScope))
 	builder.WriteByte(')')
 	return builder.String()
 }

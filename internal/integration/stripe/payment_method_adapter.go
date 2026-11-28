@@ -2,13 +2,17 @@ package stripe
 
 import (
 	"context"
+	"strconv"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	stripeapi "github.com/stripe/stripe-go/v82"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
 // PaymentMethodAdapter wraps Stripe to implement interfaces.PaymentMethodProvider.
@@ -57,7 +61,7 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 		Type:     stripeapi.String(string(stripeapi.PaymentMethodTypeCard)),
 	}
 
-	now := time.Now()
+	now := clock.Now()
 	out := make([]interfaces.ProviderPaymentMethod, 0)
 	for pm, err := range stripeClient.V1PaymentMethods.List(ctx, params) {
 		if err != nil {
@@ -69,9 +73,9 @@ func (a *PaymentMethodAdapter) ListSavedMethods(ctx context.Context, flexCustome
 			continue
 		}
 
-		var card *interfaces.ProviderCardDetails
+		var card *types.CardDetails
 		if pm.Card != nil {
-			card = &interfaces.ProviderCardDetails{
+			card = &types.CardDetails{
 				Brand:    string(pm.Card.Brand),
 				Last4:    pm.Card.Last4,
 				ExpMonth: int(pm.Card.ExpMonth),
@@ -151,7 +155,7 @@ func (a *PaymentMethodAdapter) CreateSetupLink(ctx context.Context, req interfac
 	metadata := map[string]string{
 		"customer_id":           req.CustomerID,
 		"flexprice_customer_id": req.CustomerID,
-		"set_default":           "true",
+		"set_default":           strconv.FormatBool(req.SetDefault),
 	}
 
 	// Cards only, matching what ListSavedMethods reports back.
@@ -244,4 +248,8 @@ func paymentMethodUsable(pm *stripeapi.PaymentMethod, now time.Time) bool {
 		return pm.Card.ExpYear > year
 	}
 	return pm.Card.ExpMonth >= month
+}
+
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
+	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
 }

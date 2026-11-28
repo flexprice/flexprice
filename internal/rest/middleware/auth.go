@@ -113,6 +113,9 @@ var environmentDiscoveryRoutes = map[string]map[string]struct{}{
 		http.MethodGet: {},
 		http.MethodPut: {},
 	},
+	"/v1/users/me/password": {
+		http.MethodPut: {},
+	},
 	"/v1/users": {
 		http.MethodPost: {},
 	},
@@ -125,6 +128,9 @@ var environmentDiscoveryRoutes = map[string]map[string]struct{}{
 	},
 	"/v1/users/:id/roles": {
 		http.MethodPut: {},
+	},
+	"/v1/users/:id/password-link": {
+		http.MethodPost: {},
 	},
 	"/v1/users/search": {
 		http.MethodPost: {},

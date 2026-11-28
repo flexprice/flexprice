@@ -361,22 +361,20 @@ func (s *temporalService) buildWorkerOptions(taskQueue types.TemporalTaskQueue) 
 		}
 	}
 
-	// Add interceptors
+	options.Interceptors = []interceptor.WorkerInterceptor{
+		temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		temporalInterceptor.NewWriterPinInterceptor(),
+		temporalInterceptor.NewActorInterceptor(),
+		temporalInterceptor.NewRequestIDInterceptor(),
+		temporalInterceptor.NewTimePrecisionInterceptor(),
+	}
+
+	// Tracing goes first so its span wraps every other interceptor.
 	if s.tracing != nil && s.tracing.IsEnabled() {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewTracingInterceptor(s.tracing),
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-			temporalInterceptor.NewWriterPinInterceptor(),
-			temporalInterceptor.NewActorInterceptor(),
-			temporalInterceptor.NewRequestIDInterceptor(),
-		}
-	} else {
-		options.Interceptors = []interceptor.WorkerInterceptor{
-			temporalInterceptor.NewWorkflowTrackingInterceptor(),
-			temporalInterceptor.NewWriterPinInterceptor(),
-			temporalInterceptor.NewActorInterceptor(),
-			temporalInterceptor.NewRequestIDInterceptor(),
-		}
+		options.Interceptors = append(
+			[]interceptor.WorkerInterceptor{temporalInterceptor.NewTracingInterceptor(s.tracing)},
+			options.Interceptors...,
+		)
 	}
 
 	return options
@@ -436,16 +434,20 @@ func (s *temporalService) ExecuteWorkflow(ctx context.Context, workflowType type
 	options := models.StartWorkflowOptions{
 		ID:        workflowID,
 		TaskQueue: workflowType.TaskQueueName(),
-		// Only fixed IDs (exclusiveWorkflowIDKeys) can collide; fail loudly instead of attaching to the open run.
-		WorkflowExecutionErrorWhenAlreadyStarted: true,
 	}
 
 	// Execute workflow using existing StartWorkflow method
+	return s.startUnique(ctx, options, workflowType, input)
+}
+
+// startUnique maps an already-started rejection to ErrAlreadyExists.
+func (s *temporalService) startUnique(ctx context.Context, options models.StartWorkflowOptions, workflowType types.TemporalWorkflowType, input interface{}) (models.WorkflowRun, error) {
+	options.WorkflowExecutionErrorWhenAlreadyStarted = true
 	run, err := s.StartWorkflow(ctx, options, workflowType, input)
 	if _, ok := stderrors.AsType[*serviceerror.WorkflowExecutionAlreadyStarted](err); ok {
 		return nil, errors.WithError(err).
 			WithHint("A workflow is already running for this entity. Try again once it finishes.").
-			WithReportableDetails(map[string]interface{}{"workflow_id": workflowID}).
+			WithReportableDetails(map[string]interface{}{"workflow_id": options.ID}).
 			Mark(errors.ErrAlreadyExists)
 	}
 	return run, err
@@ -472,15 +474,22 @@ func (s *temporalService) ExecuteWorkflowWithDelay(ctx context.Context, workflow
 		StartDelay: time.Duration(delaySeconds) * time.Second,
 	}
 
-	// Execute workflow using existing StartWorkflow method
-	return s.StartWorkflow(ctx, options, workflowType, input)
+	return s.startUnique(ctx, options, workflowType, input)
 }
 
 // exclusiveWorkflowIDKeys lists workflow types that allow one open run per entity. Their ID is fixed
 // (no UUID suffix), so Temporal rejects a start while a run is open.
 var exclusiveWorkflowIDKeys = map[types.TemporalWorkflowType]string{
-	types.TemporalPriceSyncV2Workflow:    "price_sync_plan",
-	types.TemporalAddonPriceSyncWorkflow: "price_sync_addon",
+	types.TemporalPriceSyncV2Workflow:         "price_sync_plan",
+	types.TemporalAddonPriceSyncWorkflow:      "price_sync_addon",
+	types.TemporalBillingEntityEnableWorkflow: "billing_entity_enable",
+
+	types.TemporalProcessSubscriptionBillingWorkflow: "process_subscription_billing",
+	types.TemporalProcessInvoiceWorkflow:             "process_invoice",
+
+	types.TemporalRazorpayInvoiceSyncWorkflow: "razorpay_invoice_sync",
+
+	types.TemporalZohoBooksCreditNoteSyncWorkflow: "zoho_credit_note_sync",
 }
 
 func (s *temporalService) generateWorkflowID(workflowType types.TemporalWorkflowType, params interface{}) string {
@@ -571,6 +580,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(models.ZohoBooksInvoiceMarkPaidWorkflowInput); ok {
 			return input.InvoiceID()
 		}
+	case types.TemporalZohoBooksCreditNoteSyncWorkflow:
+		if input, ok := params.(models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+			return input.CreditNoteID
+		}
 
 	// Vendor customer sync workflows — deterministic IDs prevent duplicate concurrent syncs.
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -626,6 +639,10 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 	case types.TemporalEnvironmentCloneWorkflow:
 		if input, ok := params.(models.EnvironmentCloneWorkflowInput); ok {
 			return input.SourceEnvironmentID + "-" + input.TargetEnvironmentID
+		}
+	case types.TemporalBillingEntityEnableWorkflow:
+		if input, ok := params.(models.BillingEntityEnableWorkflowInput); ok {
+			return input.TenantID + "-" + input.EnvironmentID
 		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
@@ -722,6 +739,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildZohoBooksInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalZohoBooksInvoiceMarkPaidWorkflow:
 		return s.buildZohoBooksInvoiceMarkPaidInput(ctx, tenantID, environmentID, params)
+	case types.TemporalZohoBooksCreditNoteSyncWorkflow:
+		return s.buildZohoBooksCreditNoteSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalTabsInvoiceSyncWorkflow:
 		return s.buildTabsInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalStripeCustomerSyncWorkflow:
@@ -756,6 +775,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalEnvironmentCloneWorkflow:
 		return s.buildEnvironmentCloneInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalBillingEntityEnableWorkflow:
+		return s.buildBillingEntityEnableInput(ctx, tenantID, environmentID, userID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -770,6 +791,9 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
 		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return input, nil
 	}
 
@@ -781,12 +805,16 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 			Mark(errors.ErrValidation)
 	}
 
-	return models.PriceSyncWorkflowInput{
+	input := models.PriceSyncWorkflowInput{
 		PlanID:        planID,
 		TenantID:      tenantID,
 		EnvironmentID: environmentID,
 		UserID:        userID,
-	}, nil
+	}
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
 }
 
 // buildAddonPriceSyncInput builds input for the addon usage-price sync workflow
@@ -795,6 +823,9 @@ func (s *temporalService) buildAddonPriceSyncInput(_ context.Context, tenantID, 
 		input.TenantID = tenantID
 		input.EnvironmentID = environmentID
 		input.UserID = userID
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
 		return input, nil
 	}
 
@@ -805,12 +836,16 @@ func (s *temporalService) buildAddonPriceSyncInput(_ context.Context, tenantID, 
 			Mark(errors.ErrValidation)
 	}
 
-	return models.AddonPriceSyncWorkflowInput{
+	input := models.AddonPriceSyncWorkflowInput{
 		AddonID:       addonID,
 		TenantID:      tenantID,
 		EnvironmentID: environmentID,
 		UserID:        userID,
-	}, nil
+	}
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
 }
 
 // buildQuickBooksPriceSyncInput builds input for QuickBooks price sync workflow
@@ -1184,6 +1219,24 @@ func (s *temporalService) buildZohoBooksInvoiceMarkPaidInput(_ context.Context, 
 
 	return nil, errors.NewError("invalid input for Zoho Books mark-paid workflow").
 		WithHint("Provide ZohoBooksInvoiceMarkPaidWorkflowInput with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+func (s *temporalService) buildZohoBooksCreditNoteSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(*models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	if input, ok := params.(models.ZohoBooksCreditNoteSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Zoho Books credit note sync workflow").
+		WithHint("Provide ZohoBooksCreditNoteSyncWorkflowInput with credit_note_id").
 		Mark(errors.ErrValidation)
 }
 
@@ -1767,6 +1820,22 @@ func (s *temporalService) buildEnvironmentCloneInput(_ context.Context, tenantID
 			Mark(errors.ErrValidation)
 	}
 	input.TenantID = tenantID
+	input.UserID = userID
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+	return input, nil
+}
+
+func (s *temporalService) buildBillingEntityEnableInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	input, ok := params.(models.BillingEntityEnableWorkflowInput)
+	if !ok {
+		return nil, errors.NewError("invalid input for billing entity enable workflow").
+			WithHint("Provide a BillingEntityEnableWorkflowInput struct").
+			Mark(errors.ErrValidation)
+	}
+	input.TenantID = tenantID
+	input.EnvironmentID = environmentID
 	input.UserID = userID
 	if err := input.Validate(); err != nil {
 		return nil, err

@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/flexprice/flexprice/internal/metrics"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/metrics"
+
+	stripeapi "github.com/stripe/stripe-go/v82"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/connection"
@@ -16,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	stripeapi "github.com/stripe/stripe-go/v82"
 )
 
 // Handler handles Stripe webhook events
@@ -105,7 +109,6 @@ func (h *Handler) HandleWebhookEvent(ctx context.Context, event *stripeapi.Event
 		return h.handleSubscriptionCancellation(ctx, event, environmentID, services)
 
 	default:
-		h.logger.Info(ctx, "unhandled Stripe webhook event type", "type", event.Type)
 		metricEventType, handled = "other", false
 		return nil // Not an error, just unhandled
 	}
@@ -204,7 +207,7 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 			return err
 		}
 
-		payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+		payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 		if err != nil {
 			h.logger.Error(ctx, "failed to get FlexPrice payment, skipping event",
 				"error", err,
@@ -212,6 +215,10 @@ func (h *Handler) handlePaymentIntentSucceeded(ctx context.Context, event *strip
 				"payment_intent_id", paymentIntent.ID,
 				"event_id", event.ID)
 			return nil
+		}
+
+		if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+			return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, paymentIntent.ID, services.PaymentService)
 		}
 
 		// Skip card payments - they're handled synchronously by charge API
@@ -279,7 +286,7 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		"flexprice_payment_id", flexpricePaymentID)
 
 	// Get payment record by flexprice_payment_id
-	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment record, skipping event",
 			"error", err,
@@ -294,14 +301,19 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		return nil
 	}
 
-	// Update payment status to failed
-	paymentStatus := string(types.PaymentStatusFailed)
-	now := time.Now()
 	errorMsg := "Payment failed"
 	if paymentIntent.LastPaymentError != nil && paymentIntent.LastPaymentError.Msg != "" {
 		errorMsg = paymentIntent.LastPaymentError.Msg
 	}
 
+	// Checkout lets the customer retry on the same PaymentIntent, so a decline is one attempt, not the payment's end.
+	if payment.PaymentMethodType == types.PaymentMethodTypePaymentLink {
+		h.recordDeclinedAttempt(ctx, event, &paymentIntent, payment, errorMsg, services)
+		return nil
+	}
+
+	paymentStatus := string(types.PaymentStatusFailed)
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus: &paymentStatus,
 		FailedAt:      &now,
@@ -325,6 +337,60 @@ func (h *Handler) handlePaymentIntentPaymentFailed(ctx context.Context, event *s
 		"error_message", errorMsg)
 
 	return nil
+}
+
+// recordDeclinedAttempt records a declined charge as a failed attempt, leaving the payment open.
+func (h *Handler) recordDeclinedAttempt(
+	ctx context.Context,
+	event *stripeapi.Event,
+	paymentIntent *stripeapi.PaymentIntent,
+	payment *dto.PaymentResponse,
+	errorMsg string,
+	services *ServiceDependencies,
+) {
+	// Each retry is a new charge on the PaymentIntent; the event id stands in when no charge was made.
+	attemptID := event.ID
+	if paymentIntent.LatestCharge != nil && paymentIntent.LatestCharge.ID != "" {
+		attemptID = paymentIntent.LatestCharge.ID
+	}
+
+	if lo.ContainsBy(payment.Attempts, func(a *dto.PaymentAttemptResponse) bool {
+		return lo.FromPtr(a.GatewayAttemptID) == attemptID
+	}) {
+		h.logger.Info(ctx, "ignoring redelivered payment_intent.payment_failed webhook",
+			"flexprice_payment_id", payment.ID,
+			"gateway_attempt_id", attemptID)
+		return
+	}
+
+	var metadata types.Metadata
+	var details *types.PaymentAttemptDetails
+	if lastErr := paymentIntent.LastPaymentError; lastErr != nil {
+		metadata = lo.OmitByValues(types.Metadata{
+			"error_code":   string(lastErr.Code),
+			"decline_code": string(lastErr.DeclineCode),
+			"error_type":   string(lastErr.Type),
+		}, []string{""})
+		details = &types.PaymentAttemptDetails{Error: &types.PaymentAttemptError{
+			Code:   string(lastErr.Code),
+			Reason: string(lastErr.DeclineCode),
+			Source: string(lastErr.Type),
+		}}
+	}
+
+	if err := services.PaymentService.RecordAttempt(ctx, payment.ID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusFailed,
+		ErrorMessage:     errorMsg,
+		GatewayAttemptID: attemptID,
+		Metadata:         metadata,
+		Details:          details,
+	}); err != nil {
+		h.logger.Error(ctx, "failed to record declined payment attempt",
+			"error", err,
+			"flexprice_payment_id", payment.ID,
+			"payment_intent_id", paymentIntent.ID,
+			"gateway_attempt_id", attemptID)
+	}
 }
 
 // handleSetupIntentSucceeded handles setup_intent.succeeded webhook
@@ -436,7 +502,7 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"error", err,
 			"environment_id", environmentID,
 			"event_id", event.ID)
-		return nil
+		return err
 	}
 
 	if !conn.IsInvoiceOutboundEnabled() {
@@ -515,7 +581,7 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"error", err,
 			"payment_intent_id", paymentIntentID,
 			"event_id", event.ID)
-		return nil
+		return err
 	}
 
 	// Process external Stripe payment
@@ -529,7 +595,10 @@ func (h *Handler) handleInvoicePaymentPaid(ctx context.Context, event *stripeapi
 			"payment_intent_id", paymentIntentID,
 			"stripe_invoice_id", stripeInvoiceID,
 			"event_id", event.ID)
-		return nil
+		if ierr.IsInvalidOperation(err) || ierr.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 
 	h.logger.Info(ctx, "successfully processed invoice.paid webhook",
@@ -964,7 +1033,7 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	}
 
 	// get payment from database
-	payment, err := services.PaymentService.GetPayment(ctx, flexpricePaymentID)
+	payment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		h.logger.Error(ctx, "failed to get payment from database, skipping event", "error", err, "event_id", event.ID)
 		return nil
@@ -974,6 +1043,14 @@ func (h *Handler) handleCheckoutSessionCompleted(ctx context.Context, event *str
 	if payment.PaymentStatus == types.PaymentStatusSucceeded {
 		h.logger.Info(ctx, "payment already succeeded, skipping event", "event_id", event.ID)
 		return nil
+	}
+
+	// A delayed method completes the session before the capture; payment_intent.succeeded refunds it then.
+	if payment.PaymentStatus == types.PaymentStatusFailed || payment.PaymentStatus == types.PaymentStatusVoided {
+		if checkoutSession.PaymentStatus != stripeapi.CheckoutSessionPaymentStatusPaid {
+			return nil
+		}
+		return h.paymentSvc.RefundLateCapturedPayment(ctx, flexpricePaymentID, piID, services.PaymentService)
 	}
 
 	// Get payment intent if it exists

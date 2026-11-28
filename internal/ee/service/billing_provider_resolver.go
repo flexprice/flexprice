@@ -11,6 +11,7 @@ import (
 
 var billingProviderCapabilities = map[types.SecretProvider][]types.IntegrationCapabilityType{
 	types.SecretProviderChargebee: {types.IntegrationCapabilityInvoiceSync},
+	types.SecretProviderStripe:    {types.IntegrationCapabilityInvoiceSync},
 }
 
 type BillingProviderResolver struct {
@@ -27,7 +28,7 @@ type BillingProviderCapabilities struct {
 }
 
 func (s *BillingProviderResolver) ListProviders(ctx context.Context) ([]BillingProviderCapabilities, error) {
-	connections, err := s.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := s.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		return nil, err
 	}

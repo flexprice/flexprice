@@ -87,6 +87,8 @@ type InvoiceLineItem struct {
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 	// CommitmentID holds the value of the "commitment_id" field.
 	CommitmentID *string `json:"commitment_id,omitempty"`
+	// BillingInstalmentID holds the value of the "billing_instalment_id" field.
+	BillingInstalmentID *string `json:"billing_instalment_id,omitempty"`
 	// Entitlement-covered units deducted from raw usage. Nil when no entitlement applied
 	AdjustedEntitlementQuantity *decimal.Decimal `json:"adjusted_entitlement_quantity,omitempty"`
 	// ID of the line item this one replaced, if it was created by editing an existing line item
@@ -143,7 +145,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
-		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldCommitmentID, invoicelineitem.FieldParentLineItemID:
+		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldSubscriptionLineItemID, invoicelineitem.FieldCommitmentID, invoicelineitem.FieldBillingInstalmentID, invoicelineitem.FieldParentLineItemID:
 			values[i] = new(sql.NullString)
 		case invoicelineitem.FieldCreatedAt, invoicelineitem.FieldUpdatedAt, invoicelineitem.FieldPeriodStart, invoicelineitem.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -389,6 +391,13 @@ func (_m *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				_m.CommitmentID = new(string)
 				*_m.CommitmentID = value.String
 			}
+		case invoicelineitem.FieldBillingInstalmentID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_instalment_id", values[i])
+			} else if value.Valid {
+				_m.BillingInstalmentID = new(string)
+				*_m.BillingInstalmentID = value.String
+			}
 		case invoicelineitem.FieldAdjustedEntitlementQuantity:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field adjusted_entitlement_quantity", values[i])
@@ -599,6 +608,11 @@ func (_m *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	if v := _m.CommitmentID; v != nil {
 		builder.WriteString("commitment_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BillingInstalmentID; v != nil {
+		builder.WriteString("billing_instalment_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

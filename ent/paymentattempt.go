@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/payment"
 	"github.com/flexprice/flexprice/ent/paymentattempt"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentAttempt is the model entity for the PaymentAttempt schema.
@@ -43,6 +44,10 @@ type PaymentAttempt struct {
 	GatewayAttemptID *string `json:"gateway_attempt_id,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage *string `json:"error_message,omitempty"`
+	// PaymentMethodDetails holds the value of the "payment_method_details" field.
+	PaymentMethodDetails *types.InstrumentDetails `json:"payment_method_details,omitempty"`
+	// ErrorDetails holds the value of the "error_details" field.
+	ErrorDetails *types.PaymentAttemptError `json:"error_details,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -76,7 +81,7 @@ func (*PaymentAttempt) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case paymentattempt.FieldMetadata:
+		case paymentattempt.FieldPaymentMethodDetails, paymentattempt.FieldErrorDetails, paymentattempt.FieldMetadata:
 			values[i] = new([]byte)
 		case paymentattempt.FieldAttemptNumber:
 			values[i] = new(sql.NullInt64)
@@ -179,6 +184,22 @@ func (_m *PaymentAttempt) assignValues(columns []string, values []any) error {
 				_m.ErrorMessage = new(string)
 				*_m.ErrorMessage = value.String
 			}
+		case paymentattempt.FieldPaymentMethodDetails:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field payment_method_details", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.PaymentMethodDetails); err != nil {
+					return fmt.Errorf("unmarshal field payment_method_details: %w", err)
+				}
+			}
+		case paymentattempt.FieldErrorDetails:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field error_details", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.ErrorDetails); err != nil {
+					return fmt.Errorf("unmarshal field error_details: %w", err)
+				}
+			}
 		case paymentattempt.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -267,6 +288,12 @@ func (_m *PaymentAttempt) String() string {
 		builder.WriteString("error_message=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("payment_method_details=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PaymentMethodDetails))
+	builder.WriteString(", ")
+	builder.WriteString("error_details=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ErrorDetails))
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))

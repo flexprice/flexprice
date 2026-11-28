@@ -349,6 +349,26 @@ func (_u *SubscriptionLineItemUpdate) ClearEndDate() *SubscriptionLineItemUpdate
 	return _u
 }
 
+// SetSuccessorLineItemID sets the "successor_line_item_id" field.
+func (_u *SubscriptionLineItemUpdate) SetSuccessorLineItemID(v string) *SubscriptionLineItemUpdate {
+	_u.mutation.SetSuccessorLineItemID(v)
+	return _u
+}
+
+// SetNillableSuccessorLineItemID sets the "successor_line_item_id" field if the given value is not nil.
+func (_u *SubscriptionLineItemUpdate) SetNillableSuccessorLineItemID(v *string) *SubscriptionLineItemUpdate {
+	if v != nil {
+		_u.SetSuccessorLineItemID(*v)
+	}
+	return _u
+}
+
+// ClearSuccessorLineItemID clears the value of the "successor_line_item_id" field.
+func (_u *SubscriptionLineItemUpdate) ClearSuccessorLineItemID() *SubscriptionLineItemUpdate {
+	_u.mutation.ClearSuccessorLineItemID()
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *SubscriptionLineItemUpdate) SetMetadata(v map[string]string) *SubscriptionLineItemUpdate {
 	_u.mutation.SetMetadata(v)
@@ -733,6 +753,15 @@ func (_u *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (_node int, e
 	}
 	if _u.mutation.AddonAssociationIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString)
+	}
+	if _u.mutation.PredecessorLineItemIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPredecessorLineItemID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SuccessorLineItemID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldSuccessorLineItemID, field.TypeString, value)
+	}
+	if _u.mutation.SuccessorLineItemIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldSuccessorLineItemID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
@@ -1169,6 +1198,26 @@ func (_u *SubscriptionLineItemUpdateOne) ClearEndDate() *SubscriptionLineItemUpd
 	return _u
 }
 
+// SetSuccessorLineItemID sets the "successor_line_item_id" field.
+func (_u *SubscriptionLineItemUpdateOne) SetSuccessorLineItemID(v string) *SubscriptionLineItemUpdateOne {
+	_u.mutation.SetSuccessorLineItemID(v)
+	return _u
+}
+
+// SetNillableSuccessorLineItemID sets the "successor_line_item_id" field if the given value is not nil.
+func (_u *SubscriptionLineItemUpdateOne) SetNillableSuccessorLineItemID(v *string) *SubscriptionLineItemUpdateOne {
+	if v != nil {
+		_u.SetSuccessorLineItemID(*v)
+	}
+	return _u
+}
+
+// ClearSuccessorLineItemID clears the value of the "successor_line_item_id" field.
+func (_u *SubscriptionLineItemUpdateOne) ClearSuccessorLineItemID() *SubscriptionLineItemUpdateOne {
+	_u.mutation.ClearSuccessorLineItemID()
+	return _u
+}
+
 // SetMetadata sets the "metadata" field.
 func (_u *SubscriptionLineItemUpdateOne) SetMetadata(v map[string]string) *SubscriptionLineItemUpdateOne {
 	_u.mutation.SetMetadata(v)
@@ -1583,6 +1632,15 @@ func (_u *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Su
 	}
 	if _u.mutation.AddonAssociationIDCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldAddonAssociationID, field.TypeString)
+	}
+	if _u.mutation.PredecessorLineItemIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldPredecessorLineItemID, field.TypeString)
+	}
+	if value, ok := _u.mutation.SuccessorLineItemID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldSuccessorLineItemID, field.TypeString, value)
+	}
+	if _u.mutation.SuccessorLineItemIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldSuccessorLineItemID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)

@@ -1,0 +1,393 @@
+package selfbilling
+
+import (
+	"context"
+	"strings"
+	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	sdktypes "github.com/flexprice/go-sdk/v2/models/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
+)
+
+func (c *remoteClient) summaryPlan(ctx context.Context, extID string) (*remoteSubscription, *dto.SelfBillingPlanResponse, error) {
+	// Retry selection once if cancellation raced the detail fetch, so an older live subscription can win.
+	for attempt := 0; attempt < 2; attempt++ {
+		sub, err := c.LatestSubscription(ctx, extID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if sub == nil || sub.status == types.SubscriptionStatusCancelled {
+			plan, err := c.offeredPlan(ctx)
+			return sub, plan, err
+		}
+
+		resp, err := c.sdk.Subscriptions.GetSubscriptionV2(ctx, sub.id, lo.ToPtr("plan,subscription_line_items.prices"))
+		if err != nil {
+			return nil, nil, cloudErr(err)
+		}
+
+		details := resp.SubscriptionResponseV2
+		if details == nil || lo.FromPtr(details.ID) != sub.id || lo.FromPtr(details.SubscriptionStatus) == "" {
+			return nil, nil, unreadablePricing()
+		}
+
+		if lo.FromPtr(details.SubscriptionStatus) == sdktypes.SubscriptionStatusCancelled {
+			continue
+		}
+
+		plan, err := c.subscribedPlan(ctx, details, clock.Now())
+		return &remoteSubscription{
+			id:       sub.id,
+			planID:   sub.planID,
+			status:   types.SubscriptionStatus(lo.FromPtr(details.SubscriptionStatus)),
+			trialEnd: details.TrialEnd,
+		}, plan, err
+	}
+
+	return nil, nil, ierr.NewError("subscription changed while reading billing summary").
+		WithHint("The subscription changed; reload the billing summary").Mark(ierr.ErrInvalidOperation)
+}
+
+// offeredPlanIDs lists the default plan first, then the other offered plans in configured order.
+func (c *remoteClient) offeredPlanIDs() []string {
+	ids := make([]string, 0, len(c.planIDs))
+	if lo.Contains(c.planIDs, c.defaultPlanID) {
+		ids = append(ids, c.defaultPlanID)
+	}
+	for _, id := range c.planIDs {
+		if id != c.defaultPlanID {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// offeredPlan is the default plan's offer: what a tenant with no live subscription is shown.
+func (c *remoteClient) offeredPlan(ctx context.Context) (*dto.SelfBillingPlanResponse, error) {
+	offers, err := c.planOffers(ctx, []string{c.defaultPlanID})
+	if err != nil {
+		return nil, err
+	}
+	return offers[0], nil
+}
+
+// offeredPlans loads every plan a tenant may buy in one search. The default plan is first.
+func (c *remoteClient) offeredPlans(ctx context.Context) ([]*dto.SelfBillingPlanResponse, error) {
+	ids := c.offeredPlanIDs()
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return c.planOffers(ctx, ids)
+}
+
+// planOffers searches for the plans, in the given order, instead of reading each one: a plan read embeds
+// entitlements, whose reporting unit the SDK cannot decode.
+func (c *remoteClient) planOffers(ctx context.Context, ids []string) ([]*dto.SelfBillingPlanResponse, error) {
+	resp, err := c.sdk.Plans.QueryPlan(ctx, sdktypes.PlanFilter{
+		PlanIds: ids,
+		Expand:  lo.ToPtr(string(types.ExpandPrices)),
+		Limit:   lo.ToPtr(int64(len(ids))),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+	if resp.ListPlansResponse == nil {
+		return nil, unreadablePricing()
+	}
+
+	byID := lo.KeyBy(resp.ListPlansResponse.Items, func(plan sdktypes.PlanResponse) string { return lo.FromPtr(plan.ID) })
+	out := make([]*dto.SelfBillingPlanResponse, 0, len(ids))
+	for _, id := range ids {
+		plan, ok := byID[id]
+		if !ok {
+			return nil, unreadablePricing()
+		}
+		offer, err := c.planOffer(ctx, &plan)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, offer)
+	}
+	return out, nil
+}
+
+func (c *remoteClient) planOffer(ctx context.Context, plan *sdktypes.PlanResponse) (*dto.SelfBillingPlanResponse, error) {
+	var err error
+	out := newSummaryPlan(plan)
+	now := clock.Now()
+	meters := make(map[string]*sdktypes.MeterResponse)
+
+	for i := range plan.Prices {
+		p := &plan.Prices[i]
+		if !activePricing(lo.FromPtr(p.Status), p.StartDate, p.EndDate, now) || !strings.EqualFold(lo.FromPtr(p.Currency), trialCurrency) {
+			continue
+		}
+
+		quantity := decimal.NewFromInt(1)
+		if lo.FromPtr(p.Type) == sdktypes.PriceTypeUsage && lo.FromPtr(p.MeterID) != "" {
+			quantity = decimal.Zero
+		}
+
+		if minimum, _ := p.MinQuantity.Get(); minimum != nil {
+			quantity, err = pricingDecimal(minimum)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if err := c.hydratePricingMeter(ctx, p, meters); err != nil {
+			return nil, err
+		}
+
+		charge, err := summaryCharge(p, quantity)
+		if err != nil {
+			return nil, err
+		}
+
+		out.Charges = append(out.Charges, charge)
+	}
+
+	return out, nil
+}
+
+func (c *remoteClient) subscribedPlan(ctx context.Context, sub *sdktypes.SubscriptionResponseV2, now time.Time) (*dto.SelfBillingPlanResponse, error) {
+	if sub.Plan == nil || lo.FromPtr(sub.Plan.ID) == "" {
+		return nil, unreadablePricing()
+	}
+
+	out := newSummaryPlan(sub.Plan)
+	meters := make(map[string]*sdktypes.MeterResponse)
+
+	for i := range sub.LineItems {
+		item := &sub.LineItems[i]
+		if item.StartDate == nil || item.StartDate.IsZero() || !activePricing(lo.FromPtr(item.Status), item.StartDate, item.EndDate, now) {
+			continue
+		}
+
+		if item.Price == nil || lo.FromPtr(item.Price.ID) == "" || lo.FromPtr(item.Price.ID) != lo.FromPtr(item.PriceID) || item.Quantity == nil {
+			return nil, unreadablePricing()
+		}
+
+		quantity, err := pricingDecimal(item.Quantity)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := c.hydratePricingMeter(ctx, item.Price, meters); err != nil {
+			return nil, err
+		}
+
+		// A grandfathered line can still reference an expired catalog price.
+		charge, err := summaryCharge(item.Price, quantity)
+		if err != nil {
+			return nil, err
+		}
+
+		charge.LineItemID = lo.FromPtr(item.ID)
+		charge.Currency = lo.FromPtr(item.Currency)
+		charge.BillingPeriod = types.BillingPeriod(lo.FromPtr(item.BillingPeriod))
+		charge.BillingPeriodCount = int(lo.FromPtr(item.BillingPeriodCount))
+		charge.InvoiceCadence = types.InvoiceCadence(lo.FromPtr(item.InvoiceCadence))
+
+		if displayName := lo.FromPtr(item.DisplayName); displayName != "" {
+			charge.DisplayName = displayName
+		}
+
+		if meterName := lo.FromPtr(item.MeterDisplayName); meterName != "" {
+			charge.MeterDisplayName = meterName
+		}
+
+		out.Charges = append(out.Charges, charge)
+	}
+
+	return out, nil
+}
+
+func newSummaryPlan(plan *sdktypes.PlanResponse) *dto.SelfBillingPlanResponse {
+	return &dto.SelfBillingPlanResponse{
+		ID:          lo.FromPtr(plan.ID),
+		Name:        lo.FromPtr(plan.Name),
+		Description: lo.FromPtr(plan.Description),
+		Charges:     []*dto.SelfBillingChargeResponse{},
+	}
+}
+
+func summaryCharge(p *sdktypes.PriceResponse, quantity decimal.Decimal) (*dto.SelfBillingChargeResponse, error) {
+	if p == nil || lo.FromPtr(p.ID) == "" {
+		return nil, unreadablePricing()
+	}
+
+	amount, err := pricingDecimal(p.Amount)
+	if err != nil {
+		return nil, err
+	}
+
+	tiers, err := pricingTiers(p.Tiers)
+	if err != nil {
+		return nil, err
+	}
+
+	unitTiers, err := pricingTiers(p.PriceUnitTiers)
+	if err != nil {
+		return nil, err
+	}
+
+	charge := &dto.SelfBillingChargeResponse{
+		PriceID:            lo.FromPtr(p.ID),
+		DisplayName:        lo.FromPtr(p.DisplayName),
+		Type:               types.PriceType(lo.FromPtr(p.Type)),
+		Quantity:           quantity,
+		Amount:             amount,
+		Currency:           lo.FromPtr(p.Currency),
+		BillingModel:       types.BillingModel(lo.FromPtr(p.BillingModel)),
+		BillingPeriod:      types.BillingPeriod(lo.FromPtr(p.BillingPeriod)),
+		BillingPeriodCount: int(lo.FromPtr(p.BillingPeriodCount)),
+		InvoiceCadence:     types.InvoiceCadence(lo.FromPtr(p.InvoiceCadence)),
+		TierMode:           types.BillingTier(lo.FromPtr(p.TierMode)),
+		Tiers:              tiers,
+		TransformQuantity:  pricingTransform(p.TransformQuantity),
+		MeterID:            lo.FromPtr(p.MeterID),
+		BucketSize:         types.WindowSize(lo.FromPtr(p.BucketSize)),
+		PriceUnitType:      types.PriceUnitType(lo.FromPtr(p.PriceUnitType)),
+		PriceUnit:          p.PriceUnit,
+		PriceUnitTiers:     unitTiers,
+	}
+
+	if p.PriceUnitAmount != nil {
+		unitAmount, err := pricingDecimal(p.PriceUnitAmount)
+		if err != nil {
+			return nil, err
+		}
+
+		charge.PriceUnitAmount = &unitAmount
+	}
+
+	if p.Meter != nil {
+		charge.MeterDisplayName = lo.FromPtr(p.Meter.Name)
+		if charge.BucketSize == "" {
+			charge.BucketSize = types.WindowSize(lo.FromPtr(p.Meter.Aggregation.GetBucketSize()))
+		}
+	}
+
+	return charge, nil
+}
+
+// Subscription price expansion omits meters; fetch missing legacy bucketing metadata once per meter.
+func (c *remoteClient) hydratePricingMeter(ctx context.Context, p *sdktypes.PriceResponse, meters map[string]*sdktypes.MeterResponse) error {
+	meterID := lo.FromPtr(p.MeterID)
+	if lo.FromPtr(p.Type) != sdktypes.PriceTypeUsage || meterID == "" || lo.FromPtr(p.BucketSize) != "" || p.Meter != nil {
+		return nil
+	}
+
+	if cached, ok := meters[meterID]; ok {
+		p.Meter = cached
+		return nil
+	}
+
+	// A price search, unlike a price read, leaves out the feature, whose reporting unit the SDK cannot decode.
+	resp, err := c.sdk.Prices.QueryPrice(ctx, sdktypes.PriceFilter{
+		PriceIds:           []string{lo.FromPtr(p.ID)},
+		Expand:             lo.ToPtr(string(types.ExpandMeters)),
+		Limit:              lo.ToPtr(int64(1)),
+		AllowExpiredPrices: lo.ToPtr(true),
+	})
+	if err != nil {
+		return cloudErr(err)
+	}
+
+	if resp.ListPricesResponse == nil || len(resp.ListPricesResponse.Items) != 1 {
+		return unreadablePricing()
+	}
+
+	found := resp.ListPricesResponse.Items[0]
+	if found.Meter == nil || lo.FromPtr(found.Meter.ID) != meterID {
+		return unreadablePricing()
+	}
+
+	p.Meter = found.Meter
+	meters[meterID] = p.Meter
+	return nil
+}
+
+func pricingTiers(in []sdktypes.PricePriceTier) (price.JSONBTiers, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+
+	out := make(price.JSONBTiers, 0, len(in))
+	for _, tier := range in {
+		if tier.UnitAmount == nil || (tier.UpTo != nil && *tier.UpTo < 0) {
+			return nil, unreadablePricing()
+		}
+
+		unitAmount, err := pricingDecimal(tier.UnitAmount)
+		if err != nil {
+			return nil, err
+		}
+
+		mapped := price.PriceTier{
+			UnitAmount: unitAmount,
+		}
+
+		if tier.UpTo != nil {
+			mapped.UpTo = lo.ToPtr(uint64(*tier.UpTo))
+		}
+
+		if tier.FlatAmount != nil {
+			flatAmount, err := pricingDecimal(tier.FlatAmount)
+			if err != nil {
+				return nil, err
+			}
+
+			mapped.FlatAmount = &flatAmount
+		}
+
+		out = append(out, mapped)
+	}
+
+	return out, nil
+}
+
+func pricingTransform(in *sdktypes.PriceJSONBTransformQuantity) *price.TransformQuantity {
+	if in == nil {
+		return nil
+	}
+
+	return &price.TransformQuantity{
+		DivideBy: int(lo.FromPtr(in.GetDivideBy())),
+		Round:    types.RoundType(lo.FromPtr(in.GetRound())),
+	}
+}
+
+func pricingDecimal(raw *string) (decimal.Decimal, error) {
+	if raw == nil {
+		return decimal.Zero, nil
+	}
+
+	value, err := decimal.NewFromString(*raw)
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).WithHint("Flexprice Cloud returned unreadable pricing").Mark(ierr.ErrInternal)
+	}
+
+	return value, nil
+}
+
+func activePricing(status sdktypes.Status, start, end *time.Time, now time.Time) bool {
+	return status == sdktypes.StatusPublished &&
+		(start == nil || !start.After(now)) &&
+		(end == nil || end.IsZero() || !end.Before(now))
+}
+
+func unreadablePricing() error {
+	return ierr.NewError("flexprice cloud returned incomplete billing details").
+		WithHint("Flexprice Cloud returned unreadable pricing").Mark(ierr.ErrInternal)
+}

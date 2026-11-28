@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // EntityIntegrationMapping represents an entity integration mapping in the system
@@ -31,6 +32,9 @@ type EntityIntegrationMapping struct {
 	// EnvironmentID is the environment identifier
 	EnvironmentID string `db:"environment_id" json:"environment_id"`
 
+	// ConnectionID is the connection the external ID belongs to; nil for providers without a connection
+	ConnectionID *string `db:"connection_id" json:"connection_id,omitempty"`
+
 	types.BaseModel
 }
 
@@ -47,6 +51,7 @@ func FromEnt(e *ent.EntityIntegrationMapping) *EntityIntegrationMapping {
 		ProviderEntityID: e.ProviderEntityID,
 		Metadata:         e.Metadata,
 		EnvironmentID:    e.EnvironmentID,
+		ConnectionID:     e.ConnectionID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -134,6 +139,16 @@ func Validate(m *EntityIntegrationMapping) error {
 			Mark(ierr.ErrValidation)
 	}
 
+	return nil
+}
+
+// ValidateConnection requires a connection for a connection-backed provider.
+func ValidateConnection(m *EntityIntegrationMapping) error {
+	if types.SecretProvider(m.ProviderType).Validate() == nil && lo.FromPtr(m.ConnectionID) == "" {
+		return ierr.NewError("connection_id is required").
+			WithHint("Connection ID cannot be empty for a connection-backed provider").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 

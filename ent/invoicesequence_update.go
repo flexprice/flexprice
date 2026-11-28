@@ -76,6 +76,26 @@ func (_u *InvoiceSequenceUpdate) SetNillableYearMonth(v *string) *InvoiceSequenc
 	return _u
 }
 
+// SetPrefix sets the "prefix" field.
+func (_u *InvoiceSequenceUpdate) SetPrefix(v string) *InvoiceSequenceUpdate {
+	_u.mutation.SetPrefix(v)
+	return _u
+}
+
+// SetNillablePrefix sets the "prefix" field if the given value is not nil.
+func (_u *InvoiceSequenceUpdate) SetNillablePrefix(v *string) *InvoiceSequenceUpdate {
+	if v != nil {
+		_u.SetPrefix(*v)
+	}
+	return _u
+}
+
+// ClearPrefix clears the value of the "prefix" field.
+func (_u *InvoiceSequenceUpdate) ClearPrefix() *InvoiceSequenceUpdate {
+	_u.mutation.ClearPrefix()
+	return _u
+}
+
 // SetLastValue sets the "last_value" field.
 func (_u *InvoiceSequenceUpdate) SetLastValue(v int64) *InvoiceSequenceUpdate {
 	_u.mutation.ResetLastValue()
@@ -183,6 +203,12 @@ func (_u *InvoiceSequenceUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if value, ok := _u.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Prefix(); ok {
+		_spec.SetField(invoicesequence.FieldPrefix, field.TypeString, value)
+	}
+	if _u.mutation.PrefixCleared() {
+		_spec.ClearField(invoicesequence.FieldPrefix, field.TypeString)
+	}
 	if value, ok := _u.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)
 	}
@@ -257,6 +283,26 @@ func (_u *InvoiceSequenceUpdateOne) SetNillableYearMonth(v *string) *InvoiceSequ
 	if v != nil {
 		_u.SetYearMonth(*v)
 	}
+	return _u
+}
+
+// SetPrefix sets the "prefix" field.
+func (_u *InvoiceSequenceUpdateOne) SetPrefix(v string) *InvoiceSequenceUpdateOne {
+	_u.mutation.SetPrefix(v)
+	return _u
+}
+
+// SetNillablePrefix sets the "prefix" field if the given value is not nil.
+func (_u *InvoiceSequenceUpdateOne) SetNillablePrefix(v *string) *InvoiceSequenceUpdateOne {
+	if v != nil {
+		_u.SetPrefix(*v)
+	}
+	return _u
+}
+
+// ClearPrefix clears the value of the "prefix" field.
+func (_u *InvoiceSequenceUpdateOne) ClearPrefix() *InvoiceSequenceUpdateOne {
+	_u.mutation.ClearPrefix()
 	return _u
 }
 
@@ -396,6 +442,12 @@ func (_u *InvoiceSequenceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice
 	}
 	if value, ok := _u.mutation.YearMonth(); ok {
 		_spec.SetField(invoicesequence.FieldYearMonth, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Prefix(); ok {
+		_spec.SetField(invoicesequence.FieldPrefix, field.TypeString, value)
+	}
+	if _u.mutation.PrefixCleared() {
+		_spec.ClearField(invoicesequence.FieldPrefix, field.TypeString)
 	}
 	if value, ok := _u.mutation.LastValue(); ok {
 		_spec.SetField(invoicesequence.FieldLastValue, field.TypeInt64, value)

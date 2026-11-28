@@ -16,11 +16,12 @@ type Repository interface {
 
 	// Operations by key
 	GetByKey(ctx context.Context, key types.SettingKey) (*Setting, error)
+	// GetByKeyUncached reads one environment's setting from the database, never the cache; inside a transaction it reads that transaction.
+	GetByKeyUncached(ctx context.Context, environmentID string, key types.SettingKey) (*Setting, error)
 	GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*Setting, error)
 	DeleteByKey(ctx context.Context, key types.SettingKey) error
 	DeleteTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) error
 
 	// Config operations
 	ListAllTenantEnvSettingsByKey(ctx context.Context, key types.SettingKey) ([]*types.TenantEnvConfig, error)
-	GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error)
 }

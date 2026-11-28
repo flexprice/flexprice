@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"math"
 	"sort"
 	"time"
 
@@ -252,9 +253,8 @@ func (r *InMemoryPlanPriceSyncStore) ListPlanLineItemsToCreateV2(
 	return items, staleSubIDs, nil
 }
 
-// TerminatePlanPricesLineItemsV2 sets end_date on live plan-derived line items
-// belonging to the given subs whose plan price has been ended. Idempotent —
-// items with non-nil end_date are skipped.
+// TerminatePlanPricesLineItemsV2 ends live plan line items of the given subs whose
+// price ended after the sub's synced_price_sequence.
 func (r *InMemoryPlanPriceSyncStore) TerminatePlanPricesLineItemsV2(
 	ctx context.Context,
 	p planpricesync.TerminatePlanPricesLineItemsV2Params,
@@ -262,22 +262,38 @@ func (r *InMemoryPlanPriceSyncStore) TerminatePlanPricesLineItemsV2(
 	if p.PlanID == "" {
 		return 0, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
 	}
-	if len(p.SubIDs) == 0 || r.lineItemStore == nil {
+	if len(p.SubIDs) == 0 {
 		return 0, nil
 	}
 
-	priceByID := make(map[string]*price.Price)
-	for _, pp := range r.planPrices(ctx, p.PlanID) {
-		if pp.EndDate == nil {
-			continue
+	syncedSeqs := make(map[string]int64, len(p.SubIDs))
+	if r.subStore != nil {
+		r.subStore.mu.RLock()
+		for _, id := range p.SubIDs {
+			if sub, ok := r.subStore.items[id]; ok && sub != nil && scopedByCtx(ctx, sub.TenantID, sub.EnvironmentID) {
+				syncedSeqs[id] = sub.SyncedPriceSequence
+			}
 		}
-		priceByID[pp.ID] = pp
+		r.subStore.mu.RUnlock()
+	}
+	return r.terminateEndedLineItems(ctx, p.PlanID, syncedSeqs), nil
+}
+
+// terminateEndedLineItems ends live plan line items of the subs in syncedSeqs whose
+// price ended with a sequence above that sub's synced sequence.
+func (r *InMemoryPlanPriceSyncStore) terminateEndedLineItems(ctx context.Context, planID string, syncedSeqs map[string]int64) int {
+	if r.lineItemStore == nil {
+		return 0
+	}
+	priceByID := make(map[string]*price.Price)
+	for _, pp := range r.planPrices(ctx, planID) {
+		if pp.EndDate != nil {
+			priceByID[pp.ID] = pp
+		}
 	}
 	if len(priceByID) == 0 {
-		return 0, nil
+		return 0
 	}
-
-	subSet := lo.SliceToMap(p.SubIDs, func(id string) (string, struct{}) { return id, struct{}{} })
 
 	r.lineItemStore.mu.Lock()
 	defer r.lineItemStore.mu.Unlock()
@@ -293,11 +309,12 @@ func (r *InMemoryPlanPriceSyncStore) TerminatePlanPricesLineItemsV2(
 		if !li.EndDate.IsZero() {
 			continue
 		}
-		if _, ok := subSet[li.SubscriptionID]; !ok {
+		syncedSeq, ok := syncedSeqs[li.SubscriptionID]
+		if !ok {
 			continue
 		}
 		pp, ok := priceByID[li.PriceID]
-		if !ok || pp.EndDate == nil {
+		if !ok || pp.EndDate == nil || pp.Sequence <= syncedSeq {
 			continue
 		}
 		if !scopedByCtx(ctx, li.TenantID, li.EnvironmentID) {
@@ -314,7 +331,7 @@ func (r *InMemoryPlanPriceSyncStore) TerminatePlanPricesLineItemsV2(
 		}
 		updated++
 	}
-	return updated, nil
+	return updated
 }
 
 // TerminateExpiredPlanPricesLineItems is the V1 termination — sets end_date on
@@ -326,11 +343,9 @@ func (r *InMemoryPlanPriceSyncStore) TerminateExpiredPlanPricesLineItems(
 	if p.PlanID == "" {
 		return 0, ierr.NewError("plan_id is required").Mark(ierr.ErrValidation)
 	}
-	subIDs := lo.Map(r.allSubscriptions(), func(s *subscription.Subscription, _ int) string { return s.ID })
-	return r.TerminatePlanPricesLineItemsV2(ctx, planpricesync.TerminatePlanPricesLineItemsV2Params{
-		PlanID: p.PlanID,
-		SubIDs: subIDs,
-	})
+	// V1 ignores synced sequences: every ended price applies.
+	syncedSeqs := lo.SliceToMap(r.allSubscriptions(), func(s *subscription.Subscription) (string, int64) { return s.ID, math.MinInt64 })
+	return r.terminateEndedLineItems(ctx, p.PlanID, syncedSeqs), nil
 }
 
 // ListPlanLineItemsToTerminate returns the (line item, price.end_date) pairs

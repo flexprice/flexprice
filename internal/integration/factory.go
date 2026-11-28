@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
@@ -20,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	"github.com/flexprice/flexprice/internal/domain/taxapplied"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/awsmarketplace"
 	"github.com/flexprice/flexprice/internal/integration/azuremarketplace"
@@ -53,7 +57,6 @@ import (
 	"github.com/flexprice/flexprice/internal/storage/s3backend"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // Factory manages different payment integration providers and storage providers
@@ -88,6 +91,7 @@ type Factory struct {
 	// paymentMethodProvider, when set, is returned by GetPaymentMethodProvider instead of
 	// constructing a live adapter. Tests use this; production never sets it.
 	paymentMethodProvider interfaces.PaymentMethodProvider
+	taxAppliedRepo        taxapplied.Repository
 }
 
 // NewFactory creates a new integration factory
@@ -109,6 +113,7 @@ func NewFactory(
 	temporalSvc temporalservice.TemporalService,
 	locker cache.Locker,
 	settingsRepo settings.Repository,
+	taxAppliedRepo taxapplied.Repository,
 ) *Factory {
 	return &Factory{
 		config:                       config,
@@ -129,6 +134,7 @@ func NewFactory(
 		locker:                       locker,
 		temporalSvc:                  temporalSvc,
 		settingsRepo:                 settingsRepo,
+		taxAppliedRepo:               taxAppliedRepo,
 	}
 }
 
@@ -168,6 +174,8 @@ func (f *Factory) GetStripeIntegration(ctx context.Context) (*StripeIntegration,
 		f.invoiceRepo,
 		f.entityIntegrationMappingRepo,
 		priceSyncSvc,
+		f.taxAppliedRepo,
+		f.paymentRepo,
 		f.logger,
 	)
 
@@ -310,9 +318,7 @@ func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegrat
 		f.invoiceRepo,
 		f.paymentRepo,
 		f.entityIntegrationMappingRepo,
-		f.locker,
 		f.logger,
-		paymentSvc,
 	)
 
 	webhookHandler := razorpaywebhook.NewHandler(
@@ -386,6 +392,7 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 		PriceRepo:                    f.priceRepo,
 		PlanSyncSvc:                  planSyncSvc,
 		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		PaymentService:               f.paymentService,
 		Logger:                       f.logger,
 	})
 
@@ -707,12 +714,20 @@ func (f *Factory) GetZohoBooksIntegration(ctx context.Context) (*ZohoBooksIntegr
 		f.logger,
 	)
 
+	creditNoteSvc := zoho.NewCreditNoteService(
+		zohoClient,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
 	return &ZohoBooksIntegration{
-		Client:      zohoClient,
-		CustomerSvc: customerSvc,
-		InvoiceSvc:  invoiceSvc,
-		ItemSyncSvc: itemSyncSvc,
-		TaxSvc:      taxSvc,
+		Client:        zohoClient,
+		CustomerSvc:   customerSvc,
+		InvoiceSvc:    invoiceSvc,
+		CreditNoteSvc: creditNoteSvc,
+		ItemSyncSvc:   itemSyncSvc,
+		TaxSvc:        taxSvc,
 	}, nil
 }
 
@@ -962,7 +977,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 		if lifecycleErr := m.Lifecycle.RecordPaymentVoided(ctx, payments.RecordPaymentVoidedParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   gatewayPaymentID,
-			VoidedAt:           time.Now().UTC(),
+			VoidedAt:           clock.Now(),
 		}); lifecycleErr != nil {
 			return false, false, lifecycleErr
 		}
@@ -983,7 +998,7 @@ func (m *MoyasarIntegration) VoidOrRefundAuthPayment(ctx context.Context, flexpr
 	if lifecycleErr := m.Lifecycle.RecordPaymentRefunded(ctx, payments.RecordPaymentRefundedParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   gatewayPaymentID,
-		RefundedAt:         time.Now().UTC(),
+		RefundedAt:         clock.Now(),
 	}); lifecycleErr != nil {
 		return false, false, lifecycleErr
 	}
@@ -1064,7 +1079,7 @@ func (m *MoyasarIntegration) ChargeInvoiceWithToken(ctx context.Context, invoice
 		if failErr := m.Lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{
 			FlexpricePaymentID: flexpricePaymentID,
 			GatewayPaymentID:   "",
-			FailedAt:           time.Now().UTC(),
+			FailedAt:           clock.Now(),
 			ErrorMessage:       err.Error(),
 		}); failErr != nil {
 			m.Logger.Error(ctx, "failed to record payment failure after charge error",
@@ -1096,11 +1111,12 @@ func (w *WhopIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID st
 
 // ZohoBooksIntegration contains all Zoho Books integration services
 type ZohoBooksIntegration struct {
-	Client      zoho.ZohoClient
-	CustomerSvc zoho.ZohoCustomerService
-	InvoiceSvc  zoho.ZohoInvoiceService
-	ItemSyncSvc zoho.ZohoItemSyncService
-	TaxSvc      zoho.ZohoTaxService
+	Client        zoho.ZohoClient
+	CustomerSvc   zoho.ZohoCustomerService
+	InvoiceSvc    zoho.ZohoInvoiceService
+	CreditNoteSvc zoho.ZohoCreditNoteService
+	ItemSyncSvc   zoho.ZohoItemSyncService
+	TaxSvc        zoho.ZohoTaxService
 }
 
 func (z *ZohoBooksIntegration) PullAndUpdateInvoice(ctx context.Context, invoiceID string) error {
@@ -1633,7 +1649,7 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 		if err != nil {
 			return nil, err
 		}
-		return &razorpay.PaymentMethodAdapter{CustomerSvc: i.CustomerSvc}, nil
+		return razorpay.NewPaymentMethodAdapter(i.Client, i.CustomerSvc, customerSvc), nil
 	default:
 		return nil, ierr.NewError("saved payment methods are not supported for this provider").
 			WithHintf("%s cannot manage saved payment methods", gateway).
@@ -1641,27 +1657,45 @@ func (f *Factory) GetPaymentMethodProvider(ctx context.Context, gateway types.Pa
 	}
 }
 
+// SupportsGatewayRefund reports whether the gateway can issue refunds, without any connection lookup.
+func (f *Factory) SupportsGatewayRefund(gateway types.PaymentGatewayType) bool {
+	return f.refundProviderFor(gateway) != nil
+}
+
 // GetRefundProvider returns ErrNotImplemented for gateways without a v1 refund
 // adapter — Moyasar's API refunds only in full, so it cannot back this ledger.
 func (f *Factory) GetRefundProvider(ctx context.Context, gateway types.PaymentGatewayType) (interfaces.RefundProvider, error) {
-	switch gateway {
-	case types.PaymentGatewayTypeRazorpay:
-		i, err := f.GetRazorpayIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	case types.PaymentGatewayTypeChargebee:
-		i, err := f.GetChargebeeIntegration(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
-	default:
+	build := f.refundProviderFor(gateway)
+	if build == nil {
 		return nil, ierr.NewError("gateway refunds are not supported for this provider").
 			WithHintf("%s cannot issue gateway refunds", gateway).
 			WithReportableDetails(map[string]interface{}{"gateway": gateway}).
 			Mark(ierr.ErrNotImplemented)
+	}
+	return build(ctx)
+}
+
+// refundProviderFor returns the gateway's refund adapter constructor, or nil when it has none.
+func (f *Factory) refundProviderFor(gateway types.PaymentGatewayType) func(context.Context) (interfaces.RefundProvider, error) {
+	switch gateway {
+	case types.PaymentGatewayTypeRazorpay:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetRazorpayIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &razorpay.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	case types.PaymentGatewayTypeChargebee:
+		return func(ctx context.Context) (interfaces.RefundProvider, error) {
+			i, err := f.GetChargebeeIntegration(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return &chargebee.RefundAdapter{Client: i.Client, Logger: f.logger}, nil
+		}
+	default:
+		return nil
 	}
 }
 

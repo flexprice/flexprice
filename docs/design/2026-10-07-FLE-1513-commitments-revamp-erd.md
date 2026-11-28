@@ -2,9 +2,9 @@
 
 - **Ticket:** [FLE-1513](https://linear.app/flexprice/issue/FLE-1513/erd-commitments-revamp) · Linear doc: [Commitment Revamp](https://linear.app/flexprice/document/commitment-revamp-f4e4242a0c8b)
 - **Scenarios:** [2026-10-07-FLE-1513-commitments-scenarios.md](./2026-10-07-FLE-1513-commitments-scenarios.md): every supported situation, how to set it up, and what gets invoiced.
-- **Date:** 2026-10-09
+- **Date:** 2026-10-09 · Status updated 2026-10-26
 - **Author:** Ankit Malik
-- **Status:** Proposed
+- **Status:** Phase 1 (commitments, `per_period`) shipped — PRs #3211, #3212, #3214, #3215. Billing terms (§5.2, §5.3, §7) are superseded by [2026-11-02-FLE-1513-billing-terms-erd.md](./2026-11-02-FLE-1513-billing-terms-erd.md). §0.1 lists what shipped and where it differs from this document.
 
 ---
 
@@ -27,7 +27,58 @@
 
 ---
 
+## 0.1 Implementation status (2026-10-26)
 
+Phase 1 shipped behind the `commitments_v2` environment setting as PRs [#3211](https://github.com/flexprice/flexprice/pull/3211) (engine), [#3212](https://github.com/flexprice/flexprice/pull/3212) (service), [#3214](https://github.com/flexprice/flexprice/pull/3214) (billing) and [#3215](https://github.com/flexprice/flexprice/pull/3215) (API + inline creation).
+
+**Shipped**
+
+- The `commitments` table, the pure allocation engine (`commitment_engine.go`), the loader (`billing_commitments.go`), and period/window maths (`commitment_periods.go`); usage is read from `meter_usage` only (the raw-events read path was removed).
+- CRUD + preview + search + terminate API, inline creation on `CreateSubscriptionRequest.commitments[]` (subscription scope and `subscription_id` filled server-side; price scopes follow price overrides; runs after all line items exist), per-subscription idempotency keys backed by a partial unique index over published rows.
+- Amount and quantity commitments; `billing_period` and `window` measurement; `active_windows` with timezone; stacking by priority; binding floors with true-up; mid-period starts and terminations prorate and clip their floors.
+- Webhooks `commitment.created` / `.updated` / `.terminated`, with `created` cascading to `subscription.updated`; activity-log entries.
+
+**Differences from this document**
+
+- `committed_rate` / `overage_rate` decimals became **price objects** (`committed_price`, `overage_price`: billing_model, amount, tiers, tier_mode, transform_quantity). A committed price must be FLAT_FEE or TIERED-SLAB; VOLUME is rejected because it breaks the binding floor. Every derived amount applies the whole price: period amount = cost(capacity), within = cost(total used) split across lines, overage = custom price over the on-demand total.
+- On-demand remainders bill the **marginal** cost beyond covered units — cost(full) − cost(full − od), per window for bucketed prices. VOLUME-tiered and PACKAGE line prices price the remainder fresh instead, matching entitlement remainders.
+- Terminate takes `{effective_at?, cancellation_fee?}` only — a flat fee billed on an immediate ONE_OFF invoice with the PRORATION billing reason. `bill_remaining`, percent fees and `on_early_termination` are **not** in v1; nothing writes a `cancellation_fee_amount` column.
+- Entitled meters are **rejected** in commitment scope (stricter than legacy, which applied entitlements before commitment math); revisit at legacy migration. WEEK/MONTH-bucketed and group-by-bucketed prices are rejected for window measurement.
+- Nothing sets `commitment_status = ended` in phase 1; terminated commitments stay binding through the end of the billing period containing the cutoff.
+
+**Pending**
+
+- **Billing terms (§5.2, §5.3, §7): designed, not implemented.** No `billing_terms` / `billing_instalments` tables exist; `collection_method`, `total_amount` and `instalment_invoicing` are stored but only `per_period` is honoured. Phase-2 contract: `docs/design/2026-10-24-FLE-1513-billing-terms-api-contract.md`.
+- Utilisation and instalment endpoints (§9.6, §11), revenue rollup and analytics (§9).
+- Before un-gating for a raw-events tenant: tag raw-path charges with `subscription_line_item_id` (line items sharing a price double-count usage on that path); guard entitlements added after a commitment exists (plan change / addon features).
+- Legacy commitment migration (§10, rollout phase 4).
+
+## 0.2 Supported, pending and deferred (2026-11-04)
+
+Billing-terms and termination items are in the [billing terms ERD](./2026-11-02-FLE-1513-billing-terms-erd.md) §18.
+
+**Supported, with the convention to use**
+
+| Need | How |
+| --- | --- |
+| "N units, all day" or "N units, 08:00–20:00" | A quantity commitment with `measurement: window` on an hourly-bucketed price. Capacity is per bucket, so per hour, and an unused hour is not carried over. A daily range is `active_windows`. |
+| Monthly until cancelled | No `end_date`, `collection_method: per_period`. Each period bills utilised plus true-up. |
+| Fixed-length terms (30, 90, 180, 364 days, several years) | Any `start_date` and `end_date`. There are no presets; the dates are computed by the tenant. |
+| Months and daily windows | Billing periods follow the subscription's timezone. `active_windows` are read in the commitment's `timezone`, UTC by default like legacy commitment windows. |
+| End dates | Exclusive: a term "through 31 Aug" ends at `2026-09-01T00:00:00Z`. |
+| Several commitments on one price | Different `priority` values; the lowest fills first. Overlapping commitments share the type, measurement, bucket and overage price. |
+| Backdated create or termination | The drafts and skipped period invoices carrying the subscription's later periods (its parent's for a grouped child) are recomputed after the change, and a draft that still predates it is recomputed when finalized. Finalized invoices are untouched; they are recalculated on request. |
+
+**Pending**
+
+- Changing `end_date` on an existing commitment. `PUT /commitments/{id}` rejects it as not supported yet; termination is the only way to end early.
+- Upcoming committed amounts and utilisation per subscription, with a per-commitment breakdown: each period's committed amount (capacity × buckets × rate, known in advance even for open-ended commitments) and, for past periods, how much was used. It belongs with the cost explorer's analytics, which report the same numbers, rather than as a commitment-only endpoint (§9.6).
+
+**Deferred**
+
+- Renewal (D9). Until then, an open-ended `per_period` commitment stands in for "monthly until cancelled".
+
+---
 
 ## 1. Problem
 
@@ -115,7 +166,7 @@ A non-binding commitment has no collection method. Usage within it is billed at 
 | Term                                | Meaning                                                                                                                                                                                                                                                                                                                                          |
 | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Billing period / boundary**       | The subscription's own invoice period, e.g. 1 Mar–1 Apr on a monthly subscription anchored on the 1st. A *boundary* is the moment one period ends and the next begins. At each boundary, Flexprice issues a subscription invoice carrying the **arrear** charges of the period that ended and the **advance** charges of the period that starts. |
-| **Term**                            | `[start_date, end_date)` of a commitment. Both are required.                                                                                                                                                                                                                                                                                     |
+| **Term**                            | `[start_date, end_date)` of a commitment. `start_date` is required; without `end_date` the term is open-ended and runs until terminated (D8).                                                                                                                                                                                                                                                                                     |
 | **Commitment period**               | A billing period clipped to the term. A term starting 25 Aug on a monthly subscription has a first period of 25 Aug–1 Sep.                                                                                                                                                                                                                       |
 | **Measurement window**              | Where capacity is checked: the whole commitment period, or one bucket of the scoped bucketed price (e.g. one minute).                                                                                                                                                                                                                            |
 | **Committed price / overage price** | The rate for usage within the commitment (the "reserved rate"), and the rate for usage beyond it (the "on-demand rate"). The overage price defaults to the line item's own price.                                                                                                                                                                |
@@ -148,11 +199,11 @@ A non-binding commitment has no collection method. Usage within it is billed at 
 | D1  | Scope is two columns: `scope_entity_type` (subscription, group, meter or price) and `scope_entity_id`. A group must be a price group. A subscription scope covers every usage price on it, including prices added later. Fixed charges are never in scope.                                                                                                                                                                                                                     | Price groups already model "several prices". Feature groups are deferred.                                                                                                                                           |
 | D2  | A quantity commitment's scope must resolve to exactly one meter.                                                                                                                                                                                                                                                                                                                                                                                                               | A quantity needs a single unit.                                                                                                                                                                                     |
 | D3  | `measurement` is `billing_period` or `window`. A window is one bucket of the scoped prices (`price.ResolveBucketSize`); all scoped prices must resolve to the same bucket size.                                                                                                                                                                                                                                                                                                | Reuses the existing bucketed-usage path.                                                                                                                                                                            |
-| D4  | `active_windows` is a list of time ranges in `timezone` (defaulting to the subscription's), all sharing one capacity and rate.                                                                                                                                                                                                                                                                                                                                                 | One rate per commitment.                                                                                                                                                                                            |
+| D4  | `active_windows` is a list of time ranges in `timezone` (defaulting to UTC), all sharing one capacity and rate.                                                                                                                                                                                                                                                                                                                                                               | One rate per commitment.                                                                                                                                                                                            |
 | D5  | Commitments stack as a **waterfall**. In each window, usage fills the active commitments in `priority` order (lowest number first; ties go to the earlier `start_date`, then the lower `id`). Each commitment is filled to its capacity before the next one receives anything. Example: two 10-GPU commitments with usage of 15 leaves the first fully used (10 of 10), the second 50% used (5 of 10), and no on-demand. Pro-rata filling across commitments is not supported. | Deterministic and easy to explain. It lets the tenant decide which reservation is consumed first, e.g. the cheaper one.                                                                                             |
 | D6  | Commitments that overlap in time and share a usage line item must have the same `type` and `measurement`.                                                                                                                                                                                                                                                                                                                                                                      | Stacking hands units from one commitment to the next. Money and units, or minutes and periods, can't be combined in a defined order.                                                                                |
 | D7  | Rates: `committed_price_id`, and `overage_price_id` (NULL means the line item's own price). New commitments don't use `overage_factor`. A custom overage price needs a single-meter scope.                                                                                                                                                                                                                                                                                     | Explicit and auditable.                                                                                                                                                                                             |
-| D8  | `end_date` is required and falls on a billing boundary or on the subscription's `end_date`. `start_date` may be mid-period. Stopping mid-period means terminating.                                                                                                                                                                                                                                                                                                             | No contract is truly open-ended.                                                                                                                                                                                    |
+| D8  | `end_date` is optional (revised 2026-10-29: a commitment without one is open-ended — it runs until terminated or its subscription ends, billing its floor and true-up every billing period; it has no finite `commitment_value`, and for overlap checks it holds its scope until its subscription ends, indefinitely when that has no end; a cancellation fee on it covers the rest of the billing period holding `effective_at`). When set, it is never after the subscription's `end_date`, and `start_date` is always before a set subscription `end_date`. Both `start_date` and `end_date` may be mid-period (revised 2026-10-27: the original billing-boundary alignment was dropped — termination had already built the partial-floor machinery, and contracts like "exactly one year from a mid-period start" need mid-period ends). The final partial period prorates its floor; the commitment occupies its last billing period for overlap checks.                                                                                                                                                                                                                                                                                                             | Originally "no contract is truly open-ended"; revised 2026-10-29 for reserved capacity held until cancelled (e.g. 10 GPUs a day with no end date).                                                                                                                                                                                    |
 | D9  | No renewal in v1.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Smaller v1. A follow-on contract is a new commitment.                                                                                                                                                               |
 | D10 | A commitment's economics are immutable: scope, type, value, rates (including the committed price), measurement, windows, priority, dates, binding, collection method and billing terms. Only `name`, `invoice_label`, `invoice_description` and `metadata` can be edited; anything else means terminate and recreate.                                                                                                                                                          | Past invoices and instalments always match the commitment that produced them. A price change on the line item can only affect on-demand usage when no `overage_rate` is set. It never affects the commitment value. |
 
@@ -232,6 +283,7 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 
 ### 5.1 `commitments` (prefix `cmt`)
 
+> **Shipped**, with these deltas: `committed_price_id` / `overage_price_id` are created from `committed_price` / `overage_price` **price objects**, not rate decimals; `on_early_termination` is unexposed; `collection_method`, `total_amount` and `instalment_invoicing` are dormant until billing terms ship; the idempotency unique index is **partial over published rows**, so archived commitments release their keys.
 
 | Column                 | Type          | Null | Meaning                                                                                                                                                                                                                             |
 | ---------------------- | ------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -250,14 +302,14 @@ All new tables use `BaseMixin` (`tenant_id`, `status`, `created_*`, `updated_*`)
 | `overage_price_id`     | varchar(50)   | yes  | Subscription-scoped price for on-demand usage, created from `overage_rate`. NULL means each line item's own price.                                                                                                                  |
 | `measurement`          | varchar(20)   | no   | `billing_period` or `window` (§6.2)                                                                                                                                                                                                 |
 | `active_windows`       | jsonb         | yes  | e.g. `[{"start":"09:00","end":"21:00"}]`. Half-open minute-of-day ranges that may wrap past midnight. NULL means all day.                                                                                                           |
-| `timezone`             | varchar(64)   | no   | IANA name used for `active_windows`. Defaults to the subscription's timezone.                                                                                                                                                       |
+| `timezone`             | varchar(64)   | no   | IANA name used for `active_windows`. Defaults to UTC.                                                                                                                                                                                 |
 | `priority`             | int           | no   | Stacking order; lower is applied first (D5)                                                                                                                                                                                         |
 | `binding`              | bool          | no   | True means the full commitment value is owed                                                                                                                                                                                        |
 | `collection_method`    | varchar(20)   | yes  | Binding only: `per_period` (default) or `billing_terms` (D11). With `billing_terms`, rows exist in `billing_terms` and `billing_instalments`.                                                                                       |
 | `total_amount`         | numeric(20,8) | yes  | Only when `collection_method` is `billing_terms`: snapshot of the commitment value at creation (D15). NULL otherwise.                                                                                                               |
 | `instalment_invoicing` | varchar(30)   | yes  | Only when `collection_method` is `billing_terms`: `subscription_invoice` (default) or `separate_invoice` (D14). Copied to each instalment's `delivery`.                                                                             |
 | `start_date`           | timestamptz   | no   | Term start (inclusive)                                                                                                                                                                                                              |
-| `end_date`             | timestamptz   | no   | Term end (exclusive), aligned per D8                                                                                                                                                                                                |
+| `end_date`             | timestamptz   | yes  | Term end (exclusive), may be mid-period; never after the subscription end. NULL: open-ended (D8)                                                                                                                                                                                                |
 | `on_early_termination` | varchar(20)   | yes  | Binding only: `forfeit` (default), `credit_note` (billing_terms only) or `bill_remaining`                                                                                                                                           |
 | `commitment_status`    | varchar(20)   | no   | `active`, `ended` or `terminated`                                                                                                                                                                                                   |
 | `terminated_at`        | timestamptz   | yes  | When termination took effect                                                                                                                                                                                                        |
@@ -449,7 +501,7 @@ All failures return `ErrValidation`, with a hint naming the field.
 | #   | Rule                                                                                                                                                                        |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | C1  | The subscription exists in this tenant and environment and is `active` or `trialing`. `currency` matches the subscription.                                                  |
-| C2  | `start_date` ≥ subscription start, and `start_date` < `end_date`.                                                                                                           |
+| C2  | `start_date` ≥ subscription start, and `start_date` < `end_date` when `end_date` is set.                                                                                                           |
 | C3  | `end_date` is a billing boundary or the subscription's `end_date`. The error names the nearest boundaries either side.                                                      |
 | C4  | `scope_entity_id` exists in this tenant and environment and matches `scope_entity_type`. A subscription scope equals `subscription_id`. A group has `entity_type = price`.  |
 | C5  | The scope resolves to at least one usage line item at `start_date`.                                                                                                         |
@@ -475,7 +527,9 @@ All failures return `ErrValidation`, with a hint naming the field.
 
 ## 7. Billing terms and instalments in detail
 
-
+> **Superseded by [2026-11-02-FLE-1513-billing-terms-erd.md](./2026-11-02-FLE-1513-billing-terms-erd.md).** Kept for history; build from the new document.
+>
+> **Not implemented.** This whole section is design only — no tables, expansion, delivery or termination handling exist yet. The phase-2 API contract supersedes the request shapes here: `docs/design/2026-10-24-FLE-1513-billing-terms-api-contract.md`. One ruling to carry into implementation: under `billing_terms`, within-commitment usage must appear at **$0** ("covered by commitment") — skipping only the true-up would double-collect.
 
 ### 7.1 Input and storage
 
@@ -696,6 +750,8 @@ Future owners (phase 5, each with its own ERD): fixed subscription line items, a
 | Edit           | Only `name`, `invoice_label`, `invoice_description` and `metadata` (D10, D37). Label changes apply to invoices generated afterwards.                                                                                                               |
 
 
+> **Shipped terminate** differs from the design below: `POST /v1/commitments/{id}/terminate {effective_at?, cancellation_fee?}`. The period invoice clips the floor to the days the commitment ran; an optional flat fee is billed at once on a ONE_OFF invoice with the PRORATION billing reason (idempotency key `commitment_termination_<id>`), atomically with the status change. `bill_remaining` and the `billing_terms` branches below are not in v1.
+
 **Termination of a binding commitment.** A non-binding commitment simply stops.
 
 1. Lock the commitment and work out two amounts.
@@ -891,6 +947,7 @@ Invoice totals are unaffected. This attribution setting belongs to the analytics
 
 ## 11. API
 
+> **Shipped:** the first six routes plus inline creation, all permission-gated (read routes included). The instalment and utilisation endpoints wait on billing terms and analytics. Request deltas: `committed_price` / `overage_price` price objects replace `committed_rate` / `overage_rate`; terminate takes `{effective_at?, cancellation_fee?}`; `billing_terms`, `collection_method = billing_terms`, `instalment_invoicing` and `on_early_termination` are not accepted yet. Inline requests may omit `subscription_id` and, on a subscription scope, `scope.entity_id` — both are filled server-side.
 
 | Method | Path                                                       | Scope                                                                     |
 | ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -916,7 +973,9 @@ Invoice totals are unaffected. This attribution setting belongs to the analytics
   "name": "H100 base reservation", "invoice_label": "1× H100 reserved GPU",
   "invoice_description": "8 GPUs reserved at $2.88/hr",
   "scope": {"entity_type": "price", "entity_id": "price_h100"},
-  "type": "quantity", "value": "8", "committed_rate": "0.048",
+  "type": "quantity", "value": "8",
+  "committed_price": {"billing_model": "FLAT_FEE", "amount": "0.048"},
+  "overage_price": {"billing_model": "FLAT_FEE", "amount": "0.06"},
   "measurement": "window", "timezone": "Asia/Kolkata", "priority": 1,
   "binding": true, "collection_method": "per_period",
   "start_date": "2026-08-01T00:00:00+05:30", "end_date": "2027-08-01T00:00:00+05:30"
@@ -1156,7 +1215,7 @@ Every rule C1–C21 and T1–T15 gets at least one failing case and one passing 
 
 | Phase | Ships                                                                                                                                                             | Gate                                                                                           |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 1     | Commitments (§6) with `per_period`                                                                                                                                | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged. |
+| 1     | **Shipped (2026-10-26)** — commitments (§6) with `per_period`, PRs #3211/#3212/#3214/#3215                                                                        | Env flag `commitments_v2`. August dry-run matches. Invoices without commitments are unchanged. |
 | 2     | `billing_terms`: rows, presets, percent input, preview, expansion, both deliveries, claim and void, re-plan, bring forward, trigger; termination for both methods | I1–I15 green; integration sync verified                                                        |
 | 3     | Revenue rollup and analytics                                                                                                                                      | Reconciliation invariant                                                                       |
 | 4     | Migrate legacy commitments                                                                                                                                        | Per-tenant dry-run shows no invoice difference                                                 |

@@ -28,6 +28,9 @@ const (
 	trialCurrency      = "usd"
 	trialBillingPeriod = sdktypes.BillingPeriodMonthly
 
+	// trialPaymentBehavior keeps a trial whose trial-end invoice is unpaid incomplete; Cloud's default_active would activate it.
+	trialPaymentBehavior = sdktypes.PaymentBehaviorAllowIncomplete
+
 	// metaExternalID tags a checkout session with the customer it belongs to.
 	metaExternalID = "self_billing_external_id"
 	metaTaxID      = "tax_id"
@@ -35,12 +38,17 @@ const (
 	summaryInvoiceLimit = 12
 
 	usageEventSource = "self_billing"
+
+	// fxRateQueryLimit is the API's page maximum, well above the number of currencies.
+	fxRateQueryLimit = 1000
 )
 
 type remoteClient struct {
-	sdk      *flexprice.Flexprice
-	planID   string
-	provider sdktypes.CheckoutPaymentProvider
+	sdk *flexprice.Flexprice
+	// defaultPlanID is the plan every trial starts on; planIDs is every plan a tenant may buy, the default included.
+	defaultPlanID string
+	planIDs       []string
+	provider      sdktypes.CheckoutPaymentProvider
 }
 
 func newRemoteClient(cfg config.BillingConfig) *remoteClient {
@@ -51,9 +59,10 @@ func newRemoteClient(cfg config.BillingConfig) *remoteClient {
 	)
 
 	return &remoteClient{
-		sdk:      sdk,
-		planID:   cfg.PlanID,
-		provider: sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
+		sdk:           sdk,
+		defaultPlanID: cfg.DefaultPlanID,
+		planIDs:       cfg.PlanIDs,
+		provider:      sdktypes.CheckoutPaymentProvider(cfg.CheckoutProvider()),
 	}
 }
 
@@ -92,52 +101,162 @@ func (c *remoteClient) StartTrial(ctx context.Context, extID string) (bool, erro
 		return false, err
 	}
 
-	_, err = c.sdk.Subscriptions.CreateSubscription(ctx, sdktypes.CreateSubscriptionRequest{
+	req := sdktypes.CreateSubscriptionRequest{
 		ExternalCustomerID: lo.ToPtr(extID),
-		PlanID:             c.planID,
+		PlanID:             c.defaultPlanID,
 		Currency:           trialCurrency,
 		BillingPeriod:      trialBillingPeriod,
-	})
-	if err != nil {
+		PaymentBehavior:    lo.ToPtr(trialPaymentBehavior),
+	}
+	if _, err := c.sdk.Subscriptions.CreateSubscription(ctx, req); err != nil {
 		return false, cloudErr(err)
 	}
 	return true, nil
 }
 
-func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
-	resp, err := c.sdk.Customers.GetSubscriptionsForCustomer(ctx, extID, nil)
-	if isNotFound(err) {
-		return nil, nil
+// StartPlanCheckout creates a subscription on in.planID behind a checkout: Cloud keeps it draft until paid and archives it
+// if the checkout fails. It has no trial, and a $0 first period activates at once with no session.
+func (c *remoteClient) StartPlanCheckout(ctx context.Context, in checkoutInput) (*remoteCheckout, error) {
+	req := sdktypes.CreateSubscriptionRequest{
+		ExternalCustomerID: lo.ToPtr(in.extID),
+		PlanID:             in.planID,
+		Currency:           trialCurrency,
+		BillingPeriod:      trialBillingPeriod,
+		TrialPeriodDays:    lo.ToPtr(int64(0)),
+		Checkout: &sdktypes.CheckoutParams{
+			PaymentProvider: c.provider,
+			SuccessURL:      lo.ToPtr(in.successURL),
+			FailureURL:      lo.ToPtr(in.failureURL),
+			Metadata:        map[string]string{metaExternalID: in.extID},
+			// Same subscription and plan replay one checkout. A different plan is a new purchase.
+			IdempotencyKey: lo.ToPtr("plan_checkout:" + in.subscriptionID + ":" + in.planID),
+		},
+	}
+
+	resp, err := c.sdk.Subscriptions.CreateSubscription(ctx, req)
+	if httpStatus(err) == http.StatusConflict {
+		return nil, ierr.WithError(err).
+			WithHint("A checkout is already open; finish it, or wait for it to expire, before starting another").
+			Mark(ierr.ErrAlreadyExists)
 	}
 	if err != nil {
 		return nil, cloudErr(err)
 	}
 
-	var live, cancelled *sdktypes.SubscriptionResponse
-	newer := func(s, than *sdktypes.SubscriptionResponse) bool {
-		return than == nil || lo.FromPtr(s.CreatedAt).After(lo.FromPtr(than.CreatedAt))
+	if resp.SubscriptionResponse == nil || resp.SubscriptionResponse.CheckoutSession == nil {
+		return &remoteCheckout{
+			status:   types.CheckoutStatusCompleted,
+			extID:    in.extID,
+			terminal: true,
+		}, nil
+	}
+	return toRemoteCheckout(resp.SubscriptionResponse.CheckoutSession), nil
+}
+
+// EndTrials cancels the customer's trials on self-serve plans, without an invoice, once a paid subscription replaced them.
+// A trial that ended while the plan checkout was open is incomplete by now: its unpaid trial-end invoice is voided too.
+func (c *remoteClient) EndTrials(ctx context.Context, extID string) error {
+	resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
+		ExternalCustomerID: lo.ToPtr(extID),
+		SubscriptionStatus: []sdktypes.SubscriptionStatus{sdktypes.SubscriptionStatusTrialing, sdktypes.SubscriptionStatusIncomplete},
+	})
+	if isNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return cloudErr(err)
+	}
+	if resp.ListSubscriptionsResponse == nil {
+		return unreadablePricing()
 	}
 
-	// Every plan counts, not just self-serve: a tenant moved to an Enterprise plan is driven by that subscription.
-	for i := range resp.ListSubscriptionsResponse.Items {
-		s := &resp.ListSubscriptionsResponse.Items[i]
-		if lo.FromPtr(s.SubscriptionStatus) == sdktypes.SubscriptionStatusCancelled {
-			if newer(s, cancelled) {
-				cancelled = s
-			}
+	for _, sub := range resp.ListSubscriptionsResponse.Items {
+		if !lo.Contains(c.planIDs, lo.FromPtr(sub.PlanID)) {
 			continue
 		}
+		id := lo.FromPtr(sub.ID)
 
-		if newer(s, live) {
-			live = s
+		if lo.FromPtr(sub.SubscriptionStatus) == sdktypes.SubscriptionStatusIncomplete {
+			invoices, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{
+				ExternalCustomerID: lo.ToPtr(extID),
+				SubscriptionID:     lo.ToPtr(id),
+				InvoiceStatus:      []sdktypes.InvoiceStatus{sdktypes.InvoiceStatusFinalized},
+			})
+			if err != nil {
+				return cloudErr(err)
+			}
+			if invoices.ListInvoicesResponse == nil {
+				return unreadablePricing()
+			}
+			for _, inv := range invoices.ListInvoicesResponse.Items {
+				if lo.FromPtr(inv.PaymentStatus) == sdktypes.PaymentStatusSucceeded {
+					continue
+				}
+				if _, err := c.sdk.Invoices.VoidInvoice(ctx, lo.FromPtr(inv.ID)); err != nil {
+					return cloudErr(err)
+				}
+			}
+		}
+
+		_, err := c.sdk.Subscriptions.CancelSubscription(ctx, id, sdktypes.CancelSubscriptionRequest{
+			CancellationType:               sdktypes.CancellationTypeImmediate,
+			CancelImmediatelyInvoicePolicy: lo.ToPtr(sdktypes.CancelImmediatelyInvoicePolicySkip),
+			Reason:                         lo.ToPtr("self_billing_plan_purchased"),
+		})
+		if err != nil {
+			return cloudErr(err)
+		}
+	}
+	return nil
+}
+
+func (c *remoteClient) LatestSubscription(ctx context.Context, extID string) (*remoteSubscription, error) {
+	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
+	defer cancel()
+
+	// The customer endpoint excludes incomplete and paused subscriptions. A draft is an unpaid checkout, not yet the
+	// tenant's subscription.
+	statuses := []sdktypes.SubscriptionStatus{
+		sdktypes.SubscriptionStatusActive,
+		sdktypes.SubscriptionStatusTrialing,
+		sdktypes.SubscriptionStatusIncomplete,
+		sdktypes.SubscriptionStatusPaused,
+	}
+
+	for _, filter := range [][]sdktypes.SubscriptionStatus{statuses, {sdktypes.SubscriptionStatusCancelled}} {
+		resp, err := c.sdk.Subscriptions.QuerySubscription(ctx, sdktypes.SubscriptionFilter{
+			ExternalCustomerID: lo.ToPtr(extID),
+			SubscriptionStatus: filter,
+			Limit:              lo.ToPtr(int64(1)),
+			Sort: []sdktypes.SortCondition{
+				{
+					Field:     lo.ToPtr("created_at"),
+					Direction: lo.ToPtr(sdktypes.SortDirectionDesc),
+				},
+				{
+					Field:     lo.ToPtr("id"),
+					Direction: lo.ToPtr(sdktypes.SortDirectionDesc),
+				},
+			},
+		})
+		if isNotFound(err) {
+			return nil, nil
+		}
+
+		if err != nil {
+			return nil, cloudErr(err)
+		}
+
+		if resp.ListSubscriptionsResponse == nil {
+			return nil, unreadablePricing()
+		}
+
+		if len(resp.ListSubscriptionsResponse.Items) > 0 {
+			return toRemoteSubscription(&resp.ListSubscriptionsResponse.Items[0]), nil
 		}
 	}
 
-	latest := lo.Ternary(live != nil, live, cancelled)
-	if latest == nil {
-		return nil, nil
-	}
-	return toRemoteSubscription(latest), nil
+	return nil, nil
 }
 
 // UpdateBillingDetails merges the tax ID into the existing metadata, since Flexprice Cloud replaces metadata wholesale.
@@ -230,15 +349,36 @@ func (c *remoteClient) PortalSession(ctx context.Context, extID string) (*portal
 
 // Summary fails on an unparseable invoice total rather than showing a wrong amount.
 func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummary, error) {
-	sub, err := c.LatestSubscription(ctx, extID)
+	sub, plan, err := c.summaryPlan(ctx, extID)
 	if err != nil {
 		return nil, err
+	}
+
+	out := &remoteSummary{
+		subscription: sub,
+		plan:         plan,
+		invoices:     []remoteInvoice{},
+	}
+
+	// The plans on offer while one can be bought: during a self-serve trial, and once no subscription is live. A
+	// negotiated (enterprise) trial keeps its plan.
+	noLiveSubscription := sub == nil || sub.status == types.SubscriptionStatusCancelled
+	selfServeTrial := sub != nil && sub.status == types.SubscriptionStatusTrialing && lo.Contains(c.planIDs, sub.planID)
+	if noLiveSubscription || selfServeTrial {
+		out.plans, err = c.offeredPlans(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	invoices, err := c.sdk.Invoices.QueryInvoice(ctx, sdktypes.InvoiceFilter{
 		ExternalCustomerID: lo.ToPtr(extID),
 		Limit:              lo.ToPtr(int64(summaryInvoiceLimit)),
 	})
+	if sub == nil && isNotFound(err) {
+		return out, nil
+	}
+
 	if err != nil {
 		return nil, cloudErr(err)
 	}
@@ -253,10 +393,8 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		return nil, err
 	}
 
-	out := &remoteSummary{
-		subscription: sub,
-		usage:        usageSummary,
-	}
+	out.usage = usageSummary
+
 	for _, inv := range invoices.ListInvoicesResponse.Items {
 		mapped, err := toRemoteInvoice(inv)
 		if err != nil {
@@ -264,6 +402,7 @@ func (c *remoteClient) Summary(ctx context.Context, extID string) (*remoteSummar
 		}
 		out.invoices = append(out.invoices, mapped)
 	}
+
 	return out, nil
 }
 
@@ -285,10 +424,41 @@ func (c *remoteClient) IngestBulk(ctx context.Context, events []usageEvent) erro
 	return cloudErr(err)
 }
 
+// USDRates reads the billing tenant's tenant-wide rates to USD; a market rate has no stored value, so it is left out.
+func (c *remoteClient) USDRates(ctx context.Context) (map[string]decimal.Decimal, error) {
+	resp, err := c.sdk.FXRates.QueryFXRates(ctx, sdktypes.FXRateFilter{
+		Scope:      lo.ToPtr(sdktypes.FXRateScopeTenant),
+		ToCurrency: lo.ToPtr(usdCurrency),
+		Status:     lo.ToPtr(sdktypes.StatusPublished),
+		Limit:      lo.ToPtr(int64(fxRateQueryLimit)),
+	})
+	if err != nil {
+		return nil, cloudErr(err)
+	}
+
+	rates := make(map[string]decimal.Decimal)
+	for _, r := range resp.ListFXRatesResponse.GetItems() {
+		if lo.FromPtr(r.Source) == sdktypes.FXRateSourceMarket {
+			continue
+		}
+
+		rate, err := decimal.NewFromString(lo.FromPtr(r.Rate))
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithMessagef("flexprice cloud fx rate %s has an unparseable rate %q", lo.FromPtr(r.ID), lo.FromPtr(r.Rate)).
+				WithHint("The billing FX rate could not be read").
+				Mark(ierr.ErrInternal)
+		}
+		rates[strings.ToLower(lo.FromPtr(r.FromCurrency))] = rate
+	}
+	return rates, nil
+}
+
 // toRemoteSubscription maps the SDK subscription onto local types; Flexprice Cloud shares our status values.
 func toRemoteSubscription(s *sdktypes.SubscriptionResponse) *remoteSubscription {
 	return &remoteSubscription{
 		id:       lo.FromPtr(s.ID),
+		planID:   lo.FromPtr(s.PlanID),
 		status:   types.SubscriptionStatus(lo.FromPtr(s.SubscriptionStatus)),
 		trialEnd: s.TrialEnd,
 	}

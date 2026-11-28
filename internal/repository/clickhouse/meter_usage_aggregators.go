@@ -57,7 +57,7 @@ func (a *MeterUsageSumAggregator) GetType() types.AggregationType {
 }
 
 func (a *MeterUsageSumAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	return qb.BuildQuery("SUM(qty_total)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("SUM(qty_total)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- COUNT aggregator ---
@@ -69,7 +69,7 @@ func (a *MeterUsageCountAggregator) GetType() types.AggregationType {
 }
 
 func (a *MeterUsageCountAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	return qb.BuildQuery("COUNT(DISTINCT id)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("COUNT(DISTINCT id)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- COUNT_UNIQUE aggregator ---
@@ -82,7 +82,7 @@ func (a *MeterUsageCountUniqueAggregator) GetType() types.AggregationType {
 
 func (a *MeterUsageCountUniqueAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
 	// COUNT_UNIQUE needs the unique_hash != '' filter applied via the query builder
-	return qb.BuildQuery("COUNT(DISTINCT unique_hash)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("COUNT(DISTINCT unique_hash)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- MAX aggregator ---
@@ -94,7 +94,7 @@ func (a *MeterUsageMaxAggregator) GetType() types.AggregationType {
 }
 
 func (a *MeterUsageMaxAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	return qb.BuildQuery("MAX(qty_total)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("MAX(qty_total)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- AVG aggregator ---
@@ -107,7 +107,7 @@ func (a *MeterUsageAvgAggregator) GetType() types.AggregationType {
 
 func (a *MeterUsageAvgAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
 	// AVG over zero rows is NaN in ClickHouse; scanning NaN into decimal.Decimal panics.
-	return qb.BuildQuery("ifNotFinite(AVG(qty_total), 0)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("ifNotFinite(AVG(qty_total), 0)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- LATEST aggregator ---
@@ -119,7 +119,7 @@ func (a *MeterUsageLatestAggregator) GetType() types.AggregationType {
 }
 
 func (a *MeterUsageLatestAggregator) GetQuery(ctx context.Context, params *events.MeterUsageQueryParams, qb *MeterUsageQueryBuilder) string {
-	return qb.BuildQuery("argMax(qty_total, timestamp)", "COUNT(DISTINCT id)", params)
+	return qb.BuildQuery("argMax(qty_total, timestamp)", eventCountExpr(params.UseFinal), params)
 }
 
 // --- Multi-meter query builder (groups by meter_id) ---
@@ -132,6 +132,11 @@ func BuildMultiMeterQuery(aggExpr, countExpr string, params *events.MeterUsageQu
 	finalClause, settings := qb.BuildFinalClause(params.UseFinal)
 
 	if windowExpr != "" {
+		groupBy := "meter_id, window_start"
+		// Preserve each billing group as a separate value within its meter and window.
+		for _, dim := range bucketedGroupByDims(params.GroupBy) {
+			groupBy += ", " + dim.sql
+		}
 		return fmt.Sprintf(`
 			SELECT
 				meter_id,
@@ -140,10 +145,10 @@ func BuildMultiMeterQuery(aggExpr, countExpr string, params *events.MeterUsageQu
 				%s AS event_count
 			FROM meter_usage %s
 			WHERE %s
-			GROUP BY meter_id, window_start
-			ORDER BY meter_id, window_start ASC
+			GROUP BY %s
+			ORDER BY %s
 			%s
-		`, windowExpr, aggExpr, countExpr, finalClause, where, settings)
+		`, windowExpr, aggExpr, countExpr, finalClause, where, groupBy, groupBy, settings)
 	}
 
 	return fmt.Sprintf(`

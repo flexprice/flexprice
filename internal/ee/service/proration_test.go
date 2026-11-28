@@ -70,6 +70,9 @@ func (s *ProrationServiceSuite) setupService() {
 		Config:                 s.GetConfig(),
 		DB:                     s.GetDB(),
 		SubRepo:                s.GetStores().SubscriptionRepo,
+		CommitmentRepo:         s.GetStores().CommitmentRepo,
+		BillingTermRepo:        s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:  s.GetStores().BillingInstalmentRepo,
 		PlanRepo:               s.GetStores().PlanRepo,
 		PriceRepo:              s.GetStores().PriceRepo,
 		EventRepo:              s.GetStores().EventRepo,
@@ -175,7 +178,7 @@ func (s *ProrationServiceSuite) setupTestData() {
 		InvoiceNumberStartSequence: 1,
 		InvoiceNumberSeparator:     "-",
 		InvoiceNumberSuffixLength:  5,
-	})
+	}, "INV")
 	s.NoError(err)
 
 	nextSeq, err := s.GetStores().InvoiceRepo.GetNextBillingSequence(s.GetContext(), s.testData.subscription.ID)
@@ -411,6 +414,9 @@ func (s *ProrationScenarioSuite) SetupTest() {
 		TaxAssociationRepo:           st.TaxAssociationRepo,
 		TaxRateRepo:                  st.TaxRateRepo,
 		SubRepo:                      st.SubscriptionRepo,
+		CommitmentRepo:               st.CommitmentRepo,
+		BillingTermRepo:              st.BillingTermRepo,
+		BillingInstalmentRepo:        st.BillingInstalmentRepo,
 		SubscriptionLineItemRepo:     st.SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:        st.SubscriptionPhaseRepo,
 		SubScheduleRepo:              st.SubscriptionScheduleRepo,

@@ -5,7 +5,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/costsheet"
@@ -339,7 +340,7 @@ func (r *costsheetRepository) Delete(ctx context.Context, id string) error {
 			costsheet.StatusNEQ(string(types.StatusDeleted)),
 		).
 		SetStatus(string(types.StatusDeleted)).
-		SetUpdatedAt(time.Now().UTC())
+		SetUpdatedAt(clock.Now())
 
 	affected, err := deleteQuery.Save(ctx)
 

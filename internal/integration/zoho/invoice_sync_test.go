@@ -2,11 +2,13 @@ package zoho
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -32,6 +34,10 @@ type fakeSyncZohoClient struct {
 	updateInvoiceReq   *InvoiceCreateRequest
 	updateInvoiceCalls int
 	submitCalls        int
+}
+
+func (f *fakeSyncZohoClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderZohoBooks}, nil
 }
 
 func (f *fakeSyncZohoClient) UpdateInvoice(_ context.Context, zohoInvoiceID string, req *InvoiceCreateRequest) (*InvoiceResponse, error) {
@@ -432,6 +438,48 @@ func TestSyncInvoiceToZoho_SkipsZeroAmountLines(t *testing.T) {
 	assert.True(t, decimal.NewFromInt(600).Equal(req.LineItems[0].Discount))
 }
 
+// Connections without payment gateway settings send the Zoho invoice exactly as before.
+func TestSyncInvoiceToZoho_OmitsPaymentOptionsWithoutGatewaySettings(t *testing.T) {
+	line := []testLineItem{{name: "Charge", priceID: "price_1", amount: "100"}}
+
+	tests := []struct {
+		name       string
+		syncConfig *types.SyncConfig
+	}{
+		{"no sync config", nil},
+		{"no invoice sync settings", &types.SyncConfig{}},
+		{"invoice sync settings without payment gateways", &types.SyncConfig{
+			InvoiceSyncSettings: &types.InvoiceSyncSettings{NormalizeFixedTo: types.BILLING_PERIOD_MONTHLY},
+		}},
+		{"payment gateways disabled", &types.SyncConfig{
+			InvoiceSyncSettings: &types.InvoiceSyncSettings{
+				ZohoInvoiceSyncSettings: types.ZohoInvoiceSyncSettings{
+					PaymentGateways: &types.ZohoPaymentGatewaySettings{
+						Gateways: []types.ZohoPaymentGateway{types.ZohoPaymentGatewayStripe},
+					},
+				},
+			},
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, client := newSyncTestService(buildTestInvoice("INR", "0", "", "", line), tt.syncConfig)
+
+			_, err := svc.SyncInvoiceToZoho(context.Background(), ZohoInvoiceSyncRequest{InvoiceID: "inv_1"})
+			require.NoError(t, err)
+
+			req := client.createInvoiceReq
+			require.NotNil(t, req)
+			assert.Nil(t, req.PaymentOptions)
+
+			body, err := json.Marshal(req)
+			require.NoError(t, err)
+			assert.NotContains(t, string(body), "payment_options")
+		})
+	}
+}
+
 func TestTotalLineItemDiscount(t *testing.T) {
 	svc := &InvoiceService{}
 
@@ -578,6 +626,8 @@ func TestSetDates(t *testing.T) {
 		{name: "end of month issued 1st", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(9, 30), wantDate: "2026-09-01", wantDue: "2026-09-30", wantTerms: lo.ToPtr(-2)},
 		{name: "tenant end of next month", tenantTerms: lo.ToPtr(types.PaymentTermsEndOfNextMonth), issueDate: ist(9, 28), dueDate: ist(10, 31), wantDate: "2026-09-28", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-3)},
 		{name: "subscription net overrides tenant", subTerms: lo.ToPtr(types.PaymentTerms30Net), tenantTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 1), wantDate: "2026-09-01", wantDue: "2026-10-01", wantTerms: lo.ToPtr(30), wantLabel: "Net 30"},
+		{name: "custom net days", subTerms: lo.ToPtr(types.PaymentTerms("120 NET")), issueDate: ist(9, 1), dueDate: ist(12, 30), wantDate: "2026-09-01", wantDue: "2026-12-30", wantTerms: lo.ToPtr(120), wantLabel: "Net 120"},
+		{name: "due on receipt", subTerms: lo.ToPtr(types.PaymentTermsDueOnReceipt), issueDate: ist(9, 1), dueDate: ist(9, 1), wantDate: "2026-09-01", wantDue: "2026-09-01", wantTerms: lo.ToPtr(0), wantLabel: "Due on Receipt"},
 		{name: "due date no longer matches terms", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: ist(9, 1), dueDate: ist(10, 15), wantDate: "2026-09-01", wantDue: "2026-10-15"},
 		{name: "no terms sends due date only", issueDate: ist(9, 1), dueDate: ist(9, 2), wantDate: "2026-09-01", wantDue: "2026-09-02"},
 		{name: "issue date in subscription timezone", subTerms: lo.ToPtr(types.PaymentTermsEndOfMonth), issueDate: time.Date(2026, 10, 1, 0, 30, 0, 0, kolkata), dueDate: time.Date(2026, 10, 31, 0, 30, 0, 0, kolkata), wantDate: "2026-10-01", wantDue: "2026-10-31", wantTerms: lo.ToPtr(-2)},
@@ -586,8 +636,9 @@ func TestSetDates(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			termsType, days := lo.FromPtr(tt.subTerms).Parts()
 			svc := &InvoiceService{
-				subRepo:      &fakeDueDateSubRepo{sub: &subscription.Subscription{Timezone: "Asia/Kolkata", PaymentTerms: tt.subTerms}},
+				subRepo:      &fakeDueDateSubRepo{sub: &subscription.Subscription{Timezone: "Asia/Kolkata", PaymentTermsType: termsType, PaymentTermsDays: days}},
 				settingsRepo: &fakeDueDateSettingsRepo{terms: tt.tenantTerms},
 			}
 			inv := &invoice.Invoice{DueDate: lo.ToPtr(tt.dueDate.UTC()), IssueDate: lo.ToPtr(tt.issueDate.UTC())}

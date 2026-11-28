@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -13,15 +16,13 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
+	"github.com/flexprice/flexprice/internal/integration/payments"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
-	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type PaymentProcessorService interface {
@@ -32,12 +33,12 @@ type PaymentProcessorService interface {
 }
 
 type paymentProcessor struct {
-	ServiceParams
+	*paymentService
 }
 
 func NewPaymentProcessorService(params ServiceParams) PaymentProcessorService {
 	return &paymentProcessor{
-		ServiceParams: params,
+		paymentService: NewPaymentService(params).(*paymentService),
 	}
 }
 
@@ -46,6 +47,10 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	if err != nil {
 		return nil, err
 	}
+	ctx, err = NewBillingEntityService(p.ServiceParams).ScopeToPayment(ctx, paymentObj)
+	if err != nil {
+		return paymentObj, err
+	}
 
 	// For payment links, accept both INITIATED and PENDING statuses
 	// For other payment methods, only accept PENDING status
@@ -53,6 +58,17 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if paymentObj.PaymentStatus != types.PaymentStatusInitiated && paymentObj.PaymentStatus != types.PaymentStatusPending {
 			return paymentObj, ierr.NewError("payment is not in initiated or pending state").
 				WithHint("Invalid payment status for processing payment link").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id": paymentObj.ID,
+					"status":     paymentObj.PaymentStatus,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
+	} else if paymentObj.SettlesByWebhook() {
+		// PENDING means the gateway already has the charge; processing it again would charge twice.
+		if paymentObj.PaymentStatus != types.PaymentStatusInitiated {
+			return paymentObj, ierr.NewError("payment is not in initiated state").
+				WithHint("This charge has already been submitted to the gateway").
 				WithReportableDetails(map[string]interface{}{
 					"payment_id": paymentObj.ID,
 					"status":     paymentObj.PaymentStatus,
@@ -72,33 +88,53 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 	}
 
-	// For payment links, if status is INITIATED, we need to create the payment link
-	// If status is already PENDING, we don't need to do anything more
-	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink && paymentObj.PaymentStatus == types.PaymentStatusInitiated {
-		// Update payment status to processing temporarily
-		statusBefore := paymentObj.PaymentStatus
-		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = time.Now().UTC()
-		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
-			return paymentObj, err
+	// A payment link already PENDING is out with the customer; any other payment moves to processing here.
+	// TODO: take a lock on the payment object here to avoid race conditions
+	statusBefore := paymentObj.PaymentStatus
+	starting := paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink ||
+		paymentObj.PaymentStatus == types.PaymentStatusInitiated
+	// The invoice lock makes a billing-terms edit either change the draft before this freshness check or see this
+	// payment and wait.
+	err = p.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+			invoices := NewInvoiceService(p.ServiceParams).(*invoiceService)
+			if err := invoices.lockInvoice(txCtx, paymentObj.DestinationID); err != nil {
+				return err
+			}
+
+			inv, err := p.InvoiceRepo.Get(txCtx, paymentObj.DestinationID)
+			if err != nil {
+				return err
+			}
+
+			if inv.InvoiceStatus == types.InvoiceStatusVoided {
+				return errInvoiceVoided(inv.ID)
+			}
+
+			if err := invoices.requireFreshDraft(txCtx, inv); err != nil {
+				return err
+			}
 		}
-		recordPaymentTransition(ctx, paymentObj, statusBefore)
-		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
-	} else if paymentObj.PaymentMethodType != types.PaymentMethodTypePaymentLink {
-		// Update payment status to processing and fire pending event
-		// TODO: take a lock on the payment object here to avoid race conditions
-		statusBefore := paymentObj.PaymentStatus
-		paymentObj.PaymentStatus = types.PaymentStatusProcessing
-		paymentObj.UpdatedAt = time.Now().UTC()
-		if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
-			return paymentObj, err
+
+		if !starting {
+			return nil
 		}
-		recordPaymentTransition(ctx, paymentObj, statusBefore)
+
+		paymentObj.PaymentStatus = types.PaymentStatusProcessing
+		paymentObj.UpdatedAt = clock.Now()
+		return p.PaymentRepo.Update(txCtx, paymentObj)
+	})
+	if err != nil {
+		return paymentObj, err
+	}
+	if starting {
+		p.recordPaymentTransition(ctx, paymentObj, statusBefore)
 		p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 	}
 
 	// Process payment based on payment method type
 	var processErr error
+	settledByWebhook := false
 	switch paymentObj.PaymentMethodType {
 	case types.PaymentMethodTypeOffline:
 		// For offline payments, we just mark them as succeeded immediately
@@ -113,9 +149,31 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		} else {
 			processErr = p.handlePaymentLinkCreation(ctx, paymentObj)
 		}
-	case types.PaymentMethodTypeCard:
-		// Handle card payment processing
-		processErr = p.handleCardPayment(ctx, paymentObj)
+	case types.PaymentMethodTypeCard, types.PaymentMethodTypeUPI, types.PaymentMethodTypeENACH:
+		if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+			lock, lockErr := payments.LockInvoiceCharge(ctx, p.Locker, p.PaymentRepo, paymentObj.EnvironmentID, paymentObj.DestinationID, paymentObj.ID)
+			if lockErr != nil {
+				processErr = lockErr
+				break
+			}
+			defer func() {
+				if releaseErr := lock.Release(ctx); releaseErr != nil {
+					p.Logger.Error(ctx, "failed to release invoice charge lock", "invoice_id", paymentObj.DestinationID, "error", releaseErr)
+				}
+			}()
+		}
+		gateway := types.PaymentGatewayType(lo.FromPtr(paymentObj.PaymentGateway))
+		switch {
+		case !lo.Contains(dto.AllowedMethodsPerGateway(gateway), paymentObj.PaymentMethodType):
+			processErr = ierr.NewErrorf("%s payments are not supported on this payment gateway", paymentObj.PaymentMethodType).
+				WithHint("CARD supports stripe (default) and razorpay. UPI and ENACH support razorpay only").
+				Mark(ierr.ErrValidation)
+		case gateway == types.PaymentGatewayTypeRazorpay:
+			processErr = p.handleRazorpayTokenCharge(ctx, paymentObj)
+			settledByWebhook = true
+		default:
+			processErr = p.handleCardPayment(ctx, paymentObj)
+		}
 	case types.PaymentMethodTypeACH:
 		// TODO: Implement ACH payment processing
 		processErr = ierr.NewError("ACH payment processing not implemented").
@@ -154,10 +212,12 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			paymentObj.PaymentStatus = types.PaymentStatusFailed
 			errMsg := processErr.Error()
 			paymentObj.ErrorMessage = lo.ToPtr(errMsg)
-			failedAt := time.Now().UTC()
+			failedAt := clock.Now()
 			paymentObj.FailedAt = &failedAt
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentFailed, paymentObj.ID)
 		}
+	} else if settledByWebhook {
+		paymentObj.PaymentStatus = types.PaymentStatusPending
+		paymentObj.SucceededAt = nil
 	} else {
 		// For payment links, keep as pending until external payment completion
 		if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
@@ -167,25 +227,45 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 			p.publishSystemEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
-			succeededAt := time.Now().UTC()
+			succeededAt := clock.Now()
 			paymentObj.SucceededAt = &succeededAt
 			p.Logger.Info(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
-			p.publishSystemEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 		}
 	}
 
-	paymentObj.UpdatedAt = time.Now().UTC()
+	paymentObj.UpdatedAt = clock.Now()
 	ctx = withPaymentStatusAction(ctx, paymentObj.ID, statusBeforeOutcome, paymentObj.PaymentStatus)
+	if settledByWebhook && processErr == nil {
+		// A fast webhook may already have settled the charge; keep its result.
+		if err := p.PaymentRepo.UpdateWithExpectedStatus(ctx, paymentObj, types.PaymentStatusProcessing); err != nil {
+			if ierr.IsVersionConflict(err) {
+				return p.PaymentRepo.Get(ctx, paymentObj.ID)
+			}
+			return paymentObj, err
+		}
+		p.recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
+		return paymentObj, nil
+	}
 	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
 		return paymentObj, err
 	}
-	recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
+	p.recordPaymentTransition(ctx, paymentObj, statusBeforeOutcome)
 
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
+		postPaymentJournal(ctx, p.ServiceParams, paymentObj.ID)
 		if err := p.handlePostProcessing(ctx, paymentObj); err != nil {
 			p.Logger.Error(ctx, "failed to handle post-processing", "error", err, "payment_id", paymentObj.ID)
 			// Note: We don't return this error as the payment itself was successful
+		}
+	}
+
+	// Checked even when saving the link failed: the link exists at the gateway either way.
+	if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink &&
+		paymentObj.DestinationType == types.PaymentDestinationTypeInvoice &&
+		lo.FromPtr(paymentObj.GatewayTrackingID) != "" {
+		if closed, err := p.closeLinkIfInvoiceSettled(ctx, paymentObj); err != nil {
+			return closed, err
 		}
 	}
 
@@ -194,6 +274,33 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	}
 
 	return paymentObj, nil
+}
+
+// closeLinkIfInvoiceSettled closes a link whose invoice was voided or paid while the link was being created.
+func (p *paymentProcessor) closeLinkIfInvoiceSettled(ctx context.Context, paymentObj *payment.Payment) (*payment.Payment, error) {
+	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to recheck invoice after creating payment link",
+			"error", err, "payment_id", paymentObj.ID, "invoice_id", paymentObj.DestinationID)
+		return paymentObj, nil
+	}
+
+	var reason string
+	var settledErr error
+	switch {
+	case inv.InvoiceStatus == types.InvoiceStatusVoided:
+		reason, settledErr = linkVoidReasonInvoiceVoided, errInvoiceVoided(inv.ID)
+	case inv.PaymentStatus == types.PaymentStatusSucceeded || inv.PaymentStatus == types.PaymentStatusOverpaid:
+		reason, settledErr = linkVoidReasonInvoicePaid, errInvoicePaid(inv.ID)
+	default:
+		return paymentObj, nil
+	}
+
+	NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, inv.ID, reason)
+	if refreshed, err := p.PaymentRepo.Get(ctx, paymentObj.ID); err == nil {
+		paymentObj = refreshed
+	}
+	return paymentObj, settledErr
 }
 
 func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment) error {
@@ -241,6 +348,14 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 }
 
 func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
+	syncOn, err := stripeInvoiceSyncEnabled(ctx, p.ConnectionRepo)
+	if err != nil {
+		return err
+	}
+	if syncOn && shouldUseStripeHostedInvoicePage(paymentObj, invoice) {
+		return p.startPaymentUsingHostedPage(ctx, paymentObj, invoice)
+	}
+
 	// Extract success URL and cancel URL from gateway metadata
 	successURL := ""
 	cancelURL := ""
@@ -275,7 +390,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Currency:   paymentObj.Currency,
 		SuccessURL: successURL,
 		CancelURL:  cancelURL,
-		SaveCardAndMakeDefault: func() bool {
+		SaveCard: func() bool {
 			if paymentObj.GatewayMetadata != nil {
 				if saveCardStr, exists := paymentObj.GatewayMetadata["save_card_and_make_default"]; exists {
 					return saveCardStr == "true"
@@ -286,6 +401,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 		Metadata:               linkMetadata,
 		PaymentID:              paymentObj.ID,
 		TaxIDCollectionEnabled: paymentObj.GatewayMetadata["tax_id_collection_enabled"] == "true",
+		AllowPromotionCodes:    paymentObj.GatewayMetadata["allow_promotion_codes"] != "false",
 	}
 
 	// Get Stripe integration for creating payment link
@@ -333,7 +449,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	recordPaymentTransition(ctx, paymentObj, statusBefore)
+	p.recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created stripe payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -343,44 +459,120 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 	return nil
 }
 
+// shouldUseStripeHostedInvoicePage reports whether the Stripe hosted invoice page, which charges the whole invoice, fits this payment.
+func shouldUseStripeHostedInvoicePage(paymentObj *payment.Payment, inv *invoice.Invoice) bool {
+	if inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] == "" {
+		return false
+	}
+	if !inv.AmountPaid.IsZero() {
+		return false
+	}
+	if !paymentObj.Amount.Equal(inv.AmountRemaining) {
+		return false
+	}
+
+	return true
+}
+
+// startPaymentUsingHostedPage points the payment at the hosted invoice page; ProcessPayment saves it.
+func (p *paymentProcessor) startPaymentUsingHostedPage(ctx context.Context, paymentObj *payment.Payment, inv *invoice.Invoice) error {
+	stripeIntegration, err := p.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return err
+	}
+	stripeInvoiceID, err := stripeIntegration.InvoiceSyncSvc.GetStripeInvoiceID(ctx, inv.ID)
+	if err != nil {
+		return err
+	}
+
+	paymentObj.GatewayMetadata = lo.Assign(paymentObj.GatewayMetadata, types.Metadata{
+		"payment_url":                           inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL],
+		"gateway":                               string(types.PaymentGatewayTypeStripe),
+		types.GatewayMetadataKeyStripeInvoiceID: stripeInvoiceID,
+	})
+	p.Logger.Info(ctx, "using Stripe hosted invoice page as payment link",
+		"payment_id", paymentObj.ID, "invoice_id", inv.ID, "stripe_invoice_id", stripeInvoiceID)
+	return nil
+}
+
+// handleRazorpayTokenCharge charges the customer's saved Razorpay token for the
+// payment's method. The payment stays PROCESSING until the webhook settles it.
+func (p *paymentProcessor) handleRazorpayTokenCharge(ctx context.Context, paymentObj *payment.Payment) error {
+	inv, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
+	if err != nil {
+		return err
+	}
+	if paymentObj.Amount.GreaterThan(inv.AmountRemaining) {
+		return ierr.NewError("payment amount exceeds invoice remaining balance").
+			WithHint("Payment amount cannot exceed the invoice's remaining balance").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id":        paymentObj.ID,
+				"payment_amount":    paymentObj.Amount.String(),
+				"invoice_remaining": inv.AmountRemaining.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	razorpayIntegration, err := p.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Razorpay is not connected for this environment").
+			Mark(ierr.ErrValidation)
+	}
+
+	cust, err := p.CustomerRepo.Get(ctx, inv.CustomerID)
+	if err != nil {
+		return err
+	}
+
+	result, charged, err := razorpayIntegration.PaymentSvc.ChargeSavedToken(ctx, razorpay.ChargeSavedTokenRequest{
+		Customer:           cust,
+		InvoiceID:          paymentObj.DestinationID,
+		Amount:             paymentObj.Amount,
+		Currency:           paymentObj.Currency,
+		FlexPricePaymentID: paymentObj.ID,
+		PreferredMethod:    paymentObj.PaymentMethodType,
+		TokenID:            paymentObj.PaymentMethodID,
+	})
+	if err != nil {
+		return err
+	}
+	if !charged || result == nil {
+		return razorpay.NoUsableTokenError(paymentObj, inv.CustomerID)
+	}
+	if result.AlreadySubmitted {
+		return ierr.NewError("razorpay charge already submitted for this invoice").
+			WithHint("A charge for this invoice is already in progress at Razorpay").
+			WithReportableDetails(map[string]interface{}{
+				"invoice_id": paymentObj.DestinationID,
+				"payment_id": paymentObj.ID,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	if result.RazorpayPaymentID != "" {
+		paymentObj.GatewayPaymentID = &result.RazorpayPaymentID
+	}
+
+	p.Logger.Info(ctx, "submitted razorpay token charge",
+		"payment_id", paymentObj.ID,
+		"invoice_id", inv.ID,
+		"payment_method_type", paymentObj.PaymentMethodType,
+		"razorpay_payment_id", result.RazorpayPaymentID)
+	return nil
+}
+
 func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
-	// Extract success URL and cancel URL from metadata
-	successURL := ""
-	cancelURL := ""
-
-	if paymentObj.Metadata != nil {
-		if url, exists := paymentObj.Metadata["success_url"]; exists {
-			successURL = url
-		}
-		if url, exists := paymentObj.Metadata["cancel_url"]; exists {
-			cancelURL = url
-		}
-	}
-
-	// Prepare metadata for payment link request
-	linkMetadata := make(map[string]string)
-	if paymentObj.Metadata != nil {
-		// Copy metadata but exclude connection-related fields (internal use only)
-		for k, v := range paymentObj.Metadata {
-			if k != "connection_id" && k != "connection_name" {
-				linkMetadata[k] = v
-			}
-		}
-	}
-
-	// Add FlexPrice payment ID to metadata
-	linkMetadata["flexprice_payment_id"] = paymentObj.ID
-
 	// Convert to Razorpay payment link request
 	paymentLinkReq := &razorpay.CreatePaymentLinkRequest{
-		InvoiceID:  paymentObj.DestinationID,
-		CustomerID: invoice.CustomerID,
-		Amount:     paymentObj.Amount,
-		Currency:   paymentObj.Currency,
-		SuccessURL: successURL,
-		CancelURL:  cancelURL,
-		Metadata:   linkMetadata,
-		PaymentID:  paymentObj.ID,
+		InvoiceID:      paymentObj.DestinationID,
+		CustomerID:     invoice.CustomerID,
+		Amount:         paymentObj.Amount,
+		Currency:       paymentObj.Currency,
+		SuccessURL:     gatewayURL(paymentObj, "success_url"),
+		CancelURL:      gatewayURL(paymentObj, "cancel_url"),
+		PaymentID:      paymentObj.ID,
+		NotifyCustomer: paymentObj.GatewayMetadata["notify_customer"] == "true",
 	}
 
 	// Get Razorpay integration for creating payment link
@@ -427,7 +619,7 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	recordPaymentTransition(ctx, paymentObj, statusBefore)
+	p.recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created razorpay payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -488,7 +680,7 @@ func (p *paymentProcessor) handleChargebeePaymentLinkCreation(ctx context.Contex
 			WithReportableDetails(map[string]interface{}{"payment_id": paymentObj.ID}).
 			Mark(ierr.ErrDatabase)
 	}
-	recordPaymentTransition(ctx, paymentObj, statusBefore)
+	p.recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "created chargebee payment link",
 		"payment_id", paymentObj.ID,
@@ -627,7 +819,7 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	recordPaymentTransition(ctx, paymentObj, statusBefore)
+	p.recordPaymentTransition(ctx, paymentObj, statusBefore)
 
 	p.Logger.Info(ctx, "successfully created nomod payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
@@ -732,6 +924,32 @@ func (p *paymentProcessor) handlePostProcessing(ctx context.Context, paymentObj 
 	}
 }
 
+// deletionGatedInvoice reports whether an event deletion covers this invoice's
+// period, in which case a paid draft stays draft rather than sealing usage that
+// is about to be removed. The finalization cron takes it over once the deletion
+// closes. A subscription_create invoice is the exception: IsFinalizationDue
+// refuses those, so one parked here has to be finalized by hand.
+func (p *paymentProcessor) deletionGatedInvoice(ctx context.Context, inv *invoice.Invoice) bool {
+	invoiceService := NewInvoiceService(p.ServiceParams).(*invoiceService)
+	gatedDeletion, err := invoiceService.isInvoiceGatedOnEventDeletion(ctx, inv)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to read the event deletion gate, leaving the paid invoice in draft",
+			"error", err,
+			"invoice_id", inv.ID,
+		)
+		return true
+	}
+	if gatedDeletion == nil {
+		return false
+	}
+
+	p.Logger.Info(ctx, "not finalizing a paid draft while an event deletion is in progress",
+		"invoice_id", inv.ID,
+		"request_id", gatedDeletion.RequestID,
+	)
+	return true
+}
+
 func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paymentObj *payment.Payment) error {
 	// Get the invoice
 	invoice, err := p.InvoiceRepo.Get(ctx, paymentObj.DestinationID)
@@ -771,7 +989,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	invoice.AmountPaid = totalPaid
 	invoice.AmountRemaining = invoice.AmountDue.Sub(totalPaid)
 	if invoice.AmountRemaining.IsZero() {
-		paidAt := time.Now().UTC()
+		paidAt := clock.Now()
 		invoice.PaidAt = &paidAt
 	}
 
@@ -785,14 +1003,20 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if invoice.AmountRemaining.IsZero() {
 		invoice.PaymentStatus = types.PaymentStatusSucceeded
 		// Finalize invoice if it's still in draft state
-		if invoice.InvoiceStatus == types.InvoiceStatusDraft {
+		if invoice.InvoiceStatus == types.InvoiceStatusDraft && !p.deletionGatedInvoice(ctx, invoice) {
 			invoice.InvoiceStatus = types.InvoiceStatusFinalized
-			finalizedAt := time.Now().UTC()
+			finalizedAt := clock.Now()
 			invoice.FinalizedAt = &finalizedAt
 			finalizedNow = true
 			// Best effort: a failed lookup must not leave a paid invoice unfinalized, so it keeps its draft dates.
 			if err := issueSubscriptionInvoice(ctx, p.ServiceParams, invoice, finalizedAt); err != nil {
 				p.Logger.Error(ctx, "failed to date invoice at finalization, keeping its draft dates",
+					"error", err,
+					"invoice_id", invoice.ID)
+			}
+			// Best effort like the dates: a paid invoice must still finalize; without a snapshot it renders the tenant.
+			if err := NewInvoiceService(p.ServiceParams).(*invoiceService).freezeBillingEntity(ctx, invoice); err != nil {
+				p.Logger.Error(ctx, "failed to freeze invoice billing entity at finalization",
 					"error", err,
 					"invoice_id", invoice.ID)
 			}
@@ -806,8 +1030,26 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if finalizedNow {
 		ctx = activity.WithAction(ctx, invoice.ID, activity.InvoiceFinalized)
 	}
-	if err := p.InvoiceRepo.Update(ctx, invoice); err != nil {
+	// Unlike the finalize action, a stale instalment never fails here: a received payment must not be dropped.
+	var unclaimed []string
+	err = p.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if finalizedNow {
+			stale, err := NewInvoiceService(p.ServiceParams).(*invoiceService).claimInstalments(txCtx, invoice)
+			if err != nil {
+				return err
+			}
+			unclaimed = stale
+		}
+		return p.InvoiceRepo.Update(txCtx, invoice)
+	})
+	if err != nil {
 		return err
+	}
+	if len(unclaimed) > 0 {
+		p.Logger.Error(ctx, "finalized a paid invoice carrying instalments that are no longer scheduled",
+			"error", "instalments changed since the invoice was computed",
+			"invoice_id", invoice.ID,
+			"instalment_ids", unclaimed)
 	}
 	if finalizedNow {
 		if err := NewHostedInvoiceTokenService(p.ServiceParams).Issue(ctx, invoice); err != nil {
@@ -859,6 +1101,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	// Invoice is fully paid — dispatch mark-paid to whichever providers are connected.
 	if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 		p.DispatchMarkPaid(ctx, invoice.ID)
+		NewPaymentService(p.ServiceParams).VoidOpenPaymentLinks(ctx, invoice.ID, linkVoidReasonInvoicePaid)
 	}
 
 	return nil
@@ -901,8 +1144,13 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 	if p.ConnectionRepo == nil {
 		return
 	}
+	ctx, err := NewBillingEntityService(p.ServiceParams).ScopeToInvoice(ctx, invoiceID)
+	if err != nil {
+		p.Logger.Error(ctx, "failed to resolve billing entity for mark-paid", "error", err, "invoice_id", invoiceID)
+		return
+	}
 
-	connections, err := p.ConnectionRepo.ListAllPublished(ctx)
+	connections, err := p.ConnectionRepo.ListPublishedInScope(ctx)
 	if err != nil {
 		p.Logger.Error(ctx, "failed to list published connections, skipping mark-paid dispatch",
 			"error", err, "invoice_id", invoiceID)
@@ -919,33 +1167,6 @@ func (p *paymentProcessor) DispatchMarkPaid(ctx context.Context, invoiceID strin
 	}
 	if connected[types.SecretProviderWhop] {
 		p.dispatchWhopMarkPaid(ctx, invoiceID)
-	}
-}
-
-func (p *paymentProcessor) publishSystemEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
-	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
-		PaymentID: paymentID,
-		TenantID:  types.GetTenantID(ctx),
-	})
-
-	if err != nil {
-		p.Logger.Error(ctx, "failed to marshal webhook payload", "error", err)
-		return
-	}
-
-	webhookEvent := &types.WebhookEvent{
-		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SYSTEM_EVENT),
-		EventName:     eventName,
-		TenantID:      types.GetTenantID(ctx),
-		EnvironmentID: types.GetEnvironmentID(ctx),
-		UserID:        types.GetUserID(ctx),
-		Timestamp:     time.Now().UTC(),
-		Payload:       json.RawMessage(webhookPayload),
-		EntityType:    types.SystemEntityTypePayment,
-		EntityID:      paymentID,
-	}
-	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		p.Logger.Error(ctx, "failed to publish webhook event", "event_name", webhookEvent.EventName, "error", err)
 	}
 }
 
@@ -1070,7 +1291,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		updateReq := &dto.UpdatePaymentRequest{
 			PaymentStatus: lo.ToPtr(string(types.PaymentStatusFailed)),
 			ErrorMessage:  lo.ToPtr(err.Error()),
-			FailedAt:      lo.ToPtr(time.Now().UTC()),
+			FailedAt:      lo.ToPtr(clock.Now()),
 		}
 
 		paymentService := NewPaymentService(p.ServiceParams)
@@ -1090,17 +1311,22 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		GatewayPaymentID: lo.ToPtr(paymentIntentResp.ID),
 		PaymentGateway:   lo.ToPtr(string(types.PaymentGatewayTypeStripe)),
 		PaymentMethodID:  lo.ToPtr(paymentObj.PaymentMethodID),
-		SucceededAt:      lo.ToPtr(time.Now().UTC()),
+		SucceededAt:      lo.ToPtr(clock.Now()),
 	}
 
 	paymentService := NewPaymentService(p.ServiceParams)
-	if _, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq); err != nil {
+	updated, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq)
+	if err != nil {
 		p.Logger.Error(ctx, "failed to update payment status to succeeded",
 			"error", err,
 			"payment_id", paymentObj.ID,
 		)
 		return err
 	}
+	// The caller saves paymentObj again; keep the status, gateway and connection the charge recorded.
+	paymentObj.PaymentStatus = updated.PaymentStatus
+	paymentObj.PaymentGateway = updated.PaymentGateway
+	paymentObj.ConnectionID = updated.ConnectionID
 
 	p.Logger.Info(ctx, "successfully processed card payment",
 		"payment_id", paymentObj.ID,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -93,12 +94,12 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_PriceCh
 			s.Require().NoError(err)
 			s.Equal(effectiveDate, ended.EndDate, "predecessor must end at effective_date")
 
-			successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+			successorID := lo.FromPtr(ended.SuccessorLineItemID)
 			s.Require().NotEmpty(successorID, "predecessor must point at its successor")
 
 			created, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, successorID)
 			s.Require().NoError(err)
-			s.Equal(li.ID, created.Metadata[types.SubscriptionLineItemMetadataKeyPredecessorID])
+			s.Equal(li.ID, lo.FromPtr(created.PredecessorLineItemID))
 			s.Equal(effectiveDate, created.StartDate)
 			s.Equal(tc.quantity, created.Quantity, "quantity is carried over when only the price changes")
 
@@ -375,14 +376,14 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_CheckoutReplay
 	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(err)
 	s.Equal(effectiveDate, ended.EndDate)
-	successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+	successorID := lo.FromPtr(ended.SuccessorLineItemID)
 	s.Require().NotEmpty(successorID)
 
 	s.Require().NoError(impl.applyModifySubscriptionParams(ctx, params), "duplicate delivery must not error")
 
 	after, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(err)
-	s.Equal(successorID, after.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID],
+	s.Equal(successorID, lo.FromPtr(after.SuccessorLineItemID),
 		"duplicate delivery must not create a second successor")
 }
 
@@ -566,7 +567,7 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteLineItemChange_Coupon(
 
 			ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 			s.Require().NoError(err)
-			successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+			successorID := lo.FromPtr(ended.SuccessorLineItemID)
 			s.Require().NotEmpty(successorID)
 
 			associations := subscriptionCouponAssociations(ctx, s.Require(), s.GetStores(), sub.ID)
@@ -635,7 +636,7 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_Coupon_PayFirs
 
 	ended, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, li.ID)
 	s.Require().NoError(err)
-	successorID := ended.Metadata[types.SubscriptionLineItemMetadataKeySuccessorID]
+	successorID := lo.FromPtr(ended.SuccessorLineItemID)
 	s.Require().NotEmpty(successorID)
 
 	association, err := s.GetStores().CouponAssociationRepo.Get(ctx, ref.AssociationID)
@@ -719,4 +720,343 @@ func (s *SubscriptionModificationServiceSuite) TestLineItemChange_GroupedChild_P
 
 	_, err := s.service.Execute(ctx, child.ID, req)
 	s.True(ierr.IsAlreadyExists(err), "a second checkout on the child must be blocked: %v", err)
+}
+
+func (s *SubscriptionModificationServiceSuite) quantityChangeRequest(lineItemID string, quantity decimal.Decimal, effectiveDate time.Time) dto.ExecuteSubscriptionModifyRequest {
+	return dto.ExecuteSubscriptionModifyRequest{
+		Type: dto.SubscriptionModifyTypeQuantityChange,
+		QuantityChangeParams: &dto.SubModifyQuantityChangeRequest{
+			LineItems: []dto.LineItemQuantityChange{{ID: lineItemID, Quantity: quantity, EffectiveDate: &effectiveDate}},
+		},
+	}
+}
+
+// A -> B through a price change, then B -> C through a quantity change. C must name B as its
+// predecessor, so reverting C reopens B rather than A.
+func (s *SubscriptionModificationServiceSuite) TestQuantityChange_OnVersion_LinksAndRevertsToIt() {
+	ctx := s.GetContext()
+	now := s.GetNow()
+	cust := s.createCustomer("qc-on-version")
+	sub := s.createActiveSub(cust.ID)
+	oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
+	itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
+	versionAt := now.AddDate(0, 0, 5)
+	quantityAt := now.AddDate(0, 0, 10)
+
+	_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), versionAt))
+	s.Require().NoError(err)
+	itemBID := lo.FromPtr(s.mustGetLineItem(itemA.ID).SuccessorLineItemID)
+	s.Require().NotEmpty(itemBID)
+
+	_, err = s.service.Execute(ctx, sub.ID, s.quantityChangeRequest(itemBID, decimal.NewFromInt(3), quantityAt))
+	s.Require().NoError(err)
+
+	itemB := s.mustGetLineItem(itemBID)
+	itemCID := lo.FromPtr(itemB.SuccessorLineItemID)
+	s.Require().NotEmpty(itemCID, "the quantity change must link B to its successor")
+	itemC := s.mustGetLineItem(itemCID)
+	s.Equal(itemBID, lo.FromPtr(itemC.PredecessorLineItemID), "C must name B, not B's own predecessor")
+	s.Nil(itemC.SuccessorLineItemID)
+	s.Equal(itemBID, lo.FromPtr(s.mustGetLineItem(itemA.ID).SuccessorLineItemID))
+
+	subSvc := NewSubscriptionService(s.buildServiceParams())
+	_, err = subSvc.DeleteSubscriptionLineItem(ctx, itemCID, dto.DeleteSubscriptionLineItemRequest{})
+	s.Require().NoError(err)
+
+	s.Equal(types.StatusDeleted, s.mustGetLineItem(itemCID).Status)
+	revertedB := s.mustGetLineItem(itemBID)
+	s.True(revertedB.EndDate.IsZero(), "reverting C must reopen B")
+	s.Nil(revertedB.SuccessorLineItemID)
+	s.Equal(versionAt, s.mustGetLineItem(itemA.ID).EndDate, "A must stay ended where B starts")
+}
+
+// A line item with a scheduled version can only be changed through that version; a second
+// change at an earlier date would overlap the two once the scheduled version is reverted.
+func (s *SubscriptionModificationServiceSuite) TestChange_RejectedWhenScheduledVersionExists() {
+	cases := []struct {
+		name    string
+		request func(lineItemID string, at time.Time) dto.ExecuteSubscriptionModifyRequest
+	}{
+		{
+			name: "quantity_change",
+			request: func(lineItemID string, at time.Time) dto.ExecuteSubscriptionModifyRequest {
+				return s.quantityChangeRequest(lineItemID, decimal.NewFromInt(3), at)
+			},
+		},
+		{
+			name: "line_item_quantity_change",
+			request: func(lineItemID string, at time.Time) dto.ExecuteSubscriptionModifyRequest {
+				return s.lineItemChangeRequest(lineItemID, lo.ToPtr(decimal.NewFromInt(3)), nil, at)
+			},
+		},
+		{
+			name: "line_item_price_change",
+			request: func(lineItemID string, at time.Time) dto.ExecuteSubscriptionModifyRequest {
+				return s.lineItemChangeRequest(lineItemID, nil, lo.ToPtr(decimal.NewFromInt(30)), at)
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		s.Run(tc.name, func() {
+			ctx := s.GetContext()
+			now := s.GetNow()
+			cust := s.createCustomer("scheduled-" + tc.name)
+			sub := s.createActiveSub(cust.ID)
+			oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
+			itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
+			versionAt := now.AddDate(0, 0, 10)
+
+			_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), versionAt))
+			s.Require().NoError(err)
+			itemBID := lo.FromPtr(s.mustGetLineItem(itemA.ID).SuccessorLineItemID)
+			s.Require().NotEmpty(itemBID)
+
+			_, err = s.service.Execute(ctx, sub.ID, tc.request(itemA.ID, now.AddDate(0, 0, 5)))
+			s.Require().Error(err)
+			s.Contains(err.Error(), "line item already has a scheduled version")
+
+			unchanged := s.mustGetLineItem(itemA.ID)
+			s.Equal(versionAt, unchanged.EndDate, "a rejected change must not move A's end date")
+			s.Equal(itemBID, lo.FromPtr(unchanged.SuccessorLineItemID))
+
+			items, err := s.GetStores().SubscriptionLineItemRepo.List(ctx, &types.SubscriptionLineItemFilter{SubscriptionIDs: []string{sub.ID}})
+			s.Require().NoError(err)
+			s.Len(items, 2, "a rejected change must not create a line item")
+		})
+	}
+}
+
+// The apply step re-checks under the row lock, so a version scheduled after the request was
+// validated still blocks the change.
+func (s *SubscriptionModificationServiceSuite) TestApply_RejectedWhenVersionScheduledAfterValidation() {
+	impl := s.service.(*subscriptionModificationService)
+
+	s.Run("quantity_change", func() {
+		ctx := s.GetContext()
+		now := s.GetNow()
+		cust := s.createCustomer("apply-recheck-qc")
+		sub := s.createActiveSub(cust.ID)
+		oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
+		itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
+
+		req, err := impl.buildQuantityChangeRequest(ctx, sub.ID, s.quantityChangeRequest(itemA.ID, decimal.NewFromInt(3), now.AddDate(0, 0, 5)).QuantityChangeParams)
+		s.Require().NoError(err)
+
+		_, err = s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), now.AddDate(0, 0, 10)))
+		s.Require().NoError(err)
+
+		_, err = impl.applyQuantityChange(ctx, req)
+		s.Require().Error(err)
+		s.Contains(err.Error(), "line item already has a scheduled version")
+	})
+
+	s.Run("line_item_change", func() {
+		ctx := s.GetContext()
+		now := s.GetNow()
+		cust := s.createCustomer("apply-recheck-lic")
+		sub := s.createActiveSub(cust.ID)
+		oldPrice := s.createRepricableFixedPrice(decimal.NewFromInt(10))
+		itemA := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, oldPrice.ID)
+
+		req, err := impl.buildLineItemChangeRequest(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(30)), now.AddDate(0, 0, 5)).LineItemChangeParams)
+		s.Require().NoError(err)
+
+		_, err = s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(itemA.ID, nil, lo.ToPtr(decimal.NewFromInt(20)), now.AddDate(0, 0, 10)))
+		s.Require().NoError(err)
+
+		_, err = impl.applyLineItemChange(ctx, req)
+		s.Require().Error(err)
+		s.Contains(err.Error(), "line item already has a scheduled version")
+	})
+}
+
+func (s *SubscriptionModificationServiceSuite) TestLineItemChange_AtPeriodEnd() {
+	for _, cadence := range []types.InvoiceCadence{types.InvoiceCadenceAdvance, types.InvoiceCadenceArrear} {
+		s.Run(string(cadence), func() {
+			ctx := s.GetContext()
+			cust := s.createCustomer("lic-period-end-" + string(cadence))
+			sub := s.createActiveSub(cust.ID)
+			periodStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+			periodEnd := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+			sub.StartDate = periodStart
+			sub.BillingAnchor = periodStart
+			sub.CurrentPeriodStart = periodStart
+			sub.CurrentPeriodEnd = periodEnd
+			s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+			p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+			li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), cadence, p.ID)
+			storedLI := s.mustGetLineItem(li.ID)
+			storedLI.StartDate = periodStart
+			s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, storedLI))
+			newQty := decimal.NewFromInt(5)
+
+			preview, err := s.service.Preview(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+			s.Require().NoError(err)
+			s.Empty(preview.ChangedResources.Invoices, "scheduling at period end must not invoice the current period")
+			s.Require().Len(preview.ChangedResources.LineItems, 2)
+			s.Equal(dto.ChangedLineItemActionEnded, preview.ChangedResources.LineItems[0].ChangeAction)
+			s.Require().NotNil(preview.ChangedResources.LineItems[0].EndDate)
+			s.True(preview.ChangedResources.LineItems[0].EndDate.Equal(periodEnd))
+			s.Equal(dto.ChangedLineItemActionCreated, preview.ChangedResources.LineItems[1].ChangeAction)
+			s.Require().NotNil(preview.ChangedResources.LineItems[1].StartDate)
+			s.True(preview.ChangedResources.LineItems[1].StartDate.Equal(periodEnd))
+			s.Nil(preview.ChangedResources.LineItems[1].EndDate, "open-ended successor scheduled at period end must stay open-ended")
+
+			resp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+			s.Require().NoError(err)
+			s.Empty(resp.ChangedResources.Invoices, "executing at period end must not invoice or credit the current period")
+			s.Require().Len(resp.ChangedResources.LineItems, 2)
+			s.Nil(resp.ChangedResources.LineItems[1].EndDate)
+
+			oldItem := s.mustGetLineItem(li.ID)
+			s.True(oldItem.EndDate.Equal(periodEnd))
+			s.Require().NotNil(oldItem.SuccessorLineItemID)
+
+			newItem := s.mustGetLineItem(*oldItem.SuccessorLineItemID)
+			s.True(newItem.StartDate.Equal(periodEnd))
+			s.True(newItem.EndDate.IsZero())
+			s.True(newItem.Quantity.Equal(newQty))
+			s.Require().NotNil(newItem.PredecessorLineItemID)
+			s.Equal(oldItem.ID, *newItem.PredecessorLineItemID)
+
+			// Run renewal at periodEnd and verify the renewal invoice bills the right version and amount.
+			sp := s.service.(*subscriptionModificationService).serviceParams
+			sp.BillingInstalmentRepo = s.GetStores().BillingInstalmentRepo
+			sp.CommitmentRepo = s.GetStores().CommitmentRepo
+			subSvc := NewSubscriptionService(sp).(*subscriptionService)
+			reloaded, err := s.GetStores().SubscriptionRepo.Get(ctx, sub.ID)
+			s.Require().NoError(err)
+			s.Require().NoError(subSvc.processSubscriptionPeriod(ctx, reloaded, periodEnd.Add(time.Second)))
+
+			invFilter := types.NewNoLimitInvoiceFilter()
+			invFilter.SubscriptionID = sub.ID
+			invoices, err := s.GetStores().InvoiceRepo.List(ctx, invFilter)
+			s.Require().NoError(err)
+			s.Require().Len(invoices, 1, "renewal should produce one invoice")
+			if cadence == types.InvoiceCadenceAdvance {
+				// Advance renewal bills the next period at the new quantity (5 * $20 = $100).
+				s.True(invoices[0].AmountDue.Equal(decimal.NewFromInt(100)), "expected advance renewal amount 100, got %s", invoices[0].AmountDue)
+			} else {
+				// Arrear renewal bills the closing period at the old quantity (2 * $20 = $40).
+				s.True(invoices[0].AmountDue.Equal(decimal.NewFromInt(40)), "expected arrear renewal amount 40, got %s", invoices[0].AmountDue)
+			}
+		})
+	}
+
+	s.Run("rejects_after_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-after-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		newQty := decimal.NewFromInt(5)
+
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd.Add(time.Nanosecond)))
+		s.Require().Error(err)
+	})
+
+	s.Run("rejects_at_finite_line_item_end_equal_to_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-finite-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(20))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
+			WithEndDate(sub.CurrentPeriodEnd).
+			Build()
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(5)
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+	})
+
+	s.Run("longer_cadence_rejected_at_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-longer-cadence-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(2), types.InvoiceCadenceAdvance, p.ID)
+		stored := s.mustGetLineItem(li.ID)
+		stored.BillingPeriod = types.BILLING_PERIOD_ANNUAL
+		stored.BillingPeriodCount = 1
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(4)
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+	})
+
+	s.Run("one_time_line_item_rejected_at_period_end", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-onetime-period-end")
+		sub := s.createActiveSub(cust.ID)
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(50))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+		stored := s.mustGetLineItem(li.ID)
+		stored.BillingPeriod = types.BILLING_PERIOD_ONETIME
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(2)
+		_, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, sub.CurrentPeriodEnd))
+		s.Require().Error(err)
+	})
+
+	s.Run("cancellation_before_period_end_does_not_credit_future_successor", func() {
+		ctx := s.GetContext()
+		cust := s.createCustomer("lic-cancel-before-period-end")
+		sub := s.createActiveSub(cust.ID)
+		periodStart := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+		periodEnd := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+		sub.StartDate = periodStart
+		sub.BillingAnchor = periodStart
+		sub.CurrentPeriodStart = periodStart
+		sub.CurrentPeriodEnd = periodEnd
+		s.Require().NoError(s.GetStores().SubscriptionRepo.Update(ctx, sub))
+
+		p := s.createRepricableFixedPrice(decimal.NewFromInt(120))
+		li := s.createFixedLineItemWithPrice(sub.ID, cust.ID, decimal.NewFromInt(1), types.InvoiceCadenceAdvance, p.ID)
+		stored := subscription.NewSubscriptionLineItemBuilder(s.mustGetLineItem(li.ID)).
+			WithStartDate(periodStart).
+			Build()
+		s.Require().NoError(s.GetStores().SubscriptionLineItemRepo.Update(ctx, stored))
+
+		newQty := decimal.NewFromInt(5)
+		execResp, err := s.service.Execute(ctx, sub.ID, s.lineItemChangeRequest(li.ID, &newQty, nil, periodEnd))
+		s.Require().NoError(err)
+		s.Require().Len(execResp.ChangedResources.LineItems, 2)
+
+		successor := s.mustGetLineItem(execResp.ChangedResources.LineItems[1].ID)
+		s.True(successor.StartDate.Equal(periodEnd))
+
+		sp := s.service.(*subscriptionModificationService).serviceParams
+		prorationSvc := NewLineItemProrationService(sp)
+		price, err := s.GetStores().PriceRepo.Get(ctx, p.ID)
+		s.Require().NoError(err)
+
+		summary, err := prorationSvc.Compute(ctx, LineItemProrationRequest{
+			Subscription:  sub,
+			EffectiveDate: time.Date(2026, 4, 16, 0, 0, 0, 0, time.UTC),
+			Behavior:      types.ProrationBehaviorCreateProrations,
+			Entries: []LineItemProrationEntry{
+				{
+					LineItem:        successor,
+					Action:          types.ProrationActionCancellation,
+					CurrentPrice:    price,
+					CurrentQuantity: successor.Quantity,
+				},
+			},
+		})
+		s.Require().NoError(err)
+		s.True(summary.TotalCreditAmount.IsZero(), "future-starting successor should not be credited on mid-period cancellation, got %s", summary.TotalCreditAmount)
+	})
+}
+
+func (s *SubscriptionModificationServiceSuite) mustGetLineItem(id string) *subscription.SubscriptionLineItem {
+	s.T().Helper()
+	item, err := s.GetStores().SubscriptionLineItemRepo.Get(s.GetContext(), id)
+	s.Require().NoError(err)
+	return item
 }

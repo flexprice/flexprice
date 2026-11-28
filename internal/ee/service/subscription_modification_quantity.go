@@ -7,14 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // quantityChangeRequest is the validated, ready-to-apply intent for a quantity change.
@@ -85,7 +88,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItemModifications))
 	for _, m := range params.LineItemModifications {
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, m.LineItemID)
@@ -131,7 +134,7 @@ func (s *subscriptionModificationService) requestFromModifySubscriptionParams(
 			}
 		}
 
-		newEndDate := sub.CurrentPeriodEnd
+		var newEndDate time.Time
 		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 			newEndDate = lineItem.EndDate
 		}
@@ -200,7 +203,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 		oldStart := old.StartDate
 		endDate := effectiveDate
 		startDate := effectiveDate
-		newEndDate := m.getNewEndDate()
+		createdEnd := optionalTimePtr(m.getNewEndDate())
 		out = append(out,
 			dto.ChangedLineItem{
 				ID:           previewEndedLineItemID,
@@ -215,7 +218,7 @@ func (r *quantityChangeRequest) previewChangedLineItems() []dto.ChangedLineItem 
 				PriceID:      old.PriceID,
 				Quantity:     m.getQuantity(),
 				StartDate:    &startDate,
-				EndDate:      &newEndDate,
+				EndDate:      createdEnd,
 				ChangeAction: dto.ChangedLineItemActionCreated,
 			},
 		)
@@ -291,6 +294,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 	params *dto.SubModifyQuantityChangeRequest,
 ) (*quantityChangeRequest, error) {
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 
 	if params == nil {
 		return nil, ierr.NewError("quantity_change_params is required").
@@ -317,7 +321,7 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			Mark(ierr.ErrValidation)
 	}
 
-	now := time.Now().UTC()
+	now := clock.Now()
 	mods := make([]*quantityChangeLineItemMod, 0, len(params.LineItems))
 
 	for _, change := range params.LineItems {
@@ -325,23 +329,8 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 		if change.EffectiveDate != nil {
 			effectiveDate = change.EffectiveDate.UTC()
 		}
-		if effectiveDate.Before(sub.CurrentPeriodStart) {
-			return nil, ierr.NewError("effective_date cannot be before the current period start").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":       effectiveDate,
-					"current_period_start": sub.CurrentPeriodStart,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if !effectiveDate.Before(sub.CurrentPeriodEnd) {
-			return nil, ierr.NewError("effective_date must be before the current period end").
-				WithHint("Set effective_date to a time within the current billing period").
-				WithReportableDetails(map[string]interface{}{
-					"effective_date":     effectiveDate,
-					"current_period_end": sub.CurrentPeriodEnd,
-				}).
-				Mark(ierr.ErrValidation)
+		if err := validateEffectiveDateWithinCurrentPeriod(effectiveDate, sub); err != nil {
+			return nil, err
 		}
 
 		lineItem, err := sp.SubscriptionLineItemRepo.Get(ctx, change.ID)
@@ -370,6 +359,12 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 				Mark(ierr.ErrValidation)
 		}
 
+		if successor, err := subSvc.findPublishedSuccessor(ctx, lineItem); err != nil {
+			return nil, err
+		} else if successor != nil {
+			return nil, alreadyScheduledVersionError(change.ID, successor.ID)
+		}
+
 		if err := validateChangeEffectiveDateWithinLineItemWindow(effectiveDate, sub, lineItem, change.ID); err != nil {
 			return nil, err
 		}
@@ -380,8 +375,8 @@ func (s *subscriptionModificationService) buildQuantityChangeRequest(
 			continue
 		}
 
-		newEndDate := sub.CurrentPeriodEnd
-		if !lineItem.EndDate.IsZero() {
+		var newEndDate time.Time
+		if !lineItem.EndDate.IsZero() && lineItem.EndDate.After(effectiveDate) {
 			newEndDate = lineItem.EndDate
 		}
 
@@ -589,6 +584,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 	}
 
 	sp := s.serviceParams
+	subSvc := NewSubscriptionService(sp).(*subscriptionService)
 	mods := request.GetModifications()
 	if len(mods) == 0 {
 		return []dto.ChangedLineItem{}, nil
@@ -606,7 +602,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 			effectiveDate := mod.getEffectiveDate()
 			lineItemID := mod.getLineItemID()
 
-			lineItem, err := sp.SubscriptionLineItemRepo.Get(txCtx, lineItemID)
+			lineItem, err := sp.SubscriptionLineItemRepo.GetForUpdate(txCtx, lineItemID)
 			if err != nil {
 				return err
 			}
@@ -629,14 +625,22 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					Mark(ierr.ErrValidation)
 			}
 
+			if successor, err := subSvc.findPublishedSuccessor(txCtx, lineItem); err != nil {
+				return err
+			} else if successor != nil {
+				return alreadyScheduledVersionError(lineItemID, successor.ID)
+			}
+
 			// Preserve a finite original window on the replacement; open-ended stays open-ended.
 			newItemEndDate := time.Time{}
 			if !lineItem.EndDate.IsZero() {
 				newItemEndDate = lineItem.EndDate
 			}
 
+			newItemID := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
 			endedItem := subscription.NewSubscriptionLineItemBuilder(lineItem).
 				WithEndDate(effectiveDate).
+				WithSuccessorLineItemID(lo.ToPtr(newItemID)).
 				Build()
 			if err := sp.SubscriptionLineItemRepo.Update(txCtx, endedItem); err != nil {
 				return ierr.WithError(err).
@@ -646,12 +650,18 @@ func (s *subscriptionModificationService) applyQuantityChange(
 
 			// Copy from the ended line item, then override identity / window / quantity.
 			newItem := subscription.NewSubscriptionLineItemBuilder(endedItem).
-				WithID(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)).
+				WithID(newItemID).
 				WithQuantity(mod.getQuantity()).
 				WithStartDate(effectiveDate).
 				WithEndDate(newItemEndDate).
 				WithBaseModel(types.GetDefaultBaseModel(txCtx)).
+				WithPredecessorLineItemID(lo.ToPtr(lineItemID)).
+				WithSuccessorLineItemID(nil).
 				Build()
+			clearLineItemMetadataIDs(newItem, lineageMetadataKeys...)
+			if err := checkLineAttach(txCtx, sp, request.GetSubscription(), newItem); err != nil {
+				return err
+			}
 			if err := sp.SubscriptionLineItemRepo.Create(txCtx, newItem); err != nil {
 				return err
 			}
@@ -659,7 +669,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 			oldStart := endedItem.StartDate
 			endDate := effectiveDate
 			startDate := effectiveDate
-			newEndDate := mod.getNewEndDate()
+			createdEnd := optionalTimePtr(mod.getNewEndDate())
 			changedLineItems = append(changedLineItems,
 				dto.ChangedLineItem{
 					ID:           endedItem.ID,
@@ -674,7 +684,7 @@ func (s *subscriptionModificationService) applyQuantityChange(
 					PriceID:      newItem.PriceID,
 					Quantity:     newItem.Quantity,
 					StartDate:    &startDate,
-					EndDate:      &newEndDate,
+					EndDate:      createdEnd,
 					ChangeAction: dto.ChangedLineItemActionCreated,
 				},
 			)
@@ -1067,15 +1077,16 @@ func buildProrationChargeInvoiceRequest(
 		Metadata:       types.WithCollapsedInvoiceDisplayName(nil, "Quantity change"),
 		LineItems: []dto.CreateInvoiceLineItemRequest{
 			{
-				PriceID:         &priceID,
-				PriceType:       &priceType,
-				PlanDisplayName: &planDisplayName,
-				DisplayName:     &displayName,
-				Amount:          netAmount,
-				Quantity:        qtyDelta,
-				PeriodStart:     &effectiveDate,
-				PeriodEnd:       &periodEnd,
-				Metadata:        types.Metadata{"description": lineItemDescription},
+				PriceID:                &priceID,
+				SubscriptionLineItemID: &oldItem.ID,
+				PriceType:              &priceType,
+				PlanDisplayName:        &planDisplayName,
+				DisplayName:            &displayName,
+				Amount:                 netAmount,
+				Quantity:               qtyDelta,
+				PeriodStart:            &effectiveDate,
+				PeriodEnd:              &periodEnd,
+				Metadata:               types.Metadata{"description": lineItemDescription},
 			},
 		},
 	}
@@ -1125,9 +1136,18 @@ func prorationChargeIdempotencyKey(subID string, parts []prorationChargeKeyPart)
 	})
 }
 
+// optionalTimePtr returns nil for a zero time so open-ended line items omit end_date in responses.
+func optionalTimePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 // validateChangeEffectiveDateWithinLineItemWindow ensures effectiveDate lies in
-// [lineItem.StartDate, lineEnd), where lineEnd is lineItem.EndDate when set, otherwise
-// sub.CurrentPeriodEnd (open-ended line item). Subscription period bounds are validated separately.
+// [lineItem.StartDate, lineItem.EndDate) for finite line items, or
+// [lineItem.StartDate, sub.CurrentPeriodEnd] for open-ended line items.
+// Subscription period bounds are validated separately.
 func validateChangeEffectiveDateWithinLineItemWindow(
 	effectiveDate time.Time,
 	sub *subscription.Subscription,
@@ -1144,19 +1164,66 @@ func validateChangeEffectiveDateWithinLineItemWindow(
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	lineEnd := sub.CurrentPeriodEnd
+
 	if !lineItem.EndDate.IsZero() {
-		lineEnd = lineItem.EndDate
-	}
-	if !effectiveDate.Before(lineEnd) {
-		return ierr.NewError("effective_date must be before the line item end date").
-			WithHint("Set effective_date to a time before the line item's active window ends").
+		// Finite line items use an exclusive end bound so edits cannot land at or after expiry.
+		if !effectiveDate.Before(lineItem.EndDate) {
+			return ierr.NewError("effective_date must be before the line item end date").
+				WithHint("Set effective_date to a time before the line item's active window ends").
+				WithReportableDetails(map[string]interface{}{
+					"effective_date": effectiveDate,
+					"line_item_id":   lineItemID,
+					"line_item_end":  lineItem.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	} else if effectiveDate.After(sub.CurrentPeriodEnd) {
+		// Open-ended line items allow scheduling up to and including current_period_end.
+		return ierr.NewError("effective_date cannot be after the current period end").
+			WithHint("Set effective_date to a time within the current billing period or at the current period end").
 			WithReportableDetails(map[string]interface{}{
 				"effective_date": effectiveDate,
 				"line_item_id":   lineItemID,
-				"line_item_end":  lineEnd,
+				"line_item_end":  sub.CurrentPeriodEnd,
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	if effectiveDate.Equal(sub.CurrentPeriodEnd) {
+		return validatePeriodEndEffectiveDate(effectiveDate, sub, lineItem, lineItemID)
+	}
+	return nil
+}
+
+// validatePeriodEndEffectiveDate rejects line items that cannot safely be versioned
+// at current_period_end without double-billing.
+func validatePeriodEndEffectiveDate(
+	effectiveDate time.Time,
+	sub *subscription.Subscription,
+	lineItem *subscription.SubscriptionLineItem,
+	lineItemID string,
+) error {
+	// One-time charges don't recur; a successor starting at period end would be billed again on renewal.
+	if lineItem.BillingPeriod == types.BILLING_PERIOD_ONETIME {
+		return ierr.NewError("effective_date at current_period_end is not supported for one-time line items").
+			WithHint("Choose an effective_date before current_period_end").
+			WithReportableDetails(map[string]interface{}{
+				"effective_date": effectiveDate,
+				"line_item_id":   lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Longer-cadence items (e.g. annual on a monthly sub) bill on their own grid, not sub.CurrentPeriodEnd.
+	if types.IsLongerCadence(lineItem.BillingPeriod, lineItem.BillingPeriodCount, sub.BillingPeriod, sub.BillingPeriodCount) {
+		return ierr.NewError("effective_date at current_period_end is not supported for longer-cadence line items").
+			WithHint("Choose an effective_date before current_period_end").
+			WithReportableDetails(map[string]interface{}{
+				"effective_date": effectiveDate,
+				"line_item_id":   lineItemID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }

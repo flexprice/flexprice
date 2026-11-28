@@ -7,12 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
+	"github.com/samber/lo"
 )
 
 // InvoiceSyncService handles synchronization of FlexPrice invoices with HubSpot
@@ -46,11 +50,17 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 			Mark(ierr.ErrNotFound)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Check if invoice is already synced to avoid duplicates
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeInvoice,
 		EntityID:      invoiceID,
 		ProviderTypes: []string{string(types.SecretProviderHubSpot)},
+		ConnectionID:  conn.ID,
 	}
 	existingMappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
 	if err == nil && len(existingMappings) > 0 {
@@ -75,9 +85,9 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 
 	// Set due date (Unix timestamp in milliseconds).
 	// Clamp to at least 15 minutes from now so wallet top-up invoices
-	// (DueDate = time.Now()) don't fail HubSpot validation.
+	// (DueDate = clock.Now()) don't fail HubSpot validation.
 	if inv.DueDate != nil {
-		minDueDate := time.Now().UTC().Add(15 * time.Minute)
+		minDueDate := clock.Now().Add(15 * time.Minute)
 		dueDate := *inv.DueDate
 		if dueDate.Before(minDueDate) {
 			dueDate = minDueDate
@@ -138,6 +148,7 @@ func (s *InvoiceSyncService) SyncInvoiceToHubSpot(ctx context.Context, invoiceID
 		Metadata:         make(map[string]interface{}),
 		EnvironmentID:    inv.EnvironmentID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, mapping); err != nil {
@@ -255,10 +266,16 @@ func (s *InvoiceSyncService) GetHubSpotContactID(ctx context.Context, customerID
 			Mark(ierr.ErrNotFound)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		EntityType:    types.IntegrationEntityTypeCustomer,
 		EntityID:      customerID,
 		ProviderTypes: []string{string(types.SecretProviderHubSpot)},
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)

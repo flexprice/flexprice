@@ -167,7 +167,7 @@ func toProviderPaymentMethod(src *paymentSourceModel.PaymentSource, primaryID st
 	}
 
 	if src.Card != nil {
-		out.Card = &interfaces.ProviderCardDetails{
+		out.Card = &types.CardDetails{
 			Brand:    string(src.Card.Brand),
 			Last4:    src.Card.Last4,
 			ExpMonth: int(src.Card.ExpiryMonth),
@@ -210,4 +210,8 @@ func paymentMethodTypeFor(m enum.PaymentMethod) (types.PaymentMethodType, bool) 
 	default:
 		return "", false
 	}
+}
+
+func (a *PaymentMethodAdapter) GetAttemptDetails(context.Context, string) (*types.PaymentAttemptDetails, error) {
+	return nil, ierr.NewError("attempt metadata is not supported for this provider").Mark(ierr.ErrNotImplemented)
 }

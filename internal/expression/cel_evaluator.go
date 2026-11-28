@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common"
@@ -47,9 +48,22 @@ type cacheEntry struct {
 
 // CELEvaluator implements Evaluator using CEL with caching of compiled programs.
 type CELEvaluator struct {
-	cache  sync.Map // expression string -> *cacheEntry
+	cache     sync.Map // expression string -> *cacheEntry
+	cacheSize atomic.Int64
+	// mu serializes cache insert and clear.
+	mu     sync.Mutex
 	parser *parser.Parser
 }
+
+const (
+	// MaxExpressionLength is the maximum accepted expression length in bytes.
+	MaxExpressionLength = 2048
+	// MaxExpressionIdents is the maximum number of distinct identifiers per expression.
+	MaxExpressionIdents    = 64
+	maxCachedPrograms      = 10000
+	evalCostLimit          = 100000
+	evalInterruptCheckFreq = 100
+)
 
 // mathEnvOpts registers stdlib-backed math helpers in every per-expression
 // env. Each function takes/returns CEL double; the existing toDecimal
@@ -152,8 +166,17 @@ func (e *CELEvaluator) Validate(expr string) error {
 	if expr == "" {
 		return fmt.Errorf("expression is empty")
 	}
-	_, err := e.compile(expr)
-	return err
+	if len(expr) > MaxExpressionLength {
+		return fmt.Errorf("expression exceeds maximum length of %d characters", MaxExpressionLength)
+	}
+	entry, err := e.compile(expr)
+	if err != nil {
+		return err
+	}
+	if len(entry.identifiers) > MaxExpressionIdents {
+		return fmt.Errorf("expression exceeds maximum of %d distinct identifiers", MaxExpressionIdents)
+	}
+	return nil
 }
 
 // Identifiers returns the event property names the expression reads.
@@ -176,7 +199,15 @@ func (e *CELEvaluator) getOrCompile(expr string) (*cacheEntry, error) {
 		return nil, err
 	}
 
-	e.cache.Store(expr, entry)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.cacheSize.Load() >= maxCachedPrograms {
+		e.cache.Clear()
+		e.cacheSize.Store(0)
+	}
+	if _, loaded := e.cache.LoadOrStore(expr, entry); !loaded {
+		e.cacheSize.Add(1)
+	}
 	return entry, nil
 }
 
@@ -228,7 +259,10 @@ func (e *CELEvaluator) compile(expr string) (*cacheEntry, error) {
 		return nil, fmt.Errorf("compile: %w", iss.Err())
 	}
 
-	prg, err := env.Program(checked)
+	prg, err := env.Program(checked,
+		cel.CostLimit(evalCostLimit),
+		cel.InterruptCheckFrequency(evalInterruptCheckFreq),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("program: %w", err)
 	}

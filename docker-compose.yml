@@ -154,6 +154,7 @@ services:
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=api
       - FLEXPRICE_ACTIVITY_ENABLED=true
+      - FLEXPRICE_ALLOW_INSECURE_DEFAULTS=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres
@@ -189,6 +190,7 @@ services:
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=consumer
       - FLEXPRICE_ACTIVITY_ENABLED=true
+      - FLEXPRICE_ALLOW_INSECURE_DEFAULTS=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres
@@ -224,6 +226,7 @@ services:
     environment:
       - FLEXPRICE_DEPLOYMENT_MODE=temporal_worker
       - FLEXPRICE_ACTIVITY_ENABLED=true
+      - FLEXPRICE_ALLOW_INSECURE_DEFAULTS=true
       # Override config.yaml settings for containerized environment
       - FLEXPRICE_POSTGRES_HOST=postgres
       - FLEXPRICE_POSTGRES_READER_HOST=postgres

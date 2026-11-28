@@ -111,8 +111,9 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		meterIDs = append(meterIDs, p.MeterID)
 	}
 
-	if len(meterIDs) == 0 {
-		// No usage-based pricing in the costsheet — return an empty response.
+	// No usage prices, or no customer: revenue analytics reports zero without a
+	// customer, so cost does too rather than scanning every customer's usage.
+	if len(meterIDs) == 0 || cust == nil {
 		return s.emptyCostAnalyticsResponse(req, costSheet, cust), nil
 	}
 
@@ -127,15 +128,13 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		meterMap[m.ID] = m
 	}
 
-	// STEP5: Query raw meter usage (no subscription context). This goes
-	// through MeterUsageService so we get analytics-shaped results that we can
-	// then re-cost using costsheet prices.
+	// STEP5: Query raw usage on the costsheet meters. Cost meters need not be on
+	// the customer's subscription, so this skips the subscription meter filter.
 	meterUsageService := NewMeterUsageService(s.ServiceParams)
 	analyticsParams := &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:        types.GetTenantID(ctx),
 		EnvironmentID:   types.GetEnvironmentID(ctx),
 		MeterIDs:        meterIDs,
-		FeatureIDs:      req.FeatureIDs,
 		StartTime:       req.StartTime,
 		EndTime:         req.EndTime,
 		IncludeChildren: req.IncludeChildren,
@@ -148,7 +147,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		analyticsParams.ExternalCustomerID = cust.ExternalID
 	}
 
-	usageResp, err := meterUsageService.GetDetailedAnalytics(ctx, analyticsParams)
+	usageResp, err := meterUsageService.GetUnpricedMeterAnalytics(ctx, analyticsParams)
 	if err != nil {
 		return nil, err
 	}
@@ -204,9 +203,16 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 			totalCost = priceService.CalculateCost(ctx, csPrice, item.TotalUsage)
 		}
 
+		// The meter's own name: vendor meters often share one event name and
+		// differ only by filter, so the event name cannot tell them apart.
+		meterName := item.EventName
+		if m != nil && m.Name != "" {
+			meterName = m.Name
+		}
+
 		costItem := dto.CostAnalyticItem{
 			MeterID:       item.MeterID,
-			MeterName:     item.EventName,
+			MeterName:     meterName,
 			Source:        item.Source,
 			Properties:    item.Properties,
 			TotalCost:     totalCost,

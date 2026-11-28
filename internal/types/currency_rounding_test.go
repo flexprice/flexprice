@@ -299,22 +299,11 @@ func TestCurrencyRounding_EdgeCases(t *testing.T) {
 // TestCurrencyRounding_PrecisionConfig tests the currency configuration
 func TestCurrencyRounding_PrecisionConfig(t *testing.T) {
 	t.Run("Verify_All_Configured_Currencies", func(t *testing.T) {
-		expectedPrecisions := map[string]int32{
-			"usd": 2, "eur": 2, "gbp": 2, "aud": 2, "cad": 2,
-			"jpy": 0, "krw": 0, "vnd": 0, "clp": 0,
-			"clf": 4, "kwd": 3,
-			"inr": 2, "idr": 2, "sgd": 2, "thb": 2, "myr": 2,
-			"php": 2, "hkd": 2, "nzd": 2, "brl": 2, "chf": 2,
-			"cny": 2, "czk": 2, "dkk": 2, "huf": 2, "ils": 2,
-			"mxn": 2, "nok": 2, "pln": 2, "ron": 2, "rub": 2,
-			"sar": 2, "sek": 2, "try": 2, "twd": 2, "zar": 2,
-		}
-
-		for currency, expectedPrecision := range expectedPrecisions {
-			actualPrecision := GetCurrencyPrecision(currency)
-			assert.Equal(t, expectedPrecision, actualPrecision,
-				"%s should have precision %d, got %d",
-				currency, expectedPrecision, actualPrecision)
+		var custom CustomCurrencyConfig
+		for currency, cfg := range CURRENCY_CONFIG {
+			assert.Equal(t, cfg.Precision, GetCurrencyPrecision(currency), currency)
+			assert.Equal(t, cfg.Symbol, GetCurrencySymbol(currency), currency)
+			assert.NoError(t, custom.EnforceCurrency(currency), currency)
 		}
 	})
 

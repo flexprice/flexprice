@@ -40,6 +40,8 @@ type EntityIntegrationMapping struct {
 	ProviderType string `json:"provider_type,omitempty"`
 	// ProviderEntityID holds the value of the "provider_entity_id" field.
 	ProviderEntityID string `json:"provider_entity_id,omitempty"`
+	// ConnectionID holds the value of the "connection_id" field.
+	ConnectionID *string `json:"connection_id,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	selectValues sql.SelectValues
@@ -52,7 +54,7 @@ func (*EntityIntegrationMapping) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entityintegrationmapping.FieldMetadata:
 			values[i] = new([]byte)
-		case entityintegrationmapping.FieldID, entityintegrationmapping.FieldTenantID, entityintegrationmapping.FieldStatus, entityintegrationmapping.FieldCreatedBy, entityintegrationmapping.FieldUpdatedBy, entityintegrationmapping.FieldEnvironmentID, entityintegrationmapping.FieldEntityID, entityintegrationmapping.FieldEntityType, entityintegrationmapping.FieldProviderType, entityintegrationmapping.FieldProviderEntityID:
+		case entityintegrationmapping.FieldID, entityintegrationmapping.FieldTenantID, entityintegrationmapping.FieldStatus, entityintegrationmapping.FieldCreatedBy, entityintegrationmapping.FieldUpdatedBy, entityintegrationmapping.FieldEnvironmentID, entityintegrationmapping.FieldEntityID, entityintegrationmapping.FieldEntityType, entityintegrationmapping.FieldProviderType, entityintegrationmapping.FieldProviderEntityID, entityintegrationmapping.FieldConnectionID:
 			values[i] = new(sql.NullString)
 		case entityintegrationmapping.FieldCreatedAt, entityintegrationmapping.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -143,6 +145,13 @@ func (_m *EntityIntegrationMapping) assignValues(columns []string, values []any)
 			} else if value.Valid {
 				_m.ProviderEntityID = value.String
 			}
+		case entityintegrationmapping.FieldConnectionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field connection_id", values[i])
+			} else if value.Valid {
+				_m.ConnectionID = new(string)
+				*_m.ConnectionID = value.String
+			}
 		case entityintegrationmapping.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -219,6 +228,11 @@ func (_m *EntityIntegrationMapping) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("provider_entity_id=")
 	builder.WriteString(_m.ProviderEntityID)
+	builder.WriteString(", ")
+	if v := _m.ConnectionID; v != nil {
+		builder.WriteString("connection_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))

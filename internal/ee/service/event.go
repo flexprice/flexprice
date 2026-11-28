@@ -2,12 +2,18 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/sourcegraph/conc/pool"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -20,9 +26,6 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/sourcegraph/conc/pool"
 )
 
 type EventService interface {
@@ -33,18 +36,18 @@ type EventService interface {
 	BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUsageByMeterRequest) (map[string]*events.AggregationResult, error)
 	// BulkGetUsageByMeterSync fetches each meter sequentially; any failure returns (nil, err) with no partial map.
 	BulkGetUsageByMeterSync(ctx context.Context, req []*dto.GetUsageByMeterRequest) (map[string]*events.AggregationResult, error)
-	GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error)
 	GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error)
 	GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error)
 }
 
 type eventService struct {
-	eventRepo  events.Repository
-	meterRepo  meter.Repository
-	publisher  publisher.EventPublisher
-	logger     *logger.Logger
-	config     *config.Configuration
-	tracingSvc *tracing.Service
+	eventRepo      events.Repository
+	meterRepo      meter.Repository
+	publisher      publisher.EventPublisher
+	logger         *logger.Logger
+	config         *config.Configuration
+	tracingSvc     *tracing.Service
+	deletionWindow EventDeletionWindowService
 }
 
 func NewEventService(
@@ -54,15 +57,35 @@ func NewEventService(
 	logger *logger.Logger,
 	config *config.Configuration,
 	tracingSvc *tracing.Service,
+	deletionWindow EventDeletionWindowService,
 ) EventService {
 	return &eventService{
-		eventRepo:  eventRepo,
-		meterRepo:  meterRepo,
-		publisher:  publisher,
-		logger:     logger,
-		config:     config,
-		tracingSvc: tracingSvc,
+		eventRepo:      eventRepo,
+		meterRepo:      meterRepo,
+		publisher:      publisher,
+		logger:         logger,
+		config:         config,
+		tracingSvc:     tracingSvc,
+		deletionWindow: deletionWindow,
 	}
+}
+
+// refuseDuringDeletion rejects an event belonging to a deletion still running for
+// that customer. Refused here rather than held at the consumer: a held message
+// blocks its whole Kafka partition, which carries other customers and other
+// tenants. Only the named customer is affected, and the caller can retry.
+func (s *eventService) refuseDuringDeletion(ctx context.Context, event *events.Event) error {
+	if s.deletionWindow == nil || !s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		return nil
+	}
+
+	return ierr.NewError("an event deletion is in progress for this customer and period").
+		WithHint("Retry once the running deletion for this customer finishes").
+		WithReportableDetails(map[string]interface{}{
+			"external_customer_id": event.ExternalCustomerID,
+			"timestamp":            event.Timestamp,
+		}).
+		Mark(ierr.ErrAlreadyExists)
 }
 
 func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.IngestEventRequest) error {
@@ -72,12 +95,16 @@ func (s *eventService) CreateEvent(ctx context.Context, createEventRequest *dto.
 
 	event := createEventRequest.ToEvent(ctx)
 
+	if err := s.refuseDuringDeletion(ctx, event); err != nil {
+		return err
+	}
+
 	if err := s.publisher.Publish(ctx, event); err != nil {
-		// Log the error but don't fail the request
 		s.logger.With(
 			"event_id", event.ID,
 			"error", err,
 		).Error("failed to publish event")
+		return publishFailure(err, "Event could not be accepted, please retry")
 	}
 
 	createEventRequest.EventID = event.ID
@@ -96,14 +123,44 @@ func (s *eventService) BulkCreateEvents(ctx context.Context, events *dto.BulkIng
 		return s.bulkCreateEventsBatched(ctx, events)
 	}
 
-	// publish events to Kafka for downstream processing
+	// Publish failures don't stop the remaining events.
+	var failed []error
+	allTooLarge := true
 	for _, event := range events.Events {
-		if err := s.CreateEvent(ctx, event); err != nil {
+		err := s.CreateEvent(ctx, event)
+		if err == nil {
+			continue
+		}
+		tooLarge := kafka.IsMessageTooLarge(err)
+		if !tooLarge && !ierr.IsServiceUnavailable(err) {
 			return err
 		}
+		allTooLarge = allTooLarge && tooLarge
+		failed = append(failed, err)
 	}
 
-	return nil
+	switch {
+	case len(failed) == 0:
+		return nil
+	case allTooLarge:
+		return failed[0]
+	}
+	s.logger.Error(ctx, "failed to publish some events", "failed_count", len(failed), "event_count", len(events.Events), "error", errors.Join(failed...))
+	return ierr.NewError(fmt.Sprintf("%d of %d events could not be published", len(failed), len(events.Events))).
+		WithHint("Some events could not be accepted, please retry").
+		Mark(ierr.ErrServiceUnavailable)
+}
+
+// publishFailure: oversize is 400, else 503.
+func publishFailure(err error, retryHint string) error {
+	if kafka.IsMessageTooLarge(err) {
+		return ierr.WithError(err).
+			WithHint("Event exceeds the maximum allowed message size").
+			Mark(ierr.ErrValidation)
+	}
+	return ierr.WithError(err).
+		WithHint(retryHint).
+		Mark(ierr.ErrServiceUnavailable)
 }
 
 // bulkCreateEventsBatched validates every event up front so a bad event fails the request
@@ -115,13 +172,16 @@ func (s *eventService) bulkCreateEventsBatched(ctx context.Context, req *dto.Bul
 			return err
 		}
 		event := createEventRequest.ToEvent(ctx)
+		if err := s.refuseDuringDeletion(ctx, event); err != nil {
+			return err
+		}
 		createEventRequest.EventID = event.ID
 		domainEvents = append(domainEvents, event)
 	}
 
 	if err := s.publisher.PublishBatch(ctx, domainEvents); err != nil {
-		// Accepted-then-published (202): a broker failure is logged, not surfaced, as in CreateEvent.
 		s.logger.Error(ctx, "failed to publish event batch", "event_count", len(domainEvents), "error", err)
+		return publishFailure(err, "Events could not be accepted, please retry")
 	}
 
 	return nil
@@ -307,7 +367,7 @@ func (s *eventService) BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUs
 				}
 
 				// Record the start time for this meter
-				processingStart := time.Now()
+				processingStart := clock.Mono()
 
 				// Create a timeout context for this specific request
 				reqCtx, reqCancel := context.WithTimeout(ctx, timeoutDuration)
@@ -444,7 +504,7 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 			spanFinisher = &tracing.SpanFinisher{Span: span}
 		}
 
-		processingStart := time.Now()
+		processingStart := clock.Mono()
 		reqCtx, reqCancel := context.WithTimeout(callCtx, timeoutDuration)
 		result, err := s.GetUsageByMeter(reqCtx, r)
 		reqCancel()
@@ -488,66 +548,6 @@ func (s *eventService) BulkGetUsageByMeterSync(ctx context.Context, req []*dto.G
 	s.logger.With(
 		"total_meters", len(req),
 	).Debug("completed sequential meter usage processing")
-
-	return results, nil
-}
-
-// GetUsageByMeterWithFilters returns usage for a meter with specific filters on top of the meter as defined in the price
-// TODO : deprecate this flow completely as we now allow only one meter per price without filters
-func (s *eventService) GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error) {
-	m, err := s.meterRepo.GetMeter(ctx, req.MeterID)
-	if err != nil {
-		return nil, err
-	}
-
-	meterFilters := make(map[string][]string)
-	for _, filter := range m.Filters {
-		meterFilters[filter.Key] = filter.Values
-	}
-
-	// Extract and sort priceIDs for stable ordering
-	priceIDs := make([]string, 0, len(filterGroups))
-	for priceID := range filterGroups {
-		priceIDs = append(priceIDs, priceID)
-	}
-	sort.Strings(priceIDs)
-
-	prioritizedGroups := make([]events.FilterGroup, 0, len(filterGroups))
-	// Assign priority deterministically
-	for i, priceID := range priceIDs {
-		priority := len(priceIDs) - i
-		prioritizedGroups = append(prioritizedGroups, events.FilterGroup{
-			ID:       priceID,
-			Priority: priority,
-			Filters:  filterGroups[priceID],
-		})
-	}
-
-	params := &events.UsageWithFiltersParams{
-		UsageParams: &events.UsageParams{
-			EventName:           m.EventName,
-			PropertyName:        m.Aggregation.Field,
-			AggregationType:     m.Aggregation.Type,
-			ExternalCustomerIDs: lo.Uniq(req.ExternalCustomerIDs),
-			CustomerID:          req.CustomerID,
-			StartTime:           req.StartTime,
-			EndTime:             req.EndTime,
-			Filters:             meterFilters,
-		},
-		FilterGroups: prioritizedGroups,
-	}
-
-	results, err := s.eventRepo.GetUsageWithFilters(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(results) == 0 {
-		s.logger.Debug(ctx, "no usage found for meter with filters",
-			"meter_id", m.ID,
-			"filter_groups", len(filterGroups))
-		return results, nil
-	}
 
 	return results, nil
 }

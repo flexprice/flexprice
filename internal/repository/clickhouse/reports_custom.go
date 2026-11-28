@@ -72,7 +72,7 @@ func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 	b.WriteString("SELECT ")
 	b.WriteString(strings.Join(selects, ", "))
 	b.WriteString(" FROM (SELECT d.*, JSONExtractArrayRaw(ifNull(d.consumption_breakdown, '[]')) AS parts FROM " + in.DB + ".wallet_transactions AS d WHERE " + in.Scope("d"))
-	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND d.transaction_reason = 'INVOICE_PAYMENT'")
+	b.WriteString(" AND d.type = 'debit' AND d.transaction_status = 'completed' AND d.transaction_reason IN ('INVOICE_PAYMENT', 'CREDIT_ADJUSTMENT')")
 	b.WriteString(" AND " + in.TimeCond("d.created_at"))
 	b.WriteString(") AS d ARRAY JOIN if(empty(d.parts), [''], d.parts) AS item LEFT JOIN " + in.DB + ".wallet_transactions AS g ON g.id = JSONExtractString(item, 'credit_transaction_id') AND " + in.Scope("g"))
 	var filterConds []string
@@ -80,11 +80,15 @@ func buildCreditConsumption(in buildInput) (*reportQuery, error) {
 		if f == nil {
 			continue
 		}
-		if f.Field != "customer_id" && f.Field != "currency" && f.Field != "credit_type" {
+		if f.Field != "customer_id" && f.Field != "currency" && f.Field != "credit_type" && f.Field != analytics.FilterCustomerStatus {
 			return nil, ierr.NewErrorf("illegal filter field %q for credit consumption", f.Field).Mark(ierr.ErrValidation)
 		}
 		if len(f.Value) == 0 {
 			filterConds = append(filterConds, "1 = 0")
+			continue
+		}
+		if f.Field == analytics.FilterCustomerStatus {
+			filterConds = append(filterConds, customerStatusCond(in.DB, "d.customer_id", i, f.Value, params))
 			continue
 		}
 		placeholders := make([]string, len(f.Value))

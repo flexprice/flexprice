@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ const (
 var gatewayCapabilities = map[string][]paymentCapability{
 	"stripe":    {capPaymentLink, capAutoCharge, capListMethods, capAddMethod, capDeleteMethod, capSetDefault},
 	"chargebee": {capPaymentLink, capAutoCharge, capListMethods, capAddMethod, capDeleteMethod, capSetDefault},
-	"razorpay":  {capPaymentLink, capAutoCharge, capListMethods},
+	"razorpay":  {capPaymentLink, capAutoCharge, capListMethods, capAddMethod},
 }
 
 // PaymentProbeOpts configures one gateway's payment probes.
@@ -219,6 +220,11 @@ func (f *paymentFlow) createWallet(ctx context.Context) error {
 
 func (f *paymentFlow) credits(ctx context.Context) (decimal.Decimal, error) {
 	resp, err := f.client.Wallets().GetBalance(ctx, f.walletID)
+	var apiErr *sdkerrors.APIError
+	if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound {
+		time.Sleep(f.opts.pollInterval())
+		resp, err = f.client.Wallets().GetBalance(ctx, f.walletID)
+	}
 	if err != nil {
 		return decimal.Zero, f.fail("read_wallet", map[string]string{"wallet_id": f.walletID}, "read wallet balance: %w", err)
 	}
@@ -335,6 +341,7 @@ func (f *paymentFlow) waitTerminal(ctx context.Context, step, sessionID string) 
 				return s, nil
 			}
 			if time.Now().After(deadline) {
+				f.cancelQuietly(sessionID)
 				return nil, f.fail(step, map[string]string{"checkout_session_id": sessionID, "checkout_status": sessionStatus(s)},
 					"session not terminal after %s", f.opts.settleTimeout())
 			}

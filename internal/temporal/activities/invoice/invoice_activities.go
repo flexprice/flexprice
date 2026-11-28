@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/clock"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -12,6 +14,7 @@ import (
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/temporal"
 )
@@ -124,6 +127,35 @@ func (s *InvoiceActivities) CreateDraftForCurrentSubscriptionPeriodActivity(
 	}
 	return &invoiceModels.CreateDraftForCurrentSubscriptionPeriodActivityOutput{
 		InvoiceID: draft.ID,
+	}, nil
+}
+
+// ListPastPeriodDraftsActivity returns the subscription's cycle drafts whose period has ended.
+func (s *InvoiceActivities) ListPastPeriodDraftsActivity(
+	ctx context.Context,
+	input invoiceModels.ListPastPeriodDraftsActivityInput,
+) (*invoiceModels.ListPastPeriodDraftsActivityOutput, error) {
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.Status = lo.ToPtr(types.StatusPublished)
+	filter.SubscriptionID = input.SubscriptionID
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft}
+	filter.BillingReason = types.InvoiceBillingReasonSubscriptionCycle
+	filter.PeriodEndLTE = lo.ToPtr(clock.Now())
+
+	drafts, err := s.serviceParams.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		s.logger.Error(ctx, "failed to list past-period drafts for subscription",
+			"subscription_id", input.SubscriptionID,
+			"error", err)
+		return nil, err
+	}
+
+	return &invoiceModels.ListPastPeriodDraftsActivityOutput{
+		InvoiceIDs: lo.Map(drafts, func(inv *invoice.Invoice, _ int) string { return inv.ID }),
 	}, nil
 }
 
@@ -306,12 +338,12 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 	temporalSvc := temporalService.GetGlobalTemporalService()
 
-	offset := 0
+	afterID := ""
 	capReached := false
 	for !capReached {
-		drafts, err := invoiceService.ListAllTenantDraftInvoices(ctx, batchSize, offset)
+		drafts, err := invoiceService.ListFinalizationCandidates(ctx, afterID, batchSize)
 		if err != nil {
-			logger.Error("Failed to list draft invoices", "offset", offset, "error", err)
+			logger.Error("Failed to list draft invoices", "after_id", afterID, "error", err)
 			return result, err
 		}
 		if len(drafts) == 0 {
@@ -332,7 +364,7 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 			invCtx = types.SetEnvironmentID(invCtx, inv.EnvironmentID)
 			invCtx = types.SetUserID(invCtx, inv.CreatedBy)
 
-			due, err := invoiceService.IsFinalizationDue(invCtx, inv.ID)
+			due, err := invoiceService.IsInvoiceFinalizationDue(invCtx, inv)
 			if err != nil {
 				logger.Error("Failed to check finalization due", "invoice_id", inv.ID, "error", err)
 				result.FailedCount++
@@ -363,11 +395,11 @@ func (s *InvoiceActivities) FinalizeDueDraftsActivity(
 			result.FinalizedCount++
 		}
 
-		activity.RecordHeartbeat(ctx, offset+len(drafts))
+		activity.RecordHeartbeat(ctx, result.TotalProcessed)
 		if len(drafts) < batchSize {
 			break
 		}
-		offset += batchSize
+		afterID = drafts[len(drafts)-1].ID
 	}
 
 	logger.Info("Completed finalize due drafts",

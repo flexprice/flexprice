@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PaymentAttempt holds the schema definition for the PaymentAttempt entity.
@@ -59,6 +60,16 @@ func (PaymentAttempt) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.JSON("payment_method_details", &types.InstrumentDetails{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
+		field.JSON("error_details", &types.PaymentAttemptError{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 		field.JSON("metadata", map[string]string{}).
 			Optional().
 			SchemaType(map[string]string{

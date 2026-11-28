@@ -37,6 +37,8 @@ const (
 	FieldMetadata = "metadata"
 	// FieldSyncConfig holds the string denoting the sync_config field in the database.
 	FieldSyncConfig = "sync_config"
+	// FieldBillingEntityID holds the string denoting the billing_entity_id field in the database.
+	FieldBillingEntityID = "billing_entity_id"
 	// Table holds the table name of the connection in the database.
 	Table = "connections"
 )
@@ -56,6 +58,7 @@ var Columns = []string{
 	FieldEncryptedSecretData,
 	FieldMetadata,
 	FieldSyncConfig,
+	FieldBillingEntityID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -138,4 +141,9 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByProviderType orders the results by the provider_type field.
 func ByProviderType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProviderType, opts...).ToFunc()
+}
+
+// ByBillingEntityID orders the results by the billing_entity_id field.
+func ByBillingEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingEntityID, opts...).ToFunc()
 }

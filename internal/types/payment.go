@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -54,7 +56,8 @@ func (s PaymentStatus) IsDeletable() bool {
 // public update API. Self-transitions are allowed so that an update which
 // resends the current status is a no-op rather than an error. Terminal statuses
 // (see IsTerminal) have no outgoing transitions except SUCCEEDED, which is not
-// terminal because AUTH payments can still be voided or refunded.
+// terminal because AUTH payments can still be voided or refunded. A pending link
+// nobody paid is voided when its invoice is.
 var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 	// INITIATED reaches SUCCEEDED and OVERPAID directly because payments created
 	// with ProcessPayment=false (external gateways, backfills, checkout
@@ -74,6 +77,7 @@ var paymentStatusTransitions = map[PaymentStatus][]PaymentStatus{
 		PaymentStatusSucceeded,
 		PaymentStatusOverpaid,
 		PaymentStatusFailed,
+		PaymentStatusVoided,
 	},
 	PaymentStatusProcessing: {
 		PaymentStatusProcessing,
@@ -163,10 +167,16 @@ const (
 	PaymentMethodTypeCredits     PaymentMethodType = "CREDITS"
 	PaymentMethodTypePaymentLink PaymentMethodType = "PAYMENT_LINK"
 	PaymentMethodTypeUPI         PaymentMethodType = "UPI"
+	PaymentMethodTypeENACH       PaymentMethodType = "ENACH"
 )
 
 func (s PaymentMethodType) String() string {
 	return string(s)
+}
+
+// IsSavedMethod reports whether a charge of this type debits the customer's saved card or mandate.
+func (s PaymentMethodType) IsSavedMethod() bool {
+	return s == PaymentMethodTypeCard || s == PaymentMethodTypeUPI || s == PaymentMethodTypeENACH
 }
 
 func (s PaymentMethodType) Validate() error {
@@ -177,6 +187,7 @@ func (s PaymentMethodType) Validate() error {
 		PaymentMethodTypeCredits,
 		PaymentMethodTypePaymentLink,
 		PaymentMethodTypeUPI,
+		PaymentMethodTypeENACH,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid payment method type").
@@ -227,12 +238,19 @@ type PaymentFilter struct {
 	PaymentIDs        []string `form:"payment_ids"`
 	DestinationType   *string  `form:"destination_type"`
 	DestinationID     *string  `form:"destination_id"`
+	DestinationIDs    []string `form:"destination_ids"`
 	PaymentMethodType *string  `form:"payment_method_type"`
 	PaymentStatus     *string  `form:"payment_status"`
 	PaymentGateway    *string  `form:"payment_gateway"`
 	Currency          *string  `form:"currency"`
 	GatewayPaymentID  *string  `form:"gateway_payment_id"`
 	GatewayTrackingID *string  `form:"gateway_tracking_id"` // For filtering by gateway tracking ID
+
+	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
+	UpdatedAtGTE *time.Time `form:"updated_at_gte"`
+
+	// PaymentStatuses matches any of these statuses; internal only.
+	PaymentStatuses []PaymentStatus `form:"-" json:"-"`
 }
 
 // NewNoLimitPaymentFilter creates a new payment filter with no limit
@@ -450,4 +468,79 @@ func (f *PaymentMethodFilter) IsUnlimited() bool {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
+}
+
+// InvoicePaymentFailureReason is why a payment of an invoice did not succeed.
+type InvoicePaymentFailureReason string
+
+const (
+	InvoicePaymentFailureReasonPaymentMethodUnavailable InvoicePaymentFailureReason = "payment_method_unavailable"
+	InvoicePaymentFailureReasonProviderError            InvoicePaymentFailureReason = "provider_error"
+	InvoicePaymentFailureReasonDeclined                 InvoicePaymentFailureReason = "declined"
+)
+
+// PaymentAttemptMethod is how the customer paid on one gateway attempt.
+type PaymentAttemptMethod string
+
+const (
+	PaymentAttemptMethodCard         PaymentAttemptMethod = "CARD"
+	PaymentAttemptMethodUPI          PaymentAttemptMethod = "UPI"
+	PaymentAttemptMethodNetBanking   PaymentAttemptMethod = "NETBANKING"
+	PaymentAttemptMethodWallet       PaymentAttemptMethod = "WALLET"
+	PaymentAttemptMethodEMI          PaymentAttemptMethod = "EMI"
+	PaymentAttemptMethodPayLater     PaymentAttemptMethod = "PAYLATER"
+	PaymentAttemptMethodBankTransfer PaymentAttemptMethod = "BANK_TRANSFER"
+	PaymentAttemptMethodOther        PaymentAttemptMethod = "OTHER"
+)
+
+// CardDetails is the displayable part of a card, shared by attempts, saved methods and mandates.
+type CardDetails struct {
+	Brand       string `json:"brand,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	Issuer      string `json:"issuer,omitempty"`
+	Funding     string `json:"funding,omitempty"` // credit, debit or prepaid
+	ExpMonth    int    `json:"exp_month,omitempty"`
+	ExpYear     int    `json:"exp_year,omitempty"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// UPIDetails is the displayable part of a UPI handle.
+type UPIDetails struct {
+	VPA string `json:"vpa,omitempty"`
+}
+
+// BankDetails is the displayable part of a bank account or netbanking bank.
+type BankDetails struct {
+	Bank        string `json:"bank,omitempty"`
+	IFSC        string `json:"ifsc,omitempty"`
+	Last4       string `json:"last4,omitempty"`
+	AccountType string `json:"account_type,omitempty"`
+	AuthType    string `json:"auth_type,omitempty"`
+}
+
+// WalletDetails is the wallet used on an attempt.
+type WalletDetails struct {
+	Provider string `json:"provider,omitempty"`
+}
+
+// InstrumentDetails is the instrument used on one attempt, in a gateway-neutral shape.
+type InstrumentDetails struct {
+	Type   PaymentAttemptMethod `json:"type"`
+	Card   *CardDetails         `json:"card,omitempty"`
+	Bank   *BankDetails         `json:"bank,omitempty"`
+	Wallet *WalletDetails       `json:"wallet,omitempty"`
+}
+
+// PaymentAttemptError is the gateway's reason for a failed attempt.
+type PaymentAttemptError struct {
+	Code   string `json:"code,omitempty"`
+	Source string `json:"source,omitempty"`
+	Step   string `json:"step,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// PaymentAttemptDetails is what the gateway reports about one attempt.
+type PaymentAttemptDetails struct {
+	PaymentMethod *InstrumentDetails   `json:"payment_method,omitempty"`
+	Error         *PaymentAttemptError `json:"error,omitempty"`
 }

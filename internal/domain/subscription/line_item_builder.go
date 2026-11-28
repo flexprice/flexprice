@@ -100,6 +100,30 @@ func (b *subscriptionLineItemBuilder) WithPrice(p *price.Price) *subscriptionLin
 	return b
 }
 
+func (b *subscriptionLineItemBuilder) WithPredecessorLineItemID(id *string) *subscriptionLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	b.item.PredecessorLineItemID = id
+	return b
+}
+
+func (b *subscriptionLineItemBuilder) WithSuccessorLineItemID(id *string) *subscriptionLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	b.item.SuccessorLineItemID = id
+	return b
+}
+
+func (b *subscriptionLineItemBuilder) WithStatus(status types.Status) *subscriptionLineItemBuilder {
+	if b == nil || b.item == nil {
+		return b
+	}
+	b.item.Status = status
+	return b
+}
+
 func (b *subscriptionLineItemBuilder) WithBaseModel(baseModel types.BaseModel) *subscriptionLineItemBuilder {
 	if b == nil || b.item == nil {
 		return b

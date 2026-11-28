@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/httpclient"
@@ -21,6 +23,7 @@ import (
 
 type ZohoClient interface {
 	HasZohoBooksConnection(ctx context.Context) bool
+	GetConnection(ctx context.Context) (*connection.Connection, error)
 	QueryContactByEmail(ctx context.Context, email string) (*ContactResponse, error)
 	CreateContact(ctx context.Context, req *ContactCreateRequest) (*ContactResponse, error)
 	UpdateContact(ctx context.Context, contactID string, req *ContactUpdateRequest) (*ContactResponse, error)
@@ -47,6 +50,17 @@ type ZohoClient interface {
 	ListTaxExemptions(ctx context.Context) ([]TaxExemption, error)
 	// GetZohoBooksSyncConfig loads the published connection and returns the
 	GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig, error)
+	// CreateCreditNote creates a credit note against the given Zoho invoice.
+	CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error)
+	// RefundCreditNote records a refund paid out of the credit note.
+	RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error)
+	// ApplyCreditNoteToInvoices applies the credit note's credit to the given invoices.
+	ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error
+	GetCreditNote(ctx context.Context, zohoCreditNoteID string) (*CreditNoteResponse, error)
+	VoidCreditNote(ctx context.Context, zohoCreditNoteID string) error
+	ListInvoiceCreditsApplied(ctx context.Context, zohoInvoiceID string) ([]InvoiceCreditApplied, error)
+	// DeleteInvoiceAppliedCredit removes one applied credit from the invoice, by its creditnotes_invoice_id.
+	DeleteInvoiceAppliedCredit(ctx context.Context, zohoInvoiceID, creditNotesInvoiceID string) error
 }
 
 type Client struct {
@@ -72,6 +86,11 @@ func NewClient(
 func (c *Client) HasZohoBooksConnection(ctx context.Context) bool {
 	conn, err := c.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
 	return err == nil && conn != nil && conn.Status == types.StatusPublished
+}
+
+// GetConnection returns the Zoho Books connection for the current context.
+func (c *Client) GetConnection(ctx context.Context) (*connection.Connection, error) {
+	return c.connectionRepo.GetByProvider(ctx, types.SecretProviderZohoBooks)
 }
 
 // GetZohoBooksWebhookConfig implements ZohoClient (used by HTTP webhooks, parallel to Stripe GetStripeClient).
@@ -129,7 +148,7 @@ func (c *Client) UpdateContact(ctx context.Context, contactID string, req *Conta
 	var resp struct {
 		Contact ContactResponse `json:"contact"`
 	}
-	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	path := fmt.Sprintf("/books/v3/contacts/%s", url.PathEscape(contactID))
 	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
@@ -140,7 +159,7 @@ func (c *Client) GetContact(ctx context.Context, contactID string) (*ContactResp
 	var resp struct {
 		Contact ContactResponse `json:"contact"`
 	}
-	path := fmt.Sprintf("/books/v3/contacts/%s", contactID)
+	path := fmt.Sprintf("/books/v3/contacts/%s", url.PathEscape(contactID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
@@ -161,7 +180,7 @@ func (c *Client) UpdateInvoice(ctx context.Context, zohoInvoiceID string, req *I
 	var resp struct {
 		Invoice InvoiceResponse `json:"invoice"`
 	}
-	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s", url.PathEscape(zohoInvoiceID))
 	if err := c.doBooksRequest(ctx, http.MethodPut, path, nil, req, &resp); err != nil {
 		return nil, err
 	}
@@ -172,7 +191,7 @@ func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*Invoice
 	var resp struct {
 		Invoice InvoiceResponse `json:"invoice"`
 	}
-	path := fmt.Sprintf("/books/v3/invoices/%s", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s", url.PathEscape(zohoInvoiceID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return nil, err
 	}
@@ -180,7 +199,7 @@ func (c *Client) GetInvoice(ctx context.Context, zohoInvoiceID string) (*Invoice
 }
 
 func (c *Client) SubmitInvoiceForApproval(ctx context.Context, zohoInvoiceID string) error {
-	path := fmt.Sprintf("/books/v3/invoices/%s/submit", zohoInvoiceID)
+	path := fmt.Sprintf("/books/v3/invoices/%s/submit", url.PathEscape(zohoInvoiceID))
 	return c.doBooksRequest(ctx, http.MethodPost, path, nil, nil, nil)
 }
 
@@ -310,7 +329,7 @@ func (c *Client) getOrganizationBaseCurrency(ctx context.Context) (string, error
 			CurrencyCode string `json:"currency_code"`
 		} `json:"organization"`
 	}
-	path := fmt.Sprintf("/books/v3/organizations/%s", orgID)
+	path := fmt.Sprintf("/books/v3/organizations/%s", url.PathEscape(orgID))
 	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
 		return "", err
 	}
@@ -368,6 +387,9 @@ func (c *Client) doBooksRequest(
 	if baseURL == "" {
 		baseURL = "https://www.zohoapis.com"
 	}
+	if err := types.ValidateZohoEndpoint(baseURL, "api_domain"); err != nil {
+		return err
+	}
 	u, err := url.Parse(baseURL + path)
 	if err != nil {
 		return err
@@ -406,13 +428,18 @@ func (c *Client) doBooksRequest(
 		var zohoErrResp ZohoErrorResponse
 		_ = json.Unmarshal(bodyBytes, &zohoErrResp)
 
+		c.logger.Error(ctx, "Zoho API request failed",
+			"error", "non_2xx_from_zoho_api",
+			"status_code", resp.StatusCode,
+			"zoho_code", zohoErrResp.Code,
+			"zoho_message", zohoErrResp.Message,
+			"response_body_bytes", len(bodyBytes))
 		return ierr.WithError(&ZohoAPIError{
 			Code:       zohoErrResp.Code,
 			Message:    zohoErrResp.Message,
 			HTTPStatus: resp.StatusCode,
 		}).
 			WithHintf("Zoho API returned status %d", resp.StatusCode).
-			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)
 	}
 	if respBody != nil && len(bodyBytes) > 0 {
@@ -431,7 +458,7 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 
 	if md.AccessToken != "" && md.AccessTokenExpiresAt != "" {
 		exp, err := time.Parse(time.RFC3339, md.AccessTokenExpiresAt)
-		if err == nil && time.Now().UTC().Before(exp.Add(-1*time.Minute)) {
+		if err == nil && clock.Now().Before(exp.Add(-1*time.Minute)) {
 			token, err := c.encryptionService.Decrypt(md.AccessToken)
 			if err == nil && token != "" {
 				return token, nil
@@ -456,6 +483,9 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 	if accountsServer == "" {
 		accountsServer = "https://accounts.zoho.com"
 	}
+	if err := types.ValidateZohoEndpoint(accountsServer, "accounts_server"); err != nil {
+		return "", err
+	}
 	form := url.Values{}
 	form.Set("refresh_token", refreshToken)
 	form.Set("client_id", clientID)
@@ -477,9 +507,12 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		c.logger.Error(ctx, "Zoho token refresh failed",
+			"error", "non_2xx_from_token_endpoint",
+			"status_code", resp.StatusCode,
+			"response_body_bytes", len(bodyBytes))
 		return "", ierr.NewError("Zoho token refresh failed").
 			WithHintf("Zoho token endpoint returned status %d", resp.StatusCode).
-			WithReportableDetails(map[string]interface{}{"response_body": string(bodyBytes)}).
 			Mark(ierr.ErrHTTPClient)
 	}
 
@@ -492,18 +525,28 @@ func (c *Client) getValidAccessToken(ctx context.Context, conn *connection.Conne
 		return "", err
 	}
 
+	newAPIDomain := strings.TrimRight(tokenResp.APIDomain, "/")
+	if newAPIDomain != "" {
+		if err := types.ValidateZohoEndpoint(newAPIDomain, "api_domain"); err != nil {
+			c.logger.Info(ctx, "ignoring invalid Zoho api_domain from token refresh",
+				"connection_id", conn.ID,
+				"error", err)
+			newAPIDomain = ""
+		}
+	}
+
 	encAccess, err := c.encryptionService.Encrypt(tokenResp.AccessToken)
 	if err != nil {
 		return "", err
 	}
 
 	md.AccessToken = encAccess
-	if tokenResp.APIDomain != "" {
-		md.APIDomain = tokenResp.APIDomain
+	if newAPIDomain != "" {
+		md.APIDomain = newAPIDomain
 	}
-	md.AccessTokenExpiresAt = time.Now().UTC().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
+	md.AccessTokenExpiresAt = clock.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second).Format(time.RFC3339)
 	conn.EncryptedSecretData.ZohoBooks = md
-	conn.UpdatedAt = time.Now().UTC()
+	conn.UpdatedAt = clock.Now()
 
 	if err := c.connectionRepo.Update(ctx, conn); err != nil {
 		return "", err
@@ -522,4 +565,63 @@ func (c *Client) GetZohoBooksSyncConfig(ctx context.Context) (*types.SyncConfig,
 			Mark(ierr.ErrNotFound)
 	}
 	return conn.GetSyncConfig(), nil
+}
+
+func (c *Client) CreateCreditNote(ctx context.Context, zohoInvoiceID string, req *CreditNoteCreateRequest) (*CreditNoteResponse, error) {
+	var resp struct {
+		CreditNote CreditNoteResponse `json:"creditnote"`
+	}
+	query := map[string]string{"invoice_id": zohoInvoiceID}
+	if err := c.doBooksRequest(ctx, http.MethodPost, "/books/v3/creditnotes", query, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNote, nil
+}
+
+func (c *Client) RefundCreditNote(ctx context.Context, zohoCreditNoteID string, req *CreditNoteRefundRequest) (*CreditNoteRefundResponse, error) {
+	var resp struct {
+		CreditNoteRefund CreditNoteRefundResponse `json:"creditnote_refund"`
+	}
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/refunds", url.PathEscape(zohoCreditNoteID))
+	if err := c.doBooksRequest(ctx, http.MethodPost, path, nil, req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNoteRefund, nil
+}
+
+func (c *Client) ApplyCreditNoteToInvoices(ctx context.Context, zohoCreditNoteID string, req *CreditNoteApplyRequest) error {
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/invoices", url.PathEscape(zohoCreditNoteID))
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, req, nil)
+}
+
+func (c *Client) GetCreditNote(ctx context.Context, zohoCreditNoteID string) (*CreditNoteResponse, error) {
+	var resp struct {
+		CreditNote CreditNoteResponse `json:"creditnote"`
+	}
+	path := fmt.Sprintf("/books/v3/creditnotes/%s", url.PathEscape(zohoCreditNoteID))
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.CreditNote, nil
+}
+
+func (c *Client) VoidCreditNote(ctx context.Context, zohoCreditNoteID string) error {
+	path := fmt.Sprintf("/books/v3/creditnotes/%s/status/void", url.PathEscape(zohoCreditNoteID))
+	return c.doBooksRequest(ctx, http.MethodPost, path, nil, nil, nil)
+}
+
+func (c *Client) ListInvoiceCreditsApplied(ctx context.Context, zohoInvoiceID string) ([]InvoiceCreditApplied, error) {
+	var resp struct {
+		Credits []InvoiceCreditApplied `json:"credits"`
+	}
+	path := fmt.Sprintf("/books/v3/invoices/%s/creditsapplied", url.PathEscape(zohoInvoiceID))
+	if err := c.doBooksRequest(ctx, http.MethodGet, path, nil, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Credits, nil
+}
+
+func (c *Client) DeleteInvoiceAppliedCredit(ctx context.Context, zohoInvoiceID, creditNotesInvoiceID string) error {
+	path := fmt.Sprintf("/books/v3/invoices/%s/creditsapplied/%s", url.PathEscape(zohoInvoiceID), url.PathEscape(creditNotesInvoiceID))
+	return c.doBooksRequest(ctx, http.MethodDelete, path, nil, nil, nil)
 }

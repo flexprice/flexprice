@@ -16,3 +16,8 @@ type IntegrationEventsPubSub struct {
 type ActivityPubSub struct {
 	pubsub.PubSub
 }
+
+// EmailEventsPubSub consumes webhook.topic under the email-events consumer group.
+type EmailEventsPubSub struct {
+	pubsub.PubSub
+}

@@ -1,7 +1,10 @@
 package service
 
 import (
+	"strings"
+
 	"context"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -22,8 +25,15 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 	if req == nil {
 		return nil, ierr.NewError("request is required").Mark(ierr.ErrValidation)
 	}
+	if err := req.RedirectionParams.Validate(); err != nil {
+		return nil, err
+	}
 
 	customerID, err := s.portalCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,15 +43,25 @@ func (s *customerPortalService) AddPaymentMethod(ctx context.Context, req *dto.P
 	if err != nil {
 		return nil, err
 	}
+	if err := requireProviderConnected(ctx, s.ServiceParams, types.SecretProvider(gw)); err != nil {
+		return nil, err
+	}
 
 	returnURL := ""
 	if req.SuccessURL != nil {
 		returnURL = *req.SuccessURL
 	}
 
+	if req.PaymentMethodType != "" && !lo.Contains(dto.SetupIntentMethodTypes(types.SecretProvider(gw)), req.PaymentMethodType) {
+		return nil, ierr.NewErrorf("%s cannot set up %s", gw, req.PaymentMethodType).
+			WithHintf("Choose one of: %s", strings.Join(dto.SetupIntentMethodTypes(types.SecretProvider(gw)), ", ")).
+			Mark(ierr.ErrValidation)
+	}
+
 	link, err := provider.CreateSetupLink(ctx, interfaces.SetupLinkRequest{
 		CustomerID: customerID,
 		ReturnURL:  returnURL,
+		SetDefault: lo.FromPtrOr(req.SetDefault, true),
 	})
 	if err != nil {
 		return nil, err
@@ -99,6 +119,10 @@ func (s *customerPortalService) mutateSavedMethod(
 	}
 
 	customerID, err := s.portalCustomerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx, err = NewBillingEntityService(s.ServiceParams).ScopeToCustomer(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}

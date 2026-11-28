@@ -1064,6 +1064,9 @@ func (m *mockSubscriptionService) UpdateSubscriptionLineItem(ctx context.Context
 func (m *mockSubscriptionService) ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*apidto.ListSubscriptionLineItemsResponse, error) {
 	return nil, nil
 }
+func (m *mockSubscriptionService) GetSubscriptionLineItemHistory(ctx context.Context, lineItemID string) (*apidto.ListSubscriptionLineItemsResponse, error) {
+	return nil, nil
+}
 func (m *mockSubscriptionService) ProcessAutoCancellationSubscriptions(ctx context.Context) error {
 	return nil
 }
@@ -1072,6 +1075,9 @@ func (m *mockSubscriptionService) ProcessOverdueSubscriptionInvoices(ctx context
 }
 func (m *mockSubscriptionService) MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error {
 	return nil
+}
+func (m *mockSubscriptionService) HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error) {
+	return false, nil
 }
 func (m *mockSubscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context, _ time.Time) error {
 	return nil
@@ -1095,6 +1101,12 @@ func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlementsForSubscr
 	return nil, nil
 }
 func (m *mockSubscriptionService) GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*apidto.EntitlementResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*apidto.EntitlementResponse, error) {
+	return nil, nil
+}
+func (m *mockSubscriptionService) GetActiveAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
 	return nil, nil
 }
 func (m *mockSubscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *apidto.GetSubscriptionEntitlementsRequest) (*apidto.SubscriptionEntitlementsResponse, error) {
@@ -1135,6 +1147,9 @@ func (m *mockSubscriptionService) MarkCancellationScheduleAsExecuted(ctx context
 }
 func (m *mockSubscriptionService) CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error {
 	return nil
+}
+func (m *mockSubscriptionService) CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error) {
+	return nil, nil
 }
 func (m *mockSubscriptionService) ExternalCustomerIDsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]string, error) {
 	return nil, nil

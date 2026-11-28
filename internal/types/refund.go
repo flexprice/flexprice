@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -204,6 +206,9 @@ type RefundFilter struct {
 	RefundDestinations []RefundDestination `json:"refund_destinations,omitempty" form:"refund_destinations"`
 	Gateway            *string             `json:"gateway,omitempty" form:"gateway"`
 	OnlySettled        *bool               `json:"only_settled,omitempty" form:"only_settled"`
+
+	// UpdatedAtGTE bounds updated_at, which every lifecycle change bumps.
+	UpdatedAtGTE *time.Time `json:"updated_at_gte,omitempty" form:"updated_at_gte"`
 }
 
 // NewRefundFilter creates a refund filter with default pagination.

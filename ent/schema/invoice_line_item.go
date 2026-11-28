@@ -201,6 +201,14 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Nillable().
 			Immutable(),
 
+		field.String("billing_instalment_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
+
 		field.Other("adjusted_entitlement_quantity", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -257,5 +265,7 @@ func (InvoiceLineItem) Indexes() []ent.Index {
 		index.Fields("subscription_id", "status"),
 		index.Fields("tenant_id", "environment_id", "commitment_id").
 			Annotations(entsql.IndexWhere("(commitment_id IS NOT NULL)")),
+		index.Fields("tenant_id", "environment_id", "billing_instalment_id").
+			Annotations(entsql.IndexWhere("(billing_instalment_id IS NOT NULL)")),
 	}
 }

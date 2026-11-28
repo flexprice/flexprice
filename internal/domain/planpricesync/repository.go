@@ -99,11 +99,8 @@ type Repository interface {
 		p ListPlanLineItemsToCreateV2Params,
 	) (items []PlanLineItemCreationDelta, staleSubIDs []string, err error)
 
-	// TerminatePlanPricesLineItemsV2 sets end_date on live plan-derived line
-	// items belonging to the given subs whose price has been ended. Scoping
-	// to a sub set bounds the UPDATE per page (no plan-wide locks). The
-	// `li.end_date IS NULL` guard makes this idempotent — re-runs are no-ops.
-	// Returns rows affected.
+	// TerminatePlanPricesLineItemsV2 ends live line items for prices ended after each sub's synced_price_sequence.
+	// Call before stamping; returns the number of updated rows.
 	TerminatePlanPricesLineItemsV2(
 		ctx context.Context,
 		p TerminatePlanPricesLineItemsV2Params,

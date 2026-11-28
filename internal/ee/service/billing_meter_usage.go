@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
@@ -13,8 +18,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // meterUsageBaseChargeInfo holds per-line-item data collected during the main loop
@@ -53,7 +56,7 @@ func resolveAsOf(params *dto.PrepareSubscriptionInvoiceRequestParams) time.Time 
 	if !params.AsOf.IsZero() {
 		return params.AsOf
 	}
-	return time.Now().UTC()
+	return clock.Now()
 }
 
 // UsageNetForWindow returns sub's usage charges for [periodStart, until) after coupon discounts,
@@ -88,7 +91,7 @@ func (s *billingService) UsageNetForWindow(ctx context.Context, sub *subscriptio
 // All queries (bucketed meters, windowed entitlements, windowed commitments) read from
 // MeterUsageRepo — never from raw events. asOfOverride, when non-nil and non-zero, overrides
 // the reference instant used to clip line items and windowed commitments (see resolveAsOf);
-// otherwise defaults to time.Now().UTC(). Callers with no override pass nil.
+// otherwise defaults to clock.Now(). Callers with no override pass nil.
 func (s *billingService) CalculateMeterUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -103,7 +106,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 
 	querySource := source
 
-	asOf := time.Now().UTC()
+	asOf := clock.Now()
 	if asOfOverride != nil && !asOfOverride.IsZero() {
 		asOf = *asOfOverride
 	}
@@ -187,6 +190,25 @@ func (s *billingService) CalculateMeterUsageCharges(
 		chargesByLineItemID[charge.SubscriptionLineItemID] = append(chargesByLineItemID[charge.SubscriptionLineItemID], charge)
 	}
 
+	commitments, err := s.newCommitmentLoader(
+		ctx, sub, periodStart, periodEnd, asOf, chargesByLineItemID, meterMap, querySource,
+	)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	handledByCommitments := commitments.HandledLineIDs()
+
+	hasFeatureEntitlementGrant := len(grantsByMeterID) > 0 || lo.ContainsBy(lo.Values(entitlementsByMeterID), func(e *dto.AggregatedEntitlement) bool {
+		return e.IsEnabled && e.UsageLimit != nil
+	})
+	subGrants, err := s.loadSubscriptionEntitlementGrants(ctx, sub, hasFeatureEntitlementGrant, chargesByLineItemID, handledByCommitments, meterMap, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+
+	usageByMeter := lineUsageByMeter(sub.LineItems, chargesByLineItemID, grantsByMeterID, periodStart, periodEnd, asOf)
+
 	// --- Per-line-item processing ---
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -194,13 +216,14 @@ func (s *billingService) CalculateMeterUsageCharges(
 	totalUsageCost := decimal.Zero
 
 	for _, item := range sub.LineItems {
-		if item.PriceType != types.PRICE_TYPE_USAGE {
+		if item.PriceType != types.PRICE_TYPE_USAGE || handledByCommitments[item.ID] {
 			continue
 		}
 
 		// Clip the line's period to elapsed time so a version that has not started yet (or a zero-length EndDate==StartDate leftover)
 		// cannot contribute commitment to wallet/invoice totals.
-		if _, _, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf); !active {
+		itemStart, itemEnd, active := elapsedLineItemWindow(item, periodStart, periodEnd, asOf)
+		if !active {
 			s.Logger.Debug(ctx, "skipping meter-usage line item: item inactive during elapsed window",
 				"subscription_id", sub.ID,
 				"line_item_id", item.ID,
@@ -269,7 +292,8 @@ func (s *billingService) CalculateMeterUsageCharges(
 			grantResult, grantsApplied := adjustMeterUsageGrantsResult{}, false
 			if !matchingCharge.IsOverage {
 				if grantsForMeter := grantsByMeterID[item.MeterID]; len(grantsForMeter) > 0 {
-					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs)
+					grantResult, grantsApplied, err = s.adjustMeterUsageGrants(ctx, item, matchingCharge, grantsForMeter, priceService, m, sub, extCustomerIDs,
+						usageByMeter[item.MeterID], TimeInterval{Start: itemStart, End: itemEnd})
 					if err != nil {
 						return nil, decimal.Zero, err
 					}
@@ -416,12 +440,32 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	// --- Post-loop: cumulative commitment or non-cumulative true-up ---
+	// --- Post-loop: subscription entitlement grants, commitments, cumulative commitment or non-cumulative true-up ---
+
+	reduction, err := s.applySubscriptionEntitlementGrants(ctx, sub, subGrants, usageCharges, periodStart, periodEnd)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+	totalUsageCost = totalUsageCost.Sub(reduction)
+
+	var commitmentLines []dto.CreateInvoiceLineItemRequest
+	commitmentTotal := decimal.Zero
+	if len(handledByCommitments) > 0 {
+		commitmentLines, commitmentTotal, err = commitments.BillingLines(ctx)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+	}
 
 	if useCumulativePath {
-		return s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
+		lines, total, err := s.buildCumulativeCommitmentCharges(sub, baseChargesForCumulative, usageCharges,
 			commitmentAmount, overageFactor, totalPriorBase, commitmentEnd,
 			periodStart, periodEnd)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+
+		return append(lines, commitmentLines...), total.Add(commitmentTotal), nil
 	}
 
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
@@ -454,7 +498,7 @@ func (s *billingService) CalculateMeterUsageCharges(
 		}
 	}
 
-	return usageCharges, totalUsageCost, nil
+	return append(usageCharges, commitmentLines...), totalUsageCost.Add(commitmentTotal), nil
 }
 
 // adjustMeterUsageEntitlement adjusts quantity for entitlement limits, reading windowed

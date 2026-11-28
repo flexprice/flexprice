@@ -42,8 +42,10 @@ type Connection struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	// SyncConfig holds the value of the "sync_config" field.
-	SyncConfig   *types.SyncConfig `json:"sync_config,omitempty"`
-	selectValues sql.SelectValues
+	SyncConfig *types.SyncConfig `json:"sync_config,omitempty"`
+	// BillingEntityID holds the value of the "billing_entity_id" field.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
+	selectValues    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -53,7 +55,7 @@ func (*Connection) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case connection.FieldEncryptedSecretData, connection.FieldMetadata, connection.FieldSyncConfig:
 			values[i] = new([]byte)
-		case connection.FieldID, connection.FieldTenantID, connection.FieldStatus, connection.FieldCreatedBy, connection.FieldUpdatedBy, connection.FieldEnvironmentID, connection.FieldName, connection.FieldProviderType:
+		case connection.FieldID, connection.FieldTenantID, connection.FieldStatus, connection.FieldCreatedBy, connection.FieldUpdatedBy, connection.FieldEnvironmentID, connection.FieldName, connection.FieldProviderType, connection.FieldBillingEntityID:
 			values[i] = new(sql.NullString)
 		case connection.FieldCreatedAt, connection.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -156,6 +158,13 @@ func (_m *Connection) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field sync_config: %w", err)
 				}
 			}
+		case connection.FieldBillingEntityID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field billing_entity_id", values[i])
+			} else if value.Valid {
+				_m.BillingEntityID = new(string)
+				*_m.BillingEntityID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -227,6 +236,11 @@ func (_m *Connection) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sync_config=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SyncConfig))
+	builder.WriteString(", ")
+	if v := _m.BillingEntityID; v != nil {
+		builder.WriteString("billing_entity_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

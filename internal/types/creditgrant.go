@@ -139,7 +139,7 @@ func (u CreditGrantExpiryDurationUnit) Validate() error {
 // timezone is an IANA name (e.g. "Asia/Kolkata"); empty or "UTC" computes in UTC.
 // Returns false when the unit is unknown.
 func AddExpiryDuration(start time.Time, duration int, unit CreditGrantExpiryDurationUnit, timezone string) (time.Time, bool) {
-	local := start.In(loadTimezone(timezone))
+	local := start.In(LoadTimezone(timezone))
 
 	var expiry time.Time
 	switch unit {

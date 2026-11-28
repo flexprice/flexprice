@@ -24,10 +24,13 @@ func (s *PaymentProviderResolverSuite) SetupTest() {
 	s.BaseServiceTestSuite.SetupTest()
 	s.ClearStores()
 	s.svc = NewPaymentProviderResolver(ServiceParams{
-		Logger:         s.GetLogger(),
-		Config:         s.GetConfig(),
-		DB:             s.GetDB(),
-		ConnectionRepo: s.GetStores().ConnectionRepo,
+		Logger:          s.GetLogger(),
+		Config:          s.GetConfig(),
+		DB:              s.GetDB(),
+		ConnectionRepo:  s.GetStores().ConnectionRepo,
+		TenantRepo:      s.GetStores().TenantRepo,
+		EnvironmentRepo: s.GetStores().EnvironmentRepo,
+		SettingsRepo:    s.GetStores().SettingsRepo,
 	})
 }
 
@@ -134,7 +137,7 @@ func (s *PaymentProviderResolverSuite) TestListProvidersSkipsUnusableAndNonPayme
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
 		{Type: types.IntegrationCapabilityListPaymentMethods},
-		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityAddPaymentMethod, AddPaymentMethodOptions: &types.AddPaymentMethodOptions{PaymentMethodTypes: []string{"card"}}},
 		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, got[0].Capabilities)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	entEnvironment "github.com/flexprice/flexprice/ent/environment"
 	domainsb "github.com/flexprice/flexprice/internal/domain/selfbilling"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -99,6 +100,38 @@ func (r *selfBillingRepository) SumInvoicesByTenantHour(ctx context.Context, fro
 		return nil, ierr.WithError(err).
 			WithHint("Failed to read self-billing invoice sums").
 			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return out, nil
+}
+
+// ListEnvironmentTypes reads across every tenant on purpose, so it lives here and not in the tenant-scoped
+// environment repository: one query labels every tenant's hourly usage rows.
+func (r *selfBillingRepository) ListEnvironmentTypes(ctx context.Context, environmentIDs []string) (map[string]types.EnvironmentType, error) {
+	out := make(map[string]types.EnvironmentType, len(environmentIDs))
+	if len(environmentIDs) == 0 {
+		return out, nil
+	}
+
+	span := StartRepositorySpan(ctx, "selfbilling", "list_environment_types", map[string]interface{}{
+		"environment_count": len(environmentIDs),
+	})
+	defer FinishSpan(span)
+
+	envs, err := r.client.Reader(ctx).Environment.Query().
+		Where(entEnvironment.IDIn(environmentIDs...)).
+		Select(entEnvironment.FieldID, entEnvironment.FieldType).
+		All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read environment types for self-billing").
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, env := range envs {
+		out[env.ID] = types.EnvironmentType(env.Type)
 	}
 
 	SetSpanSuccess(span)

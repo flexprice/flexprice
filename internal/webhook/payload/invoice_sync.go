@@ -38,19 +38,10 @@ func (b *InvoiceSyncPayloadBuilder) BuildPayload(ctx context.Context, eventType 
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	invoice, err := b.services.InvoiceService.GetInvoice(ctx, internal.InvoiceID)
+	invoice, err := getInvoiceWithURLs(ctx, b.services, internal.InvoiceID)
 	if err != nil {
 		return nil, err
 	}
-	if err := b.services.InvoiceService.WithHostedInvoiceURLs(ctx, invoice); err != nil {
-		return nil, err
-	}
-
-	pdfURL, err := b.services.InvoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: internal.InvoiceID})
-	if err != nil {
-		b.services.Tracing.CaptureException(ctx, err)
-	}
-	invoice.InvoicePDFURL = lo.ToPtr(pdfURL)
 
 	mappings, err := b.services.EntityIntegrationMappingService.GetEntityIntegrationMappings(ctx, &types.EntityIntegrationMappingFilter{
 		EntityID:      internal.InvoiceID,
@@ -65,6 +56,59 @@ func (b *InvoiceSyncPayloadBuilder) BuildPayload(ctx context.Context, eventType 
 
 	details := buildProviderDetails(internal.Provider, mapping, invoice)
 	return json.Marshal(webhookDto.NewInvoiceSyncWebhookPayload(invoice, details, internal.Error, eventType))
+}
+
+type InvoicePaymentFailedPayloadBuilder struct {
+	services *Services
+}
+
+func NewInvoicePaymentFailedPayloadBuilder(services *Services) PayloadBuilder {
+	return &InvoicePaymentFailedPayloadBuilder{services: services}
+}
+
+func (b *InvoicePaymentFailedPayloadBuilder) BuildPayload(ctx context.Context, eventType types.WebhookEventName, data json.RawMessage) (json.RawMessage, error) {
+	var internal webhookDto.InternalInvoicePaymentFailedEvent
+	if err := json.Unmarshal(data, &internal); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Unable to unmarshal invoice payment failed event payload").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if internal.InvoiceID == "" || internal.TenantID == "" || internal.Provider == "" || internal.Reason == "" {
+		return nil, ierr.NewError("missing required field(s) for invoice payment failed event").
+			WithHint("Please provide a valid invoice ID, tenant ID, provider and reason").
+			WithReportableDetails(map[string]any{
+				"invoice_id": internal.InvoiceID,
+				"tenant_id":  internal.TenantID,
+				"provider":   internal.Provider,
+				"reason":     internal.Reason,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	invoice, err := getInvoiceWithURLs(ctx, b.services, internal.InvoiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(webhookDto.NewInvoicePaymentFailedWebhookPayload(invoice, internal, eventType))
+}
+
+func getInvoiceWithURLs(ctx context.Context, services *Services, invoiceID string) (*dto.InvoiceResponse, error) {
+	invoice, err := services.InvoiceService.GetInvoice(ctx, invoiceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := services.InvoiceService.WithHostedInvoiceURLs(ctx, invoice); err != nil {
+		return nil, err
+	}
+
+	pdfURL, err := services.InvoiceService.GetInvoicePDFUrl(ctx, dto.InvoicePDFRequest{InvoiceID: invoiceID})
+	if err != nil {
+		services.Tracing.CaptureException(ctx, err)
+	}
+	invoice.InvoicePDFURL = lo.ToPtr(pdfURL)
+	return invoice, nil
 }
 
 func buildProviderDetails(provider types.SecretProvider, mapping *dto.EntityIntegrationMappingResponse, invoice *dto.InvoiceResponse) *webhookDto.ProviderDetails {

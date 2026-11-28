@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"time"
@@ -112,6 +113,45 @@ func (s *PortalWalletSuite) buildParams() ServiceParams {
 		IntegrationFactory:           s.GetIntegrationFactory(),
 		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	}
+}
+
+func (s *PortalWalletSuite) setWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.ctx, &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.ctx),
+		BaseModel:     types.GetDefaultBaseModel(s.ctx),
+	}))
+}
+
+func (s *PortalWalletSuite) TestGetWallets_SetsBalanceAlertStatus() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Require().NotNil(wallets[0].BalanceAlertStatus)
+	s.Equal(types.AlertStateWarning, *wallets[0].BalanceAlertStatus)
+}
+
+func (s *PortalWalletSuite) TestGetWallets_OmitsStatusWhenNothingToEvaluate() {
+	s.setWalletAlertConfig(types.AlertSettings{
+		AlertEnabled:       lo.ToPtr(true),
+		AlertThresholdType: types.AlertThresholdTypePercentage,
+		Warning:            &types.AlertThreshold{Threshold: decimal.NewFromInt(25), Condition: types.AlertConditionBelow},
+	})
+
+	wallets, err := s.svc.GetWallets(s.ctx)
+	s.NoError(err)
+	s.Require().Len(wallets, 1)
+	s.Nil(wallets[0].BalanceAlertStatus)
 }
 
 func (s *PortalWalletSuite) connect(providers ...types.SecretProvider) {
@@ -267,8 +307,10 @@ func (s *PortalWalletSuite) TestTopUpUseSavedMethodValidation() {
 }
 
 type stubPaymentMethodProvider struct {
-	methods []interfaces.ProviderPaymentMethod
-	err     error
+	methods        []interfaces.ProviderPaymentMethod
+	err            error
+	attemptDetails *types.PaymentAttemptDetails
+	hangDetails    bool
 }
 
 func (p *stubPaymentMethodProvider) ListSavedMethods(_ context.Context, _ string) ([]interfaces.ProviderPaymentMethod, error) {
@@ -285,6 +327,14 @@ func (p *stubPaymentMethodProvider) SetDefaultSavedMethod(_ context.Context, _ s
 
 func (p *stubPaymentMethodProvider) CreateSetupLink(_ context.Context, _ interfaces.SetupLinkRequest) (*interfaces.SetupLinkResponse, error) {
 	return nil, nil
+}
+
+func (p *stubPaymentMethodProvider) GetAttemptDetails(ctx context.Context, _ string) (*types.PaymentAttemptDetails, error) {
+	if p.hangDetails {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return p.attemptDetails, nil
 }
 
 func (s *PortalWalletSuite) TestValidateSavedMethodForTopUp_ActiveSavedCard_Success() {
@@ -399,7 +449,7 @@ func (s *PortalWalletSuite) TestAutoTopupRequiresWalletOwnership() {
 
 	_, err := s.svc.UpdateAutoTopup(other, s.walletID, &dto.PortalUpdateAutoTopupRequest{})
 	s.Error(err)
-	s.True(ierr.IsPermissionDenied(err))
+	s.True(ierr.IsNotFound(err))
 }
 
 // A customer-initiated top-up must never grant credits before the invoice is paid,
@@ -437,4 +487,53 @@ func (s *PortalWalletSuite) enableAutoCompletePurchasedCredit() {
 	}
 	setting.Status = types.StatusPublished
 	s.Require().NoError(s.GetStores().SettingsRepo.Create(s.ctx, setting))
+}
+
+func (s *PortalWalletSuite) TestUpdateCustomerIgnoresSettings() {
+	var req dto.PortalUpdateCustomerRequest
+	s.Require().NoError(json.Unmarshal([]byte(`{"name":"Renamed","settings":{"subscription_config":{"grace_period_days":90}}}`), &req))
+	resp, err := s.svc.UpdateCustomer(s.ctx, req)
+	s.Require().NoError(err)
+	s.Equal("Renamed", resp.Customer.Name)
+	s.Nil(resp.Customer.Settings)
+}
+
+func (s *PortalWalletSuite) TestWalletReadsAuthorizeBeforeCompute() {
+	other := &wallet.Wallet{
+		ID:                  "wallet_other",
+		CustomerID:          "cust_other",
+		Currency:            "usd",
+		Balance:             decimal.NewFromInt(5),
+		CreditBalance:       decimal.NewFromInt(5),
+		ConversionRate:      decimal.NewFromInt(1),
+		TopupConversionRate: decimal.NewFromInt(1),
+		WalletStatus:        types.WalletStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.ctx),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.ctx, other))
+
+	tests := []struct {
+		name     string
+		walletID string
+		wantErr  bool
+	}{
+		{"own wallet", s.walletID, false},
+		{"other customer's wallet", "wallet_other", true},
+		{"missing wallet", "wallet_missing", true},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			bal, err := s.svc.GetWallet(s.ctx, tc.walletID)
+			txs, txErr := s.svc.GetWalletTransactions(s.ctx, tc.walletID, types.NewWalletTransactionFilter())
+			if tc.wantErr {
+				s.True(ierr.IsNotFound(err), "got %v", err)
+				s.Nil(bal)
+				s.True(ierr.IsNotFound(txErr), "got %v", txErr)
+				s.Nil(txs)
+				return
+			}
+			s.NoError(err)
+			s.NoError(txErr)
+		})
+	}
 }

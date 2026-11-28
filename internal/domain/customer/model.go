@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/ent/schema"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // Customer represents a customer in the system
@@ -29,7 +30,13 @@ type Customer struct {
 	// BillingCurrency is the fiat currency invoices are issued in; nil means charge currency is used as-is.
 	BillingCurrency *string `db:"billing_currency" json:"billing_currency,omitempty"`
 
+	// BillingEntityID is the entity that bills the customer; nil while the environment has no billing entities. Never changes once set.
+	BillingEntityID *string `db:"billing_entity_id" json:"billing_entity_id"`
+
 	ContactPersons []*ContactPerson `db:"contact_persons" json:"contact_persons,omitempty" activity:"drop"`
+
+	// Settings overrides the environment's settings for this customer's subscriptions.
+	Settings *types.SettingsOverride `db:"settings" json:"settings,omitempty"`
 
 	// AddressLine1 is the first line of the customer's address
 	AddressLine1 string `db:"address_line1" json:"address_line1" activity:"drop"`
@@ -77,7 +84,9 @@ func FromEnt(c *ent.Customer) *Customer {
 		Email:             c.Email,
 		Contact:           c.Contact,
 		BillingCurrency:   c.BillingCurrency,
+		BillingEntityID:   c.BillingEntityID,
 		ContactPersons:    contactPersonsFromEnt(c.ContactPersons),
+		Settings:          c.Settings,
 		AddressLine1:      c.AddressLine1,
 		AddressLine2:      c.AddressLine2,
 		AddressCity:       c.AddressCity,
@@ -175,6 +184,7 @@ func contactPersonsFromEnt(persons []*schema.ContactPerson) []*ContactPerson {
 		out[i] = &ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -190,6 +200,7 @@ func (c *Customer) ToEntContactPersons() []*schema.ContactPerson {
 		out[i] = &schema.ContactPerson{
 			ID: p.ID, IsPrimary: p.IsPrimary, Salutation: p.Salutation, FirstName: p.FirstName, LastName: p.LastName,
 			Email: p.Email, Mobile: p.Mobile, Designation: p.Designation, Department: p.Department,
+			EmailTypes: p.EmailTypes,
 		}
 	}
 	return out
@@ -206,6 +217,27 @@ type ContactPerson struct {
 	Mobile      string `json:"mobile,omitempty" validate:"omitempty,max=20"`
 	Designation string `json:"designation,omitempty" validate:"omitempty,max=100"`
 	Department  string `json:"department,omitempty" validate:"omitempty,max=100"`
+	// email_types are the emails this person receives in place of the customer email, e.g. ["invoice"]
+	EmailTypes []types.EmailType `json:"email_types,omitempty" validate:"omitempty,max=10"`
+}
+
+// EmailRecipients returns the emails of contact persons responsible for emails of type t,
+// falling back to the customer email when no person is.
+func (c *Customer) EmailRecipients(t types.EmailType) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, p := range c.ContactPersons {
+		key := strings.ToLower(p.Email)
+		if p.Email == "" || seen[key] || !lo.Contains(p.EmailTypes, t) {
+			continue
+		}
+		seen[key] = true
+		out = append(out, p.Email)
+	}
+	if len(out) == 0 && c.Email != "" {
+		out = []string{c.Email}
+	}
+	return out
 }
 
 // ValidatePersons checks the list allows at most one primary and no repeated ids,
@@ -227,6 +259,9 @@ func ValidatePersons(persons []*ContactPerson) error {
 				Mark(ierr.ErrValidation)
 		}
 		people[person] = true
+		if err := validateEmailTypes(p); err != nil {
+			return err
+		}
 		if p.IsPrimary {
 			primaries++
 		}
@@ -246,4 +281,37 @@ func ValidatePersons(persons []*ContactPerson) error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+func validateEmailTypes(p *ContactPerson) error {
+	if len(p.EmailTypes) == 0 {
+		return nil
+	}
+	if p.Email == "" {
+		return ierr.NewError("contact person has email types but no email").
+			WithHintf("Add an email to %s to send them emails", p.FirstName).
+			Mark(ierr.ErrValidation)
+	}
+	if len(lo.Uniq(p.EmailTypes)) != len(p.EmailTypes) {
+		return ierr.NewError("duplicate contact person email type").
+			WithHint("List each email type once").
+			Mark(ierr.ErrValidation)
+	}
+	for _, t := range p.EmailTypes {
+		if t == "" {
+			return ierr.NewError("empty contact person email type").
+				WithHint("Remove the empty entry from email_types").
+				Mark(ierr.ErrValidation)
+		}
+		if err := t.Validate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// InBillingEntity reports whether the entity bills the customer; an empty entity matches every customer.
+// A customer the enable backfill has not reached belongs to the default, the only entity until enable completes.
+func (c *Customer) InBillingEntity(entityID string) bool {
+	return entityID == "" || c.BillingEntityID == nil || *c.BillingEntityID == entityID
 }

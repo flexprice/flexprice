@@ -284,6 +284,9 @@ func (_u *CommitmentUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.InstalmentInvoicingCleared() {
 		_spec.ClearField(commitment.FieldInstalmentInvoicing, field.TypeString)
 	}
+	if _u.mutation.EndDateCleared() {
+		_spec.ClearField(commitment.FieldEndDate, field.TypeTime)
+	}
 	if _u.mutation.OnEarlyTerminationCleared() {
 		_spec.ClearField(commitment.FieldOnEarlyTermination, field.TypeString)
 	}
@@ -609,6 +612,9 @@ func (_u *CommitmentUpdateOne) sqlSave(ctx context.Context) (_node *Commitment, 
 	}
 	if _u.mutation.InstalmentInvoicingCleared() {
 		_spec.ClearField(commitment.FieldInstalmentInvoicing, field.TypeString)
+	}
+	if _u.mutation.EndDateCleared() {
+		_spec.ClearField(commitment.FieldEndDate, field.TypeTime)
 	}
 	if _u.mutation.OnEarlyTerminationCleared() {
 		_spec.ClearField(commitment.FieldOnEarlyTermination, field.TypeString)

@@ -113,10 +113,16 @@ func (s *DealSyncService) getLineItemMappings(
 	ctx context.Context,
 	lineItemIDs []string,
 ) (map[string]*entityintegrationmapping.EntityIntegrationMapping, error) {
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityIDs = lineItemIDs
 	filter.EntityType = types.IntegrationEntityTypeSubscriptionLineItem
 	filter.ProviderTypes = []string{string(types.SecretProviderHubSpot)}
+	filter.ConnectionID = conn.ID
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -149,6 +155,11 @@ func (s *DealSyncService) syncLineItem(
 		return s.client.UpdateDealLineItem(ctx, mapping.ProviderEntityID, props)
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	resp, err := s.client.CreateDealLineItem(ctx, &DealLineItemCreateRequest{
 		Properties: *props,
 		Associations: []LineItemAssociation{
@@ -175,6 +186,7 @@ func (s *DealSyncService) syncLineItem(
 		ProviderEntityID: resp.ID,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	if err := s.entityIntegrationMappingRepo.Create(ctx, newMapping); err != nil {

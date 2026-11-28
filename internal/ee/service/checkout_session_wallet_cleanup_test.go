@@ -147,7 +147,7 @@ func (s *WalletServiceSuite) TestCleanupCheckoutSession_StalePendingCopyDoesNotC
 		ProviderPaymentIntentID: "pay_stale_cleanup_001",
 	}))
 
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil, false))
 
 	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
 	s.Require().NoError(err)
@@ -198,6 +198,31 @@ func (s *WalletServiceSuite) TestCancelCheckoutSession_ExpiresInFlightAndKeepsPu
 	s.Require().NoError(err)
 	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
 	s.Equal(types.StatusPublished, stored.Status)
+	s.NotNil(stored.CancelledAt)
+	s.Equal(stored.CancelledAt, resp.CancelledAt)
+
+	var events []types.WebhookEventName
+	for _, ev := range s.GetPublishedWebhooks() {
+		if ev.EntityType == types.SystemEntityTypeCheckoutSession && ev.EntityID == session.ID {
+			events = append(events, ev.EventName)
+		}
+	}
+	s.Equal([]types.WebhookEventName{types.WebhookEventCheckoutSessionExpired, types.WebhookEventCheckoutSessionCancelled}, events)
+}
+
+func (s *WalletServiceSuite) TestCleanupCheckoutSession_ExpiryLeavesCancelledAtUnset() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	_, session := s.seedPayFirstTopupSession("expire-not-cancelled", decimal.NewFromInt(100), nil)
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, session.ID, nil))
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
+	s.Nil(stored.CancelledAt)
 }
 
 func (s *WalletServiceSuite) TestCancelCheckoutSession_RejectsCompleted() {
@@ -334,7 +359,7 @@ func (s *WalletServiceSuite) TestCheckoutSessionStatusCountedOnce() {
 	_, completed := s.seedPayFirstTopupSession("metrics-complete", decimal.NewFromInt(200), nil)
 	stale := *completed
 	s.Require().NoError(checkoutSvc.CompleteCheckoutSession(ctx, completed.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_metrics_001"}))
-	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil))
+	s.Require().NoError(checkoutSvc.cleanupCheckoutSession(ctx, &stale, nil, false))
 
 	_, expired := s.seedPayFirstTopupSession("metrics-expire", decimal.NewFromInt(200), nil)
 	s.Require().NoError(checkoutSvc.CleanupCheckoutSession(ctx, expired.ID, nil))
@@ -342,4 +367,43 @@ func (s *WalletServiceSuite) TestCheckoutSessionStatusCountedOnce() {
 
 	s.Equal(completedBefore+1, count(types.CheckoutStatusCompleted))
 	s.Equal(expiredBefore+1, count(types.CheckoutStatusExpired))
+}
+
+func (s *WalletServiceSuite) TestCancelCheckoutSession_RejectsOverpaid() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	_, session := s.seedPayFirstTopupSession("cancel-overpaid", decimal.NewFromInt(100), nil)
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.PaymentStatus = types.PaymentStatusOverpaid
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	_, err = checkoutSvc.Cancel(ctx, session.ID)
+	s.True(ierr.IsInvalidOperation(err))
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusPending, stored.CheckoutStatus)
+}
+
+func (s *WalletServiceSuite) TestCompleteCheckoutSession_PastExpiryExpires() {
+	s.seedAutoComplete(false)
+	ctx := s.GetContext()
+
+	txID, session := s.seedPayFirstTopupSession("complete-past-expiry", decimal.NewFromInt(100), nil)
+	session.ExpiresAt = time.Now().UTC().Add(-time.Minute)
+	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Update(ctx, session))
+
+	checkoutSvc := &checkoutSessionService{ServiceParams: s.buildServiceParams()}
+	err := checkoutSvc.CompleteCheckoutSession(ctx, session.ID, &types.CheckoutProviderResult{ProviderPaymentIntentID: "pay_late_001"})
+	s.True(ierr.IsAlreadyExists(err))
+
+	stored, err := s.GetStores().CheckoutSessionRepo.Get(ctx, session.ID)
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusExpired, stored.CheckoutStatus)
+	tx, err := s.GetStores().WalletRepo.GetTransactionByID(ctx, txID)
+	s.Require().NoError(err)
+	s.Equal(types.TransactionStatusFailed, tx.TxStatus)
 }

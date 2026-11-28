@@ -39,6 +39,9 @@ func (s *PortalPaymentMethodSuite) SetupTest() {
 		DB:                 s.GetDB(),
 		ConnectionRepo:     s.GetStores().ConnectionRepo,
 		CustomerRepo:       s.GetStores().CustomerRepo,
+		TenantRepo:         s.GetStores().TenantRepo,
+		EnvironmentRepo:    s.GetStores().EnvironmentRepo,
+		SettingsRepo:       s.GetStores().SettingsRepo,
 		IntegrationFactory: s.GetIntegrationFactory(),
 	}
 	s.paymentSvc = NewPaymentService(params)
@@ -91,7 +94,7 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
 		{Type: types.IntegrationCapabilityListPaymentMethods},
-		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityAddPaymentMethod, AddPaymentMethodOptions: &types.AddPaymentMethodOptions{PaymentMethodTypes: []string{"card"}, SetsDefault: true}},
 		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeStripe])
 	s.ElementsMatch([]dto.IntegrationCapability{
@@ -101,7 +104,7 @@ func (s *PortalPaymentMethodSuite) TestGetIntegrationsReportsCapabilities() {
 		{Type: types.IntegrationCapabilityPaymentMethodManagement},
 		{Type: types.IntegrationCapabilitySetDefaultMethod},
 		{Type: types.IntegrationCapabilityListPaymentMethods},
-		{Type: types.IntegrationCapabilityAddPaymentMethod},
+		{Type: types.IntegrationCapabilityAddPaymentMethod, AddPaymentMethodOptions: &types.AddPaymentMethodOptions{PaymentMethodTypes: []string{"card"}}},
 		{Type: types.IntegrationCapabilityDeletePaymentMethod},
 	}, byProvider[types.PaymentGatewayTypeChargebee])
 }
@@ -215,7 +218,7 @@ func TestToSavedPaymentMethodRecurring(t *testing.T) {
 			GatewayMethodID: "token_upi",
 			Method:          types.PaymentMethodTypeUPI,
 			Active:          true,
-			UPI:             &interfaces.ProviderUPIDetails{VPA: "gaurav.kumar@upi"},
+			UPI:             &types.UPIDetails{VPA: "gaurav.kumar@upi"},
 			Recurring: &interfaces.ProviderRecurringPaymentDetails{
 				Status:             types.RecurringPaymentStatusActive,
 				AutoChargeableTill: &future,
@@ -287,7 +290,7 @@ func TestToSavedPaymentMethod(t *testing.T) {
 				Active:           true,
 				IsDefault:        true,
 				GatewayAccountID: "gw_acct_1",
-				Card:             &interfaces.ProviderCardDetails{Brand: "visa", Last4: "4242", ExpMonth: 4, ExpYear: expiry},
+				Card:             &types.CardDetails{Brand: "visa", Last4: "4242", ExpMonth: 4, ExpYear: expiry},
 			},
 			providerAutoCharges: true,
 			wantStatus:          types.PaymentMethodStatusActive,
@@ -300,7 +303,7 @@ func TestToSavedPaymentMethod(t *testing.T) {
 				GatewayMethodID: "pm_dead",
 				Method:          types.PaymentMethodTypeCard,
 				Active:          false,
-				Card:            &interfaces.ProviderCardDetails{Brand: "visa", Last4: "0000"},
+				Card:            &types.CardDetails{Brand: "visa", Last4: "0000"},
 			},
 			providerAutoCharges: true,
 			wantStatus:          types.PaymentMethodStatusInactive,
@@ -377,11 +380,23 @@ func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnconnectedProvide
 	s.True(ierr.IsValidation(err))
 }
 
-func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsIncapableProvider() {
-	s.connect(types.SecretProviderChargebee, types.SecretProviderRazorpay)
+// A method the provider's setup cannot save is refused before any gateway call.
+func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsUnsupportedMethodType() {
+	s.connect(types.SecretProviderChargebee)
 
 	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeRazorpay,
+		PaymentProvider:   types.PaymentGatewayTypeChargebee,
+		PaymentMethodType: "enach",
+	})
+	s.Error(err)
+	s.True(ierr.IsValidation(err))
+}
+
+func (s *PortalPaymentMethodSuite) TestAddPaymentMethodRejectsIncapableProvider() {
+	s.connect(types.SecretProviderChargebee, types.SecretProviderNomod)
+
+	_, err := s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
+		PaymentProvider: types.PaymentGatewayTypeNomod,
 	})
 	s.Error(err)
 	s.True(ierr.IsValidation(err))
@@ -439,7 +454,8 @@ func (s *PortalPaymentMethodSuite) TestMutateRejectsIncapableProvider() {
 	s.True(ierr.IsValidation(err))
 }
 
-func (s *PortalPaymentMethodSuite) TestRazorpayIsListOnly() {
+// Razorpay adds mandates through a registration link but can't delete or re-default them here.
+func (s *PortalPaymentMethodSuite) TestRazorpayMandatesAreNotManagedInPortal() {
 	s.connect(types.SecretProviderRazorpay)
 
 	resp, err := s.svc.ListPaymentMethods(s.ctx, &dto.ListSavedPaymentMethodsRequest{})
@@ -447,11 +463,6 @@ func (s *PortalPaymentMethodSuite) TestRazorpayIsListOnly() {
 	s.Require().Len(resp.Providers, 1)
 	s.Equal(types.PaymentGatewayTypeRazorpay, resp.Providers[0].Provider)
 	s.Nil(resp.Providers[0].Error)
-
-	_, err = s.svc.AddPaymentMethod(s.ctx, &dto.PortalAddPaymentMethodRequest{
-		PaymentProvider: types.PaymentGatewayTypeRazorpay,
-	})
-	s.True(ierr.IsValidation(err))
 
 	_, err = s.svc.DeletePaymentMethod(s.ctx, &dto.PortalDeletePaymentMethodRequest{
 		PaymentProvider: types.PaymentGatewayTypeRazorpay,

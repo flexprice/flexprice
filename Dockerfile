@@ -7,7 +7,7 @@
 # Pinned to an exact patch: the image sets GOTOOLCHAIN=local, so the builder
 # Go version must be >= the `go` directive in go.mod or `go mod download`
 # hard-fails. Bump this whenever that directive moves.
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS builder
 WORKDIR /app
 
 RUN apk add --no-cache git
@@ -39,7 +39,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # MySQL, SQLite), and importing it would pull all of that into go.mod for every
 # build. Built in its own throwaway module so the app's go.mod/go.sum are
 # untouched, and pinned -- Go verifies the checksum against sum.golang.org.
-FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine AS dbmate
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS dbmate
 ARG TARGETARCH
 ARG DBMATE_VERSION=v2.35.0
 RUN apk add --no-cache git
@@ -48,10 +48,10 @@ ENV CGO_ENABLED=0 \
     GOOS=linux
 RUN go mod init flexprice.local/dbmate-build && \
     go get github.com/amacneil/dbmate/v2@${DBMATE_VERSION} && \
-    # dbmate transitively pulls older golang.org/x/net and golang.org/x/text
-    # that Trivy flags as HIGH-severity CVEs (CVE-2026-46600, CVE-2026-56852).
-    # Force the fixed minor versions in this throwaway module.
-    go get golang.org/x/net@v0.56.0 golang.org/x/text@v0.39.0 && \
+    # dbmate transitively pulls older deps that Trivy flags as HIGH-severity
+    # CVEs; x/net also lifts x/crypto and x/text. Force the fixed versions.
+    go get golang.org/x/net@v0.60.0 github.com/klauspost/compress@v1.18.7 \
+      google.golang.org/grpc@v1.83.2 && \
     GOARCH=$TARGETARCH go build -ldflags="-w -s" -trimpath \
       -o /out/dbmate github.com/amacneil/dbmate/v2
 

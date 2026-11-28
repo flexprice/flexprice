@@ -4,14 +4,17 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // Workflow types and actions - domain models
@@ -453,7 +456,7 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 	}
 
 	if c.InitialCreditsToLoad.IsPositive() {
-		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, time.Now().UTC())
+		req.InitialCreditsExpiryDateUTC = types.ResolveCreditsExpiry(c.InitialCreditsExpirationDuration, c.InitialCreditsExpirationDurationUnit, clock.Now())
 	}
 
 	return req, nil
@@ -522,7 +525,7 @@ func (c *CreateSubscriptionActionConfig) ToDTO(params interface{}) (interface{},
 		startDate = actionParams.EventTimestamp
 	} else {
 		// Use current time (fallback)
-		now := time.Now().UTC()
+		now := clock.Now()
 		startDate = &now
 	}
 

@@ -44,7 +44,7 @@ func commitmentFilterFn(ctx context.Context, c *commitment.Commitment, filter in
 		len(f.Statuses) > 0 && !lo.Contains(f.Statuses, c.CommitmentStatus),
 		f.ScopeType != nil && *f.ScopeType != c.ScopeEntityType,
 		len(f.ScopeIDs) > 0 && !lo.Contains(f.ScopeIDs, c.ScopeEntityID),
-		f.ActiveFrom != nil && !c.EndDate.After(*f.ActiveFrom),
+		f.ActiveFrom != nil && c.EndDate != nil && !c.EndDate.After(*f.ActiveFrom),
 		f.ActiveTo != nil && !c.StartDate.Before(*f.ActiveTo):
 		return false
 	}
@@ -142,6 +142,20 @@ func (s *InMemoryCommitmentStore) Update(ctx context.Context, c *commitment.Comm
 	}
 
 	return &updated, nil
+}
+
+// Delete mirrors the ent repository's soft delete: the row stays, archived.
+func (s *InMemoryCommitmentStore) Delete(ctx context.Context, id string) error {
+	stored, err := s.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	archived := *stored
+	archived.Status = types.StatusArchived
+	archived.UpdatedAt = time.Now().UTC()
+	archived.UpdatedBy = types.GetUserID(ctx)
+	return s.InMemoryStore.Update(ctx, id, &archived)
 }
 
 func (s *InMemoryCommitmentStore) List(ctx context.Context, f *commitment.Filter) ([]*commitment.Commitment, error) {

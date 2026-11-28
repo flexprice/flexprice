@@ -49,11 +49,8 @@ func TestActiveWindows_Validate(t *testing.T) {
 }
 
 func TestActiveWindows_Contains(t *testing.T) {
-	ist, err := time.LoadLocation("Asia/Kolkata")
-	require.NoError(t, err)
-
 	at := func(h, m int) time.Time {
-		return time.Date(2026, 8, 25, h, m, 0, 0, ist).UTC()
+		return time.Date(2026, 8, 25, h, m, 0, 0, time.UTC)
 	}
 
 	w := ActiveWindows{
@@ -62,11 +59,16 @@ func TestActiveWindows_Contains(t *testing.T) {
 			End:   Bucket{Hour: 21},
 		},
 	}
-	require.True(t, w.Contains(at(9, 0), ist))
-	require.True(t, w.Contains(at(20, 59), ist))
-	require.False(t, w.Contains(at(21, 0), ist))
-	require.False(t, w.Contains(at(8, 59), ist))
-	require.True(t, ActiveWindows(nil).Contains(at(3, 0), ist))
+	require.True(t, w.Contains(at(9, 0)))
+	require.True(t, w.Contains(at(20, 59)))
+	require.False(t, w.Contains(at(21, 0)))
+	require.False(t, w.Contains(at(8, 59)))
+	require.True(t, ActiveWindows(nil).Contains(at(3, 0)))
+
+	// Windows are UTC: 09:00 in Kolkata is 03:30 UTC.
+	ist, err := time.LoadLocation("Asia/Kolkata")
+	require.NoError(t, err)
+	require.False(t, w.Contains(time.Date(2026, 8, 25, 9, 0, 0, 0, ist)))
 
 	wrap := ActiveWindows{
 		{
@@ -74,9 +76,9 @@ func TestActiveWindows_Contains(t *testing.T) {
 			End:   Bucket{Hour: 6},
 		},
 	}
-	require.True(t, wrap.Contains(at(23, 30), ist))
-	require.True(t, wrap.Contains(at(5, 59), ist))
-	require.False(t, wrap.Contains(at(6, 0), ist))
+	require.True(t, wrap.Contains(at(23, 30)))
+	require.True(t, wrap.Contains(at(5, 59)))
+	require.False(t, wrap.Contains(at(6, 0)))
 
 	evening := ActiveWindows{
 		{
@@ -84,8 +86,8 @@ func TestActiveWindows_Contains(t *testing.T) {
 			End:   Bucket{Hour: 24},
 		},
 	}
-	require.True(t, evening.Contains(at(23, 59), ist))
-	require.False(t, evening.Contains(at(0, 0), ist))
+	require.True(t, evening.Contains(at(23, 59)))
+	require.False(t, evening.Contains(at(0, 0)))
 }
 
 func TestCommitmentEnums_Validate(t *testing.T) {

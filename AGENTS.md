@@ -41,7 +41,7 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 - Every query filters on both. Missing filter = data leak = critical bug.
 - No cross-tenant reads. No shared mutable state between tenants.
 - The admin portal (`deployment.mode=admin`) may resolve a tenant from an operator-supplied email. That lookup stays in `internal/ee/service/admin`.
-- Self-billing may read hourly event counts and invoice totals across tenants, only inside `internal/ee/service/selfbilling`, through `domain/selfbilling.ClickHouseRepository` and `PostgresRepository`. No other package may call those repositories. These two and the admin email lookup are the only cross-tenant reads.
+- Self-billing may read hourly event counts, invoice totals and environment types across tenants, only inside `internal/ee/service/selfbilling`, through `domain/selfbilling.ClickHouseRepository` and `PostgresRepository`. No other package may call those repositories. These two and the admin email lookup are the only cross-tenant reads.
 
 ### Event processing (billing correctness)
 - All event handlers MUST be idempotent — duplicate delivery must not alter state twice.
@@ -52,6 +52,17 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 ### ClickHouse
 - Every query bounded by `max_memory_usage = 90GB` (hardcoded — do not remove).
 - Analytics queries → ClickHouse. Transactional reads/writes → PostgreSQL.
+
+### Time precision (one contract, never per-entity)
+- Every stored instant is whole microseconds — Postgres's precision; lib/pq ROUNDS nanoseconds half-up, so an untruncated time can read back later than what was written.
+- Four boundaries enforce this; business code never calls `.Truncate(time.Microsecond)`:
+  - `clock.Now()` (`internal/clock`) for generated instants — bare `time.Now()` in business layers fails loglint **LL010** (infra timers and tests may keep `time.Now()`).
+  - Gin's JSON, query and form bindings truncate client-supplied times at ingress (`internal/rest/middleware/binding.go`).
+  - A Temporal activity interceptor truncates every activity argument (`internal/temporal/interceptor/time_precision_interceptor.go`) — `workflow.Now()` and schedule times carry nanoseconds, and workflows can't call `clock.Now()`.
+  - An ent write hook truncates every time field as the storage backstop (`internal/postgres/ent_hooks.go`).
+- Billing period edges are whole seconds. `NextBillingDate` drops the fraction from every edge after the first, so subscription creation drops it from the start, anchor, trial and phase dates too (`CreateSubscriptionRequest.ApplyDefaults`). Subscriptions created before that may still start mid-second.
+- Commitment and billing-term dates may carry a fraction of a second; one within a second after a billing period edge is taken as that edge (`atPeriodEdge`), so a date derived from a mid-second start does not leave a half-second sliver period.
+- ClickHouse is deliberately its own precision domain and needs no normalization: raw events are `DateTime64(3)` (ms; the driver floors, never rounds up) and `meter_usage` timestamps are whole-second window starts by construction. Event timestamps are never exact-compared in memory against stored rows — keep it that way.
 
 ### Observability
 - Structured logging via `internal/logger` (ctx-first API); always propagate `ctx` for trace correlation.
@@ -67,6 +78,8 @@ Go 1.23+ · Gin · Uber FX (DI) · Ent (ORM) · PostgreSQL · ClickHouse · Kafk
 ### Testing
 - Unit tests for all service-layer business logic.
 - Table-driven tests preferred.
+- Cover a new scenario by extending the existing table or fixture of the code under test. Add a test function or helper only when no test exercises that code yet.
+- Assert every output the change affects (amounts and quantities, not only that it runs), from inputs the real code path produces.
 - Integration tests use real DB (testcontainers / docker compose); do not mock Ent client.
 - Test files alongside implementation (`internal/service/foo_test.go`).
 
@@ -687,3 +700,5 @@ the base toolchain on the box is older, so Go auto-downloads the required `1.25.
    - **Comments**: a comment explains one of *what*, *how*, or *why* — in one or two lines, self-sufficient with no references to design docs, tickets, or section numbers. Document every exported symbol; skip comments on interface-implementing methods (the interface doc stands). Don't comment bad code — rewrite it; extract a commented block into a well-named function instead.
    - **Shape**: guard clauses and early returns; keep the happy path unindented and flowing down the screen. Make zero values useful. No package-level mutable state.
    - **APIs**: easy to use, hard to misuse — avoid several same-typed parameters in a row, avoid nil-tolerant parameters that fork behavior, design for the default case.
+6. Fix a bug in the function that produces the wrong value. Don't wrap an existing method, add a helper or type that only forwards to one, or correct its output further downstream. Handle the inputs that occur; don't add branches for states the invariants already rule out.
+7. Write readable code, not fewer lines. No crammed one-liners and no nested or multi-line `lo` chains written to save lines: one step per line, a blank line between logical steps, and a plain loop in place of `lo` when the call spans lines or nests.

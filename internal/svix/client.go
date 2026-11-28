@@ -110,12 +110,19 @@ func (c *Client) GetDashboardURL(ctx context.Context, applicationID string) (url
 		defer span.Finish()
 	}
 
-	dashboard, err := c.client.Authentication.AppPortalAccess(ctx, applicationID, models.AppPortalAccessIn{}, &svix.AuthenticationAppPortalAccessOptions{})
+	dashboard, err := c.client.Authentication.AppPortalAccess(ctx, applicationID, dashboardAccessRequest(), &svix.AuthenticationAppPortalAccessOptions{})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get dashboard access: %w", err)
 	}
 
 	return dashboard.Url, dashboard.Token, nil
+}
+
+const dashboardAccessExpirySeconds uint64 = 3600
+
+func dashboardAccessRequest() models.AppPortalAccessIn {
+	expiry := dashboardAccessExpirySeconds
+	return models.AppPortalAccessIn{Expiry: &expiry}
 }
 
 // SendMessage sends a webhook message to the given application.

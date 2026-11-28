@@ -6,12 +6,31 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
+	"github.com/flexprice/flexprice/internal/webhook/publisher"
 	"github.com/shopspring/decimal"
 )
+
+// BillingEntityScope puts a record's billing entity in ctx so connection lookups find only that entity's connections.
+// Off tenants get ctx unchanged.
+type BillingEntityScope interface {
+	ScopeToCustomer(ctx context.Context, customerID string) (context.Context, error)
+	ScopeToInvoice(ctx context.Context, invoiceID string) (context.Context, error)
+	ScopeToSubscription(ctx context.Context, subscriptionID string) (context.Context, error)
+	// ScopeToDefault puts the environment's default entity in ctx; off environments get ctx unchanged.
+	ScopeToDefault(ctx context.Context) (context.Context, error)
+	// ScopeToPayment puts the entity that owns the payment's connection in ctx, else its customer's entity; a removed connection is a validation error.
+	ScopeToPayment(ctx context.Context, p *payment.Payment) (context.Context, error)
+	// ScopeToConnection puts the published connection's owner entity in ctx; a removed or another provider's connection is not found.
+	ScopeToConnection(ctx context.Context, connectionID string, provider types.SecretProvider) (context.Context, error)
+	// RequireProviderConnected returns a validation error when the entity in ctx has no connection for the provider.
+	RequireProviderConnected(ctx context.Context, provider types.SecretProvider) error
+}
 
 // CustomerService defines the interface for customer operations
 type CustomerService interface {
@@ -29,7 +48,7 @@ type CustomerService interface {
 // PaymentService defines the interface for payment operations
 type PaymentService interface {
 	CreatePayment(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
-	GetPayment(ctx context.Context, id string) (*dto.PaymentResponse, error)
+	GetPayment(ctx context.Context, req dto.GetPaymentRequest) (*dto.PaymentResponse, error)
 	ListPayments(ctx context.Context, filter *types.PaymentFilter) (*dto.ListPaymentsResponse, error)
 	// GetOrCreateInvoicePaymentLink returns the invoice's open payment link on the gateway, or creates one.
 	GetOrCreateInvoicePaymentLink(ctx context.Context, req *dto.CreatePaymentRequest) (*dto.PaymentResponse, error)
@@ -40,11 +59,16 @@ type PaymentService interface {
 	// RecordAttempt appends the gateway's outcome for one charge attempt, leaving the
 	// parent payment's status untouched.
 	RecordAttempt(ctx context.Context, paymentID string, req dto.RecordAttemptRequest) error
+	// GetAttempt reads one attempt from the primary, so a just-recorded attempt is visible.
+	GetAttempt(ctx context.Context, attemptID string) (*dto.PaymentAttemptResponse, error)
 	// CreatePaymentForCheckout creates a minimal INITIATED payment record for a checkout
 	// session without triggering payment lifecycle processing.
 	// TODO: migrate to full payment lifecycle method when payment lifecycle service is released
 	CreatePaymentForCheckout(ctx context.Context, req *dto.CreateCheckoutPaymentRequest) (*dto.PaymentResponse, error)
 	ListPaymentMethods(ctx context.Context, customerID string, req *dto.ListSavedPaymentMethodsRequest) (*dto.SavedPaymentMethodsResponse, error)
+	ListPaymentIntegrations(ctx context.Context, customerID string) (*dto.IntegrationsResponse, error)
+	// VoidOpenPaymentLinks closes an invoice's unpaid payment links once the caller's transaction commits.
+	VoidOpenPaymentLinks(ctx context.Context, invoiceID, reason string)
 }
 
 // InvoiceService defines the interface for invoice operations
@@ -62,6 +86,7 @@ type InvoiceService interface {
 	ApplyExternalInvoiceDiscount(ctx context.Context, invoiceID string, req dto.ApplyExternalInvoiceDiscountRequest) error
 	// VoidInvoice voids the invoice and returns its updated (voided) state.
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) (*invoice.Invoice, error)
+	PublishInvoicePaymentFailed(ctx context.Context, event webhookDto.InternalInvoicePaymentFailedEvent)
 }
 
 type PlanService interface {
@@ -124,6 +149,8 @@ type RevenueAnalyticsService interface {
 type DraftAndComputeOptions struct {
 	// SkipIfAlreadyInvoiced skips finalized current periods.
 	SkipIfAlreadyInvoiced bool
+	// RecomputePastPeriodDrafts also recomputes the subscription's cycle drafts whose period has ended.
+	RecomputePastPeriodDrafts bool
 }
 
 type SubscriptionService interface {
@@ -135,6 +162,8 @@ type SubscriptionService interface {
 	HandleSubscriptionActivatingInvoicePaid(ctx context.Context, inv *invoice.Invoice) error
 	// MarkSubscriptionIncomplete moves an active payment-gated subscription to incomplete when its renewal invoice is unpaid.
 	MarkSubscriptionIncomplete(ctx context.Context, invoiceID string) error
+	// HasMarketplaceMapping reports whether the subscription is linked to a marketplace, in any mapping status.
+	HasMarketplaceMapping(ctx context.Context, subscriptionID string) (bool, error)
 	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
 	GetSubscriptionsForCustomer(ctx context.Context, externalCustomerID string, expand types.Expand) (*dto.ListSubscriptionsResponse, error)
 
@@ -164,6 +193,8 @@ type SubscriptionService interface {
 	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	UpdateSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.UpdateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
 	ListSubscriptionLineItems(ctx context.Context, filter *types.SubscriptionLineItemFilter) (*dto.ListSubscriptionLineItemsResponse, error)
+	// GetSubscriptionLineItemHistory returns every version of a line item, oldest first.
+	GetSubscriptionLineItemHistory(ctx context.Context, lineItemID string) (*dto.ListSubscriptionLineItemsResponse, error)
 
 	// Auto-cancellation methods
 	ProcessAutoCancellationSubscriptions(ctx context.Context) error
@@ -188,8 +219,13 @@ type SubscriptionService interface {
 
 	GetSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription) ([]*dto.EntitlementResponse, error)
 
+	// GetActiveSubscriptionEntitlementsForSubscription is the subscription's entitlements live at at:
+	// an override past its end_date drops out and the plan or addon entitlement it replaced returns.
+	GetActiveSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, at time.Time) ([]*dto.EntitlementResponse, error)
+
 	GetAggregatedSubscriptionEntitlementsForSubscription(ctx context.Context, sub *subscription.Subscription, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
+	GetActiveAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 
 	// List all tenant subscriptions
 	GetSubscriptionsForBillingPeriodUpdate(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
@@ -227,6 +263,9 @@ type SubscriptionService interface {
 
 	// CascadeCancelToInheritedSubscriptions mirrors the parent's cancellation fields onto INHERITED child subscriptions (no-op if not a parent). Used by Temporal update-billing-period cancellation and aligned with CancelSubscription / cron processing.
 	CascadeCancelToInheritedSubscriptions(ctx context.Context, parentSub *subscription.Subscription) error
+
+	// CascadeCancelToGroupedInvoicingSubscriptions cancels a cancelled parent's grouped_invoicing children and ends their resources; returns the cancelled children.
+	CascadeCancelToGroupedInvoicingSubscriptions(ctx context.Context, parentSub *subscription.Subscription) ([]*subscription.Subscription, error)
 
 	// TerminateSubscriptionResources terminates line items, addon associations, and credit
 	// grants for a subscription as of req.EffectiveDate. Called eagerly by CancelSubscription for
@@ -281,7 +320,7 @@ type CheckoutSessionService interface {
 	// GetAndReconcile is Get plus reconciliation against the payment provider. It
 	// contacts the gateway and can complete the session, so only callers acting for
 	// the customer should use it; internal readers use Get.
-	GetAndReconcile(ctx context.Context, id string) (*dto.CheckoutSessionResponse, error)
+	GetAndReconcile(ctx context.Context, id string, expand types.Expand) (*dto.CheckoutSessionResponse, error)
 	List(ctx context.Context, filter *types.CheckoutSessionFilter) (*dto.ListCheckoutSessionsResponse, error)
 	Delete(ctx context.Context, id string) error
 	// Cancel terminates an in-flight session without archiving the row. Completed
@@ -322,6 +361,7 @@ type ServiceDependencies struct {
 	CreditAdjustmentService         CreditAdjustmentService
 	CheckoutSessionService          CheckoutSessionService
 	RefundService                   RefundService
+	WebhookPublisher                publisher.WebhookPublisher
 	DB                              postgres.IClient
 }
 

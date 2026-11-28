@@ -98,6 +98,9 @@ func (s *WalletAutoChargeSuite) buildParams() ServiceParams {
 		CustomerRepo:                 stores.CustomerRepo,
 		EntityIntegrationMappingRepo: stores.EntityIntegrationMappingRepo,
 		IntegrationFactory:           s.GetIntegrationFactory(),
+		TenantRepo:                   stores.TenantRepo,
+		EnvironmentRepo:              stores.EnvironmentRepo,
+		SettingsRepo:                 stores.SettingsRepo,
 	}
 }
 
@@ -159,6 +162,10 @@ func (p *stubAutoChargeCheckoutProvider) HasAutoChargeableMethod(_ context.Conte
 }
 func (p *stubAutoChargeCheckoutProvider) FetchPaymentState(context.Context, interfaces.PaymentStateRequest) (*interfaces.PaymentState, error) {
 	return nil, nil
+}
+
+func (p *stubAutoChargeCheckoutProvider) ExpirePaymentLink(context.Context, interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
+	return &interfaces.ExpirePaymentLinkResponse{}, nil
 }
 
 func (s *WalletAutoChargeSuite) TestFetchGatewayWithAutoChargeSupport_Success() {

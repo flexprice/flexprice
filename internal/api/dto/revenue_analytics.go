@@ -3,10 +3,13 @@ package dto
 import (
 	"time"
 
-	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // RevenueAnalyticsRequest queries revenue_facts as an analytics surface.
@@ -60,7 +63,7 @@ const revenueAnalyticsMaxRangeDays = 90
 
 func (r *RevenueAnalyticsRequest) Validate() error {
 	if r.EndTime.IsZero() {
-		r.EndTime = time.Now().UTC()
+		r.EndTime = clock.Now()
 	}
 	if r.StartTime.IsZero() || !r.StartTime.Before(r.EndTime) {
 		return ierr.NewError("invalid time range").
@@ -141,14 +144,14 @@ type RevenueAnalyticsRow struct {
 	// "commitment_trueup", "overage" or "revert". Empty for plain rows.
 	AdjustmentType string `json:"adjustment_type,omitempty"`
 
-	NetAmount         decimal.Decimal `json:"net_amount"`
-	UsageAtListRate   decimal.Decimal `json:"usage_at_list_rate"`
-	TierDelta         decimal.Decimal `json:"tier_delta"`
-	EntitlementAmount decimal.Decimal `json:"entitlement_amount"`
-	LineDiscount      decimal.Decimal `json:"line_discount"`
-	InvoiceDiscount   decimal.Decimal `json:"invoice_discount"`
-	BillableQty       decimal.Decimal `json:"billable_qty"`
-	EntitlementQty    decimal.Decimal `json:"entitlement_qty"`
+	NetAmount         decimal.Decimal `json:"net_amount" swaggertype:"string"`
+	UsageAtListRate   decimal.Decimal `json:"usage_at_list_rate" swaggertype:"string"`
+	TierDelta         decimal.Decimal `json:"tier_delta" swaggertype:"string"`
+	EntitlementAmount decimal.Decimal `json:"entitlement_amount" swaggertype:"string"`
+	LineDiscount      decimal.Decimal `json:"line_discount" swaggertype:"string"`
+	InvoiceDiscount   decimal.Decimal `json:"invoice_discount" swaggertype:"string"`
+	BillableQty       decimal.Decimal `json:"billable_qty" swaggertype:"string"`
+	EntitlementQty    decimal.Decimal `json:"entitlement_qty" swaggertype:"string"`
 }
 
 // RevenueAnalyticsResponse is the aggregated result.

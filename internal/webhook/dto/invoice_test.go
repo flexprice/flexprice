@@ -495,3 +495,13 @@ func TestNewInvoice_IncludesFxConversionAndLineOriginals(t *testing.T) {
 	assert.Contains(t, s, `"charge_currency":"usd"`)
 	assert.Contains(t, s, `"subtotal":"100"`, "line item must include its fx_conversion source")
 }
+
+// An instalment line carries the instalment it bills, so a consumer can match it to the billing_instalment events.
+func TestNewInvoice_LineItemCarriesItsBillingInstalment(t *testing.T) {
+	li := testLineItem("inv_li_inst", "price_api", decimal.NewFromInt(300), decimal.NewFromInt(1))
+	li.BillingInstalmentID = lo.ToPtr("binst_1")
+
+	raw, err := json.Marshal(NewInvoiceWebhookPayload(testInvoiceResponse([]*dto.InvoiceLineItemResponse{li}, nil), types.WebhookEventInvoiceUpdateFinalized))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"billing_instalment_id":"binst_1"`)
+}

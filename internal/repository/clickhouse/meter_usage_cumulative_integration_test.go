@@ -112,3 +112,55 @@ func TestGetDailyUsageByMeter_Integration(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, empty)
 }
+
+func TestGetUsageMultiMeterBillingGroups_Integration(t *testing.T) {
+	store := newRealClickHouseTestStore(t)
+	repo := &MeterUsageRepository{
+		store: store,
+		qb:    NewMeterUsageQueryBuilder(),
+	}
+	params := &events.MeterUsageQueryParams{
+		TenantID:            "batch_tenant",
+		EnvironmentID:       "batch_env",
+		ExternalCustomerIDs: []string{"batch_customer"},
+		MeterIDs:            []string{"meter_a", "meter_b"},
+		AggregationType:     types.AggregationMax,
+		WindowSize:          types.WindowSizeDay,
+		GroupBy:             []string{"properties.instance"},
+		StartTime:           time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		EndTime:             time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC),
+	}
+	// A CTE fixture exercises the real query and scanner without writing shared tables.
+	fixture := `WITH meter_usage AS (
+		SELECT row.1 AS meter_id, row.2 AS id, toJSONString(map('instance', row.3)) AS properties, toDecimal128(row.4, 8) AS qty_total,
+			toDateTime('2026-01-01 12:00:00', 'UTC') AS timestamp,
+			'batch_tenant' AS tenant_id, row.5 AS environment_id, row.6 AS external_customer_id
+		FROM (SELECT arrayJoin([
+			('meter_a', 'a1', 'x', 60, 'batch_env', 'batch_customer'),
+			('meter_a', 'a2', 'x', 120, 'batch_env', 'batch_customer'),
+			('meter_a', 'a3', 'y', 180, 'batch_env', 'batch_customer'),
+			('meter_b', 'b1', 'x', 70, 'batch_env', 'batch_customer'),
+			('meter_a', 'other_env', 'x', 9999, 'other_env', 'batch_customer'),
+			('meter_a', 'other_customer', 'x', 9999, 'batch_env', 'other_customer')
+		]) AS row)
+	) `
+	query := fixture + BuildMultiMeterQuery("MAX(qty_total)", "COUNT(DISTINCT id)", params, repo.qb)
+	_, args := repo.qb.BuildWhereClause(params)
+	results, err := repo.executeMultiMeterWindowedQuery(context.Background(), query, args, params)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	for _, result := range results {
+		switch result.MeterID {
+		case "meter_a":
+			require.Equal(t, "300", result.TotalValue.String())
+			require.Len(t, result.Points, 2)
+			require.Equal(t, "120", result.Points[0].Value.String())
+			require.Equal(t, "180", result.Points[1].Value.String())
+		case "meter_b":
+			require.Equal(t, "70", result.TotalValue.String())
+			require.Len(t, result.Points, 1)
+		default:
+			t.Fatalf("unexpected meter %s", result.MeterID)
+		}
+	}
+}

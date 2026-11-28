@@ -7,12 +7,16 @@ import (
 	"math/rand" // nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used -- dedup salt, not security-sensitive
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/events/transform"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -278,7 +282,17 @@ func (s *rawEventConsumptionService) processMessage(ctx context.Context, msg *me
 		)
 	}
 
-	s.Logger.Info(ctx, "completed raw event batch processing",
+	for outcome, n := range map[string]int{"success": successCount, "skipped": skipCount, "error": errorCount} {
+		if n > 0 {
+			metrics.RecordCounter(ctx, metrics.RawEvents, int64(n), metrics.L(metrics.KeyOutcome, outcome))
+		}
+	}
+
+	logBatch := s.Logger.Debug
+	if skipCount > 0 || errorCount > 0 {
+		logBatch = s.Logger.Info
+	}
+	logBatch(ctx, "completed raw event batch processing",
 		"batch_size", len(batch.Data),
 		"success_count", successCount,
 		"skip_count", skipCount,
@@ -317,7 +331,7 @@ func (s *rawEventConsumptionService) BulkIngestRawEvents(ctx context.Context, ev
 		return fmt.Errorf("failed to marshal raw event batch: %w", err)
 	}
 
-	uniqueID := fmt.Sprintf("%s-%d-%d", types.GenerateUUID(), time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
+	uniqueID := fmt.Sprintf("%s-%d-%d", types.GenerateUUID(), clock.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 	msg := message.NewMessage(uniqueID, payload)
 	msg.Metadata.Set("tenant_id", tenantID)
 	msg.Metadata.Set("environment_id", environmentID)
@@ -353,7 +367,7 @@ func (s *rawEventConsumptionService) publishTransformedEvent(ctx context.Context
 	}
 
 	// Make UUID truly unique by adding nanosecond precision timestamp and random bytes
-	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, time.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
+	uniqueID := fmt.Sprintf("%s-%d-%d", event.ID, clock.Now().UnixNano(), rand.Int63()) // #nosec G404 -- dedup salt, not security-sensitive
 
 	msg := message.NewMessage(uniqueID, payload)
 

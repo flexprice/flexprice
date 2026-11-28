@@ -7,6 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/webhook"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -16,10 +23,6 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
-	"github.com/stripe/stripe-go/v82"
-	"github.com/stripe/stripe-go/v82/webhook"
 )
 
 const refundLockTTL = 15 * time.Minute
@@ -114,7 +117,7 @@ func computeCheckoutDiscount(session *stripe.CheckoutSession, requestedAmount de
 			AmountOff:      lo.TernaryF(d.Coupon != nil, func() int64 { return d.Coupon.AmountOff }, func() int64 { return 0 }),
 			PercentOff:     lo.TernaryF(d.Coupon != nil, func() float64 { return d.Coupon.PercentOff }, func() float64 { return 0 }),
 			PromotionCode:  lo.TernaryF(d.PromotionCode != nil, func() string { return d.PromotionCode.Code }, func() string { return "" }),
-			AppliedAt:      time.Now().UTC(),
+			AppliedAt:      clock.Now(),
 		})
 	}
 
@@ -401,7 +404,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 	params := &stripe.CheckoutSessionCreateParams{
 		LineItems:           lineItems,
 		Mode:                stripe.String("payment"),
-		AllowPromotionCodes: stripe.Bool(true),
+		AllowPromotionCodes: stripe.Bool(req.AllowPromotionCodes),
 		SuccessURL:          stripe.String(successURL),
 		CancelURL:           stripe.String(cancelURL),
 		Metadata:            metadata,
@@ -411,13 +414,12 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *CreateStrip
 		},
 	}
 
-	// Only save payment method for future use if SaveCardAndMakeDefault is true
-	if req.SaveCardAndMakeDefault {
+	if req.SaveCard {
 		params.PaymentIntentData = &stripe.CheckoutSessionCreatePaymentIntentDataParams{
 			SetupFutureUsage: stripe.String("off_session"),
 			Metadata:         metadata,
 		}
-		s.logger.Info(ctx, "payment link configured to save card and make default",
+		s.logger.Info(ctx, "payment link configured to save card",
 			"invoice_id", req.InvoiceID,
 			"customer_id", req.CustomerID,
 		)
@@ -1090,7 +1092,7 @@ func (s *PaymentService) ReconcilePaymentWithInvoice(ctx context.Context, paymen
 	)
 
 	// Get the payment record
-	payment, err := paymentService.GetPayment(ctx, paymentID)
+	payment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: paymentID})
 	if err != nil {
 		s.logger.Error(ctx, "failed to get payment record for reconciliation",
 			"error", err,
@@ -1679,8 +1681,13 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	// Create external payment record
-	err = s.CreateExternalPaymentRecord(ctx, paymentIntent, flexpriceInvoiceID, types.PaymentStatusSucceeded, "", paymentService)
+	completed, err := s.completeHostedInvoicePayment(ctx, paymentIntent, flexpriceInvoiceID, stripeInvoiceID, paymentService)
+	if err != nil {
+		return err
+	}
+	if !completed {
+		err = s.CreateExternalPaymentRecord(ctx, paymentIntent, flexpriceInvoiceID, types.PaymentStatusSucceeded, "", paymentService)
+	}
 	if err != nil {
 		s.logger.Error(ctx, "failed to create external payment record",
 			"error", err,
@@ -1784,6 +1791,43 @@ func (s *PaymentService) hasSettledInvoicePaymentIntent(ctx context.Context, str
 	return false, nil
 }
 
+// completeHostedInvoicePayment settles the pending hosted invoice page payment, if there is one.
+func (s *PaymentService) completeHostedInvoicePayment(ctx context.Context, paymentIntent *stripe.PaymentIntent, invoiceID string, stripeInvoiceID string, paymentService interfaces.PaymentService) (bool, error) {
+	filter := types.NewNoLimitPaymentFilter()
+	filter.DestinationType = lo.ToPtr(string(types.PaymentDestinationTypeInvoice))
+	filter.DestinationID = lo.ToPtr(invoiceID)
+	filter.PaymentMethodType = lo.ToPtr(string(types.PaymentMethodTypePaymentLink))
+	filter.PaymentStatus = lo.ToPtr(string(types.PaymentStatusPending))
+	filter.PaymentGateway = lo.ToPtr(string(types.PaymentGatewayTypeStripe))
+	payments, err := paymentService.ListPayments(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	pending, found := lo.Find(payments.Items, func(p *dto.PaymentResponse) bool {
+		return p.GatewayMetadata[types.GatewayMetadataKeyStripeInvoiceID] == stripeInvoiceID
+	})
+	if !found {
+		return false, nil
+	}
+
+	updateReq := dto.UpdatePaymentRequest{
+		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
+		SucceededAt:      lo.ToPtr(clock.Now()),
+	}
+	if paymentIntent.PaymentMethod != nil {
+		updateReq.PaymentMethodID = lo.ToPtr(paymentIntent.PaymentMethod.ID)
+	}
+	if _, err := paymentService.UpdatePayment(ctx, pending.ID, updateReq); err != nil {
+		return false, err
+	}
+
+	s.logger.Info(ctx, "completed hosted invoice page payment",
+		"payment_id", pending.ID, "invoice_id", invoiceID, "stripe_invoice_id", stripeInvoiceID, "payment_intent_id", paymentIntent.ID)
+	return true, nil
+}
+
 // CreateExternalPaymentRecord creates a payment record in the given status for an external Stripe payment
 func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymentIntent *stripe.PaymentIntent, invoiceID string, status types.PaymentStatus, eventID string, paymentService interfaces.PaymentService) error {
 	// Convert amount from smallest unit to decimal
@@ -1834,7 +1878,7 @@ func (s *PaymentService) CreateExternalPaymentRecord(ctx context.Context, paymen
 	}
 
 	// Update payment to the final status with all Stripe details (same as regular Stripe charge)
-	now := time.Now().UTC()
+	now := clock.Now()
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(status)),
 		GatewayPaymentID: lo.ToPtr(paymentIntent.ID),
@@ -2055,6 +2099,14 @@ func (s *PaymentService) HandleFlexPriceCheckoutPayment(
 		"payment_id", payment.ID,
 		"new_status", paymentStatus)
 
+	attemptReq := dto.RecordAttemptRequest{PaymentStatus: types.PaymentStatusSucceeded}
+	if paymentIntent != nil {
+		attemptReq.GatewayAttemptID = paymentIntent.ID
+	}
+	if err := paymentService.RecordAttempt(ctx, payment.ID, attemptReq); err != nil {
+		s.logger.Error(ctx, "failed to record succeeded attempt", "error", err, "payment_id", payment.ID)
+	}
+
 	if hasDiscount {
 		applyDiscountReq := dto.ApplyExternalInvoiceDiscountRequest{
 			DiscountAmount: discountAmount,
@@ -2173,7 +2225,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		}
 	}()
 
-	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	existingPayment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithMessage("failed to get payment record for refund").
@@ -2185,6 +2237,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		s.logger.Info(ctx, "payment already refunded, skipping",
 			"payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
 		return nil
+	}
+
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: stripePaymentIntentID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"stripe_payment_intent_id", stripePaymentIntentID)
 	}
 
 	refundID, err := s.ensureRefunded(ctx, stripePaymentIntentID, flexpricePaymentID)
@@ -2224,7 +2286,7 @@ func (s *PaymentService) recordLateCaptureRefund(
 	refundID string,
 	paymentService interfaces.PaymentService,
 ) error {
-	now := time.Now().UTC()
+	now := clock.Now()
 	metadata := existingPayment.Metadata
 	if refundID != "" {
 		metadata = lo.Assign(existingPayment.Metadata, types.Metadata{"stripe_refund_id": refundID})

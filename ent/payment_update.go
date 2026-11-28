@@ -378,6 +378,26 @@ func (_u *PaymentUpdate) ClearErrorMessage() *PaymentUpdate {
 	return _u
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (_u *PaymentUpdate) SetConnectionID(v string) *PaymentUpdate {
+	_u.mutation.SetConnectionID(v)
+	return _u
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_u *PaymentUpdate) SetNillableConnectionID(v *string) *PaymentUpdate {
+	if v != nil {
+		_u.SetConnectionID(*v)
+	}
+	return _u
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *PaymentUpdate) ClearConnectionID() *PaymentUpdate {
+	_u.mutation.ClearConnectionID()
+	return _u
+}
+
 // AddAttemptIDs adds the "attempts" edge to the PaymentAttempt entity by IDs.
 func (_u *PaymentUpdate) AddAttemptIDs(ids ...string) *PaymentUpdate {
 	_u.mutation.AddAttemptIDs(ids...)
@@ -599,6 +619,12 @@ func (_u *PaymentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(payment.FieldErrorMessage, field.TypeString)
+	}
+	if value, ok := _u.mutation.ConnectionID(); ok {
+		_spec.SetField(payment.FieldConnectionID, field.TypeString, value)
+	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(payment.FieldConnectionID, field.TypeString)
 	}
 	if _u.mutation.AttemptsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1013,6 +1039,26 @@ func (_u *PaymentUpdateOne) ClearErrorMessage() *PaymentUpdateOne {
 	return _u
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (_u *PaymentUpdateOne) SetConnectionID(v string) *PaymentUpdateOne {
+	_u.mutation.SetConnectionID(v)
+	return _u
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_u *PaymentUpdateOne) SetNillableConnectionID(v *string) *PaymentUpdateOne {
+	if v != nil {
+		_u.SetConnectionID(*v)
+	}
+	return _u
+}
+
+// ClearConnectionID clears the value of the "connection_id" field.
+func (_u *PaymentUpdateOne) ClearConnectionID() *PaymentUpdateOne {
+	_u.mutation.ClearConnectionID()
+	return _u
+}
+
 // AddAttemptIDs adds the "attempts" edge to the PaymentAttempt entity by IDs.
 func (_u *PaymentUpdateOne) AddAttemptIDs(ids ...string) *PaymentUpdateOne {
 	_u.mutation.AddAttemptIDs(ids...)
@@ -1264,6 +1310,12 @@ func (_u *PaymentUpdateOne) sqlSave(ctx context.Context) (_node *Payment, err er
 	}
 	if _u.mutation.ErrorMessageCleared() {
 		_spec.ClearField(payment.FieldErrorMessage, field.TypeString)
+	}
+	if value, ok := _u.mutation.ConnectionID(); ok {
+		_spec.SetField(payment.FieldConnectionID, field.TypeString, value)
+	}
+	if _u.mutation.ConnectionIDCleared() {
+		_spec.ClearField(payment.FieldConnectionID, field.TypeString)
 	}
 	if _u.mutation.AttemptsCleared() {
 		edge := &sqlgraph.EdgeSpec{

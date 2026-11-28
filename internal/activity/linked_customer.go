@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/domain/billingterm"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/refund"
@@ -17,11 +18,13 @@ type LinkedCustomerLookup interface {
 // LinkedCustomers holds the customer lookup of each entity type whose state has no customer_id.
 type LinkedCustomers map[types.SystemEntityType]LinkedCustomerLookup
 
-func NewLinkedCustomers(payments payment.Repository, refunds refund.Repository, prices price.Repository) LinkedCustomers {
+// NewLinkedCustomers builds the customer lookups of payments, refunds, prices and billing terms.
+func NewLinkedCustomers(payments payment.Repository, refunds refund.Repository, prices price.Repository, terms billingterm.TermRepository) LinkedCustomers {
 	return LinkedCustomers{
-		types.SystemEntityTypePayment: payments,
-		types.SystemEntityTypeRefund:  refunds,
-		types.SystemEntityTypePrice:   prices,
+		types.SystemEntityTypePayment:     payments,
+		types.SystemEntityTypeRefund:      refunds,
+		types.SystemEntityTypePrice:       prices,
+		types.SystemEntityTypeBillingTerm: terms,
 	}
 }
 

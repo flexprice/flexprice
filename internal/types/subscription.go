@@ -104,8 +104,10 @@ func (s SubscriptionStatus) String() string {
 	return string(s)
 }
 
-func (s SubscriptionStatus) Validate() error {
-	allowed := []SubscriptionStatus{
+// AllSubscriptionStatuses is every status a subscription can hold. Pass it on a
+// filter to opt out of the repository's default narrowing to active.
+func AllSubscriptionStatuses() []SubscriptionStatus {
+	return []SubscriptionStatus{
 		SubscriptionStatusActive,
 		SubscriptionStatusPaused,
 		SubscriptionStatusCancelled,
@@ -113,6 +115,10 @@ func (s SubscriptionStatus) Validate() error {
 		SubscriptionStatusTrialing,
 		SubscriptionStatusDraft,
 	}
+}
+
+func (s SubscriptionStatus) Validate() error {
+	allowed := AllSubscriptionStatuses()
 
 	if s != "" && !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid subscription status").
@@ -262,92 +268,6 @@ func (g LineItemGrouping) Default() LineItemGrouping {
 
 func (g LineItemGrouping) MergesIntoBillingPeriod() bool {
 	return g.Default() == LineItemGroupingPerBillingPeriod
-}
-
-// PaymentTerms represents invoice payment terms: net days (e.g. "30 NET") or end of month.
-// Used to compute invoice due date from the issue date.
-type PaymentTerms string
-
-const (
-	PaymentTerms15Net PaymentTerms = "15 NET"
-	PaymentTerms30Net PaymentTerms = "30 NET"
-	PaymentTerms45Net PaymentTerms = "45 NET"
-	PaymentTerms60Net PaymentTerms = "60 NET"
-	PaymentTerms75Net PaymentTerms = "75 NET"
-	PaymentTerms90Net PaymentTerms = "90 NET"
-
-	PaymentTermsEndOfMonth     PaymentTerms = "END_OF_MONTH"
-	PaymentTermsEndOfNextMonth PaymentTerms = "END_OF_NEXT_MONTH"
-)
-
-// AllPaymentTerms is the list of allowed payment term values.
-var AllPaymentTerms = []PaymentTerms{
-	PaymentTerms15Net, PaymentTerms30Net, PaymentTerms45Net,
-	PaymentTerms60Net, PaymentTerms75Net, PaymentTerms90Net,
-	PaymentTermsEndOfMonth, PaymentTermsEndOfNextMonth,
-}
-
-func (p PaymentTerms) String() string {
-	return string(p)
-}
-
-// Validate returns an error if the payment terms value is not allowed.
-func (p PaymentTerms) Validate() error {
-	if p == "" {
-		return nil
-	}
-	if !lo.Contains(AllPaymentTerms, p) {
-		return ierr.NewError("invalid payment_terms").
-			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET, END_OF_MONTH, END_OF_NEXT_MONTH").
-			WithReportableDetails(map[string]any{
-				"payment_terms":  p,
-				"allowed_values": AllPaymentTerms,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// PaymentTermsToDueDateDays returns the number of days after the issue date for the given payment terms.
-// Returns (0, false) if the value is invalid or empty.
-func PaymentTermsToDueDateDays(p PaymentTerms) (int, bool) {
-	switch p {
-	case PaymentTerms15Net:
-		return 15, true
-	case PaymentTerms30Net:
-		return 30, true
-	case PaymentTerms45Net:
-		return 45, true
-	case PaymentTerms60Net:
-		return 60, true
-	case PaymentTerms75Net:
-		return 75, true
-	case PaymentTerms90Net:
-		return 90, true
-	default:
-		return 0, false
-	}
-}
-
-// PaymentTermsDueDate returns the invoice due date for the payment terms, counted from the issue date.
-// End of month terms take the last day of the issue date's month (or the next) in issueDate's location.
-// Returns false if the value is invalid or empty.
-func PaymentTermsDueDate(p PaymentTerms, issueDate time.Time) (time.Time, bool) {
-	switch p {
-	case PaymentTermsEndOfMonth:
-		return endOfMonth(issueDate, 0), true
-	case PaymentTermsEndOfNextMonth:
-		return endOfMonth(issueDate, 1), true
-	}
-	days, ok := PaymentTermsToDueDateDays(p)
-	if !ok {
-		return time.Time{}, false
-	}
-	return issueDate.AddDate(0, 0, days), true
-}
-
-func endOfMonth(t time.Time, monthsAhead int) time.Time {
-	return time.Date(t.Year(), t.Month()+time.Month(monthsAhead)+1, 0, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
 }
 
 // PauseStatus represents the pause state of a subscription

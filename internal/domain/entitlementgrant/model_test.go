@@ -241,3 +241,29 @@ func TestBuilder_MetadataIsDeepCopied(t *testing.T) {
 		t.Fatalf("builder shares the source grant's metadata map: %v", g.Metadata)
 	}
 }
+
+func TestRemainingBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		usage, quota, want int64
+	}{
+		{"unused", 0, 100, 100},
+		{"recovered", 80, 100, 20},
+		{"exhausted", 120, 100, 0},
+		{"zero quota", 0, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := baseGrant()
+			g.Usage = decimal.NewFromInt(tc.usage)
+			g.Quota = decimal.NewFromInt(tc.quota)
+			remaining, bounded := g.Remaining()
+			if !bounded || !remaining.Equal(decimal.NewFromInt(tc.want)) {
+				t.Fatalf("remaining = %s, bounded = %t; want %d", remaining, bounded, tc.want)
+			}
+			g.Unlimited = true
+			if _, bounded := g.Remaining(); bounded {
+				t.Fatal("unlimited grant must remain unbounded")
+			}
+		})
+	}
+}

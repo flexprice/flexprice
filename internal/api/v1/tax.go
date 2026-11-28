@@ -69,7 +69,7 @@ func (h *TaxHandler) CreateTaxRate(c *gin.Context) {
 func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 	taxRates, err := h.service.GetTaxRate(c.Request.Context(), c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.Error(err)
 		return
 	}
 	c.JSON(http.StatusOK, taxRates)

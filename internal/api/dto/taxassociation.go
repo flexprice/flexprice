@@ -4,12 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
 )
 
 type CreateTaxAssociationRequest struct {
@@ -72,7 +75,7 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 }
 
 func (r *CreateTaxAssociationRequest) ToTaxAssociation(ctx context.Context, taxRateID string) *taxassociation.TaxAssociation {
-	startDate := time.Now().UTC()
+	startDate := clock.Now()
 	if r.StartDate != nil {
 		startDate = r.StartDate.UTC()
 	}

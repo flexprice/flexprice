@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -13,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // SecretService defines the interface for secret business logic
@@ -123,6 +125,12 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 				"user_id": userID,
 			}).
 			Mark(ierr.ErrNotFound)
+	}
+
+	if user.Status != types.StatusPublished {
+		return nil, "", ierr.NewError("user is not active").
+			WithHint("API keys can only be created for active users").
+			Mark(ierr.ErrPermissionDenied)
 	}
 
 	// If service_account_id was explicitly provided, verify it's a service_account
@@ -371,10 +379,22 @@ func (s *secretService) VerifyAPIKey(ctx context.Context, apiKey string) (*secre
 	}
 
 	// Check if the secret has expired
-	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(time.Now()) {
+	if secretEntity.ExpiresAt != nil && secretEntity.ExpiresAt.Before(clock.Now()) {
 		return nil, ierr.NewError("secret has expired").
 			WithHint("Secret has expired").
 			Mark(ierr.ErrValidation)
+	}
+
+	if secretEntity.UserID != "" {
+		owner, err := s.userRepo.GetByID(types.SetTenantID(ctx, secretEntity.TenantID), secretEntity.UserID)
+		switch {
+		case ierr.IsNotFound(err):
+			s.logger.Info(ctx, "api key owner not found", "secret_id", secretEntity.ID, "tenant_id", secretEntity.TenantID)
+		case err != nil || owner.Status != types.StatusPublished:
+			return nil, ierr.NewError("API key owner is not active").
+				WithHint("Invalid API key").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Update last used timestamp

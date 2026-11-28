@@ -2,7 +2,11 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/refund"
@@ -11,8 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type refundRepository struct {
@@ -165,7 +167,7 @@ func (r *refundRepository) Update(ctx context.Context, ref *domainRefund.Refund)
 		SetNillableFailureReason(ref.FailureReason).
 		SetGatewayMetadata(ref.GatewayMetadata).
 		SetMetadata(ref.Metadata).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetNillableInitiatedAt(ref.InitiatedAt).
 		SetNillableSucceededAt(ref.SucceededAt).
 		SetNillableFailedAt(ref.FailedAt).
@@ -719,6 +721,9 @@ func (o RefundQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.
 		query = query.Where(refund.PaymentGateway(*f.Gateway))
 	}
 
+	if f.UpdatedAtGTE != nil {
+		query = query.Where(refund.UpdatedAtGTE(*f.UpdatedAtGTE))
+	}
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {
 			query = query.Where(refund.CreatedAtGTE(*f.TimeRangeFilter.StartTime))

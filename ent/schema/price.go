@@ -279,6 +279,14 @@ func (Price) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		// Set once, on create or on update while empty; the service enforces it.
+		field.String("product_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+
 		// Monotonic sequence stamped on every plan-price state change that
 		// subscriptions need to react to (create, end_date set, compat edit).
 		// Used by the plan-price sync to find prices changed since each
@@ -316,6 +324,7 @@ func (Price) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id"),
 		index.Fields("start_date", "end_date"),
 		index.Fields("tenant_id", "environment_id", "group_id"),
+		index.Fields("tenant_id", "environment_id", "product_id"),
 		// To get "what changed since the sub's last synced_price_sequence"
 		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "sequence").
 			Annotations(entsql.IndexWhere("((status)::text = 'published'::text)")),

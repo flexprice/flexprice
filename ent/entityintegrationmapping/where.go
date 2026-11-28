@@ -119,6 +119,11 @@ func ProviderEntityID(v string) predicate.EntityIntegrationMapping {
 	return predicate.EntityIntegrationMapping(sql.FieldEQ(FieldProviderEntityID, v))
 }
 
+// ConnectionID applies equality check predicate on the "connection_id" field. It's identical to ConnectionIDEQ.
+func ConnectionID(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldEQ(FieldConnectionID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.EntityIntegrationMapping {
 	return predicate.EntityIntegrationMapping(sql.FieldEQ(FieldTenantID, v))
@@ -812,6 +817,81 @@ func ProviderEntityIDEqualFold(v string) predicate.EntityIntegrationMapping {
 // ProviderEntityIDContainsFold applies the ContainsFold predicate on the "provider_entity_id" field.
 func ProviderEntityIDContainsFold(v string) predicate.EntityIntegrationMapping {
 	return predicate.EntityIntegrationMapping(sql.FieldContainsFold(FieldProviderEntityID, v))
+}
+
+// ConnectionIDEQ applies the EQ predicate on the "connection_id" field.
+func ConnectionIDEQ(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDNEQ applies the NEQ predicate on the "connection_id" field.
+func ConnectionIDNEQ(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldNEQ(FieldConnectionID, v))
+}
+
+// ConnectionIDIn applies the In predicate on the "connection_id" field.
+func ConnectionIDIn(vs ...string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDNotIn applies the NotIn predicate on the "connection_id" field.
+func ConnectionIDNotIn(vs ...string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldNotIn(FieldConnectionID, vs...))
+}
+
+// ConnectionIDGT applies the GT predicate on the "connection_id" field.
+func ConnectionIDGT(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldGT(FieldConnectionID, v))
+}
+
+// ConnectionIDGTE applies the GTE predicate on the "connection_id" field.
+func ConnectionIDGTE(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldGTE(FieldConnectionID, v))
+}
+
+// ConnectionIDLT applies the LT predicate on the "connection_id" field.
+func ConnectionIDLT(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldLT(FieldConnectionID, v))
+}
+
+// ConnectionIDLTE applies the LTE predicate on the "connection_id" field.
+func ConnectionIDLTE(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldLTE(FieldConnectionID, v))
+}
+
+// ConnectionIDContains applies the Contains predicate on the "connection_id" field.
+func ConnectionIDContains(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldContains(FieldConnectionID, v))
+}
+
+// ConnectionIDHasPrefix applies the HasPrefix predicate on the "connection_id" field.
+func ConnectionIDHasPrefix(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldHasPrefix(FieldConnectionID, v))
+}
+
+// ConnectionIDHasSuffix applies the HasSuffix predicate on the "connection_id" field.
+func ConnectionIDHasSuffix(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldHasSuffix(FieldConnectionID, v))
+}
+
+// ConnectionIDIsNil applies the IsNil predicate on the "connection_id" field.
+func ConnectionIDIsNil() predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldIsNull(FieldConnectionID))
+}
+
+// ConnectionIDNotNil applies the NotNil predicate on the "connection_id" field.
+func ConnectionIDNotNil() predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldNotNull(FieldConnectionID))
+}
+
+// ConnectionIDEqualFold applies the EqualFold predicate on the "connection_id" field.
+func ConnectionIDEqualFold(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldEqualFold(FieldConnectionID, v))
+}
+
+// ConnectionIDContainsFold applies the ContainsFold predicate on the "connection_id" field.
+func ConnectionIDContainsFold(v string) predicate.EntityIntegrationMapping {
+	return predicate.EntityIntegrationMapping(sql.FieldContainsFold(FieldConnectionID, v))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

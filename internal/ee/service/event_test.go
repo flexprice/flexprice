@@ -2,13 +2,19 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/Shopify/sarama"
+	pkgerrors "github.com/pkg/errors"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -54,7 +60,68 @@ func (s *EventServiceSuite) SetupTest() {
 		s.logger,
 		s.config,
 		nil, // tracing disabled in unit tests
+		nil, // no deletion window: these tests run no deletion
 	)
+}
+
+// deletionWindowFor mirrors the real window: one customer's deletion, tested
+// against the real period check rather than a reimplementation of it.
+type deletionWindowFor struct{ request *events.DeletionRequest }
+
+func (w deletionWindowFor) IsSuppressed(_ context.Context, externalCustomerID string, ts time.Time) bool {
+	if w.request.ExternalCustomerID != externalCustomerID {
+		return false
+	}
+	return w.request.IncludesTimestamp(ts)
+}
+
+// deletingCustomerWindow is a deletion running over March for one customer.
+func (s *EventServiceSuite) deletingCustomerWindow() deletionWindowFor {
+	return deletionWindowFor{request: &events.DeletionRequest{
+		ExternalCustomerID: "customer-deleting",
+		PeriodStart:        time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+		PeriodEnd:          time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+	}}
+}
+
+func (s *EventServiceSuite) serviceWithDeletionWindow() EventService {
+	return NewEventService(s.eventRepo, nil, s.publisher, s.logger, s.config, nil, s.deletingCustomerWindow())
+}
+
+func (s *EventServiceSuite) ingest(eventID, externalCustomerID string, ts time.Time) error {
+	return s.serviceWithDeletionWindow().CreateEvent(s.ctx, &dto.IngestEventRequest{
+		EventID:            eventID,
+		ExternalCustomerID: externalCustomerID,
+		EventName:          "api_request",
+		Timestamp:          ts,
+	})
+}
+
+// Refused at ingestion so it never reaches Kafka, where a held message would
+// block the partition for everyone sharing it.
+func (s *EventServiceSuite) TestCreateEvent_RefusedForTheDeletingCustomerInPeriod() {
+	err := s.ingest("evt_in_period", "customer-deleting", time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC))
+
+	s.Error(err)
+	s.False(s.publisher.HasEvent("evt_in_period"), "nothing may reach Kafka for that customer and period")
+}
+
+// The block is the deleted period only. The same customer keeps ingesting
+// everything outside it.
+func (s *EventServiceSuite) TestCreateEvent_AcceptedForTheDeletingCustomerOutsidePeriod() {
+	s.NoError(s.ingest("evt_after", "customer-deleting", time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)))
+	s.True(s.publisher.HasEvent("evt_after"), "period_end is exclusive, so this one is outside")
+
+	s.NoError(s.ingest("evt_before", "customer-deleting", time.Date(2026, 2, 28, 23, 59, 59, 0, time.UTC)))
+	s.True(s.publisher.HasEvent("evt_before"))
+}
+
+// The block is that one customer only. The rest of the tenant is untouched,
+// in the deleted period and outside it alike.
+func (s *EventServiceSuite) TestCreateEvent_AcceptedForAnotherCustomerOfTheSameTenant() {
+	s.NoError(s.ingest("evt_other", "customer-other", time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC)))
+
+	s.True(s.publisher.HasEvent("evt_other"), "another customer ingests normally mid-deletion")
 }
 
 func (s *EventServiceSuite) TearDownTest() {
@@ -66,6 +133,8 @@ func (s *EventServiceSuite) TestCreateEvent() {
 		name          string
 		input         *dto.IngestEventRequest
 		expectedError bool
+		publishErr    error
+		checkErr      func(error) bool
 		verify        func(input *dto.IngestEventRequest)
 	}{
 		{
@@ -123,16 +192,39 @@ func (s *EventServiceSuite) TestCreateEvent() {
 				s.False(s.eventRepo.HasEvent("test-2"), "Event should not be stored")
 			},
 		},
+		{
+			name:          "publish_failure_is_service_unavailable",
+			input:         publishFailureRequest("test-fail"),
+			expectedError: true,
+			publishErr:    errors.New("not the leader"),
+			checkErr:      ierr.IsServiceUnavailable,
+			verify:        func(*dto.IngestEventRequest) {},
+		},
+		{
+			name:          "oversized_message_is_validation_error",
+			input:         publishFailureRequest("test-big"),
+			expectedError: true,
+			publishErr:    pkgerrors.Wrap(sarama.ErrMessageSizeTooLarge, "cannot produce message"),
+			checkErr:      ierr.IsValidation,
+			verify:        func(*dto.IngestEventRequest) {},
+		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			err := s.service.CreateEvent(s.ctx, tc.input)
+			svc := s.service
+			if tc.publishErr != nil {
+				svc = NewEventService(s.eventRepo, nil, failingPublisher{tc.publishErr}, s.logger, s.config, nil, nil)
+			}
+			err := svc.CreateEvent(s.ctx, tc.input)
 
 			if tc.expectedError {
 				s.Error(err)
 			} else {
 				s.NoError(err)
+			}
+			if tc.checkErr != nil {
+				s.True(tc.checkErr(err), "unexpected error class: %v", err)
 			}
 
 			tc.verify(tc.input)
@@ -362,6 +454,7 @@ func (s *EventServiceSuite) TestGetUsageByMeter() {
 		s.logger,
 		s.config,
 		nil, // tracing disabled in unit tests
+		nil, // no deletion window: these tests run no deletion
 	)
 
 	// Setup test events
@@ -643,5 +736,86 @@ func (s *EventServiceSuite) TestGetEvents() {
 		s.NotNil(result)
 		s.Len(result.Events, 1)
 		s.Equal("evt-5", result.Events[0].ID) // Only the new event
+	})
+}
+
+type failingPublisher struct{ err error }
+
+func (f failingPublisher) Publish(context.Context, *events.Event) error { return f.err }
+
+func (f failingPublisher) PublishBatch(context.Context, []*events.Event) error { return f.err }
+
+func publishFailureRequest(id string) *dto.IngestEventRequest {
+	return &dto.IngestEventRequest{
+		EventID:            id,
+		ExternalCustomerID: "customer-1",
+		EventName:          "api_request",
+		Timestamp:          time.Now(),
+	}
+}
+
+// failOnIDPublisher fails listed IDs, records rest.
+type failOnIDPublisher struct {
+	failIDs   map[string]error
+	published []string
+}
+
+func (f *failOnIDPublisher) Publish(_ context.Context, e *events.Event) error {
+	if err, ok := f.failIDs[e.ID]; ok {
+		return err
+	}
+	f.published = append(f.published, e.ID)
+	return nil
+}
+
+func (f *failOnIDPublisher) PublishBatch(context.Context, []*events.Event) error { return nil }
+
+func (s *EventServiceSuite) TestBulkCreateEvents_PublishFailures() {
+	unavailable := errors.New("not the leader")
+	tooLarge := pkgerrors.Wrap(sarama.ErrMessageSizeTooLarge, "cannot produce message")
+
+	for _, bulkEnabled := range []bool{false, true} {
+		cfg := *s.config
+		cfg.Event.BulkPublishEnabled = bulkEnabled
+
+		s.Run(fmt.Sprintf("batched_%v_unavailable", bulkEnabled), func() {
+			svc := NewEventService(s.eventRepo, nil, failingPublisher{unavailable}, s.logger, &cfg, nil, nil)
+			err := svc.BulkCreateEvents(s.ctx, &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{publishFailureRequest("a")}})
+			s.Require().Error(err)
+			s.True(ierr.IsServiceUnavailable(err))
+		})
+
+		s.Run(fmt.Sprintf("batched_%v_oversized", bulkEnabled), func() {
+			svc := NewEventService(s.eventRepo, nil, failingPublisher{tooLarge}, s.logger, &cfg, nil, nil)
+			err := svc.BulkCreateEvents(s.ctx, &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{publishFailureRequest("a")}})
+			s.Require().Error(err)
+			s.True(ierr.IsValidation(err))
+		})
+	}
+
+	cfg := *s.config
+	cfg.Event.BulkPublishEnabled = false
+	reqs := func() *dto.BulkIngestEventRequest {
+		return &dto.BulkIngestEventRequest{Events: []*dto.IngestEventRequest{
+			publishFailureRequest("ok-1"), publishFailureRequest("bad"), publishFailureRequest("ok-2"),
+		}}
+	}
+
+	s.Run("per_event_continues_after_failure", func() {
+		pub := &failOnIDPublisher{failIDs: map[string]error{"bad": unavailable}}
+		svc := NewEventService(s.eventRepo, nil, pub, s.logger, &cfg, nil, nil)
+		err := svc.BulkCreateEvents(s.ctx, reqs())
+		s.Require().Error(err)
+		s.True(ierr.IsServiceUnavailable(err))
+		s.Equal([]string{"ok-1", "ok-2"}, pub.published)
+	})
+
+	s.Run("per_event_all_oversized_is_validation", func() {
+		pub := &failOnIDPublisher{failIDs: map[string]error{"bad": tooLarge}}
+		svc := NewEventService(s.eventRepo, nil, pub, s.logger, &cfg, nil, nil)
+		err := svc.BulkCreateEvents(s.ctx, reqs())
+		s.Require().Error(err)
+		s.True(ierr.IsValidation(err))
+		s.Equal([]string{"ok-1", "ok-2"}, pub.published)
 	})
 }

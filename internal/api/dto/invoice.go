@@ -2,15 +2,19 @@ package dto
 
 import (
 	"context"
+	"github.com/flexprice/flexprice/internal/domain/payment"
 	"strings"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // InvoiceCoupon represents a coupon to be applied at the invoice level.
@@ -316,10 +320,7 @@ func (r *CreateDraftInvoiceRequest) ToDraftInvoice(ctx context.Context) (*invoic
 
 	baseModel := types.GetDefaultBaseModel(ctx)
 
-	issueDate := r.IssueDate
-	if issueDate == nil {
-		issueDate = &baseModel.CreatedAt
-	}
+	issueDate := lo.CoalesceOrEmpty(r.IssueDate, invoice.IssueDateFor(r.BillingReason, r.PeriodStart, r.PeriodEnd), &baseModel.CreatedAt)
 
 	return &invoice.Invoice{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
@@ -534,13 +535,23 @@ func (r *CreateInvoiceRequest) ValidateForCheckout() error {
 	}
 
 	// A past due_date fires invoice.payment.overdue against a draft nobody could pay yet.
-	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+	if r.DueDate != nil && r.DueDate.Before(clock.Now()) {
 		return ierr.NewError("due_date must be in the future when checkout is provided").
 			WithHint("A gated invoice cannot be overdue before its payment link expires").
 			WithReportableDetails(map[string]any{"due_date": r.DueDate}).
 			Mark(ierr.ErrValidation)
 	}
 
+	return r.validateIssueDate()
+}
+
+func (r *CreateInvoiceRequest) validateIssueDate() error {
+	if r.IssueDate != nil && r.IssueDate.After(clock.Now()) {
+		return ierr.NewError("issue_date cannot be in the future").
+			WithHint("Issue date cannot be in the future").
+			WithReportableDetails(map[string]any{"issue_date": r.IssueDate}).
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
@@ -550,6 +561,10 @@ func (r *CreateInvoiceRequest) Validate() error {
 	}
 
 	if err := r.InvoiceType.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.validateIssueDate(); err != nil {
 		return err
 	}
 
@@ -617,7 +632,7 @@ func (r *CreateInvoiceRequest) Validate() error {
 		// Round both values to currency precision before comparing to avoid floating-point accumulation errors
 		roundedTotal := types.RoundToCurrencyPrecision(totalAmount, r.Currency)
 		roundedAmountDue := types.RoundToCurrencyPrecision(r.AmountDue, r.Currency)
-		if !roundedTotal.Equal(roundedAmountDue) {
+		if !decimal.Max(roundedTotal, decimal.Zero).Equal(roundedAmountDue) {
 			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", roundedTotal.String(), roundedAmountDue.String()).Mark(ierr.ErrValidation)
 		}
 	}
@@ -677,8 +692,8 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		InvoiceType:     r.InvoiceType,
 		Currency:        strings.ToLower(r.Currency),
 		AmountDue:       r.AmountDue,
-		Total:           r.Total,
-		Subtotal:        r.Subtotal,
+		Total:           decimal.Max(r.Total, decimal.Zero),
+		Subtotal:        decimal.Max(r.Subtotal, decimal.Zero),
 		Description:     r.Description,
 		DueDate:         r.DueDate,
 		PeriodStart:     r.PeriodStart,
@@ -874,6 +889,12 @@ type CreateInvoiceLineItemRequest struct {
 	// sub_line_item_id links this line item to the subscription_line_item that generated it.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
 
+	// CommitmentID links this line item to the commitment it bills; server-set only.
+	CommitmentID *string `json:"-"`
+
+	// BillingInstalmentID links this line item to the instalment it bills; server-set only.
+	BillingInstalmentID *string `json:"-"`
+
 	// subscription_id overrides the invoice's subscription_id for this specific line item.
 	// Used for grouped invoicing where child line items belong to child subscriptions.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
@@ -888,9 +909,9 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 	}
 
 	// Amount may be negative on any invoice type: a credit line offsets charges on the same
-	// document (plan change, multi-addon). Non-negativity is enforced on the invoice aggregates.
+	// document (plan change, multi-addon). Usage quantities may also be signed.
 
-	if r.Quantity.IsNegative() {
+	if r.Quantity.IsNegative() && lo.FromPtr(r.PriceType) != string(types.PRICE_TYPE_USAGE) {
 		return ierr.NewError("quantity must be non-negative").
 			WithHint("Quantity cannot be negative").
 			Mark(ierr.ErrValidation)
@@ -988,6 +1009,8 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		LineItemDiscount:            lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:        lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 		SubscriptionLineItemID:      r.SubscriptionLineItemID,
+		CommitmentID:                r.CommitmentID,
+		BillingInstalmentID:         r.BillingInstalmentID,
 		AdjustedEntitlementQuantity: r.AdjustedEntitlementQuantity,
 	}
 
@@ -1073,7 +1096,7 @@ func (r *UpdateInvoiceRequest) Validate() error {
 	}
 
 	// Validate that the due date is not in the past (optional business rule)
-	if r.DueDate != nil && r.DueDate.Before(time.Now().UTC()) {
+	if r.DueDate != nil && r.DueDate.Before(clock.Now()) {
 		return ierr.NewError("due_date cannot be in the past").
 			WithHint("Due date must be in the future").
 			Mark(ierr.ErrValidation)
@@ -1267,6 +1290,30 @@ type InvoiceResponse struct {
 
 	// checkout_session is the payment session gating this invoice, when it was created with checkout
 	CheckoutSession *CheckoutSessionResponse `json:"checkout_session,omitempty"`
+
+	// in_flight_charge is a saved-method debit submitted for this invoice that the gateway has not settled yet
+	InFlightCharge *InFlightCharge `json:"in_flight_charge,omitempty"`
+
+	// linked_wallet_transactions are the wallet credits this invoice pays for; pending ones are released when it is paid
+	LinkedWalletTransactions []*LinkedWalletTransaction `json:"linked_wallet_transactions,omitempty"`
+}
+
+// LinkedWalletTransaction is a wallet credit transaction paid for by an invoice.
+type LinkedWalletTransaction struct {
+	ID                string                  `json:"id"`
+	WalletID          string                  `json:"wallet_id"`
+	CreditAmount      decimal.Decimal         `json:"credit_amount" swaggertype:"string"`
+	TransactionStatus types.TransactionStatus `json:"transaction_status"`
+	TransactionReason types.TransactionReason `json:"transaction_reason"`
+}
+
+// InFlightCharge is a saved-method debit still waiting on the gateway.
+type InFlightCharge struct {
+	PaymentID         string                  `json:"payment_id"`
+	PaymentMethodType types.PaymentMethodType `json:"payment_method_type"`
+	PaymentGateway    string                  `json:"payment_gateway,omitempty"`
+	PaymentStatus     types.PaymentStatus     `json:"payment_status"`
+	Amount            decimal.Decimal         `json:"amount" swaggertype:"string"`
 }
 
 // SourceUsageItem represents the usage breakdown for a specific source within a line item
@@ -1375,6 +1422,17 @@ func (r *InvoiceResponse) WithHostedInvoiceURL(url string) *InvoiceResponse {
 }
 
 // WithCustomer adds customer information to the invoice response
+func (r *InvoiceResponse) WithInFlightCharge(p *payment.Payment) *InvoiceResponse {
+	r.InFlightCharge = &InFlightCharge{
+		PaymentID:         p.ID,
+		PaymentMethodType: p.PaymentMethodType,
+		PaymentGateway:    lo.FromPtr(p.PaymentGateway),
+		PaymentStatus:     p.PaymentStatus,
+		Amount:            p.Amount,
+	}
+	return r
+}
+
 func (r *InvoiceResponse) WithCustomer(customer *CustomerResponse) *InvoiceResponse {
 	r.Customer = customer
 	return r

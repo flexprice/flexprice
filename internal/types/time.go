@@ -65,3 +65,11 @@ func LatestOfPtr(a, b *time.Time) *time.Time {
 	}
 	return lo.ToPtr(LatestOf(*a, *b))
 }
+
+// WholeSecondPtr drops t's fraction of a second; nil stays nil.
+func WholeSecondPtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	return lo.ToPtr(t.Truncate(time.Second))
+}

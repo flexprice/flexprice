@@ -158,6 +158,9 @@ clickhouse:
   password: flexprice123
   database: flexprice
   max_memory_usage: 50
+  meter_usage_optimize:
+    enabled: false # FLEXPRICE_CLICKHOUSE_METER_USAGE_OPTIMIZE_ENABLED
+    lookback_days: 7 # FLEXPRICE_CLICKHOUSE_METER_USAGE_OPTIMIZE_LOOKBACK_DAYS
   # Per-process connection pool (0 would fall back to clickhouse-go's defaults: idle 5,
   # open idle+5 = 10 — a hidden 10-query cap per pod/task that bottlenecks event ingest,
   # since consumers doing one INSERT per event are bounded by max_open_conns / insert latency).
@@ -175,10 +178,13 @@ clickhouse:
 
 reports:
   # Empty database or username disables reports.
+  address: ""
   # Login must allow setting changes.
   database: ""
   # Empty falls back to database.
   usage_database: ""
+  # Read usage from the events clickhouse, not reports.
+  usage_on_events_clickhouse: false
   username: ""
   password: ""
   max_execution_seconds: 10
@@ -410,7 +416,10 @@ billing:
   region: ""
   api_host: ""
   api_key: ""
-  plan_id: ""
+  # The plan every new tenant's trial starts on; must be one of plan_ids.
+  default_plan_id: ""
+  # Every plan a tenant may buy at checkout, the default included (FLEXPRICE_BILLING_PLAN_IDS=plan_a,plan_b)
+  plan_ids: []
   dashboard_url: ""
   payment_provider: "stripe"
   usage_lookback_hours: 6
@@ -565,6 +574,9 @@ usage_alerts:
   spend_alerts_enabled: true
   entitlement_alerts_enabled: true
 
+entitlement_grants:
+  refresh_on_read: true # entitlement reads with refresh_grants=true evaluate grants first
+
 wallet_balance_alert:
   enabled: true
   topic: "wallet_alert"
@@ -596,11 +608,17 @@ whop:
 
 email:
   enabled: false # Set to true to enable email sending (override with FLEXPRICE_EMAIL_ENABLED=true)
-  resend_api_key: "" # Resend API key (set via FLEXPRICE_EMAIL_RESEND_API_KEY environment variable)
   from_address: "" # Default from address for emails (MUST be verified in Resend)
   reply_to: "" # Reply-to address for emails
   calendar_url: "" # Calendar booking URL for onboarding
   zapier_webhook_url: "" # Zapier webhook URL for user signup (set via FLEXPRICE_EMAIL_ZAPIER_WEBHOOK_URL environment variable)
+  provider: "" # resend | local; empty turns customer emails off (local writes them to disk, local runs only)
+  resend:
+    api_key: "" # FLEXPRICE_EMAIL_RESEND_API_KEY
+    webhook_secret: "" # Signing secret of this region's Resend webhook (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)
+  sender_domain: "mail.flexprice.io"
+  sender_local_part: "invoices"
+  region_tag: "" # us | ca | in | staging; delivery events tagged with another region are dropped
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file
@@ -658,6 +676,12 @@ integration_events:
   consumer_group: "integration-events-consumer"
   rate_limit: 10
 
+# Auto-sends customer emails from finalized-invoice events on webhook.topic; also needs email.provider set.
+email_events:
+  enabled: true
+  consumer_group: "email-events-consumer"
+  rate_limit: 10
+
 onboarding_events:
   enabled: true
   topic: "onboarding_events"
@@ -672,6 +696,10 @@ checkout:
 # Hosted invoice page base; links are this value, a slash and the token. Empty returns no Flexprice link.
 hosted_invoice:
   base_url: ""
+
+# Off rejects enabling billing entities for any environment (FLEXPRICE_BILLING_ENTITIES_ENABLED).
+billing_entities:
+  enabled: false
 
 onboarding:
   default_tenant_name: "Flexprice"

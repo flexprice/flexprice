@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -63,10 +65,33 @@ type UserResponse struct {
 	Tenant   *TenantResponse   `json:"tenant"`
 }
 
-// CreateUserResponse is the response for POST /users: same shape for both types; password only when type=user.
+// CreateUserResponse is the response for POST /users: same shape for both types.
+// An invited user gets a password on Supabase deployments and an invite link token on self-hosted ones.
 type CreateUserResponse struct {
 	*UserResponse
 	Password string `json:"password,omitempty"`
+	// Self-hosted only, for the dashboard's invite link; kept out of the public API spec.
+	InviteToken     string     `json:"invite_token,omitempty" swaggerignore:"true"`
+	InviteExpiresAt *time.Time `json:"invite_expires_at,omitempty" swaggerignore:"true"`
+}
+
+// ChangePasswordRequest sets a new password for the signed-in user.
+type ChangePasswordRequest struct {
+	Password string `json:"password" binding:"required,min=8" validate:"required,min=8"`
+}
+
+func (r *ChangePasswordRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return validatePasswordLength(r.Password)
+}
+
+// PasswordLinkResponse is a one-time link that lets a user set their own password.
+type PasswordLinkResponse struct {
+	Token     string    `json:"token"`
+	Purpose   string    `json:"purpose"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 func NewUserResponse(u *user.User, tenant *tenant.Tenant) *UserResponse {

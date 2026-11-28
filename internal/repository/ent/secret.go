@@ -2,7 +2,8 @@ package ent
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/secret"
@@ -196,7 +197,7 @@ func (r *secretRepository) UpdateLastUsed(ctx context.Context, id string) error 
 	// Update without tenant ID check since this is called during API key verification
 	// where we might not have the tenant ID in the context yet
 	updated, err := client.Secret.UpdateOneID(id).
-		SetLastUsedAt(time.Now().UTC()).
+		SetLastUsedAt(clock.Now()).
 		Save(ctx)
 
 	if err != nil {
@@ -310,6 +311,37 @@ func (r *secretRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *secretRepository) RevokeByUserID(ctx context.Context, userID string) ([]*domainSecret.Secret, error) {
+	revoked, err := r.client.Writer(ctx).Secret.Update().
+		Where(
+			secret.UserID(userID),
+			secret.TenantID(types.GetTenantID(ctx)),
+			secret.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusDeleted)).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetUpdatedAt(clock.Now()).
+		SaveReturning(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to revoke user API keys").
+			WithReportableDetails(map[string]interface{}{"user_id": userID}).
+			Mark(ierr.ErrDatabase)
+	}
+	secrets := domainSecret.FromEntList(revoked)
+	r.invalidateCache(ctx, secrets)
+	return secrets, nil
+}
+
+// invalidateCache evicts the secrets once the surrounding transaction commits.
+func (r *secretRepository) invalidateCache(ctx context.Context, secrets []*domainSecret.Secret) {
+	afterCommit(ctx, func() {
+		for _, s := range secrets {
+			r.DeleteCache(ctx, s.Value)
+		}
+	})
+}
+
 type SecretQuery = *ent.SecretQuery
 
 type SecretQueryOptions struct{}
@@ -419,16 +451,14 @@ func (r *secretRepository) SetCache(ctx context.Context, secret *domainSecret.Se
 		"secret_id": secret.ID,
 	})
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, secret.Value)
+	cacheKey := secretCacheKey(secret.Value)
 	r.cache.ForceCacheSet(ctx, cacheKey, secret, cache.ExpiryDefaultInMemory)
 }
 
 func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecret.Secret {
-	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", map[string]interface{}{
-		"secret_id": key,
-	})
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "get", nil)
 	defer cache.FinishSpan(span)
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	value, found := r.cache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
@@ -441,11 +471,14 @@ func (r *secretRepository) GetCache(ctx context.Context, key string) *domainSecr
 }
 
 func (r *secretRepository) DeleteCache(ctx context.Context, key string) {
-	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", map[string]interface{}{
-		"secret_id": key,
-	})
+	span, ctx := cache.StartInMemoryCacheSpan(ctx, "secret", "delete", nil)
 	defer cache.FinishSpan(span)
 
-	cacheKey := cache.GenerateKey(ctx, cache.PrefixSecret, key)
+	cacheKey := secretCacheKey(key)
 	r.cache.ForceCacheDelete(ctx, cacheKey)
+}
+
+// Auth lookup runs without tenant.
+func secretCacheKey(value string) string {
+	return cache.GenerateKey(context.Background(), cache.PrefixSecret, value)
 }

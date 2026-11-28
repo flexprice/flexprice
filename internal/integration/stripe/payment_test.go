@@ -27,7 +27,7 @@ func TestBuildSyncedLineItems_HappyPath(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -54,7 +54,7 @@ func TestBuildSyncedLineItems_MissingPriceIDFallsBackForThatItem(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -76,7 +76,7 @@ func TestBuildSyncedLineItems_MissingPriceIDFallsBackForThatItem(t *testing.T) {
 func TestBuildSyncedLineItems_AllMissingPriceIDReturnsNilForFullFallback(t *testing.T) {
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, &syncTestMappingRepo{}, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), &syncTestMappingRepo{}, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -98,7 +98,7 @@ func TestBuildSyncedLineItems_DuplicatePriceIDAcrossLineItems(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -119,7 +119,7 @@ func TestBuildSyncedLineItems_SyncFailurePropagates(t *testing.T) {
 	mappingRepo := &syncTestMappingRepo{listErr: errors.New("db unavailable")}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -140,7 +140,7 @@ func TestBuildSyncedLineItems_ZeroAmountLineItemsSkipped(t *testing.T) {
 	}
 	s := &PaymentService{
 		logger:       logger.NewNoopLogger(),
-		priceSyncSvc: NewStripePriceSyncService(nil, mappingRepo, nil, logger.NewNoopLogger()),
+		priceSyncSvc: NewStripePriceSyncService(testClient(), mappingRepo, nil, logger.NewNoopLogger()),
 	}
 	invoiceResp := &dto.InvoiceResponse{
 		LineItems: []*dto.InvoiceLineItemResponse{
@@ -287,7 +287,11 @@ func (f *checkoutTestPaymentService) UpdatePayment(_ context.Context, _ string, 
 	return &dto.PaymentResponse{}, nil
 }
 
-func (f *checkoutTestPaymentService) GetPayment(_ context.Context, _ string) (*dto.PaymentResponse, error) {
+func (f *checkoutTestPaymentService) RecordAttempt(context.Context, string, dto.RecordAttemptRequest) error {
+	return nil
+}
+
+func (f *checkoutTestPaymentService) GetPayment(_ context.Context, _ dto.GetPaymentRequest) (*dto.PaymentResponse, error) {
 	return f.payment, nil
 }
 
@@ -395,6 +399,7 @@ func TestCreateExternalPaymentRecord(t *testing.T) {
 	}
 }
 
+// Booking back a Stripe payment (invoice_payment.paid / payment_intent.* for synced invoices).
 func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -404,6 +409,7 @@ func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
 	}{
 		{"USD control", 1234, "usd", "12.34"},
 		{"JPY zero-decimal", 12000, "jpy", "12000"},
+		{"KRW zero-decimal", 50000, "krw", "50000"},
 		{"KWD three-decimal", 12345, "kwd", "12.345"},
 	}
 	for _, tc := range cases {
@@ -418,4 +424,3 @@ func TestCreateExternalPaymentRecord_SmallestUnit(t *testing.T) {
 		})
 	}
 }
-

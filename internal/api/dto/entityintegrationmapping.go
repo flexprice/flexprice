@@ -15,6 +15,8 @@ type CreateEntityIntegrationMappingRequest struct {
 	ProviderType     string                      `json:"provider_type" validate:"required,max=50"`
 	ProviderEntityID string                      `json:"provider_entity_id" validate:"required,max=255"`
 	Metadata         map[string]interface{}      `json:"metadata,omitempty"`
+
+	ConnectionID *string `json:"-"`
 }
 
 type UpdateEntityIntegrationMappingRequest struct {
@@ -80,6 +82,7 @@ func (r *CreateEntityIntegrationMappingRequest) ToEntityIntegrationMapping(ctx c
 		ProviderEntityID: r.ProviderEntityID,
 		Metadata:         r.Metadata,
 		EnvironmentID:    types.GetEnvironmentID(ctx),
+		ConnectionID:     r.ConnectionID,
 		BaseModel:        types.GetDefaultBaseModel(ctx),
 	}
 }

@@ -11,6 +11,8 @@
  *    FeatureType instead of TypesFeatureType.
  * 4. In swagger-3-0.json only: patches string fields with timestamp-like names (created_at, updated_at,
  *    etc.) with format: date-time so the spec has ≥150 date-time fields for SDK generation.
+ * 5. In swagger-3-0.json only: orders paths by tag so the docs sidebar lists the API groups A to Z.
+ * 6. In swagger-3-0.json only: marks properties deprecated where their replacement exists (DEPRECATED_PROPERTIES).
  *
  * Usage: node scripts/fix_swagger_internal_types.mjs [--spec path/to/swagger-3-0.json]
  */
@@ -172,9 +174,30 @@ function main() {
     }
   }
 
+  // 4c. Mark properties deprecated where their replacement exists; swag cannot deprecate a field.
+  //     OpenAPI 3.0 ignores keywords beside $ref, so a $ref property is wrapped in allOf first.
+  const DEPRECATED_PROPERTIES = [{ property: 'payment_terms', replacedBy: 'payment_terms_type' }];
+  let deprecatedCount = 0;
+  for (const schema of Object.values(schemas)) {
+    const props = schema?.properties;
+    if (!props) continue;
+    for (const { property, replacedBy } of DEPRECATED_PROPERTIES) {
+      if (!props[property] || !props[replacedBy]) continue;
+      const { $ref, ...rest } = props[property];
+      props[property] = $ref ? { ...rest, allOf: [{ $ref }], deprecated: true } : { ...rest, deprecated: true };
+      deprecatedCount++;
+    }
+  }
+
+  // 5. Mintlify orders API groups by first appearance; the stable sort keeps each tag's own path order.
+  const HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'patch', 'head', 'options', 'trace']);
+  const tagOf = (item) => Object.entries(item).find(([method]) => HTTP_METHODS.has(method))?.[1]?.tags?.[0] ?? '';
+  spec.paths = Object.fromEntries(Object.entries(spec.paths).sort(([, a], [, b]) => tagOf(a).localeCompare(tagOf(b))));
+
   writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n', 'utf8');
   console.log(`Added x-speakeasy-name-override to ${count} prefixed schemas in swagger-3-0.json.`);
   console.log(`Patched ${dtCount} timestamp fields with format: date-time in swagger-3-0.json.`);
+  console.log(`Marked ${deprecatedCount} replaced properties deprecated in swagger-3-0.json.`);
   if (stripped > 0) {
     console.log(`Stripped incorrect format: date-time from ${stripped} billing_period field(s).`);
   }

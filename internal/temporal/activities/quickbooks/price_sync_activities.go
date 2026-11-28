@@ -3,8 +3,10 @@ package activities
 import (
 	"context"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -17,6 +19,7 @@ const ActivityPrefix = "QuickBooksPriceSyncActivities"
 // QuickBooksPriceSyncActivities contains all QuickBooks price sync activities
 type QuickBooksPriceSyncActivities struct {
 	integrationFactory *integration.Factory
+	connectionRepo     connection.Repository
 	planRepo           plan.Repository
 	priceRepo          price.Repository
 	logger             *logger.Logger
@@ -25,12 +28,14 @@ type QuickBooksPriceSyncActivities struct {
 // NewQuickBooksPriceSyncActivities creates a new QuickBooksPriceSyncActivities instance
 func NewQuickBooksPriceSyncActivities(
 	integrationFactory *integration.Factory,
+	connectionRepo connection.Repository,
 	planRepo plan.Repository,
 	priceRepo price.Repository,
 	logger *logger.Logger,
 ) *QuickBooksPriceSyncActivities {
 	return &QuickBooksPriceSyncActivities{
 		integrationFactory: integrationFactory,
+		connectionRepo:     connectionRepo,
 		planRepo:           planRepo,
 		priceRepo:          priceRepo,
 		logger:             logger,
@@ -73,37 +78,6 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	// Get QuickBooks integration
-	quickbooksIntegration, err := a.integrationFactory.GetQuickBooksIntegration(ctx)
-	if err != nil {
-		if ierr.IsNotFound(err) {
-			a.logger.Debug(ctx, "QuickBooks connection not configured",
-				"price_id", input.PriceID)
-			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
-			return nil, temporal.NewNonRetryableApplicationError(
-				"QuickBooks connection not configured",
-				ierr.ErrConnectionNotFound,
-				ierr.NewError("QuickBooks connection not configured").
-					WithHint("QuickBooks connection must be configured before syncing prices").
-					WithReportableDetails(map[string]interface{}{
-						"price_id": input.PriceID,
-						"plan_id":  input.PlanID,
-					}).
-					Mark(ierr.ErrNotFound),
-			)
-		}
-		a.logger.Error(ctx, "SyncPriceToQuickBooks activity failed to get QuickBooks integration",
-			"error", err,
-			"price_id", input.PriceID,
-			"plan_id", input.PlanID,
-			"tenant_id", input.TenantID,
-			"environment_id", input.EnvironmentID,
-		)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get QuickBooks integration").
-			Mark(ierr.ErrInternal)
-	}
-
 	// Get plan
 	plan, err := a.planRepo.Get(ctx, input.PlanID)
 	if err != nil {
@@ -140,12 +114,41 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Sync to QuickBooks
-	if err := quickbooksIntegration.ItemSyncSvc.SyncPriceToQuickBooks(ctx, plan, priceModel); err != nil {
-		a.logger.Error(ctx, "failed to sync price to QuickBooks",
-			"price_id", input.PriceID,
-			"plan_id", input.PlanID,
-			"error", err)
+	// Sync to every QuickBooks connection; one failing does not stop the others.
+	synced := false
+	err = service.ForEachConnection(ctx, a.connectionRepo, types.SecretProviderQuickBooks, func(ctx context.Context, conn *connection.Connection) error {
+		synced = true
+		quickbooksIntegration, err := a.integrationFactory.GetQuickBooksIntegration(ctx)
+		if err != nil {
+			return err
+		}
+		if err := quickbooksIntegration.ItemSyncSvc.SyncPriceToQuickBooks(ctx, plan, priceModel); err != nil {
+			a.logger.Error(ctx, "failed to sync price to QuickBooks",
+				"price_id", input.PriceID,
+				"plan_id", input.PlanID,
+				"connection_id", conn.ID,
+				"error", err)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		if !synced && ierr.IsNotFound(err) {
+			a.logger.Debug(ctx, "QuickBooks connection not configured",
+				"price_id", input.PriceID)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return nil, temporal.NewNonRetryableApplicationError(
+				"QuickBooks connection not configured",
+				ierr.ErrConnectionNotFound,
+				ierr.NewError("QuickBooks connection not configured").
+					WithHint("QuickBooks connection must be configured before syncing prices").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": input.PriceID,
+						"plan_id":  input.PlanID,
+					}).
+					Mark(ierr.ErrNotFound),
+			)
+		}
 		// Return the actual error so Temporal marks the workflow as FAILED
 		return nil, ierr.WithError(err).
 			WithHint("Failed to sync price to QuickBooks").

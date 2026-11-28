@@ -2,6 +2,9 @@ package interceptor
 
 import (
 	"testing"
+
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestToSnakeCase(t *testing.T) {
@@ -44,5 +47,22 @@ func TestToSnakeCase(t *testing.T) {
 				t.Errorf("toSnakeCase(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestExtractWorkflowContext_CreditNote(t *testing.T) {
+	input := models.ZohoBooksCreditNoteSyncWorkflowInput{
+		CreditNoteID:  "cn_123",
+		TenantID:      "tenant_1",
+		EnvironmentID: "env_1",
+	}
+
+	for _, arg := range []interface{}{input, &input} {
+		tenantID, environmentID, _, entity, entityID, metadata := extractWorkflowContext([]interface{}{arg})
+		assert.Equal(t, "tenant_1", tenantID)
+		assert.Equal(t, "env_1", environmentID)
+		assert.Equal(t, "credit_note", entity)
+		assert.Equal(t, "cn_123", entityID)
+		assert.NotContains(t, metadata, "credit_note_id")
 	}
 }

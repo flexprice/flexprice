@@ -34,7 +34,7 @@ Gin HTTP handlers: deserialize requests, validate input, call service layer, ser
 - Extract body: `c.ShouldBindJSON(&req)` → return 400 on error.
 - Extract path params: `c.Param("id")`.
 - Call service: `h.invoiceService.SomeMethod(ctx, ...)`.
-- On error: `c.JSON(http.StatusXxx, gin.H{"error": err.Error()})` — use `ierr` package for typed errors.
+- On error: `c.Error(err); return` — the error middleware renders it. Wrap bind errors with `ierr.WithError(err).WithHint(...).Mark(ierr.ErrValidation)`. Never put `err.Error()` in a response body.
 - On success: `c.JSON(http.StatusOK, response)`.
 - Swagger annotations required on every handler; include `@x-scope` for non-default scopes.
 

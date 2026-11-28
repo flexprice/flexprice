@@ -133,6 +133,15 @@ func (h *EnvironmentHandler) CloneEnvironment(c *gin.Context) {
 		return
 	}
 
+	cloneEnvIDs := []string{sourceEnvID}
+	if req.TargetEnvironmentID != "" {
+		cloneEnvIDs = append(cloneEnvIDs, req.TargetEnvironmentID)
+	}
+	if err := h.service.CheckCloneAllowed(c.Request.Context(), cloneEnvIDs...); err != nil {
+		c.Error(err)
+		return
+	}
+
 	var targetEnvID string
 
 	if req.TargetEnvironmentID != "" {

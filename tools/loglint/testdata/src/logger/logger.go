@@ -41,3 +41,10 @@ func Event(entity, action string) []any {
 func Entity(name, id string) []any {
 	return []any{name + "_id", id}
 }
+
+// L and GetLogger exist only so the LL002 fixtures type-check; LL002 bans both.
+var L = &zapLogger{}
+
+func GetLogger() ILogger {
+	return L
+}

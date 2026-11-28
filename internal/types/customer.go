@@ -19,6 +19,9 @@ type CustomerFilter struct {
 	ExternalIDs []string           `json:"external_ids,omitempty" form:"external_ids" validate:"omitempty"`
 	ExternalID  string             `json:"external_id,omitempty" form:"external_id" validate:"omitempty"`
 	Email       string             `json:"email,omitempty" form:"email" validate:"omitempty,email"`
+
+	// billing_entity_id filters by the customer's billing entity
+	BillingEntityID string `json:"billing_entity_id,omitempty" form:"billing_entity_id"`
 }
 
 // NewCustomerFilter creates a new CustomerFilter with default values
@@ -163,4 +166,16 @@ func ValidateCustomerID(id string) error {
 // ValidateExternalCustomerID validates the external customer id
 func ValidateExternalCustomerID(id string) error {
 	return validateID(id, "external customer id")
+}
+
+// EmailType names a kind of email a customer's contact person can be responsible for.
+type EmailType string
+
+const (
+	EmailTypeInvoice                EmailType = "invoice"
+	EmailTypeInvoicePaymentReminder EmailType = "invoice_payment_reminder"
+)
+
+func (t EmailType) Validate() error {
+	return validateEnum("email_types", t, []EmailType{EmailTypeInvoice, EmailTypeInvoicePaymentReminder})
 }

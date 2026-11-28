@@ -69,6 +69,8 @@ const (
 	FieldRecordedAt = "recorded_at"
 	// FieldErrorMessage holds the string denoting the error_message field in the database.
 	FieldErrorMessage = "error_message"
+	// FieldConnectionID holds the string denoting the connection_id field in the database.
+	FieldConnectionID = "connection_id"
 	// EdgeAttempts holds the string denoting the attempts edge name in mutations.
 	EdgeAttempts = "attempts"
 	// Table holds the table name of the payment in the database.
@@ -112,6 +114,7 @@ var Columns = []string{
 	FieldVoidedAt,
 	FieldRecordedAt,
 	FieldErrorMessage,
+	FieldConnectionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -284,6 +287,11 @@ func ByRecordedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByErrorMessage orders the results by the error_message field.
 func ByErrorMessage(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldErrorMessage, opts...).ToFunc()
+}
+
+// ByConnectionID orders the results by the connection_id field.
+func ByConnectionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConnectionID, opts...).ToFunc()
 }
 
 // ByAttemptsCount orders the results by attempts count.

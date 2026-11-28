@@ -9,13 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/oklog/ulid/v2"
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainActivity "github.com/flexprice/flexprice/internal/domain/activity"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/oklog/ulid/v2"
-	"github.com/samber/lo"
 )
 
 const (
@@ -45,7 +48,7 @@ func activityValidation(format string, args ...any) error {
 }
 
 func (s *activityService) List(ctx context.Context, req *dto.ListActivityRequest) (*dto.ListActivityResponse, error) {
-	now := time.Now().UTC()
+	now := clock.Now()
 	query, limit, err := s.buildQuery(req, now)
 	if err != nil {
 		return nil, err

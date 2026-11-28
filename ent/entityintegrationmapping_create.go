@@ -134,6 +134,20 @@ func (_c *EntityIntegrationMappingCreate) SetProviderEntityID(v string) *EntityI
 	return _c
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (_c *EntityIntegrationMappingCreate) SetConnectionID(v string) *EntityIntegrationMappingCreate {
+	_c.mutation.SetConnectionID(v)
+	return _c
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_c *EntityIntegrationMappingCreate) SetNillableConnectionID(v *string) *EntityIntegrationMappingCreate {
+	if v != nil {
+		_c.SetConnectionID(*v)
+	}
+	return _c
+}
+
 // SetMetadata sets the "metadata" field.
 func (_c *EntityIntegrationMappingCreate) SetMetadata(v map[string]interface{}) *EntityIntegrationMappingCreate {
 	_c.mutation.SetMetadata(v)
@@ -328,6 +342,10 @@ func (_c *EntityIntegrationMappingCreate) createSpec() (*EntityIntegrationMappin
 	if value, ok := _c.mutation.ProviderEntityID(); ok {
 		_spec.SetField(entityintegrationmapping.FieldProviderEntityID, field.TypeString, value)
 		_node.ProviderEntityID = value
+	}
+	if value, ok := _c.mutation.ConnectionID(); ok {
+		_spec.SetField(entityintegrationmapping.FieldConnectionID, field.TypeString, value)
+		_node.ConnectionID = &value
 	}
 	if value, ok := _c.mutation.Metadata(); ok {
 		_spec.SetField(entityintegrationmapping.FieldMetadata, field.TypeJSON, value)

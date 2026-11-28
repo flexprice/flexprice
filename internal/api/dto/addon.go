@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -89,7 +91,7 @@ type AddAddonToSubscriptionRequest struct {
 	ChangeAt *types.ScheduleType    `json:"change_at,omitempty"`
 	Metadata map[string]interface{} `json:"metadata"`
 
-	// LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)
+	// Deprecated: use POST /commitments instead.
 	LineItemCommitments map[string]*LineItemCommitmentConfig `json:"line_item_commitments,omitempty" validate:"omitempty,dive"`
 
 	// OverrideLineItems allows overriding price/quantity/billing model for specific addon prices
@@ -108,7 +110,7 @@ type AddAddonToSubscriptionRequest struct {
 
 func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, enitiyId string, enitityType types.AddonAssociationEntityType) *addonassociation.AddonAssociation {
 
-	now := time.Now()
+	now := clock.Now()
 	startDate := now
 	if a.StartDate != nil {
 		startDate = *a.StartDate

@@ -109,6 +109,11 @@ func ProviderType(v string) predicate.Connection {
 	return predicate.Connection(sql.FieldEQ(FieldProviderType, v))
 }
 
+// BillingEntityID applies equality check predicate on the "billing_entity_id" field. It's identical to BillingEntityIDEQ.
+func BillingEntityID(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldEQ(FieldBillingEntityID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Connection {
 	return predicate.Connection(sql.FieldEQ(FieldTenantID, v))
@@ -702,6 +707,81 @@ func SyncConfigIsNil() predicate.Connection {
 // SyncConfigNotNil applies the NotNil predicate on the "sync_config" field.
 func SyncConfigNotNil() predicate.Connection {
 	return predicate.Connection(sql.FieldNotNull(FieldSyncConfig))
+}
+
+// BillingEntityIDEQ applies the EQ predicate on the "billing_entity_id" field.
+func BillingEntityIDEQ(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldEQ(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDNEQ applies the NEQ predicate on the "billing_entity_id" field.
+func BillingEntityIDNEQ(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldNEQ(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDIn applies the In predicate on the "billing_entity_id" field.
+func BillingEntityIDIn(vs ...string) predicate.Connection {
+	return predicate.Connection(sql.FieldIn(FieldBillingEntityID, vs...))
+}
+
+// BillingEntityIDNotIn applies the NotIn predicate on the "billing_entity_id" field.
+func BillingEntityIDNotIn(vs ...string) predicate.Connection {
+	return predicate.Connection(sql.FieldNotIn(FieldBillingEntityID, vs...))
+}
+
+// BillingEntityIDGT applies the GT predicate on the "billing_entity_id" field.
+func BillingEntityIDGT(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldGT(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDGTE applies the GTE predicate on the "billing_entity_id" field.
+func BillingEntityIDGTE(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldGTE(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDLT applies the LT predicate on the "billing_entity_id" field.
+func BillingEntityIDLT(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldLT(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDLTE applies the LTE predicate on the "billing_entity_id" field.
+func BillingEntityIDLTE(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldLTE(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDContains applies the Contains predicate on the "billing_entity_id" field.
+func BillingEntityIDContains(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldContains(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDHasPrefix applies the HasPrefix predicate on the "billing_entity_id" field.
+func BillingEntityIDHasPrefix(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldHasPrefix(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDHasSuffix applies the HasSuffix predicate on the "billing_entity_id" field.
+func BillingEntityIDHasSuffix(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldHasSuffix(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDIsNil applies the IsNil predicate on the "billing_entity_id" field.
+func BillingEntityIDIsNil() predicate.Connection {
+	return predicate.Connection(sql.FieldIsNull(FieldBillingEntityID))
+}
+
+// BillingEntityIDNotNil applies the NotNil predicate on the "billing_entity_id" field.
+func BillingEntityIDNotNil() predicate.Connection {
+	return predicate.Connection(sql.FieldNotNull(FieldBillingEntityID))
+}
+
+// BillingEntityIDEqualFold applies the EqualFold predicate on the "billing_entity_id" field.
+func BillingEntityIDEqualFold(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldEqualFold(FieldBillingEntityID, v))
+}
+
+// BillingEntityIDContainsFold applies the ContainsFold predicate on the "billing_entity_id" field.
+func BillingEntityIDContainsFold(v string) predicate.Connection {
+	return predicate.Connection(sql.FieldContainsFold(FieldBillingEntityID, v))
 }
 
 // And groups predicates with the AND operator between them.

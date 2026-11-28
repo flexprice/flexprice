@@ -593,7 +593,7 @@ func WindowCommitmentBreakdown(
 	aggType types.AggregationType,
 	lineItemPrice *price.Price,
 ) ([]WindowCommitmentPart, error) {
-	bs := &billingService{ServiceParams: params}
+	bs := newBillingService(params)
 	values, starts := bs.fillBucketedValuesForWindowedCommitment(
 		item, usageResult, periodStart, periodEnd, bucketSize, billingAnchor, aggType)
 	if len(values) == 0 || len(starts) != len(values) {

@@ -73,6 +73,8 @@ type Payment struct {
 	RecordedAt *time.Time `json:"recorded_at,omitempty"`
 	// ErrorMessage holds the value of the "error_message" field.
 	ErrorMessage *string `json:"error_message,omitempty"`
+	// ConnectionID holds the value of the "connection_id" field.
+	ConnectionID *string `json:"connection_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PaymentQuery when eager-loading is set.
 	Edges        PaymentEdges `json:"edges"`
@@ -108,7 +110,7 @@ func (*Payment) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case payment.FieldTrackAttempts:
 			values[i] = new(sql.NullBool)
-		case payment.FieldID, payment.FieldTenantID, payment.FieldStatus, payment.FieldCreatedBy, payment.FieldUpdatedBy, payment.FieldEnvironmentID, payment.FieldIdempotencyKey, payment.FieldDestinationType, payment.FieldDestinationID, payment.FieldPaymentMethodType, payment.FieldPaymentMethodID, payment.FieldPaymentGateway, payment.FieldGatewayPaymentID, payment.FieldGatewayTrackingID, payment.FieldCurrency, payment.FieldPaymentStatus, payment.FieldErrorMessage:
+		case payment.FieldID, payment.FieldTenantID, payment.FieldStatus, payment.FieldCreatedBy, payment.FieldUpdatedBy, payment.FieldEnvironmentID, payment.FieldIdempotencyKey, payment.FieldDestinationType, payment.FieldDestinationID, payment.FieldPaymentMethodType, payment.FieldPaymentMethodID, payment.FieldPaymentGateway, payment.FieldGatewayPaymentID, payment.FieldGatewayTrackingID, payment.FieldCurrency, payment.FieldPaymentStatus, payment.FieldErrorMessage, payment.FieldConnectionID:
 			values[i] = new(sql.NullString)
 		case payment.FieldCreatedAt, payment.FieldUpdatedAt, payment.FieldSucceededAt, payment.FieldFailedAt, payment.FieldRefundedAt, payment.FieldVoidedAt, payment.FieldRecordedAt:
 			values[i] = new(sql.NullTime)
@@ -308,6 +310,13 @@ func (_m *Payment) assignValues(columns []string, values []any) error {
 				_m.ErrorMessage = new(string)
 				*_m.ErrorMessage = value.String
 			}
+		case payment.FieldConnectionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field connection_id", values[i])
+			} else if value.Valid {
+				_m.ConnectionID = new(string)
+				*_m.ConnectionID = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -445,6 +454,11 @@ func (_m *Payment) String() string {
 	builder.WriteString(", ")
 	if v := _m.ErrorMessage; v != nil {
 		builder.WriteString("error_message=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ConnectionID; v != nil {
+		builder.WriteString("connection_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

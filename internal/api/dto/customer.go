@@ -10,6 +10,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 // IntegrationEntityMapping represents a provider integration mapping
@@ -68,6 +69,9 @@ type CreateCustomerRequest struct {
 	// contact_persons are people at the customer; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
+	// settings overrides the environment settings for this customer's subscriptions
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
 	// metadata contains additional key-value pairs for storing extra information
 	Metadata map[string]string `json:"metadata,omitempty"`
 
@@ -84,6 +88,10 @@ type CreateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// billing_entity_id is the billing entity that bills this customer; defaults to the environment's
+	// default entity. Accepted only once billing entities are enabled, and never changes afterwards.
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -131,11 +139,17 @@ type UpdateCustomerRequest struct {
 	// contact_persons replaces the customer's contact persons when provided; at most one may be primary
 	ContactPersons []*customer.ContactPerson `json:"contact_persons,omitempty" validate:"omitempty,max=5,dive"`
 
+	// settings merges into the customer's setting overrides when provided; send {} to inherit the environment settings
+	Settings *types.SettingsOverride `json:"settings,omitempty"`
+
 	// metadata contains updated key-value pairs that will replace existing metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*CreateEntityIntegrationMappingRequest `json:"integration_entity_mapping,omitempty"`
+
+	// billing_entity_id cannot be changed; sending it is rejected
+	BillingEntityID *string `json:"billing_entity_id,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
@@ -155,6 +169,15 @@ func EmptyCustomerResponse() *CustomerResponse {
 // ListCustomersResponse represents the response for listing customers
 // @Description Response object for listing customers with pagination
 type ListCustomersResponse = types.ListResponse[*CustomerResponse] // @name ListCustomersResponse
+
+// FindCustomerInBillingEntity returns the first listed customer the entity bills, or nil; an empty entity matches any customer.
+func FindCustomerInBillingEntity(list *ListCustomersResponse, entityID string) *CustomerResponse {
+	if list == nil {
+		return nil
+	}
+	match, _ := lo.Find(list.Items, func(c *CustomerResponse) bool { return c.InBillingEntity(entityID) })
+	return match
+}
 
 func (r *CreateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
@@ -218,6 +241,30 @@ func NormalizeBillingCurrency(code *string) *string {
 	return &trimmed
 }
 
+// NormalizeSettingsOverride returns nil when no override is set, so cleared overrides store as NULL.
+func NormalizeSettingsOverride(s *types.SettingsOverride) *types.SettingsOverride {
+	if s == nil || s.SubscriptionConfig == nil || lo.IsEmpty(*s.SubscriptionConfig) {
+		return nil
+	}
+	return s
+}
+
+func MergeSettingsOverride(existing, update *types.SettingsOverride) *types.SettingsOverride {
+	update = NormalizeSettingsOverride(update)
+	existing = NormalizeSettingsOverride(existing)
+	if update == nil || existing == nil {
+		return update
+	}
+	merged := *existing.SubscriptionConfig
+	if update.SubscriptionConfig.GracePeriodDays != nil {
+		merged.GracePeriodDays = update.SubscriptionConfig.GracePeriodDays
+	}
+	if update.SubscriptionConfig.AutoCancellationEnabled != nil {
+		merged.AutoCancellationEnabled = update.SubscriptionConfig.AutoCancellationEnabled
+	}
+	return &types.SettingsOverride{SubscriptionConfig: &merged}
+}
+
 func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Customer {
 	tz := r.Timezone
 	if tz == "" {
@@ -235,6 +282,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		Contact:           r.Contact,
 		BillingCurrency:   NormalizeBillingCurrency(r.BillingCurrency),
 		ContactPersons:    r.ContactPersons,
+		Settings:          NormalizeSettingsOverride(r.Settings),
 		AddressLine1:      r.AddressLine1,
 		AddressLine2:      r.AddressLine2,
 		AddressCity:       r.AddressCity,
@@ -252,6 +300,12 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 func (r *UpdateCustomerRequest) Validate() error {
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	if r.BillingEntityID != nil {
+		return ierr.NewError("billing_entity_id cannot be changed").
+			WithHint("A customer's billing entity is set at creation and cannot be changed").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate timezone is a valid IANA timezone name

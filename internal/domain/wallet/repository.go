@@ -13,6 +13,8 @@ type Repository interface {
 	// Wallet operations
 	CreateWallet(ctx context.Context, w *Wallet) error
 	GetWalletByID(ctx context.Context, id string) (*Wallet, error)
+	// GetWalletForUpdate locks the row, bypassing cache.
+	GetWalletForUpdate(ctx context.Context, id string) (*Wallet, error)
 	GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*Wallet, error)
 	GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*Wallet, error)
 	UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error
@@ -43,6 +45,12 @@ type Repository interface {
 	GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*CreditTopupsExportData, error)
 	// GetWalletDebitsForExport returns the next limit debits after the cursor, one row per credit batch each drew from.
 	GetWalletDebitsForExport(ctx context.Context, tenantID, envID string, after WalletDebitsExportCursor, endTime time.Time, limit int) ([]*WalletDebitsExportData, error)
+	// ListWalletIDsForLedgerExport returns, in order, the wallets of the given customers, or with no
+	// customers, every wallet with activity in the window.
+	ListWalletIDsForLedgerExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, customerExternalIDs []string) ([]string, error)
+	// GetWalletLedgerForExport returns the wallets' credits and debits in the window, by wallet and
+	// then by when each changed the balance, a debit split into the credit batches it drew from.
+	GetWalletLedgerForExport(ctx context.Context, tenantID, envID string, walletIDs []string, startTime, endTime time.Time) ([]*WalletLedgerExportData, error)
 
 	// Credit breakdown operations
 	GetCreditsAvailableBreakdown(ctx context.Context, walletID string) (*types.CreditBreakdown, error)

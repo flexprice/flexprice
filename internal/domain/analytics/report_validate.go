@@ -9,6 +9,31 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
+// FilterCustomerStatus filters by the owning customer's status.
+const FilterCustomerStatus = "customer_status"
+
+// ValidCustomerStatus reports whether v is a filterable status.
+func ValidCustomerStatus(v string) bool {
+	return v == string(types.StatusPublished) || v == string(types.StatusArchived)
+}
+
+// CheckCustomerStatusFilter validates operator arity and values.
+func CheckCustomerStatusFilter(op string, values []string) error {
+	if op == "eq" && len(values) > 1 {
+		return ierr.NewError("customer_status eq takes one value").
+			WithHint("use op in for several statuses").
+			Mark(ierr.ErrValidation)
+	}
+	for _, v := range values {
+		if !ValidCustomerStatus(v) {
+			return ierr.NewErrorf("customer_status %q not allowed", v).
+				WithHint("customer_status must be one of: published, archived").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
+}
+
 type ReportQueryFilter struct {
 	Field string
 	Op    string
@@ -29,6 +54,7 @@ type ReportQuery struct {
 	Filters    []ReportQueryFilter
 	Compare    string
 	Limit      int
+	Offset     int
 	Sort       []ReportQuerySort
 }
 
@@ -95,6 +121,11 @@ func (req *ReportQuery) ValidateAgainst(e *ReportCatalogEntry, maxRows int) erro
 			WithHint(fmt.Sprintf("limit must be between 0 and %d (0 = no limit)", maxRows)).
 			Mark(ierr.ErrValidation)
 	}
+	if req.Offset < 0 || (req.Offset > 0 && (req.Limit == 0 || req.Shape != string(types.ShapeBreakdown) || len(req.Sort) > 0)) {
+		return ierr.NewError("offset not allowed").
+			WithHint("offset needs a breakdown with a limit and the default sort").
+			Mark(ierr.ErrValidation)
+	}
 	if req.Limit > 0 && req.Shape != string(types.ShapeBreakdown) {
 		return ierr.NewError("limit only applies to breakdown").
 			WithHint("omit limit unless shape is breakdown").
@@ -149,15 +180,21 @@ func (req *ReportQuery) ValidateAgainst(e *ReportCatalogEntry, maxRows int) erro
 		}
 	}
 	for _, f := range req.Filters {
-		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) {
+		isStatus := f.Field == FilterCustomerStatus && slices.Contains(dims, "customer_id")
+		if !slices.Contains(dims, f.Field) && !(f.Field == "currency" && hasCurrency) && !isStatus {
 			return ierr.NewErrorf("filter field %q not allowed", f.Field).
-				WithHint("filter fields must be one of: currency, " + strings.Join(dims, ", ")).
+				WithHint("filter fields must be one of: currency, " + FilterCustomerStatus + " (reports by customer), " + strings.Join(dims, ", ")).
 				Mark(ierr.ErrValidation)
 		}
 		if (f.Op != "eq" && f.Op != "in") || len(f.Value) == 0 || (f.Op == "eq" && len(f.Value) != 1) {
 			return ierr.NewErrorf("filter on %q invalid", f.Field).
 				WithHint("op must be eq (1 value) or in (1+ values)").
 				Mark(ierr.ErrValidation)
+		}
+		if isStatus {
+			if err := CheckCustomerStatusFilter(f.Op, f.Value); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

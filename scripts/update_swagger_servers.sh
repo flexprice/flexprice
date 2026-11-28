@@ -28,7 +28,9 @@ with open(path) as f:
 
 spec["servers"] = [
     {"url": "https://us.api.flexprice.io/v1", "description": "US Region"},
-    {"url": "https://api.cloud.flexprice.io/v1", "description": "India Region"}
+    {"url": "https://api.cloud.flexprice.io/v1", "description": "India Region"},
+    {"url": "https://canada.api.flexprice.io/v1", "description": "Canada Region"},
+    {"url": "https://eu.api.flexprice.io/v1", "description": "EU Region"}
 ]
 
 with open(path, "w") as f:

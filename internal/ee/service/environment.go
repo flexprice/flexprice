@@ -3,7 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -16,6 +17,8 @@ type EnvironmentService interface {
 	GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error)
 	GetEnvironments(ctx context.Context, filter types.Filter) (*dto.ListEnvironmentsResponse, error)
 	UpdateEnvironment(ctx context.Context, id string, req dto.UpdateEnvironmentRequest) (*dto.EnvironmentResponse, error)
+	// CheckCloneAllowed rejects cloning from or into an environment with billing entities.
+	CheckCloneAllowed(ctx context.Context, environmentIDs ...string) error
 }
 
 type environmentService struct {
@@ -82,6 +85,22 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 	}
 
 	return dto.NewEnvironmentResponse(env), nil
+}
+
+func (s *environmentService) CheckCloneAllowed(ctx context.Context, environmentIDs ...string) error {
+	for _, id := range environmentIDs {
+		mode, err := NewBillingEntityService(s.ServiceParams).Status(types.SetEnvironmentID(ctx, id))
+		if err != nil {
+			return err
+		}
+		if mode != types.BillingEntityModeOff {
+			return ierr.NewErrorf("environment %s has billing entities", id).
+				WithHint("Environments with billing entities cannot be cloned from or into").
+				WithReportableDetails(map[string]any{"environment_id": id}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 func (s *environmentService) GetEnvironment(ctx context.Context, id string) (*dto.EnvironmentResponse, error) {
@@ -191,7 +210,7 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, id string, r
 			WithHintf("type is immutable; current type is %q", env.Type).
 			Mark(ierr.ErrValidation)
 	}
-	env.UpdatedAt = time.Now()
+	env.UpdatedAt = clock.Now()
 	env.UpdatedBy = userID
 
 	if err := s.repo.Update(ctx, env); err != nil {

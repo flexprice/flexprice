@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	customerDomain "github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -31,6 +32,10 @@ type fakeContactClient struct {
 	createResp   *ContactResponse
 	current      *ContactResponse
 	updateResp   *ContactResponse
+}
+
+func (f *fakeContactClient) GetConnection(_ context.Context) (*connection.Connection, error) {
+	return &connection.Connection{ID: "conn_test", ProviderType: types.SecretProviderZohoBooks}, nil
 }
 
 func (f *fakeContactClient) GetContact(_ context.Context, contactID string) (*ContactResponse, error) {

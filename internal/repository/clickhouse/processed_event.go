@@ -7,13 +7,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type ProcessedEventRepository struct {
@@ -378,31 +381,6 @@ func (r *ProcessedEventRepository) IsDuplicate(ctx context.Context, subscription
 	return exists == 1, nil
 }
 
-// GetLineItemUsage gets the current usage amounts for a subscription line item in a period
-func (r *ProcessedEventRepository) GetLineItemUsage(ctx context.Context, subLineItemID string, periodID uint64) (qty decimal.Decimal, freeUnits decimal.Decimal, err error) {
-	query := `
-		SELECT 
-			sumMerge(qty_state) AS qty_billable,
-			sumMerge(free_state) AS qty_free
-		FROM agg_usage_period_totals
-		WHERE sub_line_item_id = ?
-		AND period_id = ?
-	`
-
-	err = r.store.GetConn().QueryRow(ctx, query, subLineItemID, periodID).Scan(&qty, &freeUnits)
-	if err != nil {
-		// If no rows found, return zero values
-		if err.Error() == "sql: no rows in result set" {
-			return decimal.Zero, decimal.Zero, nil
-		}
-		return decimal.Zero, decimal.Zero, ierr.WithError(err).
-			WithHint("Failed to get line item usage").
-			Mark(ierr.ErrDatabase)
-	}
-
-	return qty, freeUnits, nil
-}
-
 // GetPeriodCost gets the total cost for a subscription in a billing period
 func (r *ProcessedEventRepository) GetPeriodCost(ctx context.Context, tenantID, environmentID, customerID, subscriptionID string, periodID uint64) (decimal.Decimal, error) {
 	query := `
@@ -523,7 +501,7 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 	// Set default start/end times if not provided
 	if params.EndTime.IsZero() {
-		params.EndTime = time.Now().UTC()
+		params.EndTime = clock.Now()
 	}
 
 	if params.StartTime.IsZero() {

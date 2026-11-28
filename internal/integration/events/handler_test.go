@@ -3,16 +3,21 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/domain/refund"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalmodels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -94,11 +99,42 @@ func (fakeWorkflowRun) GetRunID() string { return "run_1" }
 type fakeTemporalService struct {
 	temporalservice.TemporalService
 	inputs []interface{}
+	err    error
 }
 
 func (f *fakeTemporalService) ExecuteWorkflow(_ context.Context, _ types.TemporalWorkflowType, params interface{}) (temporalmodels.WorkflowRun, error) {
 	f.inputs = append(f.inputs, params)
+	if f.err != nil {
+		return nil, f.err
+	}
 	return fakeWorkflowRun{}, nil
+}
+
+func TestRunTriggers_WorkflowStartErrors(t *testing.T) {
+	alreadyRunning := ierr.NewError("already started").Mark(ierr.ErrAlreadyExists)
+	tests := []struct {
+		name     string
+		startErr error
+		opts     []DispatchOption
+		wantErrs int
+	}{
+		{name: "started"},
+		{name: "already running is skipped automatically", startErr: alreadyRunning},
+		{name: "already running is reported to a manual sync", startErr: alreadyRunning, opts: []DispatchOption{Manual()}, wantErrs: 1},
+		{name: "other failure is retried", startErr: ierr.NewError("temporal down").Mark(ierr.ErrInternal), wantErrs: 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			temporalSvc := &fakeTemporalService{err: tc.startErr}
+			trigger := providerTrigger{types.SecretProviderRazorpay, func() error {
+				return executeWorkflow(context.Background(), temporalSvc, testLogger(), types.TemporalRazorpayInvoiceSyncWorkflow, nil, types.SecretProviderRazorpay, "inv_1")
+			}}
+			if errs := runTriggers([]providerTrigger{trigger}, resolveDispatchOptions(tc.opts)); len(errs) != tc.wantErrs {
+				t.Fatalf("want %d errors, got %v", tc.wantErrs, errs)
+			}
+		})
+	}
 }
 
 func TestTriggerZohoBooksIfEnabled_MappedInvoice(t *testing.T) {
@@ -133,6 +169,48 @@ func TestTriggerZohoBooksIfEnabled_MappedInvoice(t *testing.T) {
 			input, ok := temporalSvc.inputs[0].(*temporalmodels.ZohoBooksInvoiceSyncWorkflowInput)
 			if !ok || !input.Resync {
 				t.Fatalf("expected Zoho input with Resync set, got %#v", temporalSvc.inputs[0])
+			}
+		})
+	}
+}
+
+func TestProcessMessage_RoutesCreditNoteEventsToZohoBooksSync(t *testing.T) {
+	refundCreditNote := &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeRefund, CreditNoteStatus: types.CreditNoteStatusFinalized}
+	adjustmentCreditNote := &creditnote.CreditNote{ID: "cn_1", InvoiceID: "inv_1", CreditNoteType: types.CreditNoteTypeAdjustment, CreditNoteStatus: types.CreditNoteStatusFinalized}
+	tests := []struct {
+		name      string
+		eventName types.WebhookEventName
+		payload   string
+		cn        *creditnote.CreditNote
+	}{
+		{"credit_note.updated", types.WebhookEventCreditNoteUpdated, `{"credit_note_id":"cn_1"}`, adjustmentCreditNote},
+		{"refund.succeeded", types.WebhookEventRefundSucceeded, `{"refund_id":"ref_1"}`, refundCreditNote},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, ok := NewHandler(Deps{
+				Logger:         testLogger(),
+				Config:         &config.Configuration{IntegrationEvents: config.IntegrationEventsConfig{Enabled: true}},
+				ConnectionRepo: &cnDispatchConnectionRepo{conn: zohoConnection(true, true)},
+				EIMRepo:        &cnPushMappingRepo{},
+				CreditNoteRepo: &cnDispatchCreditNoteRepo{cn: tt.cn},
+				RefundRepo: &cnDispatchRefundRepo{refunds: []*refund.Refund{
+					{ID: "ref_1", InvoiceID: "inv_1", CreditNoteID: lo.ToPtr("cn_1"), RefundStatus: types.RefundStatusSucceeded},
+				}},
+				EntityScope: &cnDispatchEntityScope{},
+			}).(*handler)
+			if !ok {
+				t.Fatalf("expected concrete *handler")
+			}
+
+			ev := types.WebhookEvent{EventName: tt.eventName, TenantID: "ten_1", EnvironmentID: "env_1", Payload: json.RawMessage(tt.payload)}
+			b, _ := json.Marshal(ev)
+
+			// Reaching the workflow start without a Temporal service shows the event was routed
+			// all the way to the Zoho Books credit note sync.
+			if err := h.processMessage(context.Background(), message.NewMessage("msg-cn", b)); !errors.Is(err, errTemporalUnavailable) {
+				t.Fatalf("expected the workflow start to fail without a temporal service, got %v", err)
 			}
 		})
 	}

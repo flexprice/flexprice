@@ -11,7 +11,7 @@ import (
 )
 
 // selfBillingEventCountQuery counts across every tenant on purpose: Flexprice bills each tenant on its ingest volume.
-// It filters on ingested_at only, so the mm_ingested_at skip index keeps the scan to recent granules; hours are pinned to UTC.
+// Hours are pinned to UTC. Events ingested over 30 days late go uncounted.
 const selfBillingEventCountQuery = `
 SELECT
 	tenant_id,
@@ -20,8 +20,13 @@ SELECT
 	uniqExact(id) AS cnt
 FROM events
 WHERE ingested_at >= ? AND ingested_at < ?
+	AND timestamp >= ingested_at - INTERVAL 30 DAY
+	AND timestamp >= ?
 GROUP BY tenant_id, environment_id, hour
 SETTINGS ` + maxMemoryUsageSetting
+
+// Implied by the per-row bound; enables partition pruning.
+const selfBillingLateEventHorizon = 30 * 24 * time.Hour
 
 type selfBillingRepository struct {
 	store  *clickhouse.ClickHouseStore
@@ -36,7 +41,7 @@ func NewSelfBillingRepository(store *clickhouse.ClickHouseStore, logger *logger.
 }
 
 func (r *selfBillingRepository) CountEventsByTenantHour(ctx context.Context, from, to time.Time) ([]*domainsb.TenantHourEvents, error) {
-	rows, err := r.store.GetConn().Query(ctx, selfBillingEventCountQuery, from.UTC(), to.UTC())
+	rows, err := r.store.GetConn().Query(ctx, selfBillingEventCountQuery, from.UTC(), to.UTC(), from.UTC().Add(-selfBillingLateEventHorizon))
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to count events for self-billing").

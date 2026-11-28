@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
+	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
@@ -25,6 +27,23 @@ import (
 
 // ── fake provider ────────────────────────────────────────────────────────────
 
+// seedCheckoutConnections gives the environment a connection for each gateway the fake stands in for.
+func seedCheckoutConnections(s *testutil.BaseServiceTestSuite) {
+	ctx := s.GetContext()
+	for _, provider := range []types.SecretProvider{types.SecretProviderRazorpay, types.SecretProviderChargebee} {
+		id := "conn_" + string(provider)
+		if _, err := s.GetStores().ConnectionRepo.Get(ctx, id); err == nil {
+			continue
+		}
+		s.Require().NoError(s.GetStores().ConnectionRepo.Create(ctx, &connection.Connection{
+			ID:            id,
+			ProviderType:  provider,
+			EnvironmentID: types.GetEnvironmentID(ctx),
+			BaseModel:     types.GetDefaultBaseModel(ctx),
+		}))
+	}
+}
+
 // fakeCheckoutProvider stands in for a gateway adapter. It records every call so a
 // test can assert not just the outcome but whether the gateway was contacted at
 // all — the difference between "the poll found nothing" and "the poll correctly
@@ -39,13 +58,33 @@ type fakeCheckoutProvider struct {
 	// linkRequests records what callCheckoutProvider asked for, so a test can assert on
 	// the expiry we send rather than recomputing it.
 	linkRequests []interfaces.CheckoutProviderRequest
+	// onCreateLink runs inside CreatePaymentLink, standing in for a void that lands mid-call.
+	onCreateLink func()
 
 	// charged makes TryAutoChargingSavedMethod report a submitted saved-method charge.
 	charged bool
+	// chargedMethod is the method that charge reports using.
+	chargedMethod types.PaymentMethodType
 	// onCharge runs inside TryAutoChargingSavedMethod, standing in for a webhook that beats the response.
 	onCharge func(req interfaces.AuthorizationLinkRequest)
 	// chargeErr fails the charge call after onCharge, as a timeout after the gateway charged would.
 	chargeErr error
+
+	// expired records the tracking ids passed to ExpirePaymentLink; expireErr fails the call.
+	expired   []string
+	expireErr error
+	// alreadyPaid makes ExpirePaymentLink report the link as already paid.
+	alreadyPaid bool
+}
+
+func (f *fakeCheckoutProvider) ExpirePaymentLink(_ context.Context, req interfaces.ExpirePaymentLinkRequest) (*interfaces.ExpirePaymentLinkResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.expired = append(f.expired, req.GatewayTrackingID)
+	if f.expireErr != nil {
+		return nil, f.expireErr
+	}
+	return &interfaces.ExpirePaymentLinkResponse{AlreadyPaid: f.alreadyPaid}, nil
 }
 
 func (f *fakeCheckoutProvider) FetchPaymentState(
@@ -71,6 +110,9 @@ func (f *fakeCheckoutProvider) CreatePaymentLink(_ context.Context, req interfac
 	f.mu.Lock()
 	f.linkRequests = append(f.linkRequests, req)
 	f.mu.Unlock()
+	if f.onCreateLink != nil {
+		f.onCreateLink()
+	}
 	return &interfaces.CheckoutProviderResponse{
 		ProviderSessionID: "plink_created",
 		NextAction: types.PaymentAction{
@@ -95,7 +137,7 @@ func (f *fakeCheckoutProvider) TryAutoChargingSavedMethod(_ context.Context, req
 	if f.chargeErr != nil {
 		return nil, false, f.chargeErr
 	}
-	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged"}, true, nil
+	return &interfaces.CheckoutProviderResponse{ProviderSessionID: "order_charged", PaymentMethod: f.chargedMethod}, true, nil
 }
 func (f *fakeCheckoutProvider) HasAutoChargeableMethod(context.Context, interfaces.HasAutoChargeableMethodRequest) (bool, error) {
 	return false, nil
@@ -142,6 +184,7 @@ func (s *CheckoutPollSuite) SetupTest() {
 	s.Require().NoError(s.GetStores().PlanRepo.Create(ctx, pl))
 
 	s.GetIntegrationFactory().SetCheckoutProvider(s.provider)
+	seedCheckoutConnections(&s.BaseServiceTestSuite)
 	s.svc = NewCheckoutSessionService(s.buildParams()).(*checkoutSessionService)
 }
 
@@ -151,6 +194,9 @@ func (s *CheckoutPollSuite) buildParams() ServiceParams {
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
 		SubRepo:                      s.GetStores().SubscriptionRepo,
+		CommitmentRepo:               s.GetStores().CommitmentRepo,
+		BillingTermRepo:              s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:        s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:        s.GetStores().SubscriptionPhaseRepo,
 		SubScheduleRepo:              s.GetStores().SubscriptionScheduleRepo,
@@ -284,6 +330,11 @@ func (s *CheckoutPollSuite) seedSession(
 		ExpiresAt:     time.Now().UTC().Add(20 * time.Minute),
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+	if strings.HasPrefix(trackingID, "plink_") {
+		session.ProviderResult = domainCheckout.ToJSONBCheckoutProviderResult(&types.CheckoutProviderResult{
+			NextAction: &types.PaymentAction{Type: types.PaymentActionTypePaymentLink, URL: "https://rzp.io/test"},
+		})
 	}
 	s.Require().NoError(s.GetStores().CheckoutSessionRepo.Create(ctx, session))
 	return session
@@ -573,7 +624,7 @@ func (s *CheckoutPollSuite) TestGet_ReconcilesAndReportsTerminal() {
 		GatewayPaymentID: "pay_rzp_001",
 	}
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
 	s.Equal(types.CheckoutStatusCompleted, resp.CheckoutStatus,
@@ -586,16 +637,95 @@ func (s *CheckoutPollSuite) TestGet_ReconcilesAndReportsTerminal() {
 	s.Equal(types.PaymentStatusSucceeded, resp.Payment.Status)
 }
 
+func (s *CheckoutPollSuite) TestGet_ExpandsInvoiceAndPaymentWithPolledAttempts() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.TrackAttempts = true
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+	s.provider.state = &interfaces.PaymentState{
+		Status:                  types.PaymentStatusSucceeded,
+		GatewayPaymentID:        "pay_rzp_ok",
+		FailedGatewayPaymentIDs: []string{"pay_rzp_declined"},
+	}
+
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand("invoice,payment"))
+	s.Require().NoError(err)
+
+	s.Require().NotNil(resp.CheckoutInvoice)
+	s.Equal(*session.CheckoutInvoiceID, resp.CheckoutInvoice.ID)
+	s.Require().NotNil(resp.CheckoutPayment)
+	s.Equal(p.ID, resp.CheckoutPayment.ID)
+	stored, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+	s.Require().NoError(err)
+	attempts := lo.SliceToMap(stored, func(a *payment.PaymentAttempt) (string, types.PaymentStatus) {
+		return lo.FromPtr(a.GatewayAttemptID), a.PaymentStatus
+	})
+	s.Equal(map[string]types.PaymentStatus{"pay_rzp_declined": types.PaymentStatusFailed, "pay_rzp_ok": types.PaymentStatusSucceeded}, attempts)
+
+	plain, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Nil(plain.CheckoutInvoice)
+	s.Nil(plain.CheckoutPayment)
+}
+
+func (s *CheckoutPollSuite) TestGet_ExpandsFinishedSessionInvoiceAndPayment() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusExpired, "plink_001", "")
+	s.Require().NoError(s.GetStores().InvoiceRepo.Delete(ctx, *session.CheckoutInvoiceID))
+	s.Require().NoError(s.GetStores().PaymentRepo.Delete(ctx, *session.CheckoutPaymentID))
+
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand("invoice,payment"))
+	s.Require().NoError(err)
+	s.Require().NotNil(resp.CheckoutInvoice)
+	s.Equal(*session.CheckoutInvoiceID, resp.CheckoutInvoice.ID)
+	s.Require().NotNil(resp.CheckoutPayment)
+	s.Equal(*session.CheckoutPaymentID, resp.CheckoutPayment.ID)
+	s.Zero(s.provider.callCount(), "a finished session is served from the database")
+}
+
+// The webhook and the poll share HandleDecline, so a polled auto-charge decline ends the session like the webhook does.
+func (s *CheckoutPollSuite) TestGet_AutoChargeDeclineEndsSession() {
+	ctx := s.GetContext()
+	session := s.seedSession(types.CheckoutStatusPending, "pay_rzp_auto", "")
+	p, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+	s.Require().NoError(err)
+	p.TrackAttempts = true
+	s.Require().NoError(s.GetStores().PaymentRepo.Update(ctx, p))
+	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusFailed, GatewayPaymentID: "pay_rzp_auto"}
+
+	resp, err := s.svc.GetAndReconcile(ctx, session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+
+	s.Equal(types.CheckoutStatusFailed, resp.CheckoutStatus)
+	s.True(resp.Terminal)
+	attempts, err := s.GetStores().PaymentRepo.ListAttempts(ctx, p.ID)
+	s.Require().NoError(err)
+	s.Require().Len(attempts, 1)
+	s.Equal(types.PaymentStatusFailed, attempts[0].PaymentStatus)
+}
+
+// A declined payment on a link session leaves the session open for the customer to retry.
+func (s *CheckoutPollSuite) TestGet_LinkDeclineKeepsSessionOpen() {
+	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
+	s.provider.state = &interfaces.PaymentState{FailedGatewayPaymentIDs: []string{"pay_rzp_declined"}}
+
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
+	s.Require().NoError(err)
+	s.Equal(types.CheckoutStatusPending, resp.CheckoutStatus)
+}
+
 // A read that could not be checked against the gateway must say so, and must keep
 // telling the client when to come back.
 func (s *CheckoutPollSuite) TestGet_DebouncedReadIsStaleAndKeepsPolling() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.state = &interfaces.PaymentState{Status: types.PaymentStatusPending}
 
-	_, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	_, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 	s.Require().NoError(err)
 
 	s.True(resp.Stale)
@@ -609,7 +739,7 @@ func (s *CheckoutPollSuite) TestGet_SurvivesGatewayOutage() {
 	session := s.seedSession(types.CheckoutStatusPending, "plink_001", "")
 	s.provider.err = ierr.NewError("razorpay unavailable").Mark(ierr.ErrHTTPClient)
 
-	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID)
+	resp, err := s.svc.GetAndReconcile(s.GetContext(), session.ID, types.NewExpand(""))
 
 	s.Require().NoError(err, "the read must not fail because the gateway did")
 	s.True(resp.Stale)
@@ -819,13 +949,51 @@ func (s *CheckoutPollSuite) TestSavedMethodChargeExtendsSessionPastSettlement() 
 			_, err = s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
 			s.Require().NoError(err)
 
-			settlement := provider.SavedMethodSettlement()
+			settlement := provider.SavedMethodSettlement("")
 			if settlement == 0 {
 				s.Equal(linkExpiry, session.ExpiresAt, "an instant charge keeps the link-sized expiry")
 				return
 			}
 			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(settlement-time.Minute)),
 				"the session must outlive the debit it is waiting on")
+		})
+	}
+}
+
+func (s *CheckoutPollSuite) TestENACHCheckoutDebitsMandateOrRefuses() {
+	tests := []struct {
+		name    string
+		charged bool
+	}{
+		{name: "no mandate is refused without a link"},
+		{name: "a mandate picked without a preferred method waits 7 days", charged: true},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			ctx := s.GetContext()
+			s.provider.charged = tt.charged
+			s.provider.chargedMethod = types.PaymentMethodTypeENACH
+			cfg := &types.CheckoutPaymentProviderConfig{CollectionMethod: types.CollectionMethodChargeAutomatically}
+			if !tt.charged {
+				cfg.PaymentMethod = types.PaymentMethodTypeENACH
+			}
+			session := s.seedSession(types.CheckoutStatusInitiated, "", "")
+			session.PaymentProvider = types.CheckoutPaymentProviderRazorpay
+			session.PaymentProviderConfig = domainCheckout.ToJSONBCheckoutPaymentProviderConfig(cfg)
+			payment, err := s.GetStores().PaymentRepo.Get(ctx, *session.CheckoutPaymentID)
+			s.Require().NoError(err)
+
+			result, err := s.svc.callCheckoutProvider(ctx, session, dto.NewPaymentResponse(payment))
+
+			if !tt.charged {
+				s.True(ierr.IsInvalidOperation(err), "got %v", err)
+				s.Nil(result)
+				return
+			}
+			s.Require().NoError(err)
+			s.Equal("order_charged", result.ProviderSessionID)
+			s.False(session.ExpiresAt.Before(time.Now().UTC().Add(7*24*time.Hour-time.Minute)),
+				"an eNACH debit can take up to 7 days to settle")
 		})
 	}
 }

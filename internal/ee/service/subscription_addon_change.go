@@ -7,13 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // errAddonChangeNotACharge is returned from the pay-first transaction so it rolls back instead of committing.
@@ -237,7 +241,7 @@ func (s *addonChangeService) Resolve(ctx context.Context, req AddonChangeRequest
 
 	// One `now` for the whole change: resolving per entry would give each immediate entry a
 	// different timestamp and split one proration pass into several.
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	for _, remove := range req.Removes {
 		removeReq := resolveRemoveChangeAt(remove, now, sub.CurrentPeriodEnd)
@@ -341,10 +345,7 @@ func resolveAttachChangeAt(
 		resolved.ChangeAt = nil
 	}
 
-	if resolved.StartDate == nil {
-		resolved.StartDate = lo.ToPtr(now)
-	}
-
+	resolved.StartDate = lo.ToPtr(lo.FromPtrOr(resolved.StartDate, now))
 	return resolved
 }
 
@@ -537,6 +538,11 @@ func (s *addonChangeService) Persist(ctx context.Context, config *addonChangeCon
 		return err
 	}
 
+	// Checked once the batch's own attaches exist, so a swap's incoming line keeps a commitment's scope covered.
+	if err := s.checkRemovalCommitments(ctx, config); err != nil {
+		return err
+	}
+
 	// Overrides repoint line items at prices that did not exist when Resolve quoted, so the
 	// quote has to be retaken against what will actually be billed.
 	if config.hasPriceOverrides() {
@@ -602,6 +608,18 @@ func (s *addonChangeService) persistRemovals(ctx context.Context, config *addonC
 	return nil
 }
 
+func (s *addonChangeService) checkRemovalCommitments(ctx context.Context, config *addonChangeConfig) error {
+	for _, detach := range config.getDetaches() {
+		for _, lineItem := range detach.getLineItems() {
+			if err := checkLineDetach(ctx, s.ServiceParams, config.getSubscription(), lineItem, detach.getEffectiveDate()); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonChangeConfig) error {
 	sub := config.getSubscription()
 
@@ -638,6 +656,12 @@ func (s *addonChangeService) persistAttaches(ctx context.Context, config *addonC
 			return err
 		}
 		lineItems = append(lineItems, attach.getLineItems()...)
+	}
+
+	for _, li := range lineItems {
+		if err := checkLineAttach(ctx, s.ServiceParams, sub, li); err != nil {
+			return err
+		}
 	}
 
 	if err := s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItems); err != nil {
@@ -1002,12 +1026,53 @@ func validateAddonChangeCheckout(req AddonChangeRequest, checkout *dto.CheckoutP
 	return nil
 }
 
+// previewPriceOverrides repoints override line items at unsaved override prices and re-quotes,
+// so a preview prices what execute bills without minting prices.
+func (s *addonChangeService) previewPriceOverrides(ctx context.Context, config *addonChangeConfig) error {
+	if !config.hasPriceOverrides() {
+		return nil
+	}
+
+	sub := config.getSubscription()
+	for _, attach := range config.getAttaches() {
+		priceMap := attach.getPriceMap()
+		lineItems := lo.KeyBy(attach.getLineItems(), func(li *subscription.SubscriptionLineItem) string { return li.PriceID })
+		for _, override := range attach.getRequest().OverrideLineItems {
+			if err := override.Validate(priceMap, lineItems, sub.PlanID); err != nil {
+				return err
+			}
+			priceReq, err := buildOverridePriceRequest(priceMap[override.PriceID], override, sub.ID)
+			if err != nil {
+				return err
+			}
+			if err := priceReq.Validate(); err != nil {
+				return err
+			}
+			overridePrice, err := priceReq.ToPrice(ctx)
+			if err != nil {
+				return err
+			}
+
+			lineItem := lineItems[override.PriceID]
+			if override.Quantity != nil {
+				lineItem.Quantity = price.ApplyQuantityDefault(*override.Quantity, priceMap[override.PriceID].Price)
+			}
+			lineItem.PriceID, lineItem.Price = overridePrice.ID, overridePrice
+		}
+	}
+
+	return s.quote(ctx, config)
+}
+
 func (s *addonChangeService) Preview(
 	ctx context.Context,
 	req AddonChangeRequest,
 ) (*addonChangeConfig, *SettleProrationResult, error) {
 	config, err := s.Resolve(ctx, req)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.previewPriceOverrides(ctx, config); err != nil {
 		return nil, nil, err
 	}
 
@@ -1177,6 +1242,9 @@ func (s *addonChangeService) PreviewGrouped(
 
 		config, err := s.Resolve(ctx, req)
 		if err != nil {
+			return nil, nil, err
+		}
+		if err := s.previewPriceOverrides(ctx, config); err != nil {
 			return nil, nil, err
 		}
 		configs = append(configs, config)

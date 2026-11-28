@@ -5,6 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -16,6 +19,18 @@ const (
 	// DefaultInvoiceLabel is the default label for invoice reference
 	DefaultInvoiceLabel = "Invoice"
 )
+
+// attemptMethods maps Razorpay's payment method to the gateway-neutral attempt method.
+var attemptMethods = map[string]types.PaymentAttemptMethod{
+	"card":          types.PaymentAttemptMethodCard,
+	"upi":           types.PaymentAttemptMethodUPI,
+	"netbanking":    types.PaymentAttemptMethodNetBanking,
+	"wallet":        types.PaymentAttemptMethodWallet,
+	"emi":           types.PaymentAttemptMethodEMI,
+	"cardless_emi":  types.PaymentAttemptMethodEMI,
+	"paylater":      types.PaymentAttemptMethodPayLater,
+	"bank_transfer": types.PaymentAttemptMethodBankTransfer,
+}
 
 // RazorpayConfig holds decrypted Razorpay configuration
 type RazorpayConfig struct {
@@ -79,11 +94,11 @@ type CreatePaymentLinkRequest struct {
 	Currency   string
 	SuccessURL string // Callback URL - customer redirected here after payment completion or cancellation
 	CancelURL  string // Not used by Razorpay (only SuccessURL is used as callback_url)
-	Metadata   map[string]string
 	PaymentID  string
 	// ExpiresAt, when set, is sent as expire_by so the link stops accepting new
 	// payments at a known time. Razorpay's minimum is 15 minutes from now.
-	ExpiresAt *time.Time
+	ExpiresAt      *time.Time
+	NotifyCustomer bool
 }
 
 // RazorpayPaymentLinkResponse represents the response after creating a payment link
@@ -146,13 +161,17 @@ type Token struct {
 	RecurringDetails *TokenRecurringDetails `json:"recurring_details"`
 	Card             *TokenCard             `json:"card"`
 	VPA              *TokenVPA              `json:"vpa"`
+	BankDetails      *TokenBankDetails      `json:"bank_details"`
+	AuthType         string                 `json:"auth_type"`
+	Bank             string                 `json:"bank"`
 	MaxAmount        float64                `json:"max_amount"`
 	ExpiredAt        int64                  `json:"expired_at"`
 	CreatedAt        int64                  `json:"created_at"`
 }
 
 type TokenRecurringDetails struct {
-	Status string `json:"status"`
+	Status        string `json:"status"`
+	FailureReason string `json:"failure_reason"`
 }
 
 type TokenCard struct {
@@ -165,6 +184,50 @@ type TokenCard struct {
 
 type TokenCardFlows struct {
 	Recurring *bool `json:"recurring"`
+}
+
+type TokenBankDetails struct {
+	BeneficiaryName string `json:"beneficiary_name"`
+	AccountNumber   string `json:"account_number"`
+	IFSC            string `json:"ifsc"`
+	AccountType     string `json:"account_type"`
+}
+
+// AuthorizationLinkRequest is the body of a mandate registration link.
+type AuthorizationLinkRequest struct {
+	Customer                 *CustomerInfo            `json:"customer"`
+	Amount                   int64                    `json:"amount"`
+	Currency                 string                   `json:"currency"`
+	Description              string                   `json:"description"`
+	ExpireBy                 int64                    `json:"expire_by,omitempty"`
+	EmailNotify              bool                     `json:"email_notify"` // off: the merchant shares the link
+	SMSNotify                bool                     `json:"sms_notify"`
+	Notes                    map[string]interface{}   `json:"notes,omitempty"`
+	SubscriptionRegistration SubscriptionRegistration `json:"subscription_registration"`
+}
+
+type SubscriptionRegistration struct {
+	Method    string `json:"method"`
+	Frequency string `json:"frequency,omitempty"`
+	MaxAmount int64  `json:"max_amount,omitempty"`
+}
+
+// AuthorizationLinkResponse is the invoice Razorpay creates for a registration link.
+type AuthorizationLinkResponse struct {
+	ID         string `json:"id"`
+	ShortURL   string `json:"short_url"`
+	CustomerID string `json:"customer_id"`
+	Status     string `json:"status"`
+	ExpireBy   int64  `json:"expire_by"`
+	CreatedAt  int64  `json:"created_at"`
+}
+
+func (l AuthorizationLinkResponse) toSetupLink() *interfaces.SetupLinkResponse {
+	out := &interfaces.SetupLinkResponse{URL: l.ShortURL, ProviderSessionID: l.ID, Status: l.Status, CreatedAt: time.Unix(l.CreatedAt, 0).UTC()}
+	if l.ExpireBy > 0 {
+		out.ExpiresAt = lo.ToPtr(time.Unix(l.ExpireBy, 0).UTC())
+	}
+	return out
 }
 
 type TokenVPA struct {
@@ -185,4 +248,47 @@ func (f *flexInt) UnmarshalJSON(b []byte) error {
 	}
 	*f = flexInt(i)
 	return nil
+}
+
+type paymentEntity struct {
+	Method      string `json:"method"`
+	Bank        string `json:"bank"`
+	Wallet      string `json:"wallet"`
+	ErrorCode   string `json:"error_code"`
+	ErrorSource string `json:"error_source"`
+	ErrorStep   string `json:"error_step"`
+	ErrorReason string `json:"error_reason"`
+	Card        *struct {
+		Network string `json:"network"`
+		Issuer  string `json:"issuer"`
+		Last4   string `json:"last4"`
+		Type    string `json:"type"`
+	} `json:"card"`
+}
+
+func (e paymentEntity) toAttemptDetails() *types.PaymentAttemptDetails {
+	details := &types.PaymentAttemptDetails{PaymentMethod: AttemptMethod(e.Method)}
+	if details.PaymentMethod != nil {
+		if e.Card != nil {
+			details.PaymentMethod.Card = &types.CardDetails{Brand: e.Card.Network, Issuer: e.Card.Issuer, Last4: e.Card.Last4, Funding: e.Card.Type}
+		}
+		if e.Bank != "" {
+			details.PaymentMethod.Bank = &types.BankDetails{Bank: e.Bank}
+		}
+		if e.Wallet != "" {
+			details.PaymentMethod.Wallet = &types.WalletDetails{Provider: e.Wallet}
+		}
+	}
+	if attemptError := (types.PaymentAttemptError{Code: e.ErrorCode, Source: e.ErrorSource, Step: e.ErrorStep, Reason: e.ErrorReason}); attemptError != (types.PaymentAttemptError{}) {
+		details.Error = &attemptError
+	}
+	return details
+}
+
+// AttemptMethod returns the instrument for a Razorpay payment method; nil when the payment has no method.
+func AttemptMethod(method string) *types.InstrumentDetails {
+	if method == "" {
+		return nil
+	}
+	return &types.InstrumentDetails{Type: lo.ValueOr(attemptMethods, method, types.PaymentAttemptMethodOther)}
 }

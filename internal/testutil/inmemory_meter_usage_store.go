@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -417,15 +418,21 @@ func (s *InMemoryMeterUsageStore) GetUsageMultiMeter(_ context.Context, params *
 		}
 
 		buckets := bucketRecords(recs, params.WindowSize, params.BillingAnchor)
+		dims := parseInMemoryGroupBy(params.GroupBy)
 		points := make([]events.MeterUsageResult, 0, len(buckets))
 		for _, b := range buckets {
-			points = append(points, events.MeterUsageResult{
-				WindowStart: b.start,
-				Value:       aggregateScalar(b.records, params.AggregationType),
-				EventCount:  uint64(distinctIDCount(b.records)), // #nosec G115 -- test store, bounded
-			})
+			groups := groupMeterUsageRecords(b.records, dims)
+			keys := lo.Keys(groups)
+			sort.Strings(keys)
+			for _, key := range keys {
+				points = append(points, events.MeterUsageResult{
+					WindowStart: b.start,
+					Value:       aggregateScalar(groups[key], params.AggregationType),
+					EventCount:  uint64(distinctIDCount(groups[key])), // #nosec G115 -- test store, bounded
+				})
+			}
 		}
-		sort.Slice(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
+		sort.SliceStable(points, func(i, j int) bool { return points[i].WindowStart.Before(points[j].WindowStart) })
 		for _, p := range points {
 			res.TotalValue = res.TotalValue.Add(p.Value)
 			res.EventCount += p.EventCount
@@ -512,19 +519,7 @@ func (s *InMemoryMeterUsageStore) GetUsageForBucketedMeters(_ context.Context, p
 		// only reads Value, and per-row group identity isn't consumed downstream.
 		// groupKey is just used here for stable sort order within a bucket.
 		for bucket, recs := range byBucket {
-			byCombo := make(map[string][]*events.MeterUsage)
-			for _, r := range recs {
-				var parts []string
-				for _, d := range dims {
-					if d.isSource {
-						parts = append(parts, "s="+r.Source)
-					} else {
-						parts = append(parts, d.propName+"="+propertyValue(r.Properties, d.propName))
-					}
-				}
-				k := strings.Join(parts, "|")
-				byCombo[k] = append(byCombo[k], r)
-			}
+			byCombo := groupMeterUsageRecords(recs, dims)
 			for k, crecs := range byCombo {
 				entries = append(entries, entry{
 					bucket:     bucket,
@@ -759,6 +754,24 @@ func parseInMemoryGroupBy(groupBy []string) []inMemoryGroupByDim {
 		}
 	}
 	return out
+}
+
+// groupMeterUsageRecords encodes the dimension tuple so values containing delimiters stay distinct.
+func groupMeterUsageRecords(records []*events.MeterUsage, dims []inMemoryGroupByDim) map[string][]*events.MeterUsage {
+	groups := make(map[string][]*events.MeterUsage)
+	for _, record := range records {
+		values := make([]string, len(dims))
+		for i, dim := range dims {
+			if dim.isSource {
+				values[i] = record.Source
+			} else {
+				values[i] = propertyValue(record.Properties, dim.propName)
+			}
+		}
+		key, _ := json.Marshal(values) // A string slice always marshals successfully.
+		groups[string(key)] = append(groups[string(key)], record)
+	}
+	return groups
 }
 
 // propsString produces a deterministic serialization for entry.props sorting.
@@ -1061,27 +1074,39 @@ func (s *InMemoryMeterUsageStore) meterUsageForExportWindow(ctx context.Context,
 	return filtered
 }
 
-// GetEventsByEventIDAndExternalCustomerID returns the customer's meter_usage record for a single event, or nil if not found.
-func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string) (*events.MeterUsage, error) {
+// GetEventsByEventIDAndExternalCustomerID mirrors ClickHouse: the latest row per meter within window,
+// ordered by meter id.
+func (s *InMemoryMeterUsageStore) GetEventsByEventIDAndExternalCustomerID(_ context.Context, tenantID, environmentID, externalCustomerID, eventID string, window events.TimeRange) ([]*events.MeterUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	latestByMeterID := make(map[string]*events.MeterUsage)
 	for _, r := range s.records {
-		if r.TenantID == tenantID && r.EnvironmentID == environmentID && r.ExternalCustomerID == externalCustomerID && r.ID == eventID {
-			return &events.MeterUsage{
-				Event: events.Event{
-					ID:                 eventID,
-					ExternalCustomerID: r.ExternalCustomerID,
-					IngestedAt:         r.IngestedAt,
-					Properties:         r.Properties,
-					Timestamp:          r.Timestamp,
-				},
-				MeterID:  r.MeterID,
-				QtyTotal: r.QtyTotal,
-			}, nil
+		if r.TenantID != tenantID || r.EnvironmentID != environmentID || r.ExternalCustomerID != externalCustomerID || r.ID != eventID {
+			continue
+		}
+		if r.Timestamp.Before(window.Start) || !r.Timestamp.Before(window.End) {
+			continue
+		}
+		if latest, ok := latestByMeterID[r.MeterID]; ok && !r.IngestedAt.After(latest.IngestedAt) {
+			continue
+		}
+		latestByMeterID[r.MeterID] = &events.MeterUsage{
+			Event: events.Event{
+				ID:                 eventID,
+				ExternalCustomerID: r.ExternalCustomerID,
+				IngestedAt:         r.IngestedAt,
+				Properties:         r.Properties,
+				Timestamp:          r.Timestamp,
+			},
+			MeterID:  r.MeterID,
+			QtyTotal: r.QtyTotal,
 		}
 	}
-	return nil, nil
+
+	out := lo.Values(latestByMeterID)
+	sort.Slice(out, func(i, j int) bool { return out[i].MeterID < out[j].MeterID })
+	return out, nil
 }
 
 // GetUsageActivitySince mirrors the ClickHouse activity query: distinct

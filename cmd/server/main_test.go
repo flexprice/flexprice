@@ -57,7 +57,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 	temporalSvc := &startupRollbackTemporalService{}
 	temporalClient := failingScheduleTemporalClient{}
 	lc := fxtest.NewLifecycle(t)
-	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil)
+	startTemporalWorker(lc, logger.NewNoopLogger(), temporalClient, temporalSvc, service.ServiceParams{}, nil, nil)
 
 	err := lc.Start(context.Background())
 	if !errors.Is(err, errEnsureSchedules) {
@@ -69,7 +69,7 @@ func TestStartTemporalWorkerStopsAfterScheduleFailure(t *testing.T) {
 }
 
 func TestProvideAdminHandlersBuildsEveryHandler(t *testing.T) {
-	handlers := reflect.ValueOf(provideAdminHandlers(nil, nil, nil, nil, nil))
+	handlers := reflect.ValueOf(provideAdminHandlers(nil, nil, nil, nil, nil, nil))
 	for i := range handlers.NumField() {
 		if handlers.Field(i).IsNil() {
 			t.Errorf("provideAdminHandlers leaves %s nil", handlers.Type().Field(i).Name)
@@ -85,12 +85,13 @@ func TestServiceParamsProviders(t *testing.T) {
 	}{
 		{"billing_not_configured", config.BillingConfig{}},
 		{"billing_configured", config.BillingConfig{
-			Enabled:      true,
-			Region:       "us",
-			APIHost:      "https://billing.example.com/v1",
-			APIKey:       "sk_test",
-			PlanID:       "plan_free",
-			DashboardURL: "https://app.example.com",
+			Enabled:       true,
+			Region:        "us",
+			APIHost:       "https://billing.example.com/v1",
+			APIKey:        "sk_test",
+			DefaultPlanID: "plan_free",
+			PlanIDs:       []string{"plan_free"},
+			DashboardURL:  "https://app.example.com",
 		}},
 	}
 	for _, tt := range tests {

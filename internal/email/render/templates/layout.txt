@@ -1,0 +1,6 @@
+{{define "layout"}}{{.Merchant}}
+
+{{template "body" .}}
+{{if .ContactEmail}}Contact {{.Merchant}} at {{.ContactEmail}}
+{{end}}Powered by Flexprice
+{{end}}

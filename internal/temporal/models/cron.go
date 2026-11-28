@@ -114,6 +114,13 @@ type MoyasarAuthPaymentSettlementWorkflowResult struct {
 	VoidRefund MoyasarVoidOrRefundResult     `json:"void_refund"`
 }
 
+// RazorpayPaymentStatusSyncResult captures metrics for the Razorpay in-flight payment sync.
+type RazorpayPaymentStatusSyncResult struct {
+	Total   int `json:"total"`
+	Settled int `json:"settled"`
+	Errors  int `json:"errors"`
+}
+
 // ===================== Auto invoice threshold billing =====================
 
 // AutoInvoiceThresholdBillingWorkflowInput is the input for AutoInvoiceThresholdBillingWorkflow.
@@ -144,3 +151,21 @@ type CheckoutSessionExpiryWorkflowResult struct {
 
 // SelfBillingHourlyWorkflowInput is the input for SelfBillingHourlyWorkflow.
 type SelfBillingHourlyWorkflowInput struct{}
+
+// ===================== Billing Instalments Due =====================
+
+// BillingInstalmentsDueWorkflowInput is the input for BillingInstalmentsDueWorkflow.
+type BillingInstalmentsDueWorkflowInput struct{}
+
+// ===================== Email Dispatch =====================
+
+// EmailDispatchWorkflowInput is the input for EmailDispatchWorkflow.
+type EmailDispatchWorkflowInput struct{}
+
+// EmailDispatchWorkflowResult counts what one dispatch run did.
+type EmailDispatchWorkflowResult struct {
+	Sent     int `json:"sent"`
+	Failed   int `json:"failed"`
+	Skipped  int `json:"skipped"`
+	Deferred int `json:"deferred"`
+}

@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -13,17 +14,20 @@ import (
 type QuickBooksCustomerSyncActivities struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 func NewQuickBooksCustomerSyncActivities(
 	integrationFactory *integration.Factory,
 	customerService interfaces.CustomerService,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *QuickBooksCustomerSyncActivities {
 	return &QuickBooksCustomerSyncActivities{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -31,6 +35,11 @@ func NewQuickBooksCustomerSyncActivities(
 func (a *QuickBooksCustomerSyncActivities) SyncCustomerToQuickBooks(ctx context.Context, input models.QuickBooksCustomerSyncWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", "")
+	if err != nil {
+		return err
+	}
 
 	qbIntegration, err := a.integrationFactory.GetQuickBooksIntegration(ctx)
 	if err != nil {

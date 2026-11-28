@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 const eventLookupMaxVersions = 50
@@ -43,7 +44,7 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, 
 		Event: eventToDTO(event),
 	}
 
-	meterUsage, err := s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, externalCustomerID, eventID)
+	meterUsages, err := s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, externalCustomerID, eventID, window)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from meter_usage table").
@@ -52,8 +53,8 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, 
 
 	response.Events = eventsToDTOs(rawEvents)
 
-	if meterUsage != nil {
-		processed, err := s.fanOutMeterUsageToLineItems(ctx, meterUsage)
+	if len(meterUsages) > 0 {
+		processed, err := s.fanOutMeterUsageToLineItems(ctx, meterUsages)
 		if err == nil && len(processed) > 0 {
 			response.Status = types.EventProcessingStatusTypeProcessed
 			response.ProcessedEvents = processed
@@ -64,7 +65,7 @@ func (s *meterUsageService) DebugEvent(ctx context.Context, externalCustomerID, 
 	}
 
 	response.Status = types.EventProcessingStatusTypeProcessing
-	tracker := s.runDebugTracker(ctx, event, meterUsage)
+	tracker := s.runDebugTracker(ctx, event, meterUsages, window)
 	response.DebugTracker = tracker
 	if tracker.FailurePoint != nil {
 		response.Status = types.EventProcessingStatusTypeFailed
@@ -94,12 +95,15 @@ func eventsToDTOs(rawEvents []*events.Event) []*dto.Event {
 	return out
 }
 
-// fanOutMeterUsageToLineItems turns one meter_usage row into per-line-item
-// FeatureUsageInfo entries by resolving the customer's active subscription
-// line items that reference this meter at the event's timestamp. Mirrors the
-// per-line-item shape that feature_usage used to persist.
-func (s *meterUsageService) fanOutMeterUsageToLineItems(ctx context.Context, mu *events.MeterUsage) ([]*dto.FeatureUsageInfo, error) {
-	cust, err := s.CustomerRepo.GetByLookupKey(ctx, mu.ExternalCustomerID)
+// fanOutMeterUsageToLineItems turns an event's meter_usage rows (one per matched meter) into
+// per-line-item FeatureUsageInfo entries, using the active line items on each row's meter.
+func (s *meterUsageService) fanOutMeterUsageToLineItems(ctx context.Context, rows []*events.MeterUsage) ([]*dto.FeatureUsageInfo, error) {
+	rowByMeterID := make(map[string]*events.MeterUsage, len(rows))
+	for _, row := range rows {
+		rowByMeterID[row.MeterID] = row
+	}
+
+	cust, err := s.CustomerRepo.GetByLookupKey(ctx, rows[0].ExternalCustomerID)
 	if err != nil || cust == nil {
 		return nil, err
 	}
@@ -127,7 +131,7 @@ func (s *meterUsageService) fanOutMeterUsageToLineItems(ctx context.Context, mu 
 
 	liFilter := types.NewNoLimitSubscriptionLineItemFilter()
 	liFilter.SubscriptionIDs = subIDs
-	liFilter.MeterIDs = []string{mu.MeterID}
+	liFilter.MeterIDs = lo.Keys(rowByMeterID)
 	liFilter.ActiveFilter = false
 	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, liFilter)
 	if err != nil {
@@ -147,10 +151,8 @@ func (s *meterUsageService) fanOutMeterUsageToLineItems(ctx context.Context, mu 
 
 	out := make([]*dto.FeatureUsageInfo, 0, len(lineItems))
 	for _, li := range lineItems {
-		if !li.IsUsage() {
-			continue
-		}
-		if !li.IsActive(mu.Timestamp) {
+		mu, ok := rowByMeterID[li.MeterID]
+		if !ok || !li.IsUsage() || !li.IsActive(mu.Timestamp) {
 			continue
 		}
 		out = append(out, &dto.FeatureUsageInfo{
@@ -168,9 +170,9 @@ func (s *meterUsageService) fanOutMeterUsageToLineItems(ctx context.Context, mu 
 }
 
 // runDebugTracker walks customer → meter → price → line-item → meter_usage
-// attribution and stops at the first failure. When meterUsage is non-nil it is
-// reused for Step 5 to save an extra ClickHouse round-trip.
-func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.Event, meterUsage *events.MeterUsage) *dto.DebugTracker {
+// attribution and stops at the first failure. Non-empty meterUsages are reused
+// for Step 5 to save an extra ClickHouse round-trip.
+func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.Event, meterUsages []*events.MeterUsage, window events.TimeRange) *dto.DebugTracker {
 	tenantID := types.GetTenantID(ctx)
 	envID := types.GetEnvironmentID(ctx)
 	tracker := &dto.DebugTracker{
@@ -345,9 +347,8 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 
 	// Step 5: meter_usage attribution — always run under the meter-usage pipeline.
 	tracker.AttributedToCustomer = &dto.AttributedToCustomerResult{Status: types.DebugTrackerStatusUnprocessed}
-	mu := meterUsage
-	if mu == nil {
-		mu, err = s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID)
+	if len(meterUsages) == 0 {
+		meterUsages, err = s.MeterUsageRepo.GetEventsByEventIDAndExternalCustomerID(ctx, tenantID, envID, event.ExternalCustomerID, event.ID, window)
 		if err != nil {
 			status, code := ierr.ResolveError(err)
 			errResp := &ierr.ErrorResponse{Code: code, Message: err.Error(), HTTPStatusCode: status}
@@ -357,10 +358,20 @@ func (s *meterUsageService) runDebugTracker(ctx context.Context, event *events.E
 			return tracker
 		}
 	}
-	if mu == nil {
+	if len(meterUsages) == 0 {
 		// Event hasn't landed in meter_usage yet — pipeline still in flight, not a hard failure.
 		tracker.AttributedToCustomer.Status = types.DebugTrackerStatusProcessing
 		return tracker
+	}
+	// Show the row of a meter an active line item bills, not whichever meter sorts first.
+	mu := meterUsages[0]
+	for _, row := range meterUsages {
+		if lo.ContainsBy(matchedLI, func(li dto.MatchedSubscriptionLineItem) bool {
+			return li.TimestampWithinRange && li.SubscriptionLineItem != nil && li.SubscriptionLineItem.MeterID == row.MeterID
+		}) {
+			mu = row
+			break
+		}
 	}
 	tracker.AttributedToCustomer.Status = types.DebugTrackerStatusAttributed
 	tracker.AttributedToCustomer.MeterUsage = &dto.MeterUsageAttribution{

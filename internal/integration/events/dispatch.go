@@ -17,6 +17,56 @@ import (
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 )
 
+// DispatchOption narrows a dispatch.
+type DispatchOption func(*dispatchOptions)
+
+type dispatchOptions struct {
+	onlyProvider types.SecretProvider
+	manual       bool
+}
+
+// OnlyProvider limits a dispatch to one provider: a push the user chose for one
+// connection must not also reach every other connected provider.
+func OnlyProvider(provider types.SecretProvider) DispatchOption {
+	return func(o *dispatchOptions) { o.onlyProvider = provider }
+}
+
+// Manual marks a user-requested dispatch: a sync already running is reported, not skipped.
+func Manual() DispatchOption {
+	return func(o *dispatchOptions) { o.manual = true }
+}
+
+func resolveDispatchOptions(opts []DispatchOption) dispatchOptions {
+	var o dispatchOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+// providerTrigger is one provider's sync start, named so a dispatch can keep to one provider.
+type providerTrigger struct {
+	provider types.SecretProvider
+	run      func() error
+}
+
+// runTriggers starts each provider's sync (only the chosen provider's, when one is set)
+// and gathers the failures.
+func runTriggers(triggers []providerTrigger, o dispatchOptions) []error {
+	var errs []error
+	for _, trigger := range triggers {
+		if o.onlyProvider != "" && trigger.provider != o.onlyProvider {
+			continue
+		}
+		err := trigger.run()
+		// An automatic dispatch skips a sync that is already running instead of retrying it.
+		if err != nil && !(ierr.IsAlreadyExists(err) && !o.manual) {
+			errs = append(errs, err)
+		}
+	}
+	return errs
+}
+
 // getConnectionIfExists returns the connection for a provider, or nil if none is configured.
 // A "not found" result is not an error — it simply means the tenant hasn't set up that provider.
 // Real DB errors are still propagated.
@@ -32,45 +82,48 @@ func getConnectionIfExists(ctx context.Context, connRepo connection.Repository, 
 }
 
 // invoiceAlreadySynced returns true when the entity mapping table already has a record for
-// (invoiceID, invoice, provider). This is the primary idempotency guard that prevents
+// (invoiceID, invoice, connection). This is the primary idempotency guard that prevents
 // duplicate external invoices when the same Kafka message is consumed more than once
 // (e.g. two consumers on the same topic, at-least-once redelivery, manual replay).
-func invoiceAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, invoiceID string, provider types.SecretProvider) bool {
+func invoiceAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, invoiceID string, conn *connection.Connection) bool {
 	if eimRepo == nil {
 		return false
 	}
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = invoiceID
 	filter.EntityType = types.IntegrationEntityTypeInvoice
-	filter.ProviderTypes = []string{string(provider)}
+	filter.ProviderTypes = []string{string(conn.ProviderType)}
+	filter.ConnectionID = conn.ID
 	count, err := eimRepo.Count(ctx, filter)
 	return err == nil && count > 0
 }
 
 // customerAlreadySynced returns true when the entity mapping table already has a record for
-// (customerID, customer, provider). Same idempotency guarantee as invoiceAlreadySynced.
-func customerAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, customerID string, provider types.SecretProvider) bool {
+// (customerID, customer, connection). Same idempotency guarantee as invoiceAlreadySynced.
+func customerAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, customerID string, conn *connection.Connection) bool {
 	if eimRepo == nil {
 		return false
 	}
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = customerID
 	filter.EntityType = types.IntegrationEntityTypeCustomer
-	filter.ProviderTypes = []string{string(provider)}
+	filter.ProviderTypes = []string{string(conn.ProviderType)}
+	filter.ConnectionID = conn.ID
 	count, err := eimRepo.Count(ctx, filter)
 	return err == nil && count > 0
 }
 
 // subscriptionAlreadySynced returns true when the entity mapping table already has a record for
-// (subscriptionID, subscription, provider). Same idempotency guarantee as invoiceAlreadySynced.
-func subscriptionAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, subscriptionID string, provider types.SecretProvider) bool {
+// (subscriptionID, subscription, connection). Same idempotency guarantee as invoiceAlreadySynced.
+func subscriptionAlreadySynced(ctx context.Context, eimRepo entityintegrationmapping.Repository, subscriptionID string, conn *connection.Connection) bool {
 	if eimRepo == nil {
 		return false
 	}
 	filter := types.NewNoLimitEntityIntegrationMappingFilter()
 	filter.EntityID = subscriptionID
 	filter.EntityType = types.IntegrationEntityTypeSubscription
-	filter.ProviderTypes = []string{string(provider)}
+	filter.ProviderTypes = []string{string(conn.ProviderType)}
+	filter.ConnectionID = conn.ID
 	count, err := eimRepo.Count(ctx, filter)
 	return err == nil && count > 0
 }
@@ -146,6 +199,7 @@ func DispatchInvoiceVendorSync(
 	event *types.WebhookEvent,
 	msgUUID string,
 	resync bool,
+	opts ...DispatchOption,
 ) error {
 	if cfg != nil && !cfg.IntegrationEvents.Enabled {
 		return nil
@@ -180,24 +234,19 @@ func DispatchInvoiceVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
-		if err := trigger(); err != nil {
-			dispatchErrs = append(dispatchErrs, err)
-		}
-	}
+	dispatchErrs := runTriggers([]providerTrigger{
+		{types.SecretProviderStripe, func() error { return triggerStripeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderRazorpay, func() error { return triggerRazorpayIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderChargebee, func() error { return triggerChargebeeIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderQuickBooks, func() error { return triggerQuickBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderHubSpot, func() error { return triggerHubSpotIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderMoyasar, func() error { return triggerMoyasarIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderNomod, func() error { return triggerNomodIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderPaddle, func() error { return triggerPaddleIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderZohoBooks, func() error { return triggerZohoBooksIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderWhop, func() error { return triggerWhopIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderTabs, func() error { return triggerTabsIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+	}, resolveDispatchOptions(opts))
 
 	if len(dispatchErrs) > 0 {
 		return fmt.Errorf("integration_events: one or more provider dispatches failed for invoice %s: %w", in.InvoiceID, errors.Join(dispatchErrs...))
@@ -217,6 +266,7 @@ func DispatchCustomerVendorSync(
 	log *logger.Logger,
 	event *types.WebhookEvent,
 	msgUUID string,
+	opts ...DispatchOption,
 ) error {
 	if cfg != nil && !cfg.IntegrationEvents.Enabled {
 		return nil
@@ -260,25 +310,20 @@ func DispatchCustomerVendorSync(
 		"environment_id", in.EnvironmentID,
 	)
 
-	var dispatchErrs []error
-	for _, trigger := range []func() error{
-		func() error { return triggerStripeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error {
+	dispatchErrs := runTriggers([]providerTrigger{
+		{types.SecretProviderStripe, func() error { return triggerStripeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderRazorpay, func() error {
 			return triggerRazorpayCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error {
+		}},
+		{types.SecretProviderChargebee, func() error {
 			return triggerChargebeeCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error {
+		}},
+		{types.SecretProviderQuickBooks, func() error {
 			return triggerQuickBooksCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in)
-		},
-		func() error { return triggerNomodCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-		func() error { return triggerPaddleCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) },
-	} {
-		if err := trigger(); err != nil {
-			dispatchErrs = append(dispatchErrs, err)
-		}
-	}
+		}},
+		{types.SecretProviderNomod, func() error { return triggerNomodCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+		{types.SecretProviderPaddle, func() error { return triggerPaddleCustomerSyncIfEnabled(ctx, connRepo, eimRepo, temporalSvc, log, in) }},
+	}, resolveDispatchOptions(opts))
 
 	if len(dispatchErrs) > 0 {
 		return fmt.Errorf("integration_events: one or more provider dispatches failed for customer %s: %w", in.CustomerID, errors.Join(dispatchErrs...))
@@ -349,7 +394,7 @@ func triggerPaddleSubscriptionSyncIfEnabled(
 	if conn == nil {
 		return nil
 	}
-	if subscriptionAlreadySynced(ctx, eimRepo, in.SubscriptionID, types.SecretProviderPaddle) {
+	if subscriptionAlreadySynced(ctx, eimRepo, in.SubscriptionID, conn) {
 		log.Info(ctx, "integration_events: subscription already synced to Paddle, skipping",
 			"subscription_id", in.SubscriptionID)
 		return nil
@@ -383,6 +428,14 @@ func executeWorkflow(
 	invoiceID string,
 ) error {
 	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, workflowType, input)
+	if ierr.IsAlreadyExists(err) {
+		log.Info(ctx, "integration_events: workflow already running",
+			"provider", provider,
+			"workflow_type", workflowType,
+			"invoice_id", invoiceID,
+		)
+		return err
+	}
 	if err != nil {
 		log.Error(ctx, "integration_events: failed to start workflow",
 			"provider", provider,
@@ -448,7 +501,7 @@ func triggerStripeIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderStripe) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Stripe, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -473,10 +526,10 @@ func triggerRazorpayIfEnabled(
 	if err != nil {
 		return err
 	}
-	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
+	if conn == nil {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderRazorpay) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Razorpay, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -504,7 +557,7 @@ func triggerChargebeeIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderChargebee) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Chargebee, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -532,7 +585,7 @@ func triggerQuickBooksIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderQuickBooks) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to QuickBooks, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -560,7 +613,7 @@ func triggerHubSpotIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderHubSpot) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to HubSpot, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -588,7 +641,7 @@ func triggerMoyasarIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderMoyasar) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Moyasar, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -616,7 +669,7 @@ func triggerNomodIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderNomod) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Nomod, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -644,7 +697,7 @@ func triggerPaddleIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderPaddle) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Paddle, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -672,7 +725,7 @@ func triggerZohoBooksIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if !in.Resync && invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderZohoBooks) {
+	if !in.Resync && invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Zoho Books, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}
@@ -723,7 +776,7 @@ func triggerStripeCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderStripe) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to Stripe, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -750,7 +803,7 @@ func triggerRazorpayCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderRazorpay) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to Razorpay, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -777,7 +830,7 @@ func triggerChargebeeCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderChargebee) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to Chargebee, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -804,7 +857,7 @@ func triggerQuickBooksCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderQuickBooks) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to QuickBooks, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -831,7 +884,7 @@ func triggerNomodCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderNomod) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to Nomod, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -858,7 +911,7 @@ func triggerPaddleCustomerSyncIfEnabled(
 	if conn == nil || !conn.IsCustomerOutboundEnabled() {
 		return nil
 	}
-	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, types.SecretProviderPaddle) {
+	if customerAlreadySynced(ctx, eimRepo, in.CustomerID, conn) {
 		log.Info(ctx, "integration_events: customer already synced to Paddle, skipping", "customer_id", in.CustomerID)
 		return nil
 	}
@@ -956,7 +1009,7 @@ func triggerWhopIfEnabled(
 	if conn == nil || !conn.IsInvoiceOutboundEnabled() {
 		return nil
 	}
-	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, types.SecretProviderWhop) {
+	if invoiceAlreadySynced(ctx, eimRepo, in.InvoiceID, conn) {
 		log.Info(ctx, "integration_events: invoice already synced to Whop, skipping", "invoice_id", in.InvoiceID)
 		return nil
 	}

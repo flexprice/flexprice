@@ -245,10 +245,17 @@ func (s *InMemoryEntitlementGrantStore) UpdateSnapshot(ctx context.Context, g *e
 			WithReportableDetails(map[string]interface{}{"id": g.ID}).
 			Mark(errors.ErrNotFound)
 	}
+	// Matches the repo's guard: an older measurement never overwrites a newer one.
+	if g.LastComputedAt != nil && existing.LastComputedAt != nil && existing.LastComputedAt.After(*g.LastComputedAt) {
+		return nil
+	}
 	existing.Usage = g.Usage
 	existing.GrantStatus = g.GrantStatus
 	existing.LastComputedAt = g.LastComputedAt
 	existing.QuotaCrossedAt = g.QuotaCrossedAt
+	if g.IsSubscriptionScoped() && g.Metadata != nil {
+		existing.Metadata = g.Metadata
+	}
 	existing.UpdatedAt = time.Now().UTC()
 	return s.InMemoryStore.Update(ctx, g.ID, existing)
 }

@@ -5,7 +5,9 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -14,16 +16,19 @@ import (
 // InvoiceSyncActivities contains all HubSpot invoice sync activities
 type InvoiceSyncActivities struct {
 	integrationFactory *integration.Factory
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 // NewInvoiceSyncActivities creates a new instance of InvoiceSyncActivities
 func NewInvoiceSyncActivities(
 	integrationFactory *integration.Factory,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *InvoiceSyncActivities {
 	return &InvoiceSyncActivities{
 		integrationFactory: integrationFactory,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -43,6 +48,11 @@ func (a *InvoiceSyncActivities) SyncInvoiceToHubSpot(
 	// Set context values for tenant and environment
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, "")
+	if err != nil {
+		return err
+	}
 
 	// Get HubSpot integration with runtime context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)

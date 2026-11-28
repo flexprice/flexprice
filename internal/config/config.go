@@ -62,6 +62,7 @@ type Configuration struct {
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
+	EntitlementGrants      EntitlementGrantsConfig      `mapstructure:"entitlement_grants" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
 	RBAC                   RBACConfig                   `mapstructure:"rbac" validate:"omitempty"`
@@ -71,10 +72,12 @@ type Configuration struct {
 	CustomerPortal         CustomerPortalConfig         `mapstructure:"customer_portal" validate:"required"`
 	Checkout               CheckoutConfig               `mapstructure:"checkout" validate:"omitempty"`
 	HostedInvoice          HostedInvoiceConfig          `mapstructure:"hosted_invoice" validate:"omitempty"`
+	BillingEntities        BillingEntitiesConfig        `mapstructure:"billing_entities" validate:"omitempty"`
 	Redis                  RedisConfig                  `mapstructure:"redis" validate:"required"`
 	RawEventsReprocessing  RawEventsReprocessingConfig  `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption    RawEventConsumptionConfig    `mapstructure:"raw_event_consumption" validate:"required"`
 	IntegrationEvents      IntegrationEventsConfig      `mapstructure:"integration_events" validate:"omitempty"`
+	EmailEvents            EmailEventsConfig            `mapstructure:"email_events" validate:"omitempty"`
 	OnboardingEvents       OnboardingEventsConfig       `mapstructure:"onboarding_events" validate:"omitempty"`
 	WebhookRetryJob        WebhookRetryJobConfig        `mapstructure:"webhook_retry_job" validate:"omitempty"`
 	Gemini                 GeminiConfig                 `mapstructure:"gemini" validate:"omitempty"`
@@ -613,18 +616,29 @@ type ClickHouseConfig struct {
 	Password       string `mapstructure:"password" validate:"required"`
 	Database       string `mapstructure:"database" validate:"required"`
 	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
+
+	MeterUsageOptimize MeterUsageOptimizeConfig `mapstructure:"meter_usage_optimize" validate:"omitempty"`
+}
+
+// MeterUsageOptimizeConfig gates the daily OPTIMIZE FINAL of closed
+// meter_usage day-partitions. Off by default.
+type MeterUsageOptimizeConfig struct {
+	Enabled      bool `mapstructure:"enabled" default:"false"`
+	LookbackDays int  `mapstructure:"lookback_days" default:"7"`
 }
 
 // ReportsConfig is the reports ClickHouse login.
 type ReportsConfig struct {
-	Database             string `mapstructure:"database"`
-	UsageDatabase        string `mapstructure:"usage_database"`
-	Username             string `mapstructure:"username"`
-	Password             string `mapstructure:"password"`
-	MaxExecutionSeconds  int    `mapstructure:"max_execution_seconds"`
-	MaxResultRows        int    `mapstructure:"max_result_rows"`
-	MaxRowsToRead        int64  `mapstructure:"max_rows_to_read"`
-	QueryCacheTTLSeconds int    `mapstructure:"query_cache_ttl_seconds"`
+	Address                 string `mapstructure:"address"`
+	Database                string `mapstructure:"database"`
+	UsageDatabase           string `mapstructure:"usage_database"`
+	UsageOnEventsClickHouse bool   `mapstructure:"usage_on_events_clickhouse"`
+	Username                string `mapstructure:"username"`
+	Password                string `mapstructure:"password"`
+	MaxExecutionSeconds     int    `mapstructure:"max_execution_seconds"`
+	MaxResultRows           int    `mapstructure:"max_result_rows"`
+	MaxRowsToRead           int64  `mapstructure:"max_rows_to_read"`
+	QueryCacheTTLSeconds    int    `mapstructure:"query_cache_ttl_seconds"`
 }
 
 func (c ReportsConfig) Enabled() bool {
@@ -849,12 +863,9 @@ type PyroscopeConfig struct {
 }
 
 type TelemetryConfig struct {
-	// Enabled defaults to false — telemetry is opt-in until validated.
-	// FLEXPRICE_TELEMETRY_DISABLED / DO_NOT_TRACK always win regardless.
-	Enabled      bool   `mapstructure:"enabled"`
+	// On by default. FLEXPRICE_TELEMETRY_DISABLED opts out.
 	Disabled     bool   `mapstructure:"disabled"`
 	Host         string `mapstructure:"host"`
-	DryRun       bool   `mapstructure:"dry_run"`
 	InstallLabel string `mapstructure:"install_label"`
 }
 
@@ -909,8 +920,11 @@ type BillingConfig struct {
 	Region        string `mapstructure:"region"`
 	APIHost       string `mapstructure:"api_host"`
 	APIKey        string `mapstructure:"api_key"`
-	PlanID        string `mapstructure:"plan_id"`
-	DashboardURL  string `mapstructure:"dashboard_url"`
+	// DefaultPlanID is the plan every new tenant's trial starts on; it must be one of PlanIDs.
+	DefaultPlanID string `mapstructure:"default_plan_id"`
+	// PlanIDs are every plan a tenant may buy at checkout, the default included.
+	PlanIDs      []string `mapstructure:"plan_ids"`
+	DashboardURL string   `mapstructure:"dashboard_url"`
 
 	// PaymentProvider is the provider of Flexprice Cloud's trial-end checkout; empty means stripe.
 	PaymentProvider types.CheckoutPaymentProvider `mapstructure:"payment_provider"`
@@ -937,7 +951,7 @@ func (c BillingConfig) IsSelfBillingEnabled() bool {
 	return c.Enabled &&
 		c.Region != "" &&
 		c.APIKey != "" &&
-		c.PlanID != "" &&
+		c.DefaultPlanID != "" &&
 		c.DashboardURL != "" &&
 		c.CheckoutProvider().Validate() == nil &&
 		c.hasSecureAPIHost()
@@ -1017,6 +1031,12 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
+
+// EntitlementGrantsConfig controls entitlement grant behaviour outside billing.
+type EntitlementGrantsConfig struct {
+	// RefreshOnRead lets entitlement reads with refresh_grants=true evaluate grants first.
+	RefreshOnRead bool `mapstructure:"refresh_on_read" default:"true"`
 }
 
 // UsageAlertsConfig controls the usage-driven alert pipeline end to end:
@@ -1173,15 +1193,43 @@ type Email struct {
 
 type EmailConfig struct {
 	Enabled          bool   `mapstructure:"enabled" validate:"required"`
-	ResendAPIKey     string `mapstructure:"resend_api_key" validate:"omitempty"`
 	FromAddress      string `mapstructure:"from_address" validate:"omitempty"`
 	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
 	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
 	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
+
+	// Customer invoice emails.
+	Provider        string            `mapstructure:"provider" validate:"omitempty,oneof=resend local"`
+	Resend          ResendEmailConfig `mapstructure:"resend"`
+	SenderDomain    string            `mapstructure:"sender_domain" validate:"omitempty"`
+	SenderLocalPart string            `mapstructure:"sender_local_part" validate:"omitempty"`
+	RegionTag       string            `mapstructure:"region_tag" validate:"omitempty"`
+}
+
+// EmailEventsConfig is the consumer group that auto-sends customer emails from webhook.topic events.
+type EmailEventsConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"email-events-consumer"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+}
+
+type ResendEmailConfig struct {
+	APIKey        string `mapstructure:"api_key" validate:"omitempty"`
+	WebhookSecret string `mapstructure:"webhook_secret" validate:"omitempty"`
+}
+
+// IsProviderConfigured reports whether customer emails are on: email.enabled and a provider set.
+func (c EmailConfig) IsProviderConfigured() bool {
+	return c.Enabled && c.Provider != ""
 }
 
 type CheckoutConfig struct {
 	BaseURL string `mapstructure:"base_url" validate:"required,url"`
+}
+
+// BillingEntitiesConfig gates enabling billing entities; off rejects every enable request.
+type BillingEntitiesConfig struct {
+	Enabled bool `mapstructure:"enabled" default:"false"`
 }
 
 // HostedInvoiceConfig holds the hosted invoice page base; empty returns no Flexprice hosted links.
@@ -1273,6 +1321,12 @@ func NewConfig() (*Configuration, error) {
 	// config.yaml predates this key. Env/yaml still override.
 	v.SetDefault("otel.traces.capture_exceptions", true)
 	v.SetDefault("logging.provider_calls_enabled", true)
+	// Customer email sender defaults, for deploys whose config.yaml (a Helm ConfigMap) predates these keys.
+	v.SetDefault("email.sender_domain", "mail.flexprice.io")
+	v.SetDefault("email.sender_local_part", "invoices")
+	v.SetDefault("email_events.enabled", true)
+	v.SetDefault("email_events.consumer_group", "email-events-consumer")
+	v.SetDefault("email_events.rate_limit", 10)
 
 	// Step 5: Read the YAML file
 	if err := v.ReadInConfig(); err != nil {
@@ -1386,6 +1440,9 @@ func (c Configuration) Validate() error {
 // Legitimate for local dev; a red flag in any real deployment.
 const devDBPassword = "flexprice123"
 
+// devAPIKeyHash is the hash of the public dev API key in config.yaml.
+const devAPIKeyHash = "0cfd568f22158887f8b77bc019fb245b1f14077b80936342b052985efa7de46c"
+
 const (
 	defaultClickHouseDialTimeout = 10 * time.Second
 	defaultClickHouseReadTimeout = 30 * time.Second
@@ -1395,7 +1452,8 @@ const (
 // A non-local deployment booting with any of these for an ENABLED feature is running on a
 // public credential, so validateSecrets flags it (warn-only — see NewValidatedConfig).
 var placeholderSecrets = map[string]bool{
-	"": true, // unset
+	"":             true, // unset
+	"super_secret": true,
 	"dev-only-insecure-secret-prod-sets-FLEXPRICE_AUTH_SECRET": true,
 	"<supabase service key>":                                   true,
 	"svix_auth_token":                                          true,
@@ -1414,6 +1472,9 @@ func NewValidatedConfig() (*Configuration, error) {
 	}
 	if cfg.Deployment.Mode == types.ModeLocal {
 		return cfg, nil
+	}
+	if err := cfg.validateCriticalSecrets(); err != nil {
+		return nil, err
 	}
 	// NOTE: we deliberately do NOT run the full-struct cfg.Validate() here.
 	// Many fields carry dormant `validate:"required"` tags that were never enforced
@@ -1442,13 +1503,72 @@ func NewValidatedConfig() (*Configuration, error) {
 	// customer uploads to their identity provider contains unusable endpoints,
 	// and the failure surfaces much later as an audience mismatch on every
 	// assertion, pointing at signatures rather than at configuration.
+	if err := cfg.validateEncryptionKey(); err != nil {
+		return nil, err
+	}
 	if err := cfg.Auth.SAML.validate(); err != nil {
 		return nil, err
 	}
 	if err := cfg.validateSAMLDependencies(); err != nil {
 		return nil, err
 	}
+	if err := cfg.validateEmail(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// validateEmail rejects a customer-email provider that cannot work in this deployment. It applies
+// only when customer emails are on, so a deployment without them cannot be taken down by it.
+func (c Configuration) validateEmail() error {
+	if !c.Email.IsProviderConfigured() {
+		return nil
+	}
+	if strings.TrimSpace(c.Email.SenderDomain) == "" || strings.TrimSpace(c.Email.SenderLocalPart) == "" {
+		return fmt.Errorf("email.sender_domain and email.sender_local_part are required (mode %q)", c.Deployment.Mode)
+	}
+	switch types.EmailProvider(c.Email.Provider) {
+	case types.EmailProviderLocal:
+		if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") != "true" {
+			return fmt.Errorf("email.provider local writes emails to disk and is only for local runs (mode %q): set email.provider to resend", c.Deployment.Mode)
+		}
+	case types.EmailProviderResend:
+		var missing []string
+		for _, f := range []struct{ value, name string }{
+			{c.Email.Resend.APIKey, "email.resend.api_key (FLEXPRICE_EMAIL_RESEND_API_KEY)"},
+			{c.Email.Resend.WebhookSecret, "email.resend.webhook_secret (FLEXPRICE_EMAIL_RESEND_WEBHOOK_SECRET)"},
+			{c.Email.RegionTag, "email.region_tag (FLEXPRICE_EMAIL_REGION_TAG)"},
+		} {
+			if strings.TrimSpace(f.value) == "" {
+				missing = append(missing, f.name)
+			}
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("email.provider resend needs %s (mode %q)", strings.Join(missing, ", "), c.Deployment.Mode)
+		}
+	default:
+		return fmt.Errorf("unsupported email.provider %q (mode %q): use resend or local", c.Email.Provider, c.Deployment.Mode)
+	}
+	return nil
+}
+
+// validateCriticalSecrets rejects secrets that sign tokens or grant access.
+func (c Configuration) validateCriticalSecrets() error {
+	allowInsecure := os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true"
+	fail := func(err error) error {
+		if !allowInsecure {
+			return err
+		}
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed critical secret check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	if placeholderSecrets[strings.TrimSpace(c.Auth.Secret)] {
+		return fail(fmt.Errorf("auth.secret (FLEXPRICE_AUTH_SECRET) is empty or a placeholder (mode %q)", c.Deployment.Mode))
+	}
+	if _, ok := c.Auth.APIKey.Keys[devAPIKeyHash]; ok {
+		return fail(fmt.Errorf("auth.api_key.keys contains the public dev key (mode %q): set FLEXPRICE_AUTH_API_KEY_KEYS", c.Deployment.Mode))
+	}
+	return nil
 }
 
 // validateSecrets flags placeholder/dev secret values for features that are actually
@@ -1480,16 +1600,27 @@ func (c Configuration) validateSecrets() error {
 	if strings.TrimSpace(c.ClickHouse.Password) == devDBPassword {
 		bad = append(bad, "clickhouse.password (FLEXPRICE_CLICKHOUSE_PASSWORD)")
 	}
-	// NOTE: secrets.encryption_key is intentionally NOT checked. ECS prod currently decrypts
-	// with the baked value (canonical env FLEXPRICE_SECRETS_ENCRYPTION_KEY is unset there; ECS
-	// sets a different, unread name). Rejecting it would block prod boot and switching keys
-	// would corrupt stored ciphertext. Reconcile separately before adding it. See config.yaml.
-
 	if len(bad) > 0 {
 		return fmt.Errorf("placeholder/dev secrets detected for enabled features (mode %q): %s — inject real values via FLEXPRICE_* env",
 			c.Deployment.Mode, strings.Join(bad, ", "))
 	}
 	return nil
+}
+
+const defaultEncryptionKey = "super-secret-encryption-key"
+
+func (c Configuration) validateEncryptionKey() error {
+	key := strings.TrimSpace(c.Secrets.EncryptionKey)
+	if key != "" && key != defaultEncryptionKey {
+		return nil
+	}
+	err := fmt.Errorf("secrets.encryption_key is empty or the shipped default (mode %q): set FLEXPRICE_SECRETS_ENCRYPTION_KEY",
+		c.Deployment.Mode)
+	if os.Getenv("FLEXPRICE_ALLOW_INSECURE_DEFAULTS") == "true" {
+		log.Printf("[config] WARNING: FLEXPRICE_ALLOW_INSECURE_DEFAULTS bypassed encryption key check: %v. Must never be set outside local Docker Compose", err)
+		return nil
+	}
+	return err
 }
 
 // GetDefaultConfig returns a default configuration for local development

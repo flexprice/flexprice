@@ -213,6 +213,26 @@ func (_u *PriceUpdate) ClearGroupID() *PriceUpdate {
 	return _u
 }
 
+// SetProductID sets the "product_id" field.
+func (_u *PriceUpdate) SetProductID(v string) *PriceUpdate {
+	_u.mutation.SetProductID(v)
+	return _u
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_u *PriceUpdate) SetNillableProductID(v *string) *PriceUpdate {
+	if v != nil {
+		_u.SetProductID(*v)
+	}
+	return _u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (_u *PriceUpdate) ClearProductID() *PriceUpdate {
+	_u.mutation.ClearProductID()
+	return _u
+}
+
 // SetSequence sets the "sequence" field.
 func (_u *PriceUpdate) SetSequence(v int64) *PriceUpdate {
 	_u.mutation.ResetSequence()
@@ -427,6 +447,12 @@ func (_u *PriceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(price.FieldGroupID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProductID(); ok {
+		_spec.SetField(price.FieldProductID, field.TypeString, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(price.FieldProductID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Sequence(); ok {
 		_spec.SetField(price.FieldSequence, field.TypeInt64, value)
@@ -683,6 +709,26 @@ func (_u *PriceUpdateOne) ClearGroupID() *PriceUpdateOne {
 	return _u
 }
 
+// SetProductID sets the "product_id" field.
+func (_u *PriceUpdateOne) SetProductID(v string) *PriceUpdateOne {
+	_u.mutation.SetProductID(v)
+	return _u
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_u *PriceUpdateOne) SetNillableProductID(v *string) *PriceUpdateOne {
+	if v != nil {
+		_u.SetProductID(*v)
+	}
+	return _u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (_u *PriceUpdateOne) ClearProductID() *PriceUpdateOne {
+	_u.mutation.ClearProductID()
+	return _u
+}
+
 // SetSequence sets the "sequence" field.
 func (_u *PriceUpdateOne) SetSequence(v int64) *PriceUpdateOne {
 	_u.mutation.ResetSequence()
@@ -927,6 +973,12 @@ func (_u *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error)
 	}
 	if _u.mutation.GroupIDCleared() {
 		_spec.ClearField(price.FieldGroupID, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProductID(); ok {
+		_spec.SetField(price.FieldProductID, field.TypeString, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(price.FieldProductID, field.TypeString)
 	}
 	if value, ok := _u.mutation.Sequence(); ok {
 		_spec.SetField(price.FieldSequence, field.TypeInt64, value)

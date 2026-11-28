@@ -7,6 +7,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // MoyasarCustomerService defines the interface for Moyasar customer operations
@@ -47,12 +48,18 @@ func (s *CustomerService) GetFlexPriceCustomerID(ctx context.Context, moyasarCus
 		return "", nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	// Look up the entity integration mapping
 	filter := &types.EntityIntegrationMappingFilter{
 		QueryFilter:       types.NewNoLimitQueryFilter(),
 		ProviderEntityIDs: []string{moyasarCustomerRef},
 		ProviderTypes:     []string{string(types.SecretProviderMoyasar)},
 		EntityType:        types.IntegrationEntityTypeCustomer,
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -88,12 +95,18 @@ func (s *CustomerService) StoreCustomerMapping(ctx context.Context, flexpriceCus
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Create new mapping
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		EntityID:         flexpriceCustomerID,
 		EntityType:       types.IntegrationEntityTypeCustomer,
 		ProviderType:     string(types.SecretProviderMoyasar),
 		ProviderEntityID: moyasarCustomerRef,
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)
@@ -125,11 +138,17 @@ func (s *CustomerService) HasCustomerMapping(ctx context.Context, flexpriceCusto
 		return false, nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return false, err
+	}
+
 	filter := &types.EntityIntegrationMappingFilter{
 		QueryFilter:   types.NewNoLimitQueryFilter(),
 		EntityID:      flexpriceCustomerID,
 		ProviderTypes: []string{string(types.SecretProviderMoyasar)},
 		EntityType:    types.IntegrationEntityTypeCustomer,
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -152,6 +171,11 @@ func (s *CustomerService) GetCustomerTokens(ctx context.Context, customerID stri
 		return nil, nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Look up token mappings for this customer
 	// We use a composite key: customerID is stored in metadata, and entity_id is the token ID
 	filter := &types.EntityIntegrationMappingFilter{
@@ -159,6 +183,7 @@ func (s *CustomerService) GetCustomerTokens(ctx context.Context, customerID stri
 		EntityID:      customerID, // Customer ID is the EntityID
 		ProviderTypes: []string{string(types.SecretProviderMoyasar) + "_token"},
 		EntityType:    "payment_method", // EntityType is "payment_method"
+		ConnectionID:  conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -187,6 +212,11 @@ func (s *CustomerService) SaveCustomerToken(ctx context.Context, customerID stri
 		return nil
 	}
 
+	conn, err := s.client.GetConnection(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Check if mapping already exists
 	filter := &types.EntityIntegrationMappingFilter{
 		QueryFilter:       types.NewNoLimitQueryFilter(),
@@ -194,6 +224,7 @@ func (s *CustomerService) SaveCustomerToken(ctx context.Context, customerID stri
 		ProviderEntityIDs: []string{tokenID},
 		ProviderTypes:     []string{string(types.SecretProviderMoyasar) + "_token"},
 		EntityType:        "payment_method",
+		ConnectionID:      conn.ID,
 	}
 
 	mappings, err := s.entityIntegrationMappingRepo.List(ctx, filter)
@@ -217,6 +248,7 @@ func (s *CustomerService) SaveCustomerToken(ctx context.Context, customerID stri
 		EntityType:       "payment_method",
 		ProviderType:     string(types.SecretProviderMoyasar) + "_token",
 		ProviderEntityID: tokenID,
+		ConnectionID:     lo.ToPtr(conn.ID),
 	}
 
 	err = s.entityIntegrationMappingRepo.Create(ctx, mapping)

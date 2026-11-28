@@ -15,6 +15,7 @@ type Connection struct {
 	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
 	SyncConfig          *types.SyncConfig        `db:"sync_config" json:"sync_config,omitempty"`
 	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
+	BillingEntityID     *string                  `db:"billing_entity_id" json:"billing_entity_id,omitempty"`
 	types.BaseModel
 }
 
@@ -364,6 +365,7 @@ func FromEnt(entConn *ent.Connection) *Connection {
 		Metadata:            entConn.Metadata,
 		SyncConfig:          entConn.SyncConfig,
 		EnvironmentID:       entConn.EnvironmentID,
+		BillingEntityID:     entConn.BillingEntityID,
 		BaseModel: types.BaseModel{
 			TenantID:  entConn.TenantID,
 			Status:    types.Status(entConn.Status),
@@ -414,6 +416,12 @@ func (c *Connection) IsInvoiceInboundEnabled() bool {
 func (c *Connection) IsInvoiceOutboundEnabled() bool {
 	config := c.GetSyncConfig()
 	return config.Invoice != nil && config.Invoice.Outbound
+}
+
+// IsCreditNoteOutboundEnabled checks if credit note outbound sync is enabled
+func (c *Connection) IsCreditNoteOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.CreditNote != nil && config.CreditNote.Outbound
 }
 
 // IsPriceOutboundEnabled checks if price outbound sync is enabled

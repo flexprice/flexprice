@@ -3,6 +3,8 @@ package dto
 import (
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -128,6 +130,8 @@ func (r *CreateScheduledTaskRequest) ToCreateInput() *types.CreateScheduledTaskI
 type TriggerForceRunRequest struct {
 	StartTime *time.Time `json:"start_time,omitempty" validate:"omitempty"`
 	EndTime   *time.Time `json:"end_time,omitempty" validate:"omitempty"`
+	// Limits a wallet_ledger export to these customers; empty means every customer.
+	CustomerExternalIDs []string `json:"customer_external_ids,omitempty" validate:"omitempty,max=100,dive,required"`
 }
 
 // Validate validates the force run request
@@ -156,7 +160,7 @@ func (r *TriggerForceRunRequest) Validate() error {
 		}
 
 		// Validate that end time is not in the future
-		now := time.Now()
+		now := clock.Now()
 		if r.EndTime.After(now) {
 			return ierr.NewError("end_time cannot be in the future").
 				WithHint("End time must be in the past or present").
@@ -202,6 +206,8 @@ type ExportRequest struct {
 	StartTime    time.Time                     `json:"start_time"`
 	EndTime      time.Time                     `json:"end_time"`
 	JobConfig    *types.S3JobConfig            `json:"job_config"` // S3 job configuration from scheduled_tasks
+	// Only exports that support it read this; empty means every customer.
+	CustomerExternalIDs []string `json:"customer_external_ids,omitempty"`
 }
 
 // ExportResponse represents the result of an export operation

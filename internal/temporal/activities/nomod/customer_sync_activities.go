@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -13,17 +14,20 @@ import (
 type CustomerSyncActivities struct {
 	integrationFactory *integration.Factory
 	customerService    interfaces.CustomerService
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 func NewCustomerSyncActivities(
 	integrationFactory *integration.Factory,
 	customerService interfaces.CustomerService,
+	entityScope interfaces.BillingEntityScope,
 	logger *logger.Logger,
 ) *CustomerSyncActivities {
 	return &CustomerSyncActivities{
 		integrationFactory: integrationFactory,
 		customerService:    customerService,
+		entityScope:        entityScope,
 		logger:             logger,
 	}
 }
@@ -31,6 +35,11 @@ func NewCustomerSyncActivities(
 func (a *CustomerSyncActivities) SyncCustomerToNomod(ctx context.Context, input models.NomodCustomerSyncWorkflowInput) error {
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", "")
+	if err != nil {
+		return err
+	}
 
 	nomodIntegration, err := a.integrationFactory.GetNomodIntegration(ctx)
 	if err != nil {

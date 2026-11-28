@@ -649,6 +649,11 @@ func (s *SubscriptionModificationServiceSuite) TestExecuteQuantityChange_Effecti
 		{
 			name:      "at_period_end",
 			buildDate: func(start, end time.Time) time.Time { return end },
+			wantError: false,
+		},
+		{
+			name:      "after_period_end",
+			buildDate: func(start, end time.Time) time.Time { return end.Add(time.Nanosecond) },
 			wantError: true,
 		},
 		{
@@ -2088,7 +2093,7 @@ func (s *SubscriptionModificationServiceSuite) TestCompleteModifySubscriptionChe
 	s.Equal(types.InvoiceStatusFinalized, finalInv.InvoiceStatus)
 
 	paySvc := NewPaymentService(params)
-	finalPay, err := paySvc.GetPayment(ctx, payID)
+	finalPay, err := paySvc.GetPayment(ctx, dto.GetPaymentRequest{ID: payID})
 	s.Require().NoError(err)
 	s.Equal(types.PaymentStatusSucceeded, finalPay.PaymentStatus)
 

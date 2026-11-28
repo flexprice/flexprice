@@ -10,13 +10,19 @@ import (
 type Repository interface {
 	Create(ctx context.Context, connection *Connection) error
 	Get(ctx context.Context, id string) (*Connection, error)
+	// GetByProvider returns the first in-scope published connection of the provider.
 	GetByProvider(ctx context.Context, provider types.SecretProvider) (*Connection, error)
 	// ListPublishedByProvider returns every published connection for a provider across all tenants and environments.
 	ListPublishedByProvider(ctx context.Context, provider types.SecretProvider) ([]*Connection, error)
 	// ListAllPublished returns every published connection for the current tenant and environment
 	ListAllPublished(ctx context.Context) ([]*Connection, error)
+	// ListPublishedInScope returns ListAllPublished narrowed by InScope.
+	ListPublishedInScope(ctx context.Context) ([]*Connection, error)
 	List(ctx context.Context, filter *types.ConnectionFilter) ([]*Connection, error)
 	Count(ctx context.Context, filter *types.ConnectionFilter) (int, error)
+	// Update saves the connection's settings; it never changes the owning billing entity.
 	Update(ctx context.Context, connection *Connection) error
+	// UpdateBillingEntity saves only the connection's owning billing entity.
+	UpdateBillingEntity(ctx context.Context, connection *Connection) error
 	Delete(ctx context.Context, connection *Connection) error
 }

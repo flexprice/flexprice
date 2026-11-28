@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -86,6 +88,9 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		RedisCache:                   s.GetRedisCache(),
 		WalletRepo:                   stores.WalletRepo,
 		SubRepo:                      stores.SubscriptionRepo,
+		CommitmentRepo:               stores.CommitmentRepo,
+		BillingTermRepo:              stores.BillingTermRepo,
+		BillingInstalmentRepo:        stores.BillingInstalmentRepo,
 		SubscriptionLineItemRepo:     stores.SubscriptionLineItemRepo,
 		PlanRepo:                     stores.PlanRepo,
 		PriceRepo:                    stores.PriceRepo,
@@ -93,6 +98,8 @@ func (s *WalletServiceSuite) buildServiceParams() ServiceParams {
 		MeterUsageRepo:               stores.MeterUsageRepo,
 		MeterRepo:                    stores.MeterRepo,
 		CustomerRepo:                 stores.CustomerRepo,
+		TenantRepo:                   stores.TenantRepo,
+		EnvironmentRepo:              stores.EnvironmentRepo,
 		InvoiceRepo:                  stores.InvoiceRepo,
 		HostedInvoiceTokenRepo:       stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:          stores.InvoiceLineItemRepo,
@@ -129,6 +136,9 @@ func (s *WalletServiceSuite) setupService() {
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
 		SubRepo:                  stores.SubscriptionRepo,
+		CommitmentRepo:           stores.CommitmentRepo,
+		BillingTermRepo:          stores.BillingTermRepo,
+		BillingInstalmentRepo:    stores.BillingInstalmentRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
@@ -607,6 +617,13 @@ func (s *WalletServiceSuite) setupWallet() {
 }
 
 func (s *WalletServiceSuite) TestCreateWallet() {
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+		ID:         "customer-2",
+		ExternalID: "ext-customer-2",
+		Name:       "Customer Two",
+		Email:      "c2@test.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}))
 	// Test successful wallet creation with CustomerID
 	req := &dto.CreateWalletRequest{
 		CustomerID: "customer-2",
@@ -2738,6 +2755,9 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		DB:                       s.GetDB(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
+		CommitmentRepo:           stores.CommitmentRepo,
+		BillingTermRepo:          stores.BillingTermRepo,
+		BillingInstalmentRepo:    stores.BillingInstalmentRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
@@ -2745,6 +2765,8 @@ func (s *WalletAutoTopupInvoiceSuite) setupService() {
 		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
+		TenantRepo:               stores.TenantRepo,
+		EnvironmentRepo:          stores.EnvironmentRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		HostedInvoiceTokenRepo:   stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
@@ -3091,6 +3113,9 @@ func (s *WalletAutoTopupDirectSuite) SetupTest() {
 		DB:                       s.GetDB(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
+		CommitmentRepo:           stores.CommitmentRepo,
+		BillingTermRepo:          stores.BillingTermRepo,
+		BillingInstalmentRepo:    stores.BillingInstalmentRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
@@ -3098,6 +3123,8 @@ func (s *WalletAutoTopupDirectSuite) SetupTest() {
 		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
+		TenantRepo:               stores.TenantRepo,
+		EnvironmentRepo:          stores.EnvironmentRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		HostedInvoiceTokenRepo:   stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
@@ -3292,6 +3319,9 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		DB:                       s.GetDB(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
+		CommitmentRepo:           stores.CommitmentRepo,
+		BillingTermRepo:          stores.BillingTermRepo,
+		BillingInstalmentRepo:    stores.BillingInstalmentRepo,
 		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
@@ -3299,6 +3329,8 @@ func (s *CheckWalletBalanceAlertSuite) setupService() {
 		MeterUsageRepo:           stores.MeterUsageRepo,
 		MeterRepo:                stores.MeterRepo,
 		CustomerRepo:             stores.CustomerRepo,
+		TenantRepo:               stores.TenantRepo,
+		EnvironmentRepo:          stores.EnvironmentRepo,
 		InvoiceRepo:              stores.InvoiceRepo,
 		HostedInvoiceTokenRepo:   stores.HostedInvoiceTokenRepo,
 		InvoiceLineItemRepo:      stores.InvoiceLineItemRepo,
@@ -4575,8 +4607,16 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
+			custID := s.GetUUID()
+			s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), &customer.Customer{
+				ID:         custID,
+				ExternalID: "ext-" + custID,
+				Name:       "Currency Customer",
+				Email:      "currency@test.com",
+				BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+			}))
 			resp, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-				CustomerID: s.GetUUID(),
+				CustomerID: custID,
 				Currency:   tt.currency,
 			})
 			if tt.wantErr {
@@ -4587,4 +4627,356 @@ func (s *WalletServiceSuite) TestCreateWallet_CustomCurrencyEnforcement() {
 			s.Equal(tt.currency, resp.Currency)
 		})
 	}
+}
+
+// setTenantWalletAlertConfig stores the tenant's wallet_balance_alert_config.
+func (s *CheckWalletBalanceAlertSuite) setTenantWalletAlertConfig(cfg types.AlertSettings) {
+	value, err := utils.ToMap(cfg)
+	s.NoError(err)
+	s.NoError(s.GetStores().SettingsRepo.Create(s.GetContext(), &settings.Setting{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+		Key:           types.SettingKeyWalletBalanceAlertConfig,
+		Value:         value,
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}))
+}
+
+// tieredBelow is warning at 100 and critical at 0, both "below", switched on.
+func tieredBelow() types.AlertSettings {
+	return types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Warning:      &types.AlertThreshold{Threshold: decimal.NewFromInt(100), Condition: types.AlertConditionBelow},
+		Critical:     &types.AlertThreshold{Threshold: decimal.Zero, Condition: types.AlertConditionBelow},
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantThresholds() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_tenant", decimal.NewFromInt(500), nil, nil)
+
+	tests := []struct {
+		name    string
+		balance decimal.Decimal
+		want    types.AlertState
+	}{
+		{name: "above the warning threshold is ok", balance: decimal.NewFromInt(101), want: types.AlertStateOk},
+		{name: "exactly the warning threshold is a warning", balance: decimal.NewFromInt(100), want: types.AlertStateWarning},
+		{name: "between the thresholds is a warning", balance: decimal.NewFromInt(40), want: types.AlertStateWarning},
+		{name: "zero is in alarm", balance: decimal.Zero, want: types.AlertStateInAlarm},
+		{name: "a negative balance is in alarm", balance: decimal.NewFromInt(-5), want: types.AlertStateInAlarm},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			got, err := s.service.BalanceAlertStatus(s.GetContext(), w, tt.balance, tt.balance)
+			s.NoError(err)
+			s.Require().NotNil(got)
+			s.Equal(tt.want, *got)
+		})
+	}
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_TenantAlertsOff_Nil() {
+	cfg := tieredBelow()
+	cfg.AlertEnabled = lo.ToPtr(false)
+	s.setTenantWalletAlertConfig(cfg)
+	// The wallet's own settings are on, but the tenant switch gates every wallet,
+	// as it does for the alert pipeline.
+	w := s.makeWallet("wallet_status_off", decimal.Zero, s.enabledAlertSettings(decimal.NewFromInt(10)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_NeverConfigured_Nil() {
+	// The default config is off, with a critical threshold of "below 0" sitting there.
+	w := s.makeWallet("wallet_status_default", decimal.Zero, nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletSettingsWin() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	// Critical at 50 on the wallet itself: 40 is in alarm here, a warning by the tenant's.
+	w := s.makeWallet("wallet_status_own", decimal.NewFromInt(40), s.enabledAlertSettings(decimal.NewFromInt(50)), nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(40), decimal.NewFromInt(40))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateInAlarm, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_WalletAlertsOff_Nil() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	own := s.enabledAlertSettings(decimal.NewFromInt(50))
+	own.AlertEnabled = lo.ToPtr(false)
+	w := s.makeWallet("wallet_status_own_off", decimal.Zero, own, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AbsoluteUsesCurrencyBalance() {
+	s.setTenantWalletAlertConfig(tieredBelow())
+	w := s.makeWallet("wallet_status_currency", decimal.NewFromInt(500), nil, nil)
+
+	// 1,000 credits worth 50 in currency: absolute thresholds are in currency.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(1000), decimal.NewFromInt(50))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_PercentageOfPeriodCredits() {
+	cfg := *s.percentageAlertSettings()
+	s.setTenantWalletAlertConfig(cfg)
+	w := s.makeWallet("wallet_status_pct", decimal.NewFromInt(25), nil, nil)
+	s.makeCreditTransaction("wtxn_status_pct", w.ID, decimal.NewFromInt(100),
+		types.TransactionStatusCompleted, types.StatusPublished, time.Now().UTC().Add(-time.Hour))
+
+	// 25 credits against a 100 credit base is 25%, the warning threshold.
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(25), decimal.NewFromInt(25))
+	s.NoError(err)
+	s.Require().NotNil(got)
+	s.Equal(types.AlertStateWarning, *got)
+}
+
+func (s *CheckWalletBalanceAlertSuite) TestBalanceAlertStatus_AboveThresholds_Nil() {
+	s.setTenantWalletAlertConfig(types.AlertSettings{
+		AlertEnabled: lo.ToPtr(true),
+		Critical:     &types.AlertThreshold{Threshold: decimal.NewFromInt(1000), Condition: types.AlertConditionAbove},
+	})
+	// A high balance trips an "above" alarm; it is not a low balance to warn about.
+	w := s.makeWallet("wallet_status_above", decimal.NewFromInt(5000), nil, nil)
+
+	got, err := s.service.BalanceAlertStatus(s.GetContext(), w, decimal.NewFromInt(5000), decimal.NewFromInt(5000))
+	s.NoError(err)
+	s.Nil(got)
+}
+
+func (s *WalletServiceSuite) TestCreateWallet_CustomerMustExist() {
+	tests := []struct {
+		name       string
+		customerID string
+		wantErr    bool
+	}{
+		{"unknown customer id", "cust_does_not_exist", true},
+		{"existing customer id", s.testData.customer.ID, false},
+	}
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			_, err := s.service.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
+				CustomerID: tc.customerID,
+				Currency:   "eur",
+			})
+			if tc.wantErr {
+				s.Error(err)
+				s.True(ierr.IsNotFound(err))
+				return
+			}
+			s.NoError(err)
+		})
+	}
+}
+
+type lockStateKey struct{}
+
+type heldLocks struct{ mus []*sync.Mutex }
+
+// lockingDB fakes advisory locks.
+type lockingDB struct {
+	postgres.IClient
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+func (d *lockingDB) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	if ctx.Value(lockStateKey{}) != nil {
+		return fn(ctx)
+	}
+	st := &heldLocks{}
+	defer func() {
+		for _, m := range st.mus {
+			m.Unlock()
+		}
+	}()
+	return d.IClient.WithTx(context.WithValue(ctx, lockStateKey{}, st), fn)
+}
+
+func (d *lockingDB) LockWithWait(ctx context.Context, req postgres.LockRequest) error {
+	st, _ := ctx.Value(lockStateKey{}).(*heldLocks)
+	d.mu.Lock()
+	m, ok := d.locks[req.Key]
+	if !ok {
+		m = &sync.Mutex{}
+		d.locks[req.Key] = m
+	}
+	d.mu.Unlock()
+	m.Lock()
+	if st != nil {
+		st.mus = append(st.mus, m)
+	}
+	return nil
+}
+
+// cachedWalletRepo fakes the wallet cache.
+type cachedWalletRepo struct {
+	wallet.Repository
+	mu     sync.Mutex
+	cached *wallet.Wallet
+	// recacheStale simulates a stale re-cache.
+	recacheStale bool
+}
+
+func (r *cachedWalletRepo) GetWalletByID(ctx context.Context, id string) (*wallet.Wallet, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cached != nil {
+		c := *r.cached
+		return &c, nil
+	}
+	w, err := r.Repository.GetWalletByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	c := *w
+	r.cached = &c
+	return w, nil
+}
+
+func (r *cachedWalletRepo) UpdateWalletBalance(ctx context.Context, id string, bal, credit decimal.Decimal) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	before, err := r.Repository.GetWalletByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	snap := *before
+	if err := r.Repository.UpdateWalletBalance(ctx, id, bal, credit); err != nil {
+		return err
+	}
+	r.cached = nil
+	if r.recacheStale {
+		r.cached = &snap
+	}
+	return nil
+}
+
+func (s *WalletServiceSuite) serviceWithCachedRepo(recacheStale bool) (WalletService, *cachedWalletRepo) {
+	repo := &cachedWalletRepo{Repository: s.GetStores().WalletRepo, recacheStale: recacheStale}
+	params := s.buildServiceParams()
+	params.WalletRepo = repo
+	params.DB = &lockingDB{IClient: s.GetDB(), locks: map[string]*sync.Mutex{}}
+	return NewWalletService(params), repo
+}
+
+func (s *WalletServiceSuite) resetWalletAndSeed(svc WalletService, credits int64) {
+	ctx := s.GetContext()
+	id := s.testData.wallet.ID
+	s.NoError(s.GetStores().WalletRepo.UpdateWalletBalance(ctx, id, decimal.Zero, decimal.Zero))
+	s.NoError(svc.CreditWallet(ctx, &wallet.WalletOperation{
+		WalletID:          id,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(credits),
+		Description:       "seed",
+		TransactionReason: types.TransactionReasonFreeCredit,
+	}))
+}
+
+func (s *WalletServiceSuite) ledger() []*wallet.Transaction {
+	f := types.NewWalletTransactionFilter()
+	f.WalletID = &s.testData.wallet.ID
+	txs, err := s.GetStores().WalletRepo.ListAllWalletTransactions(s.GetContext(), f)
+	s.NoError(err)
+	sort.SliceStable(txs, func(i, j int) bool { return txs[i].CreatedAt.Before(txs[j].CreatedAt) })
+	return txs
+}
+
+func (s *WalletServiceSuite) TestOperationIgnoresStaleCachedWallet() {
+	svc, repo := s.serviceWithCachedRepo(false)
+	s.resetWalletAndSeed(svc, 1000)
+
+	repo.mu.Lock()
+	stale := *s.testData.wallet
+	stale.CreditBalance = decimal.NewFromInt(5000)
+	stale.Balance = decimal.NewFromInt(5000)
+	repo.cached = &stale
+	repo.mu.Unlock()
+
+	s.NoError(svc.DebitWallet(s.GetContext(), &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(10),
+		Description:       "debit",
+		TransactionReason: types.TransactionReasonInvoicePayment,
+	}))
+
+	txs := s.ledger()
+	last := txs[len(txs)-1]
+	s.True(decimal.NewFromInt(1000).Equal(last.CreditBalanceBefore), "before=%s", last.CreditBalanceBefore)
+	s.True(decimal.NewFromInt(990).Equal(last.CreditBalanceAfter), "after=%s", last.CreditBalanceAfter)
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(990).Equal(w.CreditBalance), "balance=%s", w.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestConcurrentOperationsKeepLedgerChain() {
+	svc, _ := s.serviceWithCachedRepo(true)
+	s.resetWalletAndSeed(svc, 1000)
+
+	const n = 40
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			ctx := s.GetContext()
+			if i%2 == 0 {
+				errs[i] = svc.CreditWallet(ctx, &wallet.WalletOperation{
+					WalletID:          s.testData.wallet.ID,
+					Type:              types.TransactionTypeCredit,
+					CreditAmount:      decimal.NewFromInt(7),
+					Description:       "credit",
+					TransactionReason: types.TransactionReasonFreeCredit,
+				})
+				return
+			}
+			errs[i] = svc.DebitWallet(ctx, &wallet.WalletOperation{
+				WalletID:          s.testData.wallet.ID,
+				Type:              types.TransactionTypeDebit,
+				CreditAmount:      decimal.NewFromInt(3),
+				Description:       "debit",
+				TransactionReason: types.TransactionReasonInvoicePayment,
+			})
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		s.NoError(err, "operation %d failed", i)
+	}
+	ledger := s.ledger()
+	s.Len(ledger, n+1)
+
+	sum := decimal.Zero
+	prevAfter := decimal.Zero
+	for i, tx := range ledger {
+		s.True(prevAfter.Equal(tx.CreditBalanceBefore), "tx %d before=%s prevAfter=%s", i, tx.CreditBalanceBefore, prevAfter)
+		prevAfter = tx.CreditBalanceAfter
+		if tx.Type == types.TransactionTypeCredit {
+			sum = sum.Add(tx.CreditAmount)
+		} else {
+			sum = sum.Sub(tx.CreditAmount)
+		}
+	}
+
+	w, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(sum.Equal(w.CreditBalance), "ledger=%s wallet=%s", sum, w.CreditBalance)
 }

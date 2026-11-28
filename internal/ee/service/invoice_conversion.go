@@ -6,12 +6,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // convertInvoiceAmounts converts a draft's amounts to the billing currency at a frozen rate, spreading
@@ -34,7 +37,15 @@ func convertInvoiceAmounts(inv *invoice.Invoice, resolution *FXRateResolution, c
 
 	rate := resolution.Rate
 
+	// Use the signed line sum, not the stored subtotal (floored at 0): otherwise lines netting
+	// below zero leave a fake residual that allocateResidual adds to a charge line.
 	srcSubtotal := inv.Subtotal
+	if len(inv.LineItems) > 0 {
+		srcSubtotal = decimal.Zero
+		for _, item := range inv.LineItems {
+			srcSubtotal = srcSubtotal.Add(item.Amount)
+		}
+	}
 	srcDiscount := inv.TotalDiscount
 	srcPrepaid := inv.TotalPrepaidCreditsApplied
 	netCharge := srcSubtotal.Sub(srcDiscount).Sub(srcPrepaid)
@@ -93,8 +104,10 @@ func convertInvoiceAmounts(inv *invoice.Invoice, resolution *FXRateResolution, c
 		inv.TotalPrepaidCreditsApplied = convert(srcPrepaid)
 	}
 
+	inv.Subtotal = decimal.Max(inv.Subtotal, decimal.Zero)
+
 	// Pre-tax total; tax is added on the converted amounts in the finalize step that follows.
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
+	inv.Total = decimal.Max(inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied), decimal.Zero)
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total // nothing is paid before conversion
 	inv.Currency = billingCurrency
@@ -270,7 +283,7 @@ func (s *invoiceService) convertToBillingCurrency(ctx context.Context, inv *invo
 		inv.LineItems = lineItems
 	}
 
-	if err := convertInvoiceAmounts(inv, resolution, time.Now().UTC()); err != nil {
+	if err := convertInvoiceAmounts(inv, resolution, clock.Now()); err != nil {
 		return err
 	}
 

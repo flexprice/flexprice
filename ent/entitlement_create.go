@@ -146,9 +146,25 @@ func (_c *EntitlementCreate) SetFeatureID(v string) *EntitlementCreate {
 	return _c
 }
 
+// SetNillableFeatureID sets the "feature_id" field if the given value is not nil.
+func (_c *EntitlementCreate) SetNillableFeatureID(v *string) *EntitlementCreate {
+	if v != nil {
+		_c.SetFeatureID(*v)
+	}
+	return _c
+}
+
 // SetFeatureType sets the "feature_type" field.
 func (_c *EntitlementCreate) SetFeatureType(v types.FeatureType) *EntitlementCreate {
 	_c.mutation.SetFeatureType(v)
+	return _c
+}
+
+// SetNillableFeatureType sets the "feature_type" field if the given value is not nil.
+func (_c *EntitlementCreate) SetNillableFeatureType(v *types.FeatureType) *EntitlementCreate {
+	if v != nil {
+		_c.SetFeatureType(*v)
+	}
 	return _c
 }
 
@@ -368,6 +384,20 @@ func (_c *EntitlementCreate) SetNillableAggregationMode(v *types.EntitlementAggr
 	return _c
 }
 
+// SetGrantScope sets the "grant_scope" field.
+func (_c *EntitlementCreate) SetGrantScope(v types.EntitlementGrantScopeEntityType) *EntitlementCreate {
+	_c.mutation.SetGrantScope(v)
+	return _c
+}
+
+// SetNillableGrantScope sets the "grant_scope" field if the given value is not nil.
+func (_c *EntitlementCreate) SetNillableGrantScope(v *types.EntitlementGrantScopeEntityType) *EntitlementCreate {
+	if v != nil {
+		_c.SetGrantScope(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *EntitlementCreate) SetID(v string) *EntitlementCreate {
 	_c.mutation.SetID(v)
@@ -449,6 +479,10 @@ func (_c *EntitlementCreate) defaults() {
 		v := entitlement.DefaultAggregationMode
 		_c.mutation.SetAggregationMode(v)
 	}
+	if _, ok := _c.mutation.GrantScope(); !ok {
+		v := entitlement.DefaultGrantScope
+		_c.mutation.SetGrantScope(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -475,16 +509,10 @@ func (_c *EntitlementCreate) check() error {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.entity_type": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.FeatureID(); !ok {
-		return &ValidationError{Name: "feature_id", err: errors.New(`ent: missing required field "Entitlement.feature_id"`)}
-	}
 	if v, ok := _c.mutation.FeatureID(); ok {
 		if err := entitlement.FeatureIDValidator(v); err != nil {
 			return &ValidationError{Name: "feature_id", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_id": %w`, err)}
 		}
-	}
-	if _, ok := _c.mutation.FeatureType(); !ok {
-		return &ValidationError{Name: "feature_type", err: errors.New(`ent: missing required field "Entitlement.feature_type"`)}
 	}
 	if v, ok := _c.mutation.FeatureType(); ok {
 		if err := entitlement.FeatureTypeValidator(string(v)); err != nil {
@@ -526,6 +554,14 @@ func (_c *EntitlementCreate) check() error {
 	if v, ok := _c.mutation.AggregationMode(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "aggregation_mode", err: fmt.Errorf(`ent: validator failed for field "Entitlement.aggregation_mode": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.GrantScope(); !ok {
+		return &ValidationError{Name: "grant_scope", err: errors.New(`ent: missing required field "Entitlement.grant_scope"`)}
+	}
+	if v, ok := _c.mutation.GrantScope(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "grant_scope", err: fmt.Errorf(`ent: validator failed for field "Entitlement.grant_scope": %w`, err)}
 		}
 	}
 	if v, ok := _c.mutation.ID(); ok {
@@ -606,11 +642,11 @@ func (_c *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.FeatureID(); ok {
 		_spec.SetField(entitlement.FieldFeatureID, field.TypeString, value)
-		_node.FeatureID = value
+		_node.FeatureID = &value
 	}
 	if value, ok := _c.mutation.FeatureType(); ok {
 		_spec.SetField(entitlement.FieldFeatureType, field.TypeString, value)
-		_node.FeatureType = value
+		_node.FeatureType = &value
 	}
 	if value, ok := _c.mutation.IsEnabled(); ok {
 		_spec.SetField(entitlement.FieldIsEnabled, field.TypeBool, value)
@@ -675,6 +711,10 @@ func (_c *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AggregationMode(); ok {
 		_spec.SetField(entitlement.FieldAggregationMode, field.TypeString, value)
 		_node.AggregationMode = value
+	}
+	if value, ok := _c.mutation.GrantScope(); ok {
+		_spec.SetField(entitlement.FieldGrantScope, field.TypeString, value)
+		_node.GrantScope = value
 	}
 	return _node, _spec
 }

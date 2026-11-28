@@ -29,6 +29,7 @@ type Services struct {
 	GroupService                    service.GroupService
 	EntitlementGrantSvc             service.EntitlementGrantService
 	EntityIntegrationMappingService service.EntityIntegrationMappingService
+	CommitmentService               service.CommitmentService
 }
 
 // NewServices creates a new Services container
@@ -50,6 +51,7 @@ func NewServices(
 	groupService service.GroupService,
 	entitlementGrantSvc service.EntitlementGrantService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
+	commitmentService service.CommitmentService,
 ) *Services {
 	return &Services{
 		InvoiceService:                  invoiceService,
@@ -69,5 +71,6 @@ func NewServices(
 		GroupService:                    groupService,
 		EntitlementGrantSvc:             entitlementGrantSvc,
 		EntityIntegrationMappingService: entityIntegrationMappingService,
+		CommitmentService:               commitmentService,
 	}
 }

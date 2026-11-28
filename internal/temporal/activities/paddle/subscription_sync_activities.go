@@ -7,7 +7,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	paddleint "github.com/flexprice/flexprice/internal/integration/paddle"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
@@ -16,16 +18,19 @@ import (
 // SubscriptionSyncActivities handles Paddle subscription sync activities.
 type SubscriptionSyncActivities struct {
 	integrationFactory *integration.Factory
+	entityScope        interfaces.BillingEntityScope
 	logger             *logger.Logger
 }
 
 // NewSubscriptionSyncActivities creates a new SubscriptionSyncActivities.
 func NewSubscriptionSyncActivities(
 	integrationFactory *integration.Factory,
+	entityScope interfaces.BillingEntityScope,
 	log *logger.Logger,
 ) *SubscriptionSyncActivities {
 	return &SubscriptionSyncActivities{
 		integrationFactory: integrationFactory,
+		entityScope:        entityScope,
 		logger:             log,
 	}
 }
@@ -42,6 +47,11 @@ func (a *SubscriptionSyncActivities) SyncSubscriptionToPaddle(
 
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, "", input.SubscriptionID)
+	if err != nil {
+		return err
+	}
 
 	a.logger.Info(ctx, "syncing subscription to Paddle",
 		"subscription_id", input.SubscriptionID,
@@ -143,6 +153,11 @@ func (a *SubscriptionSyncActivities) CheckSubscriptionSyncStatus(
 	if validationErr := input.Validate(); validationErr != nil {
 		return nil, temporal.NewNonRetryableApplicationError(
 			validationErr.Error(), "ValidationError", validationErr)
+	}
+
+	ctx, err := billingentity.ScopeActivity(ctx, a.entityScope, input.CustomerID, input.InvoiceID, input.SubscriptionID)
+	if err != nil {
+		return nil, err
 	}
 
 	paddleIntegration, err := a.integrationFactory.GetPaddleIntegration(ctx)

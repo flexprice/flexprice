@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"entgo.io/ent/dialect"
 	"github.com/flexprice/flexprice/ent"
@@ -104,6 +105,18 @@ func TestCommitmentRepository_ListAppliesFiltersAndSort(t *testing.T) {
 			},
 			dontWantSQL: []string{
 				`ORDER BY "commitments"."priority"`,
+			},
+		},
+		{
+			name: "active window keeps open-ended commitments",
+			filter: &domain.Filter{
+				QueryFilter: types.NewNoLimitQueryFilter(),
+				ActiveFrom:  lo.ToPtr(time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)),
+				ActiveTo:    lo.ToPtr(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)),
+			},
+			wantSQL: []string{
+				`("commitments"."end_date" IS NULL OR "commitments"."end_date" > $`,
+				`"commitments"."start_date" < $`,
 			},
 		},
 		{

@@ -11,12 +11,14 @@ import (
 type InternalPaymentEvent struct {
 	PaymentID string `json:"payment_id"`
 	TenantID  string `json:"tenant_id"`
+	AttemptID string `json:"attempt_id,omitempty"`
 }
 
 type Payment struct {
 	ID                string                       `json:"id"`
 	DestinationType   types.PaymentDestinationType `json:"destination_type"`
 	DestinationID     string                       `json:"destination_id"`
+	ConnectionID      *string                      `json:"connection_id"`
 	PaymentMethodType types.PaymentMethodType      `json:"payment_method_type"`
 	Amount            decimal.Decimal              `json:"amount" swaggertype:"string"`
 	Currency          string                       `json:"currency"`
@@ -35,6 +37,7 @@ func NewPayment(resp *dto.PaymentResponse) *Payment {
 		return nil
 	}
 	return &Payment{
+		ConnectionID:      resp.ConnectionID,
 		ID:                resp.ID,
 		DestinationType:   resp.DestinationType,
 		DestinationID:     resp.DestinationID,
@@ -59,4 +62,72 @@ type PaymentWebhookPayload struct {
 
 func NewPaymentWebhookPayload(payment *dto.PaymentResponse, eventType types.WebhookEventName) *PaymentWebhookPayload {
 	return &PaymentWebhookPayload{EventType: eventType, Payment: NewPayment(payment)}
+}
+
+type PaymentAttempt struct {
+	ID               string                     `json:"id"`
+	PaymentStatus    types.PaymentStatus        `json:"payment_status"`
+	AttemptNumber    int                        `json:"attempt_number"`
+	GatewayAttemptID *string                    `json:"gateway_attempt_id,omitempty"`
+	ErrorMessage     *string                    `json:"error_message,omitempty"`
+	Metadata         types.Metadata             `json:"metadata,omitempty"`
+	PaymentMethod    *types.InstrumentDetails   `json:"payment_method,omitempty"`
+	Error            *types.PaymentAttemptError `json:"error,omitempty"`
+	CreatedAt        time.Time                  `json:"created_at"`
+}
+
+func NewPaymentAttempt(resp *dto.PaymentAttemptResponse) *PaymentAttempt {
+	if resp == nil {
+		return nil
+	}
+	return &PaymentAttempt{
+		ID:               resp.ID,
+		PaymentStatus:    resp.PaymentStatus,
+		AttemptNumber:    resp.AttemptNumber,
+		GatewayAttemptID: resp.GatewayAttemptID,
+		ErrorMessage:     resp.ErrorMessage,
+		Metadata:         resp.Metadata,
+		PaymentMethod:    resp.PaymentMethod,
+		Error:            resp.Error,
+		CreatedAt:        resp.CreatedAt,
+	}
+}
+
+type PaymentAttemptWebhookPayload struct {
+	EventType       types.WebhookEventName `json:"event_type"`
+	Payment         *Payment               `json:"payment"`
+	Attempt         *PaymentAttempt        `json:"attempt"`
+	CheckoutSession *CheckoutSession       `json:"checkout_session,omitempty"`
+}
+
+// InternalMandateEvent is what the publisher puts in WebhookEvent.Payload for mandate.* events.
+type InternalMandateEvent struct {
+	Mandate Mandate `json:"mandate"`
+}
+
+type Mandate struct {
+	ID                 string                   `json:"id"`
+	SetupIntentID      string                   `json:"setup_intent_id,omitempty"`
+	CustomerID         string                   `json:"customer_id"`
+	ExternalCustomerID string                   `json:"external_customer_id"`
+	Provider           types.PaymentGatewayType `json:"provider"`
+	Type               types.PaymentMethodType  `json:"type"`
+	Status             string                   `json:"status"`
+	FailureReason      *string                  `json:"failure_reason"`
+	MaxAmount          *decimal.Decimal         `json:"max_amount,omitempty" swaggertype:"string"`
+	Currency           string                   `json:"currency"`
+	ExpiresAt          *time.Time               `json:"expires_at,omitempty"`
+	BankAccount        *types.BankDetails       `json:"bank_account,omitempty"`
+	Card               *types.CardDetails       `json:"card,omitempty"`
+	UPI                *types.UPIDetails        `json:"upi,omitempty"`
+}
+
+// MandateWebhookPayload is the outbound payload for every mandate.* event.
+type MandateWebhookPayload struct {
+	EventType types.WebhookEventName `json:"event_type"`
+	Mandate   Mandate                `json:"mandate"`
+}
+
+func NewMandateWebhookPayload(internal *InternalMandateEvent, eventType types.WebhookEventName) *MandateWebhookPayload {
+	return &MandateWebhookPayload{EventType: eventType, Mandate: internal.Mandate}
 }

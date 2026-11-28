@@ -5,9 +5,16 @@ package razorpay
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakePaymentLinkClient stubs only FetchPaymentLink; other RazorpayClient methods
@@ -81,4 +88,279 @@ func TestGetPaymentLinkStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+type fakeOrderPaymentsClient struct {
+	RazorpayClient
+	payments []map[string]interface{}
+	err      error
+	hang     bool
+}
+
+func (c *fakeOrderPaymentsClient) FetchOrderPayments(ctx context.Context, _ string) ([]map[string]interface{}, error) {
+	if c.hang {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return c.payments, c.err
+}
+
+// The link status is read without the order: fakePaymentLinkClient has no FetchOrderPayments and would panic.
+func TestGetPaymentLinkStatus_ReturnsOrderWithoutReadingIt(t *testing.T) {
+	svc := &PaymentService{
+		client: &fakePaymentLinkClient{resp: map[string]interface{}{"status": "created", "order_id": "order_1"}},
+		logger: logger.NewNoopLogger(),
+	}
+	got, err := svc.GetPaymentLinkStatus(context.Background(), "plink_test")
+	require.NoError(t, err)
+	assert.Equal(t, "order_1", got.OrderID)
+}
+
+func TestFailedOrderPaymentIDs(t *testing.T) {
+	tests := []struct {
+		name   string
+		client *fakeOrderPaymentsClient
+		want   []string
+	}{
+		{
+			name: "only declined payments",
+			client: &fakeOrderPaymentsClient{payments: []map[string]interface{}{
+				{"id": "pay_open", "status": "created"},
+				{"id": "pay_declined", "status": "failed"},
+				{"id": "pay_ok", "status": "captured"},
+			}},
+			want: []string{"pay_declined"},
+		},
+		{name: "a failed read returns none", client: &fakeOrderPaymentsClient{err: errors.New("razorpay unavailable")}},
+		{name: "a hung read times out and returns none", client: &fakeOrderPaymentsClient{hang: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &PaymentService{client: tt.client, logger: logger.NewNoopLogger()}
+			start := time.Now()
+			assert.Equal(t, tt.want, svc.FailedOrderPaymentIDs(context.Background(), "order_1"))
+			assert.Less(t, time.Since(start), orderPaymentsTimeout+time.Second)
+		})
+	}
+}
+
+type hungOrderLinkClient struct {
+	fakeOrderPaymentsClient
+	link map[string]interface{}
+}
+
+func (c *hungOrderLinkClient) FetchPaymentLink(context.Context, string) (map[string]interface{}, error) {
+	return c.link, nil
+}
+
+// The checkout poll still gets the link's outcome when the order read hangs; only the declines are dropped.
+func TestFetchPaymentState_HungOrderReadKeepsLinkOutcome(t *testing.T) {
+	client := &hungOrderLinkClient{
+		fakeOrderPaymentsClient: fakeOrderPaymentsClient{hang: true},
+		link: map[string]interface{}{"status": "paid", "order_id": "order_1", "payments": []interface{}{
+			map[string]interface{}{"payment_id": "pay_ok", "status": "captured"},
+		}},
+	}
+	adapter := &CheckoutAdapter{Svc: &PaymentService{client: client, logger: logger.NewNoopLogger()}}
+
+	start := time.Now()
+	state, err := adapter.FetchPaymentState(context.Background(), interfaces.PaymentStateRequest{GatewayTrackingID: "plink_test"})
+	require.NoError(t, err)
+	assert.Less(t, time.Since(start), orderPaymentsTimeout+time.Second)
+	assert.Equal(t, "pay_ok", state.GatewayPaymentID)
+	assert.Equal(t, types.PaymentStatusSucceeded, state.Status)
+	assert.Empty(t, state.FailedGatewayPaymentIDs)
+}
+
+type orderInvoiceClient struct {
+	fakeOrderPaymentsClient
+	invoice map[string]interface{}
+}
+
+func (c *orderInvoiceClient) GetInvoice(context.Context, string) (map[string]interface{}, error) {
+	return c.invoice, nil
+}
+
+// A mandate authorization link (inv_) reports its declines from the invoice's order, like a payment link.
+func TestFetchPaymentState_InvoiceReportsOrderDeclines(t *testing.T) {
+	client := &orderInvoiceClient{
+		fakeOrderPaymentsClient: fakeOrderPaymentsClient{payments: []map[string]interface{}{
+			{"id": "pay_declined", "status": "failed"},
+			{"id": "pay_open", "status": "created"},
+		}},
+		invoice: map[string]interface{}{"status": "issued", "order_id": "order_1"},
+	}
+	adapter := &CheckoutAdapter{Svc: &PaymentService{client: client, logger: logger.NewNoopLogger()}}
+
+	state, err := adapter.FetchPaymentState(context.Background(), interfaces.PaymentStateRequest{GatewayTrackingID: "inv_test"})
+	require.NoError(t, err)
+	assert.Empty(t, state.Status)
+	assert.Equal(t, []string{"pay_declined"}, state.FailedGatewayPaymentIDs)
+}
+
+type expireClient struct {
+	RazorpayClient
+	cancelLinkIDs    []string
+	cancelInvoiceIDs []string
+	cancelErr        error
+	fetched          map[string]interface{}
+}
+
+func (c *expireClient) CancelPaymentLink(_ context.Context, id string) (map[string]interface{}, error) {
+	c.cancelLinkIDs = append(c.cancelLinkIDs, id)
+	return map[string]interface{}{"status": "cancelled"}, c.cancelErr
+}
+
+func (c *expireClient) CancelInvoice(_ context.Context, id string) (*AuthorizationLinkResponse, error) {
+	c.cancelInvoiceIDs = append(c.cancelInvoiceIDs, id)
+	return &AuthorizationLinkResponse{Status: "cancelled"}, c.cancelErr
+}
+
+func (c *expireClient) FetchPaymentLink(context.Context, string) (map[string]interface{}, error) {
+	return c.fetched, nil
+}
+
+func (c *expireClient) GetInvoice(context.Context, string) (map[string]interface{}, error) {
+	return c.fetched, nil
+}
+
+func newExpireAdapter(c RazorpayClient) *CheckoutAdapter {
+	return &CheckoutAdapter{Svc: &PaymentService{client: c, logger: logger.NewNoopLogger()}}
+}
+
+func TestExpirePaymentLink_RoutesPlinkToPaymentLinkCancel(t *testing.T) {
+	c := &expireClient{}
+	_, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: "plink_x"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"plink_x"}, c.cancelLinkIDs)
+	assert.Empty(t, c.cancelInvoiceIDs)
+}
+
+func TestExpirePaymentLink_RoutesInvoiceToInvoiceCancel(t *testing.T) {
+	c := &expireClient{}
+	_, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: "inv_x"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"inv_x"}, c.cancelInvoiceIDs)
+	assert.Empty(t, c.cancelLinkIDs)
+}
+
+func TestExpirePaymentLink_AlreadyClosedIsNil(t *testing.T) {
+	for _, handle := range []string{"plink_x", "inv_x"} {
+		for _, status := range []string{"cancelled", "expired"} {
+			t.Run(handle+"/"+status, func(t *testing.T) {
+				c := &expireClient{cancelErr: errors.New("boom"), fetched: map[string]interface{}{"status": status}}
+				resp, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: handle})
+				require.NoError(t, err)
+				assert.False(t, resp.AlreadyPaid)
+			})
+		}
+	}
+}
+
+func TestExpirePaymentLink_PaidReportsAlreadyPaid(t *testing.T) {
+	tests := map[string]map[string]interface{}{
+		"plink_x": {"status": "paid", "payments": []interface{}{
+			map[string]interface{}{"payment_id": "pay_cap", "status": "captured"},
+		}},
+		"inv_x": {"status": "paid", "payment_id": "pay_cap"},
+	}
+	for handle, fetched := range tests {
+		t.Run(handle, func(t *testing.T) {
+			c := &expireClient{cancelErr: errors.New("boom"), fetched: fetched}
+			resp, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: handle})
+			require.NoError(t, err)
+			assert.True(t, resp.AlreadyPaid)
+		})
+	}
+}
+
+func TestExpirePaymentLink_StillOpenReturnsCancelError(t *testing.T) {
+	c := &expireClient{cancelErr: errors.New("boom"), fetched: map[string]interface{}{"status": "created"}}
+	_, err := newExpireAdapter(c).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: "plink_x"})
+	assert.Error(t, err)
+}
+
+func TestExpirePaymentLink_UnknownHandleNotImplemented(t *testing.T) {
+	for _, handle := range []string{"order_x", "pay_x", ""} {
+		_, err := newExpireAdapter(&expireClient{}).ExpirePaymentLink(context.Background(), interfaces.ExpirePaymentLinkRequest{GatewayTrackingID: handle})
+		assert.True(t, ierr.IsNotImplemented(err), handle)
+	}
+}
+
+type fakePaymentClient struct {
+	RazorpayClient
+	resp map[string]interface{}
+}
+
+func (c *fakePaymentClient) FetchPayment(_ context.Context, _ string) (map[string]interface{}, error) {
+	return c.resp, nil
+}
+
+func TestGetPaymentStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		resp      map[string]interface{}
+		wantError string
+	}{
+		{name: "failed payment carries the gateway error", resp: map[string]interface{}{"status": "failed", "error_description": "predebit notification was not approved"}, wantError: "predebit notification was not approved"},
+		{name: "captured payment has no error", resp: map[string]interface{}{"status": "captured", "error_description": nil}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewPaymentService(&fakePaymentClient{resp: tt.resp}, nil, nil, nil, logger.NewNoopLogger())
+			status, gatewayError, err := svc.GetPaymentStatus(context.Background(), "pay_x")
+			require.NoError(t, err)
+			assert.Equal(t, tt.resp["status"], status)
+			assert.Equal(t, tt.wantError, gatewayError)
+		})
+	}
+}
+
+type fakeAttemptClient struct {
+	RazorpayClient
+	resp map[string]map[string]interface{}
+}
+
+func (c *fakeAttemptClient) FetchPayment(_ context.Context, id string) (map[string]interface{}, error) {
+	if r, ok := c.resp[id]; ok {
+		return r, nil
+	}
+	return nil, errors.New("razorpay unavailable")
+}
+
+func TestGetAttemptDetails(t *testing.T) {
+	client := &fakeAttemptClient{resp: map[string]map[string]interface{}{
+		"pay_card": {"status": "captured", "method": "card", "vpa": nil, "email": "a@b.c", "contact": "+91999",
+			"card": map[string]interface{}{"network": "Visa", "issuer": "ICIC", "last4": "1111", "type": "credit"}},
+		"pay_upi": {"status": "captured", "method": "upi", "vpa": "user@okhdfc", "upi": map[string]interface{}{"vpa": "user@okhdfc"}},
+		"pay_nb":  {"status": "captured", "method": "netbanking", "bank": "HDFC", "card": nil},
+		"pay_failed": {"status": "failed", "method": "card", "error_code": "BAD_REQUEST_ERROR", "error_description": "Card declined",
+			"error_source": "bank", "error_step": "payment_authorization", "error_reason": "card_declined",
+			"card": map[string]interface{}{"network": "MasterCard", "issuer": "HDFC", "last4": "4444", "type": "debit"}},
+	}}
+	adapter := NewPaymentMethodAdapter(client, nil, nil)
+
+	tests := []struct {
+		id   string
+		want *types.PaymentAttemptDetails
+	}{
+		{id: "pay_card", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "Visa", Issuer: "ICIC", Last4: "1111", Funding: "credit"}}}},
+		{id: "pay_upi", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodUPI}}},
+		{id: "pay_nb", want: &types.PaymentAttemptDetails{PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodNetBanking, Bank: &types.BankDetails{Bank: "HDFC"}}}},
+		{id: "pay_failed", want: &types.PaymentAttemptDetails{
+			PaymentMethod: &types.InstrumentDetails{Type: types.PaymentAttemptMethodCard, Card: &types.CardDetails{Brand: "MasterCard", Issuer: "HDFC", Last4: "4444", Funding: "debit"}},
+			Error:         &types.PaymentAttemptError{Code: "BAD_REQUEST_ERROR", Source: "bank", Step: "payment_authorization", Reason: "card_declined"},
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			got, err := adapter.GetAttemptDetails(context.Background(), tt.id)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	_, err := adapter.GetAttemptDetails(context.Background(), "pay_down")
+	assert.Error(t, err)
 }

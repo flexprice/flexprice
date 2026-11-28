@@ -6,6 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/activity"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
@@ -17,8 +22,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type planChangeRequest struct {
@@ -37,7 +40,6 @@ type planChangeRequest struct {
 
 	creditGrants                *planChangeCreditGrants
 	closingEntitlementOverrides []*entitlement.Entitlement
-	closingEntitlementGrants    []*entitlementgrant.EntitlementGrant
 
 	anchorAtEffect bool
 
@@ -86,6 +88,12 @@ func (s *subscriptionService) resolvePlanChange(
 		return nil, err
 	}
 
+	// Read before the prices so synced_price_sequence never claims a change the new line items missed.
+	targetSeq, err := s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, toPlan.Plan.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Plan change v2 does not currently support caller-driven price selection —
 	// pass nil so the strict-equal default applies (matches historical behavior
 	// on this path).
@@ -121,9 +129,7 @@ func (s *subscriptionService) resolvePlanChange(
 	if err != nil {
 		return nil, err
 	}
-	if updatedSub.SyncedPriceSequence, err = s.PlanPriceSyncRepo.CurrentPlanSequence(ctx, r.toPlan.ID); err != nil {
-		return nil, err
-	}
+	updatedSub.SyncedPriceSequence = targetSeq
 	r.updatedSub = updatedSub
 
 	carriedLineItems, openingLineItems, closingLineItems, err := s.resolveLineItems(ctx, sub, targetPrices, toPlan, effectiveAt)
@@ -166,7 +172,47 @@ func (s *subscriptionService) resolvePlanChange(
 		return nil, err
 	}
 
+	if err := s.validatePlanChangeSubscriptionEntitlementGrant(ctx, r, toPlan); err != nil {
+		return nil, err
+	}
+
 	return r, nil
+}
+
+// validatePlanChangeSubscriptionEntitlementGrant refuses a plan change that would break the subscription entitlement grant: a
+// target plan line or feature entitlement grant it cannot cover, or a period reset that would cut its window.
+func (s *subscriptionService) validatePlanChangeSubscriptionEntitlementGrant(ctx context.Context, r *planChangeRequest, toPlan *dto.PlanResponse) error {
+	grants := &entitlementGrantService{ServiceParams: s.ServiceParams}
+	granted, err := grants.hasSubscriptionScopedEntitlement(ctx, r.currentSub.ID)
+	if err != nil {
+		return err
+	}
+	if !granted {
+		return nil
+	}
+	if r.anchorAtEffect {
+		return ierr.NewError("the billing period cannot be reset on a subscription with a subscription entitlement grant").
+			WithHint("Use billing_period_behaviour='unchanged'. A reset would cut the grant's current window short.").
+			WithReportableDetails(map[string]any{"subscription_id": r.currentSub.ID}).
+			Mark(ierr.ErrValidation)
+	}
+
+	var change subscriptionEntitlementGrantChange
+	for _, e := range r.closingLineItems {
+		ended := *e.LineItem
+		ended.EndDate = r.effectiveAt
+		change.items = append(change.items, &ended)
+	}
+	for _, e := range r.openingLineItems {
+		change.items = append(change.items, e.LineItem)
+		change.prices = append(change.prices, e.NewPrice)
+	}
+	for _, e := range toPlan.Entitlements {
+		if e != nil {
+			change.entitlements = append(change.entitlements, e.Entitlement)
+		}
+	}
+	return grants.validateChange(ctx, r.currentSub, change)
 }
 
 // resolveCreditGrantMigration works out which grants leave with the old plan and which
@@ -279,54 +325,6 @@ func (s *subscriptionService) resolveClosingEntitlements(ctx context.Context, r 
 		})
 	}
 
-	return s.resolveClosingEntitlementGrants(ctx, r, fromPlanEntIDs)
-}
-
-// resolveClosingEntitlementGrants collects the subscription's grant windows still open at the
-// change instant whose config is an outgoing-plan entitlement or an override closing with it.
-func (s *subscriptionService) resolveClosingEntitlementGrants(
-	ctx context.Context,
-	r *planChangeRequest,
-	fromPlanEntIDs map[string]bool,
-) error {
-	// Grants key off the entitlement the subscription actually resolves to, which is the
-	// override where one is active and the plan entitlement otherwise.
-
-	// NOTE: This logic doesnot close entitlement grants that are additive and derived from
-	// some entities which are not being closed like addon. There is no way to be certain on
-	// what qouta had been used in that grant and associate it to different constituent grant qoutas.
-	// If needed, later on a prorated handling could be added to close the existing grant and open a
-	// new one with prorated qouta.
-
-	configIDs := lo.Keys(fromPlanEntIDs)
-	for _, ent := range r.closingEntitlementOverrides {
-		configIDs = append(configIDs, ent.ID)
-	}
-
-	filter := types.NewNoLimitEntitlementGrantFilter().
-		WithSubscriptionIDs(r.currentSub.ID).
-		WithEntitlementConfigIDs(configIDs...)
-	filter.ValidToAfter = &r.effectiveAt
-
-	grants, err := s.EntitlementGrantRepo.List(ctx, filter)
-	if err != nil {
-		return err
-	}
-
-	for _, g := range grants {
-		if g == nil {
-			continue
-		}
-
-		r.closingEntitlementGrants = append(r.closingEntitlementGrants, g)
-		r.changes = append(r.changes, &dto.EntityChangeResult{
-			EntityType:  types.SubscriptionChangeEntityTypeEntitlementGrant,
-			ReferenceID: g.FeatureID(),
-			EntityID:    g.ID,
-			Behaviour:   types.EntityChangeBehaviourDrop,
-		})
-	}
-
 	return nil
 }
 
@@ -399,35 +397,45 @@ func (s *subscriptionService) closeEntitlementOverrides(ctx context.Context, r *
 	return nil
 }
 
-// closeEntitlementGrants ends the outgoing plan's open grant windows at the change instant.
-// Closing shrinks valid_to, which the evaluator treats as a window owed one final usage
-// refresh, so events landing before the swap still reach the billing reads.
-func (s *subscriptionService) closeEntitlementGrants(ctx context.Context, r *planChangeRequest) error {
-	for _, g := range r.closingEntitlementGrants {
-		// A window opening after the swap has nothing to keep; close it empty rather than inverted.
-		closeAt := r.effectiveAt
-		if closeAt.Before(g.ValidFrom) {
-			closeAt = g.ValidFrom
-		}
-
-		closed := entitlementgrant.NewEntitlementGrantBuilder(g).
-			WithWindow(g.ValidFrom, closeAt).
-			Build()
-
-		if _, err := s.EntitlementGrantRepo.Update(ctx, closed); err != nil {
-			return err
-		}
-
-		s.Logger.Info(ctx, "closed entitlement grant window on plan change",
-			"subscription_id", r.currentSub.ID,
-			"grant_id", closed.ID,
-			"entitlement_config_id", closed.EntitlementConfigID,
-			"feature_id", closed.FeatureID(),
-			"from_plan_id", r.fromPlan.ID,
-			"valid_to", closeAt)
+// applyPlanChangeEntitlementGrants uses the addon change flow to close outgoing
+// allowances and open incoming ones with carry-forward and optional proration.
+func (s *subscriptionService) applyPlanChangeEntitlementGrants(ctx context.Context, r *planChangeRequest) error {
+	grantSvc := newSubscriptionGrantService(s.ServiceParams)
+	outgoing, err := NewEntitlementService(s.ServiceParams).GetPlanEntitlements(ctx, r.fromPlan.ID)
+	if err != nil {
+		return err
 	}
-
-	return nil
+	removed := append(dto.ToEntitlements(outgoing), r.closingEntitlementOverrides...)
+	ecsByFeature, err := grantSvc.GetSubscriptionGrantECsByFeature(ctx, r.updatedSub)
+	if err != nil {
+		return err
+	}
+	incoming := make([]*entitlement.Entitlement, 0)
+	surviving := make(map[string][]*entitlement.Entitlement)
+	for featureID, ecs := range ecsByFeature {
+		for _, ec := range ecs {
+			if ec.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN && ec.EntityID == r.toPlan.ID {
+				incoming = append(incoming, ec)
+			} else {
+				surviving[featureID] = append(surviving[featureID], ec)
+			}
+		}
+	}
+	grants, err := grantSvc.resolveGrantProration(ctx, r.updatedSub, incoming, surviving,
+		r.effectiveAt, r.behavior, grantProrationSourcePlanChange)
+	if err != nil {
+		return err
+	}
+	for i, g := range grants {
+		grants[i] = entitlementgrant.NewEntitlementGrantBuilder(g).
+			WithWindow(types.LatestOf(r.effectiveAt, g.ValidFrom), g.ValidTo).
+			Build()
+	}
+	return grantSvc.applyEntitlementGrantChange(ctx, &GrantChangeConfig{
+		sub: r.updatedSub, incomingECs: incoming, survivingECsByFeature: surviving,
+		entitlementGrantsToAdd: grants, entitlementsToRemove: removed,
+		entitlementChangeAt: r.effectiveAt, entitlementChangeOrigin: grantProrationSourcePlanChange,
+	})
 }
 
 func (s *subscriptionService) checkPlanChangePreconditions(
@@ -899,7 +907,7 @@ func (s *subscriptionService) executePlanChangeAt(
 			return err
 		}
 
-		if err := s.closeEntitlementGrants(txCtx, r); err != nil {
+		if err := s.applyPlanChangeEntitlementGrants(txCtx, r); err != nil {
 			return err
 		}
 
@@ -927,6 +935,7 @@ func (s *subscriptionService) executePlanChangeAt(
 	s.attemptPlanChangePayment(ctx, resp)
 
 	// After commit so webhook failure cannot roll back a completed change.
+	NotifySubscriptionChanged(ctx, s.ServiceParams, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionPlanChanged, subscriptionID)
 	s.publishSystemEvent(ctx, types.WebhookEventSubscriptionUpdated, subscriptionID)
 
@@ -976,10 +985,14 @@ func (s *subscriptionService) loadSubscriptionForChange(
 
 func (s *subscriptionService) applyPlanChangeLineItems(ctx context.Context, r *planChangeRequest) error {
 	for _, move := range r.carriedLineItems {
-		updated := subscription.NewSubscriptionLineItemBuilder(move.LineItem).
+		builder := subscription.NewSubscriptionLineItemBuilder(move.LineItem).
 			WithPlan(r.toPlan.ID, r.toPlan.Name).
-			WithPrice(move.NewPrice).
-			Build()
+			WithPrice(move.NewPrice)
+		// A target price scheduled to end ends the line carried onto it
+		if move.NewPrice.EndDate != nil {
+			builder = builder.WithEndDate(*move.NewPrice.EndDate)
+		}
+		updated := builder.Build()
 
 		if err := s.SubscriptionLineItemRepo.Update(ctx, updated); err != nil {
 			return err
@@ -1001,7 +1014,12 @@ func (s *subscriptionService) applyPlanChangeLineItems(ctx context.Context, r *p
 	}
 	toCreate := make([]*subscription.SubscriptionLineItem, 0, len(r.openingLineItems))
 	for _, move := range r.openingLineItems {
-		toCreate = append(toCreate, move.LineItem)
+		item := move.LineItem
+		// A target price scheduled to end ends the line opened for it
+		if priceEnd := move.NewPrice.EndDate; priceEnd != nil && (item.EndDate.IsZero() || priceEnd.Before(item.EndDate)) {
+			item = subscription.NewSubscriptionLineItemBuilder(item).WithEndDate(*priceEnd).Build()
+		}
+		toCreate = append(toCreate, item)
 	}
 	return s.SubscriptionLineItemRepo.CreateBulk(ctx, toCreate)
 }
@@ -1466,7 +1484,7 @@ func (s *subscriptionService) ExecuteScheduledPlanChangeV2(
 	}
 
 	schedule.Status = types.ScheduleStatusExecuted
-	schedule.ExecutedAt = lo.ToPtr(time.Now().UTC())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 	if err := schedule.SetPlanChangeV2Result(&subscription.PlanChangeV2Result{
 		SubscriptionID: schedule.SubscriptionID,
 		FromPlanID:     resp.FromPlan.ID,
@@ -1493,7 +1511,7 @@ func (s *subscriptionService) failPlanChangeSchedule(
 	cause error,
 ) {
 	schedule.Status = types.ScheduleStatusFailed
-	schedule.ExecutedAt = lo.ToPtr(time.Now().UTC())
+	schedule.ExecutedAt = lo.ToPtr(clock.Now())
 	schedule.ErrorMessage = lo.ToPtr(cause.Error())
 
 	if err := s.SubScheduleRepo.Update(ctx, schedule); err != nil {
@@ -1565,7 +1583,7 @@ func (s *subscriptionService) resolvePendingPlanChangeSchedule(
 
 	superseded := subscription.NewSubscriptionScheduleBuilder(existing).
 		WithStatus(types.ScheduleStatusCancelled).
-		WithCancelledAt(time.Now().UTC()).
+		WithCancelledAt(clock.Now()).
 		WithUpdatedBy(types.GetUserID(ctx)).
 		Build()
 
@@ -1590,7 +1608,7 @@ func resolveEffectiveAt(sub *subscription.Subscription, req dto.SubscriptionChan
 		return sub.CurrentPeriodEnd
 	}
 
-	return time.Now().UTC()
+	return clock.Now()
 }
 
 // schedulePlanChangeForPeriodEnd records a deferred change.

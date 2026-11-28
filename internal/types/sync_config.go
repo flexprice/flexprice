@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/samber/lo"
 )
 
 // SyncConfig defines which entities should be synced between FlexPrice and external providers
@@ -13,6 +14,7 @@ type SyncConfig struct {
 	Plan         *EntitySyncConfig `json:"plan,omitempty"`
 	Subscription *EntitySyncConfig `json:"subscription,omitempty"`
 	Invoice      *EntitySyncConfig `json:"invoice,omitempty"`
+	CreditNote   *EntitySyncConfig `json:"credit_note,omitempty"` // Credit note sync (Zoho Books only), outbound only
 	Customer     *EntitySyncConfig `json:"customer,omitempty"`
 	Payment      *EntitySyncConfig `json:"payment,omitempty"` // Payment sync (QuickBooks bidirectional)
 	Price        *EntitySyncConfig `json:"price,omitempty"`   // Price sync (Stripe only) — outbound only, see Validate()
@@ -67,6 +69,16 @@ type InvoiceSyncSettings struct {
 	// Embedded rather than nested so the provider-specific settings stay inline in the
 	// same JSON object they have always been stored in.
 	ZohoInvoiceSyncSettings
+	StripeInvoiceSyncSettings
+}
+
+// StripeInvoiceSyncSettings overrides how synced invoices are collected and sent in Stripe.
+type StripeInvoiceSyncSettings struct {
+	// Nil lets the sync decide from the collection method and saved payment method.
+	AutoAdvance *bool `json:"auto_advance,omitempty"`
+
+	// Nil sends Stripe's invoice email for send_invoice invoices.
+	SendInvoiceEmail *bool `json:"send_invoice_email,omitempty"`
 }
 
 // ZohoInvoiceSyncSettings holds the outbound invoice settings that map onto Zoho Books API
@@ -93,6 +105,109 @@ type ZohoInvoiceSyncSettings struct {
 	// Zoho chart-of-accounts id ("Deposit To"). Empty omits account_id, leaving Zoho's
 	// Undeposited Funds default.a
 	DepositToAccountID string `json:"deposit_to_account_id,omitempty"`
+
+	// Online payment gateways attached to the Zoho invoice as payment options, so the Zoho
+	// invoice carries online payment links.
+	PaymentGateways *ZohoPaymentGatewaySettings `json:"payment_gateways,omitempty"`
+}
+
+// ZohoPaymentGatewaySettings lists the Zoho Books gateways attached to synced invoices.
+// Each gateway must also be set up under Online Payments in Zoho Books.
+type ZohoPaymentGatewaySettings struct {
+	Enabled  bool                 `json:"enabled"`
+	Gateways []ZohoPaymentGateway `json:"gateways,omitempty"`
+
+	// Sent as additional_field1 on the PayPal gateway. Required when PayPal is selected.
+	PayPalPaymentMethod ZohoPayPalPaymentMethod `json:"paypal_payment_method,omitempty"`
+}
+
+// ZohoPaymentGateway is a Zoho Books online payment gateway, sent as gateway_name in an
+// invoice's payment options.
+type ZohoPaymentGateway string
+
+const (
+	ZohoPaymentGatewayPayPal       ZohoPaymentGateway = "paypal"
+	ZohoPaymentGatewayStripe       ZohoPaymentGateway = "stripe"
+	ZohoPaymentGatewayAuthorizeNet ZohoPaymentGateway = "authorize_net"
+	ZohoPaymentGatewayPayflowPro   ZohoPaymentGateway = "payflow_pro"
+	ZohoPaymentGateway2Checkout    ZohoPaymentGateway = "2checkout"
+	ZohoPaymentGatewayBraintree    ZohoPaymentGateway = "braintree"
+	// Not in Zoho's documented gateway_name values, but offered under Online Payments in Zoho Books.
+	ZohoPaymentGatewayRazorpay ZohoPaymentGateway = "razorpay"
+)
+
+// ZohoPayPalPaymentMethod is the PayPal checkout flow Zoho Books uses for an invoice.
+type ZohoPayPalPaymentMethod string
+
+const (
+	ZohoPayPalPaymentMethodStandard ZohoPayPalPaymentMethod = "standard"
+	ZohoPayPalPaymentMethodAdaptive ZohoPayPalPaymentMethod = "adaptive"
+)
+
+func (s *ZohoPaymentGatewaySettings) Validate() error {
+	if s == nil {
+		return nil
+	}
+
+	if s.Enabled && len(s.Gateways) == 0 {
+		return ierr.NewError("no zoho payment gateway selected").
+			WithHint("Select at least one payment gateway to attach to Zoho invoices").
+			Mark(ierr.ErrValidation)
+	}
+
+	for _, gateway := range s.Gateways {
+		switch gateway {
+		case ZohoPaymentGatewayPayPal, ZohoPaymentGatewayStripe, ZohoPaymentGatewayAuthorizeNet,
+			ZohoPaymentGatewayPayflowPro, ZohoPaymentGateway2Checkout, ZohoPaymentGatewayBraintree,
+			ZohoPaymentGatewayRazorpay:
+		default:
+			return ierr.NewError("invalid zoho payment gateway").
+				WithHint(fmt.Sprintf("gateways must be one of %q, %q, %q, %q, %q, %q or %q",
+					ZohoPaymentGatewayPayPal, ZohoPaymentGatewayStripe, ZohoPaymentGatewayAuthorizeNet,
+					ZohoPaymentGatewayPayflowPro, ZohoPaymentGateway2Checkout, ZohoPaymentGatewayBraintree,
+					ZohoPaymentGatewayRazorpay)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	if lo.Contains(s.Gateways, ZohoPaymentGatewayPayPal) {
+		switch s.PayPalPaymentMethod {
+		case ZohoPayPalPaymentMethodStandard, ZohoPayPalPaymentMethodAdaptive:
+		default:
+			return ierr.NewError("invalid zoho paypal payment method").
+				WithHint(fmt.Sprintf("paypal_payment_method must be %q or %q when paypal is selected",
+					ZohoPayPalPaymentMethodStandard, ZohoPayPalPaymentMethodAdaptive)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// IsZohoPaymentGatewaysEnabled reports whether synced invoices carry the selected payment
+// gateways as Zoho payment options.
+func (s *InvoiceSyncSettings) IsZohoPaymentGatewaysEnabled() bool {
+	return s != nil && s.PaymentGateways != nil && s.PaymentGateways.Enabled
+}
+
+// ZohoPaymentGateways returns the gateways to attach to synced Zoho invoices, or nil when
+// attaching is off.
+func (s *InvoiceSyncSettings) ZohoPaymentGateways() []ZohoPaymentGateway {
+	if !s.IsZohoPaymentGatewaysEnabled() {
+		return nil
+	}
+	return s.PaymentGateways.Gateways
+}
+
+func (s *InvoiceSyncSettings) StripeAutoAdvance() *bool {
+	if s == nil {
+		return nil
+	}
+	return s.AutoAdvance
+}
+
+func (s *InvoiceSyncSettings) IsStripeSendInvoiceEmailEnabled() bool {
+	return s == nil || s.SendInvoiceEmail == nil || *s.SendInvoiceEmail
 }
 
 // IsSubmitForApprovalEnabled reports whether synced invoices should be submitted into the
@@ -387,6 +502,29 @@ func (s *SyncConfig) Validate() error {
 		return ierr.NewError("invoice inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
+	if s.CreditNote != nil && s.CreditNote.Inbound {
+		return ierr.NewError("credit note inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	if s.CreditNote != nil && s.CreditNote.Outbound && (s.Invoice == nil || !s.Invoice.Outbound) {
+		return ierr.NewError("credit note sync requires invoice outbound sync").
+			WithHint("Enable invoice outbound sync to sync credit notes to Zoho Books").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Zoho rejects a credit note refund without a Bank or Cash account to pay it from.
+	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.ZohoDepositToAccountID() == "" {
+		return ierr.NewError("credit note sync requires a deposit to account").
+			WithHint("Set deposit_to_account_id to the Zoho Bank or Cash account credit note refunds are paid from").
+			Mark(ierr.ErrValidation)
+	}
+
+	if s.CreditNote != nil && s.CreditNote.Outbound && s.InvoiceSyncSettings.IsSubmitForApprovalEnabled() {
+		return ierr.NewError("credit note sync requires submit for approval to be disabled").
+			WithHint("Disable submit_for_approval to sync credit notes to Zoho Books").
+			Mark(ierr.ErrValidation)
+	}
+
 	if s.Deal != nil && s.Deal.Inbound {
 		return ierr.NewError("deal inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
@@ -428,6 +566,9 @@ func (s *SyncConfig) Validate() error {
 			return err
 		}
 		if err := s.InvoiceSyncSettings.ValidateZohoPaymentSettings(); err != nil {
+			return err
+		}
+		if err := s.InvoiceSyncSettings.PaymentGateways.Validate(); err != nil {
 			return err
 		}
 	}

@@ -18,9 +18,12 @@ type Repository interface {
 	Update(ctx context.Context, inv *Invoice) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
-	// ListAllTenant retrieves invoices across all tenants (for scheduled jobs only).
-	ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
+	// ListFinalizationCandidates pages computed drafts across all tenants by id (scheduled jobs only).
+	ListFinalizationCandidates(ctx context.Context, afterID string, limit int) ([]*Invoice, error)
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
+	// AssignDefaultBillingEntities sets up to limit (all when limit <= 0) of the environment's invoices
+	// without an entity to its default entity, bypassing the activity log.
+	AssignDefaultBillingEntities(ctx context.Context, limit int) (int, error)
 
 	// Edge-specific operations
 	// TODO: AddLineItems and RemoveLineItems are candidates for future removal
@@ -40,13 +43,14 @@ type Repository interface {
 	// If billingReason is empty, it matches any billing reason (backward compat).
 	GetForPeriod(ctx context.Context, subscriptionID string, periodStart, periodEnd time.Time, billingReason string) (*Invoice, error)
 
-	// UpdateDraftInvoicePeriod sets a draft invoice's period end, billing reason and idempotency key, for a
+	// UpdateDraftInvoicePeriod sets a draft invoice's period end, issue date, billing reason and idempotency key, for a
 	// period that ends early. Returns ErrNotFound if the invoice is not a draft.
-	UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd time.Time, billingReason string, idempotencyKey string) error
+	UpdateDraftInvoicePeriod(ctx context.Context, id string, periodEnd, issueDate time.Time, billingReason string, idempotencyKey string) error
 
 	// GetNextInvoiceNumber generates and returns the next invoice number for a tenant
 	// Format: INV-YYYYMM-XXXXX
-	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig) (string, error)
+	// The prefix is recorded on the period's counter row and printed in the number.
+	GetNextInvoiceNumber(ctx context.Context, invoiceConfig *types.InvoiceConfig, prefix string) (string, error)
 
 	// GetNextBillingSequence returns the next billing sequence number for a subscription
 	GetNextBillingSequence(ctx context.Context, subscriptionID string) (int, error)

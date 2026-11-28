@@ -5,6 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponassociation"
@@ -20,8 +25,6 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 type subscriptionRepository struct {
@@ -56,7 +59,12 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		sub.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	subscription, err := client.Subscription.Create().
+	paymentTerms, err := storedPaymentTerms(sub)
+	if err != nil {
+		return err
+	}
+
+	create := client.Subscription.Create().
 		SetID(sub.ID).
 		SetTenantID(sub.TenantID).
 		SetLookupKey(sub.LookupKey).
@@ -98,9 +106,13 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
-		SetNillablePaymentTerms(sub.PaymentTerms).
-		SetSyncedPriceSequence(sub.SyncedPriceSequence).
-		Save(ctx)
+		SetNillablePaymentTerms(paymentTerms).
+		SetSyncedPriceSequence(sub.SyncedPriceSequence)
+	// SetSettings(nil) would store JSON null, so leave the column NULL when there are no overrides.
+	if sub.Settings != nil {
+		create.SetSettings(sub.Settings)
+	}
+	subscription, err := create.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -238,7 +250,7 @@ func (r *subscriptionRepository) GetForUpdate(ctx context.Context, id string) (*
 
 func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subscription) error {
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription", "update", map[string]interface{}{
@@ -284,10 +296,19 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Handle nullable payment_terms - explicitly clear if nil
-	if sub.PaymentTerms != nil {
-		query.SetPaymentTerms(*sub.PaymentTerms)
+	paymentTerms, err := storedPaymentTerms(sub)
+	if err != nil {
+		return err
+	}
+	if paymentTerms != nil {
+		query.SetPaymentTerms(*paymentTerms)
 	} else {
 		query.ClearPaymentTerms()
+	}
+	if sub.Settings != nil {
+		query.SetSettings(sub.Settings)
+	} else {
+		query.ClearSettings()
 	}
 
 	// Handle nullable date fields - explicitly clear if nil
@@ -333,8 +354,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Execute update
-	_, err := query.SaveReturning(ctx)
-	if err != nil {
+	if _, err := query.SaveReturning(ctx); err != nil {
 		SetSpanError(span, err)
 		r.logger.Error(ctx, "failed to update subscription", "error", err, "subscription_id", sub.ID)
 		return ierr.WithError(err).
@@ -342,9 +362,22 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			Mark(ierr.ErrDatabase)
 	}
 
+	sub.PaymentTerms = paymentTerms
 	SetSpanSuccess(span)
 	r.invalidateCache(ctx, sub.ID)
 	return nil
+}
+
+// storedPaymentTerms joins the subscription's payment terms type and days into the stored payment_terms; nil when unset.
+func storedPaymentTerms(sub *domainSub.Subscription) (*types.PaymentTerms, error) {
+	if sub.PaymentTermsType == nil {
+		return nil, nil
+	}
+	terms, err := types.NewPaymentTerms(*sub.PaymentTermsType, sub.PaymentTermsDays)
+	if err != nil {
+		return nil, err
+	}
+	return &terms, nil
 }
 
 // UpdatePlan writes plan_id and nothing else, so a plan move can never ride along
@@ -371,7 +404,7 @@ func (r *subscriptionRepository) UpdatePlan(ctx context.Context, id string, plan
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetPlanID(planID).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SaveReturning(ctx)
 	if err != nil {
@@ -410,7 +443,7 @@ func (r *subscriptionRepository) Delete(ctx context.Context, id string) error {
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetStatus(string(types.StatusArchived)).
-		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedAt(clock.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Exec(ctx)
 
@@ -926,8 +959,8 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetStatus(string(item.Status)).
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
-				SetCreatedAt(time.Now()).
-				SetUpdatedAt(time.Now())
+				SetCreatedAt(clock.Now()).
+				SetUpdatedAt(clock.Now())
 		}
 
 		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
@@ -1091,7 +1124,7 @@ func (r *subscriptionRepository) UpdatePause(ctx context.Context, pause *domainS
 	defer FinishSpan(span)
 
 	client := r.client.Writer(ctx)
-	now := time.Now().UTC()
+	now := clock.Now()
 
 	p, err := client.SubscriptionPause.Query().
 		Where(
@@ -1237,6 +1270,10 @@ func (r *subscriptionRepository) GetCache(ctx context.Context, id string) *domai
 	s, ok := cache.UnmarshalCacheValue[domainSub.Subscription](value)
 	if !ok {
 		return nil
+	}
+	// Entries cached before payment_terms_type and payment_terms_days existed carry only payment_terms.
+	if s.PaymentTermsType == nil {
+		s.PaymentTermsType, s.PaymentTermsDays = lo.FromPtr(s.PaymentTerms).Parts()
 	}
 	return s
 }
@@ -1393,9 +1430,60 @@ func (r *subscriptionRepository) ListEnvironmentsWithGatedActiveSubscriptions(ct
 	return envs, nil
 }
 
+// listEnvironmentsForAutoCancellationQuery finds environments where auto-cancellation is on at any level;
+// the customer and subscription branches read only the settings_override partial indexes.
+const listEnvironmentsForAutoCancellationQuery = `
+	SELECT tenant_id, environment_id FROM settings
+	WHERE key = 'subscription_config' AND status = 'published'
+		AND (value ->> 'auto_cancellation_enabled')::boolean
+	UNION
+	SELECT tenant_id, environment_id FROM subscriptions
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean
+	UNION
+	SELECT tenant_id, environment_id FROM customers
+	WHERE settings IS NOT NULL AND status = 'published'
+		AND (settings -> 'subscription_config' ->> 'auto_cancellation_enabled')::boolean`
+
+func (r *subscriptionRepository) ListEnvironmentsForAutoCancellation(ctx context.Context) ([]types.TenantEnvironment, error) {
+	span := StartRepositorySpan(ctx, "subscription", "list_environments_for_auto_cancellation", nil)
+	defer FinishSpan(span)
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, listEnvironmentsForAutoCancellationQuery)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list environments for auto-cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var envs []types.TenantEnvironment
+	for rows.Next() {
+		var env types.TenantEnvironment
+		if err := rows.Scan(&env.TenantID, &env.EnvironmentID); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to read environment for auto-cancellation").
+				Mark(ierr.ErrDatabase)
+		}
+		envs = append(envs, env)
+	}
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to read environments for auto-cancellation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return envs, nil
+}
+
 // markOverdueGatedIncompleteQuery is one UPDATE ... RETURNING, so the returned IDs are exactly the rows
 // changed. The subscription filter matches idx_subscriptions_gated_active; EXISTS re-checks the invoice at
-// write time, so an invoice paid mid-sweep never flips its subscription. $5 is due date minus grace.
+// write time, so an invoice paid mid-sweep never flips its subscription. $5 is the environment grace days,
+// overridden by the subscription's, then the customer's, settings.
 const markOverdueGatedIncompleteQuery = `
 	UPDATE subscriptions s
 	SET subscription_status = 'incomplete', updated_at = $3, updated_by = $4
@@ -1416,7 +1504,11 @@ const markOverdueGatedIncompleteQuery = `
 				AND i.payment_status IN ('PENDING', 'FAILED')
 				AND i.amount_remaining > 0
 				AND i.due_date <= $3
-				AND i.due_date > $5)
+				AND i.due_date > $3 - make_interval(days => COALESCE(
+					(s.settings->'subscription_config'->>'grace_period_days')::int,
+					(SELECT (c.settings->'subscription_config'->>'grace_period_days')::int FROM customers c
+						WHERE c.tenant_id = s.tenant_id AND c.environment_id = s.environment_id AND c.id = s.customer_id),
+					$5::int)))
 	RETURNING s.id`
 
 func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx context.Context, asOf time.Time, graceDays int) ([]string, error) {
@@ -1431,7 +1523,7 @@ func (r *subscriptionRepository) MarkOverdueGatedSubscriptionsIncomplete(ctx con
 		types.GetEnvironmentID(ctx),
 		asOf,
 		types.GetUserID(ctx),
-		asOf.AddDate(0, 0, -graceDays),
+		graceDays,
 	)
 	if err != nil {
 		SetSpanError(span, err)

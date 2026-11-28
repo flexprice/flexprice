@@ -13,7 +13,7 @@
 #let precision = invoice-data.at("precision", default: 2)
 #let label-color = rgb("#919191")
 
-// Renders "DD Mon YY" from a "YYYY-MM-DD" string, blank if empty.
+// Renders "DD Mon YYYY" from a "YYYY-MM-DD" string, blank if empty.
 #let short-date(s) = {
   if s == none or s == "" { "" } else { format-date(parse-date(s)) }
 }

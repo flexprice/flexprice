@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/stripe/stripe-go/v82"
 )
 
@@ -64,11 +65,17 @@ func (s *stripePlanService) CreatePlan(ctx context.Context, planID string, servi
 	var planIDResult string
 
 	err := services.DB.WithTx(ctx, func(txCtx context.Context) error {
+		conn, err := s.client.GetConnection(txCtx)
+		if err != nil {
+			return err
+		}
+
 		// Check if the plan already exists in Entity Mapping
 		filter := &types.EntityIntegrationMappingFilter{
 			EntityType:        types.IntegrationEntityTypePlan,
 			ProviderTypes:     []string{"stripe"},
 			ProviderEntityIDs: []string{planID},
+			ConnectionID:      conn.ID,
 		}
 
 		existingMappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(txCtx, filter)
@@ -123,6 +130,7 @@ func (s *stripePlanService) CreatePlan(ctx context.Context, planID string, servi
 				"created_via":    "stripe_plan_service",
 				"stripe_plan_id": planID,
 			},
+			ConnectionID: lo.ToPtr(conn.ID),
 		}
 
 		// Validate the mapping request
@@ -162,11 +170,17 @@ func (s *stripePlanService) UpdatePlan(ctx context.Context, stripeProductID stri
 	var planResponse *dto.PlanResponse
 
 	err := services.DB.WithTx(ctx, func(txCtx context.Context) error {
+		conn, err := s.client.GetConnection(txCtx)
+		if err != nil {
+			return err
+		}
+
 		// Find the FlexPrice plan ID by looking up the entity mapping with Stripe product ID
 		filter := &types.EntityIntegrationMappingFilter{
 			ProviderEntityIDs: []string{stripeProductID},
 			EntityType:        types.IntegrationEntityTypePlan,
 			ProviderTypes:     []string{"stripe"},
+			ConnectionID:      conn.ID,
 		}
 
 		mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(txCtx, filter)
@@ -226,11 +240,17 @@ func (s *stripePlanService) DeletePlan(ctx context.Context, stripeProductID stri
 	}
 
 	return services.DB.WithTx(ctx, func(txCtx context.Context) error {
+		conn, err := s.client.GetConnection(txCtx)
+		if err != nil {
+			return err
+		}
+
 		// Find the FlexPrice plan ID by looking up the entity mapping with Stripe product ID
 		filter := &types.EntityIntegrationMappingFilter{
 			ProviderEntityIDs: []string{stripeProductID},
 			EntityType:        types.IntegrationEntityTypePlan,
 			ProviderTypes:     []string{"stripe"},
+			ConnectionID:      conn.ID,
 		}
 
 		mappings, err := services.EntityIntegrationMappingService.GetEntityIntegrationMappings(txCtx, filter)

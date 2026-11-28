@@ -107,6 +107,9 @@ func (s *BillingServiceSuite) setupService() {
 		ProrationCalculator:      s.GetCalculator(),
 		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 		MeterUsageRepo:           s.GetStores().MeterUsageRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 	})
 }
 
@@ -273,6 +276,12 @@ func (s *BillingServiceSuite) setupTestData() {
 	// Use CurrentPeriodEnd as BillingAnchor so the next period is a full month (same day-of-month),
 	// ensuring next-period advance charges (e.g. fixed price) are included when billing at period end.
 	currentPeriodEnd := s.testData.now.Add(6 * 24 * time.Hour)
+	// Keep the anchor day at or below 28: a later day makes AddDate(0, -1, 0) normalize past the
+	// month end, so the period no longer matches the billing grid and amounts prorate by a day.
+	if currentPeriodEnd.Day() > 28 {
+		currentPeriodEnd = time.Date(currentPeriodEnd.Year(), currentPeriodEnd.Month(), 28,
+			currentPeriodEnd.Hour(), currentPeriodEnd.Minute(), currentPeriodEnd.Second(), 0, time.UTC)
+	}
 	currentPeriodStart := currentPeriodEnd.AddDate(0, -1, 0)
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
@@ -662,6 +671,32 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 			if tt.validateFunc != nil {
 				tt.validateFunc(req, sub)
 			}
+		})
+	}
+}
+
+func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest_DoesNotGenerateMemo() {
+	for _, referencePoint := range []types.InvoiceReferencePoint{
+		types.ReferencePointPeriodStart,
+		types.ReferencePointPeriodEnd,
+		types.ReferencePointPreview,
+		types.ReferencePointInternalPreview,
+		types.ReferencePointRevenueFacts,
+		types.ReferencePointCancel,
+	} {
+		s.Run(string(referencePoint), func() {
+			sub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), s.testData.subscription.ID)
+			s.Require().NoError(err)
+			req, err := s.service.PrepareSubscriptionInvoiceRequest(s.GetContext(), &dto.PrepareSubscriptionInvoiceRequestParams{
+				Subscription:   sub,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+				ReferencePoint: referencePoint,
+			})
+			s.Require().NoError(err)
+			s.Require().NotEmpty(req.LineItems)
+			s.Empty(req.Description)
+			s.Equal(sub.ID, *req.SubscriptionID)
 		})
 	}
 }
@@ -2412,6 +2447,9 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 		Config:                   s.GetConfig(),
 		DB:                       s.GetDB(),
 		SubRepo:                  s.GetStores().SubscriptionRepo,
+		CommitmentRepo:           s.GetStores().CommitmentRepo,
+		BillingTermRepo:          s.GetStores().BillingTermRepo,
+		BillingInstalmentRepo:    s.GetStores().BillingInstalmentRepo,
 		SubscriptionLineItemRepo: s.GetStores().SubscriptionLineItemRepo,
 		PlanRepo:                 s.GetStores().PlanRepo,
 		PriceRepo:                s.GetStores().PriceRepo,
@@ -4143,7 +4181,7 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 			}
 
 			// Call the function under test using the real event service
-			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil)
+			eventService := NewEventService(s.GetStores().EventRepo, s.GetStores().MeterRepo, s.GetPublisher(), s.GetLogger(), s.GetConfig(), nil, nil)
 
 			// Create mock events in the event store for our test data
 			for _, event := range tt.totalUsageEvents {
@@ -5913,7 +5951,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_MonthlyMeterOnQuart
 	// March: ts in Mar window, QtyTotal=300
 	seedMeterUsage(time.Date(2026, 3, 15, 12, 0, 0, 0, time.UTC), decimal.NewFromInt(300))
 
-	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, quarterStart, quarterEnd, true, nil)
+	result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, quarterStart, quarterEnd, true, nil, nil)
 	s.Require().NoError(err)
 	s.Require().Len(result.UsageCharges, 3, "one usage line item per month")
 
@@ -6018,7 +6056,7 @@ func (s *BillingServiceSuite) TestCalculateMeterUsageCharges_LongerCadenceUsage_
 				}}))
 			}
 
-			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, sub, sub.LineItems, feb1, mar1, true, nil)
+			result, err := s.service.(*billingService).calculateMeterUsageCharges(ctx, types.UsageSourceInvoiceCreation, sub, sub.LineItems, feb1, mar1, true, nil, nil)
 			s.Require().NoError(err, "a longer usage item must not fail the invoice")
 			s.Require().Len(result.UsageCharges, 1)
 			s.Equal(feb1, *result.UsageCharges[0].PeriodStart)

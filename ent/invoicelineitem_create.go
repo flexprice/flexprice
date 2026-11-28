@@ -438,6 +438,20 @@ func (_c *InvoiceLineItemCreate) SetNillableCommitmentID(v *string) *InvoiceLine
 	return _c
 }
 
+// SetBillingInstalmentID sets the "billing_instalment_id" field.
+func (_c *InvoiceLineItemCreate) SetBillingInstalmentID(v string) *InvoiceLineItemCreate {
+	_c.mutation.SetBillingInstalmentID(v)
+	return _c
+}
+
+// SetNillableBillingInstalmentID sets the "billing_instalment_id" field if the given value is not nil.
+func (_c *InvoiceLineItemCreate) SetNillableBillingInstalmentID(v *string) *InvoiceLineItemCreate {
+	if v != nil {
+		_c.SetBillingInstalmentID(*v)
+	}
+	return _c
+}
+
 // SetAdjustedEntitlementQuantity sets the "adjusted_entitlement_quantity" field.
 func (_c *InvoiceLineItemCreate) SetAdjustedEntitlementQuantity(v decimal.Decimal) *InvoiceLineItemCreate {
 	_c.mutation.SetAdjustedEntitlementQuantity(v)
@@ -796,6 +810,10 @@ func (_c *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Creat
 	if value, ok := _c.mutation.CommitmentID(); ok {
 		_spec.SetField(invoicelineitem.FieldCommitmentID, field.TypeString, value)
 		_node.CommitmentID = &value
+	}
+	if value, ok := _c.mutation.BillingInstalmentID(); ok {
+		_spec.SetField(invoicelineitem.FieldBillingInstalmentID, field.TypeString, value)
+		_node.BillingInstalmentID = &value
 	}
 	if value, ok := _c.mutation.AdjustedEntitlementQuantity(); ok {
 		_spec.SetField(invoicelineitem.FieldAdjustedEntitlementQuantity, field.TypeOther, value)

@@ -80,7 +80,7 @@ func TestReportsCache(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, [][]string{{"EUR", "5"}}, got)
 		assert.Equal(t, 2, calls)
-		assert.NotEqual(t, reportCacheKey(ctx, q), reportCacheKey(ctx, other))
+		assert.NotEqual(t, reportCacheKey(ctx, "", q), reportCacheKey(ctx, "", other))
 	})
 }
 
@@ -88,7 +88,7 @@ func TestReportCacheKey_NoDelimiterCollision(t *testing.T) {
 	ctx := context.Background()
 	a := &reportQuery{SQL: "q", Params: map[string]string{"f0": "a\x00f1\x00b"}}
 	b := &reportQuery{SQL: "q", Params: map[string]string{"f0": "a", "f1": "b"}}
-	assert.NotEqual(t, reportCacheKey(ctx, a), reportCacheKey(ctx, b))
+	assert.NotEqual(t, reportCacheKey(ctx, "", a), reportCacheKey(ctx, "", b))
 }
 
 func TestReportsRepository_RelativeRangesShareKey(t *testing.T) {
@@ -101,7 +101,7 @@ func TestReportsRepository_RelativeRangesShareKey(t *testing.T) {
 			Time: analytics.TimeSpec{From: now.AddDate(0, 0, -7), To: now},
 		}, "t1", "e1")
 		require.NoError(t, err)
-		return reportCacheKey(ctx, q)
+		return reportCacheKey(ctx, "", q)
 	}
 	assert.Equal(t, key(base.Add(123456*time.Microsecond)), key(base.Add(41*time.Second)))
 	assert.NotEqual(t, key(base), key(base.Add(time.Minute)))
@@ -131,4 +131,11 @@ func TestReportsRepository_FixedRangesKeepDayBoundaries(t *testing.T) {
 		assert.Equal(t, from, r.stableTime(from), ttl)
 		assert.Equal(t, to, r.stableTime(to), ttl)
 	}
+}
+
+func TestReportCacheKeySeparatesSources(t *testing.T) {
+	ctx := context.Background()
+	q := &reportQuery{SQL: "SELECT 1", Params: map[string]string{"tenant_id": "t1"}}
+	assert.Equal(t, reportCacheKey(ctx, "a:9000", q), reportCacheKey(ctx, "a:9000", q))
+	assert.NotEqual(t, reportCacheKey(ctx, "a:9000", q), reportCacheKey(ctx, "b:9000", q))
 }

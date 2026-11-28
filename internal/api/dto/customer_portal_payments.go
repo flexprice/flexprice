@@ -76,6 +76,10 @@ type PortalTopUpWalletResponse struct {
 // endpoint. Read AddPaymentMethodResponse.Action for what to do next.
 type PortalAddPaymentMethodRequest struct {
 	PaymentProvider types.PaymentGatewayType `json:"payment_provider" binding:"required"`
+	// PaymentMethodType is what to set up, one of the provider's add_payment_method payment_method_types. Omitted, the provider's own.
+	PaymentMethodType string `json:"payment_method_type,omitempty"`
+	// SetDefault makes the saved method the default where the provider supports it. Omitted, true.
+	SetDefault *bool `json:"set_default,omitempty"`
 	RedirectionParams
 }
 
@@ -116,4 +120,34 @@ type PortalPayInvoiceResponse struct {
 	Amount        decimal.Decimal      `json:"amount" swaggertype:"string"`
 	Currency      string               `json:"currency"`
 	PaymentAction *types.PaymentAction `json:"payment_action,omitempty"`
+}
+
+// PortalUpdateCustomerRequest contains customer-editable profile fields.
+type PortalUpdateCustomerRequest struct {
+	Name              *string `json:"name"`
+	Email             *string `json:"email" validate:"omitempty,email"`
+	Contact           *string `json:"contact" validate:"omitempty,max=20"`
+	AddressLine1      *string `json:"address_line1" validate:"omitempty,max=255"`
+	AddressLine2      *string `json:"address_line2" validate:"omitempty,max=255"`
+	AddressCity       *string `json:"address_city" validate:"omitempty,max=100"`
+	AddressState      *string `json:"address_state" validate:"omitempty,max=100"`
+	AddressPostalCode *string `json:"address_postal_code" validate:"omitempty,max=20"`
+	AddressCountry    *string `json:"address_country" validate:"omitempty,len=2,iso3166_1_alpha2"`
+	Timezone          *string `json:"timezone" validate:"omitempty,timezone"`
+}
+
+// ToUpdateCustomerRequest maps editable profile fields to a customer update.
+func (r PortalUpdateCustomerRequest) ToUpdateCustomerRequest() UpdateCustomerRequest {
+	return UpdateCustomerRequest{
+		Name:              r.Name,
+		Email:             r.Email,
+		Contact:           r.Contact,
+		AddressLine1:      r.AddressLine1,
+		AddressLine2:      r.AddressLine2,
+		AddressCity:       r.AddressCity,
+		AddressState:      r.AddressState,
+		AddressPostalCode: r.AddressPostalCode,
+		AddressCountry:    r.AddressCountry,
+		Timezone:          r.Timezone,
+	}
 }

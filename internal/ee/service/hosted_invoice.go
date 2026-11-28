@@ -2,14 +2,16 @@ package service
 
 import (
 	"context"
-	"time"
+
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // HostedInvoiceService serves the public hosted invoice page.
@@ -69,7 +71,7 @@ func (s *hostedInvoiceService) Resolve(ctx context.Context, rawToken string) (co
 		return nil, err
 	}
 
-	if !token.IsActive(time.Now().UTC()) ||
+	if !token.IsActive(clock.Now()) ||
 		inv.Metadata[types.InvoiceMetadataKeyStripeHostedInvoiceURL] != "" ||
 		t.InternalStatus == types.TenantInternalStatusSuspended {
 		s.Logger.Info(ctx, "hosted invoice link no longer valid", "token_id", token.ID, "invoice_id", inv.ID)
@@ -93,6 +95,13 @@ func (s *hostedInvoiceService) GetInvoice(ctx context.Context) (*dto.HostedInvoi
 	t, err := s.TenantRepo.GetByID(ctx, types.GetTenantID(ctx))
 	if err != nil {
 		return nil, err
+	}
+	billingEntity, err := NewInvoiceService(s.ServiceParams).GetInvoiceBillingEntity(ctx, &inv.Invoice)
+	if err != nil {
+		return nil, err
+	}
+	if billingEntity != nil {
+		t = billingEntityAsTenant(t, billingEntity)
 	}
 
 	filter := types.NewNoLimitPaymentFilter()
@@ -199,19 +208,31 @@ func (s *hostedInvoiceService) payGateway(ctx context.Context, inv *dto.InvoiceR
 		return "", false, nil
 	}
 
+	ctx, err := NewBillingEntityService(s.ServiceParams).ScopeToInvoice(ctx, inv.ID)
+	if err != nil {
+		return "", false, err
+	}
+
 	providers, err := NewPaymentProviderResolver(s.ServiceParams).ListProviders(ctx, inv.CustomerID)
 	if err != nil {
 		return "", false, err
 	}
-	provider, found := lo.Find(providers, func(p ProviderCapabilities) bool {
-		return lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
+	for _, p := range providers {
+		canLink := lo.ContainsBy(p.Capabilities, func(c types.IntegrationCapability) bool {
 			return c.Type == types.IntegrationCapabilityPaymentLink
 		})
-	})
-	if !found {
-		return "", false, nil
+		if !canLink {
+			continue
+		}
+		connected, err := providerConnected(ctx, s.ServiceParams, types.SecretProvider(p.Gateway))
+		if err != nil {
+			return "", false, err
+		}
+		if connected {
+			return p.Gateway, true, nil
+		}
 	}
-	return provider.Gateway, true, nil
+	return "", false, nil
 }
 
 func errHostedInvoiceLinkNotValid() error {

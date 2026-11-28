@@ -133,6 +133,26 @@ func (_u *ConnectionUpdate) ClearSyncConfig() *ConnectionUpdate {
 	return _u
 }
 
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *ConnectionUpdate) SetBillingEntityID(v string) *ConnectionUpdate {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *ConnectionUpdate) SetNillableBillingEntityID(v *string) *ConnectionUpdate {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *ConnectionUpdate) ClearBillingEntityID() *ConnectionUpdate {
+	_u.mutation.ClearBillingEntityID()
+	return _u
+}
+
 // Mutation returns the ConnectionMutation object of the builder.
 func (_u *ConnectionUpdate) Mutation() *ConnectionMutation {
 	return _u.mutation
@@ -247,6 +267,12 @@ func (_u *ConnectionUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.SyncConfigCleared() {
 		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(connection.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(connection.FieldBillingEntityID, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -369,6 +395,26 @@ func (_u *ConnectionUpdateOne) SetSyncConfig(v *types.SyncConfig) *ConnectionUpd
 // ClearSyncConfig clears the value of the "sync_config" field.
 func (_u *ConnectionUpdateOne) ClearSyncConfig() *ConnectionUpdateOne {
 	_u.mutation.ClearSyncConfig()
+	return _u
+}
+
+// SetBillingEntityID sets the "billing_entity_id" field.
+func (_u *ConnectionUpdateOne) SetBillingEntityID(v string) *ConnectionUpdateOne {
+	_u.mutation.SetBillingEntityID(v)
+	return _u
+}
+
+// SetNillableBillingEntityID sets the "billing_entity_id" field if the given value is not nil.
+func (_u *ConnectionUpdateOne) SetNillableBillingEntityID(v *string) *ConnectionUpdateOne {
+	if v != nil {
+		_u.SetBillingEntityID(*v)
+	}
+	return _u
+}
+
+// ClearBillingEntityID clears the value of the "billing_entity_id" field.
+func (_u *ConnectionUpdateOne) ClearBillingEntityID() *ConnectionUpdateOne {
+	_u.mutation.ClearBillingEntityID()
 	return _u
 }
 
@@ -516,6 +562,12 @@ func (_u *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection, 
 	}
 	if _u.mutation.SyncConfigCleared() {
 		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.BillingEntityID(); ok {
+		_spec.SetField(connection.FieldBillingEntityID, field.TypeString, value)
+	}
+	if _u.mutation.BillingEntityIDCleared() {
+		_spec.ClearField(connection.FieldBillingEntityID, field.TypeString)
 	}
 	_node = &Connection{config: _u.config}
 	_spec.Assign = _node.assignValues

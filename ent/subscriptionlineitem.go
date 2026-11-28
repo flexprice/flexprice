@@ -77,6 +77,10 @@ type SubscriptionLineItem struct {
 	SubscriptionPhaseID *string `json:"subscription_phase_id,omitempty"`
 	// AddonAssociationID holds the value of the "addon_association_id" field.
 	AddonAssociationID *string `json:"addon_association_id,omitempty"`
+	// PredecessorLineItemID holds the value of the "predecessor_line_item_id" field.
+	PredecessorLineItemID *string `json:"predecessor_line_item_id,omitempty"`
+	// SuccessorLineItemID holds the value of the "successor_line_item_id" field.
+	SuccessorLineItemID *string `json:"successor_line_item_id,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CommitmentAmount holds the value of the "commitment_amount" field.
@@ -147,7 +151,7 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscriptionlineitem.FieldBillingPeriodCount:
 			values[i] = new(sql.NullInt64)
-		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID, subscriptionlineitem.FieldAddonAssociationID, subscriptionlineitem.FieldCommitmentType, subscriptionlineitem.FieldCommitmentDuration:
+		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID, subscriptionlineitem.FieldAddonAssociationID, subscriptionlineitem.FieldPredecessorLineItemID, subscriptionlineitem.FieldSuccessorLineItemID, subscriptionlineitem.FieldCommitmentType, subscriptionlineitem.FieldCommitmentDuration:
 			values[i] = new(sql.NullString)
 		case subscriptionlineitem.FieldCreatedAt, subscriptionlineitem.FieldUpdatedAt, subscriptionlineitem.FieldStartDate, subscriptionlineitem.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -351,6 +355,20 @@ func (_m *SubscriptionLineItem) assignValues(columns []string, values []any) err
 			} else if value.Valid {
 				_m.AddonAssociationID = new(string)
 				*_m.AddonAssociationID = value.String
+			}
+		case subscriptionlineitem.FieldPredecessorLineItemID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field predecessor_line_item_id", values[i])
+			} else if value.Valid {
+				_m.PredecessorLineItemID = new(string)
+				*_m.PredecessorLineItemID = value.String
+			}
+		case subscriptionlineitem.FieldSuccessorLineItemID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field successor_line_item_id", values[i])
+			} else if value.Valid {
+				_m.SuccessorLineItemID = new(string)
+				*_m.SuccessorLineItemID = value.String
 			}
 		case subscriptionlineitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -566,6 +584,16 @@ func (_m *SubscriptionLineItem) String() string {
 	builder.WriteString(", ")
 	if v := _m.AddonAssociationID; v != nil {
 		builder.WriteString("addon_association_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.PredecessorLineItemID; v != nil {
+		builder.WriteString("predecessor_line_item_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SuccessorLineItemID; v != nil {
+		builder.WriteString("successor_line_item_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

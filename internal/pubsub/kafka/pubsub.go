@@ -35,6 +35,7 @@ func NewPubSubFromConfig(
 	config *config.Configuration,
 	logger *logger.Logger,
 	consumerGroupID string,
+	opts ...ConsumerOption,
 ) (pubsub.PubSub, error) {
 	producer, err := NewProducer(config)
 	if err != nil {
@@ -42,7 +43,7 @@ func NewPubSubFromConfig(
 		return nil, err
 	}
 
-	consumer, err := NewConsumer(config, consumerGroupID)
+	consumer, err := NewConsumer(config, consumerGroupID, opts...)
 	if err != nil {
 		logger.Error(context.Background(), "failed to create consumer", "error", err)
 		return nil, err

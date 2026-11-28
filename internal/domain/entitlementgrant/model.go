@@ -27,13 +27,17 @@ type EntitlementGrant struct {
 	ValidTo             time.Time                             `json:"valid_to"`
 	GrantStatus         types.EntitlementGrantStatus          `json:"grant_status"`
 	LastComputedAt      *time.Time                            `json:"last_computed_at,omitempty"`
-	// QuotaCrossedAt is set once, when the evaluator first sees usage >= quota. It holds
-	// the evaluation time, not the exact event-level crossing — the interval billing lane
-	// forgives whatever was consumed between the two.
+	// QuotaCrossedAt records the current exhaustion's evaluation time, not the exact
+	// event crossing. Recovery clears it so a later exhaustion records a new crossing.
 	QuotaCrossedAt *time.Time     `json:"quota_crossed_at,omitempty"`
 	Metadata       types.Metadata `json:"metadata,omitempty"`
 	EnvironmentID  string         `json:"environment_id"`
 	types.BaseModel
+}
+
+// IsSubscriptionScoped reports whether the grant covers every usage line on its subscription.
+func (g *EntitlementGrant) IsSubscriptionScoped() bool {
+	return g != nil && g.ScopeEntityType == types.EntitlementGrantScopeSubscription
 }
 
 func (g *EntitlementGrant) IsFeatureScoped() bool {
@@ -69,16 +73,32 @@ func (g *EntitlementGrant) IsExhausted(usage decimal.Decimal) bool {
 	return usage.GreaterThanOrEqual(g.Quota)
 }
 
-// Overage is the non-negative excess of usage over quota.
+// Overage is the non-negative excess of the saved usage over quota.
 func (g *EntitlementGrant) Overage() decimal.Decimal {
+	if g == nil {
+		return decimal.Zero
+	}
+	return g.OverageOf(g.Usage)
+}
+
+// OverageOf is the non-negative excess of usage over quota; zero when unlimited.
+func (g *EntitlementGrant) OverageOf(usage decimal.Decimal) decimal.Decimal {
 	if g == nil || g.Unlimited {
 		return decimal.Zero
 	}
-	over := g.Usage.Sub(g.Quota)
-	if over.IsNegative() {
+	return decimal.Max(usage.Sub(g.Quota), decimal.Zero)
+}
+
+// Covered is how much of usage the grant covers: all of it when unlimited, otherwise up to the quota.
+func (g *EntitlementGrant) Covered(usage decimal.Decimal) decimal.Decimal {
+	usage = decimal.Max(usage, decimal.Zero)
+	if g == nil {
 		return decimal.Zero
 	}
-	return over
+	if g.Unlimited {
+		return usage
+	}
+	return decimal.Min(usage, g.Quota)
 }
 
 func (g *EntitlementGrant) Remaining() (decimal.Decimal, bool) {

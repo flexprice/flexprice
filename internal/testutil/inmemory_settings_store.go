@@ -75,6 +75,11 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingK
 		Mark(ierr.ErrNotFound)
 }
 
+// GetByKeyUncached retrieves a setting by key for the given environment
+func (s *InMemorySettingsStore) GetByKeyUncached(ctx context.Context, environmentID string, key types.SettingKey) (*domainSettings.Setting, error) {
+	return s.GetByKey(types.SetEnvironmentID(ctx, environmentID), key)
+}
+
 // GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
 // This is for settings that apply tenant-wide across all environments
 func (s *InMemorySettingsStore) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
@@ -183,27 +188,4 @@ func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Contex
 	}
 
 	return configs, nil
-}
-
-// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
-func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	var subscriptionConfigs []*types.TenantEnvSubscriptionConfig
-	for _, config := range configs {
-		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
-			TenantID:      config.TenantID,
-			EnvironmentID: config.EnvironmentID,
-			SubscriptionConfig: &types.SubscriptionConfig{
-				GracePeriodDays:         config.Config["grace_period_days"].(int),
-				AutoCancellationEnabled: config.Config["auto_cancellation_enabled"].(bool),
-			},
-		}
-		subscriptionConfigs = append(subscriptionConfigs, subscriptionConfig)
-	}
-
-	return subscriptionConfigs, nil
 }

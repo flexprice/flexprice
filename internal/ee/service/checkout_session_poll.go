@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainCheckout "github.com/flexprice/flexprice/internal/domain/checkout"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -102,6 +104,33 @@ func (s *checkoutSessionService) refreshSessionFromGateway(
 		// No handles recorded, or this provider has no read API: the session was not
 		// checked against the gateway, so the answer is stored state.
 		return reconcileResult{stale: true}
+	}
+
+	failedIDs := state.FailedGatewayPaymentIDs
+	if state.Status == types.PaymentStatusFailed && state.GatewayPaymentID != "" {
+		failedIDs = append(failedIDs, state.GatewayPaymentID)
+	}
+	for _, id := range failedIDs {
+		if err := NewPaymentService(s.ServiceParams).RecordAttempt(ctx, *session.CheckoutPaymentID, dto.RecordAttemptRequest{
+			PaymentStatus:    types.PaymentStatusFailed,
+			GatewayAttemptID: id,
+		}); err != nil {
+			s.Logger.Error(ctx, "failed to record polled failed attempt",
+				"error", err,
+				"session_id", session.ID,
+				"gateway_attempt_id", id)
+		}
+	}
+
+	// An auto-charge has no link to retry on, so its decline ends the session, as the payment.failed webhook does.
+	if state.Status == types.PaymentStatusFailed && dto.ToCheckoutSessionResponse(session).IsAutoCharge() {
+		if err := s.CleanupCheckoutSession(ctx, session.ID, errors.New("Payment failed")); err != nil {
+			s.Logger.Error(ctx, "failed to end checkout session after polled auto-charge decline",
+				"error", err,
+				"session_id", session.ID)
+			return reconcileResult{stale: true}
+		}
+		return reconcileResult{completed: true}
 	}
 
 	// Success transitions only. A declined payment is deliberately left PENDING — the

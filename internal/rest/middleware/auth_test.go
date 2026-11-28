@@ -448,10 +448,12 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 		}
 		r.GET("/v1/users/me", handler)
 		r.PUT("/v1/users/me", handler)
+		r.PUT("/v1/users/me/password", handler)
 		r.POST("/v1/users", handler)
 		r.PUT("/v1/users/:id", handler)
 		r.PUT("/v1/users/:id/roles", handler)
 		r.DELETE("/v1/users/:id", handler)
+		r.POST("/v1/users/:id/password-link", handler)
 		r.GET("/v1/environments", handler)
 		r.GET("/v1/environments/:id", handler)
 		r.POST("/v1/environments", handler)
@@ -496,10 +498,12 @@ func TestAuthenticateMiddleware_EnvironmentDiscoveryWithoutHeader(t *testing.T) 
 			method, path string
 		}{
 			{http.MethodPut, "/v1/users/me"},
+			{http.MethodPut, "/v1/users/me/password"},
 			{http.MethodPost, "/v1/users"},
 			{http.MethodPut, "/v1/users/some_id"},
 			{http.MethodDelete, "/v1/users/some_id"},
 			{http.MethodPut, "/v1/users/some_id/roles"},
+			{http.MethodPost, "/v1/users/some_id/password-link"},
 			{http.MethodPost, "/v1/environments"},
 			{http.MethodPut, "/v1/tenants/update"},
 		} {

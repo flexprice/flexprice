@@ -42,7 +42,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
-	if !c.Enabled || c.DryRun || c.EventIngestRate != 1 || c.OTEL.Enabled {
+	if !c.Enabled || c.DryRun || c.EventIngestRate != 5 || c.OTEL.Enabled {
 		t.Errorf("defaults mismatch: %+v", c)
 	}
 	if c.EventIngestSeed != 42 {

@@ -12,6 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -47,6 +49,7 @@ type eventConsumptionService struct {
 	bulkPubSub     pubsub.PubSub
 	eventRepo      events.Repository
 	tracingService *tracing.Service
+	deletionWindow EventDeletionWindowService
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -54,11 +57,13 @@ func NewEventConsumptionService(
 	params ServiceParams,
 	eventRepo events.Repository,
 	tracingService *tracing.Service,
+	deletionWindow EventDeletionWindowService,
 ) EventConsumptionService {
 	ev := &eventConsumptionService{
 		ServiceParams:  params,
 		eventRepo:      eventRepo,
 		tracingService: tracingService,
+		deletionWindow: deletionWindow,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -140,6 +145,32 @@ func (s *eventConsumptionService) RegisterBulkHandler(router *pubsubRouter.Route
 	)
 }
 
+// scopeConflict reports two non-empty, differing scope values.
+func scopeConflict(a, b string) bool {
+	return a != "" && b != "" && a != b
+}
+
+// dropScopeMismatch logs and counts scope-mismatched events.
+func dropScopeMismatch(ctx context.Context, log *logger.Logger, consumer, msg string, count int, eventTenantID, eventEnvironmentID string, fields ...any) {
+	metrics.RecordCounter(ctx, metrics.EventsScopeDropped, int64(count), metrics.L(metrics.KeyConsumer, consumer))
+	log.Info(ctx, msg, append([]any{
+		"consumer", consumer,
+		"event_tenant_id", eventTenantID,
+		"event_environment_id", eventEnvironmentID,
+	}, fields...)...)
+}
+
+// withEventScope pins ctx to the tenant and environment the event is written under.
+func withEventScope(ctx context.Context, evt *events.Event) context.Context {
+	if evt.TenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, evt.TenantID)
+	}
+	if evt.EnvironmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, evt.EnvironmentID)
+	}
+	return ctx
+}
+
 // processBulkMessage unmarshals a RawEventBatch and bulk-inserts every event
 // in the batch with a single call. Malformed rows inside the batch are
 // skipped so healthy siblings still land in ClickHouse.
@@ -158,11 +189,31 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 		return nil
 	}
 
-	tenantID := batch.TenantID
-	environmentID := batch.EnvironmentID
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	if scopeConflict(types.GetTenantID(ctx), batch.TenantID) ||
+		scopeConflict(types.GetEnvironmentID(ctx), batch.EnvironmentID) {
+		dropScopeMismatch(ctx, s.Logger, "events_bulk", "dropping bulk event batch: message scope mismatch",
+			len(batch.Events), batch.TenantID, batch.EnvironmentID,
+			"message_uuid", msg.UUID,
+			"batch_size", len(batch.Events),
+		)
+		return nil
 	}
+
+	tenantID := batch.TenantID
+	if tenantID == "" {
+		tenantID = types.GetTenantID(ctx)
+	}
+	environmentID := batch.EnvironmentID
+	if environmentID == "" {
+		environmentID = types.GetEnvironmentID(ctx)
+	}
+	if tenantID == "" {
+		s.Logger.Info(ctx, "dropping bulk event batch: tenant missing",
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	if environmentID != "" {
 		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
@@ -173,11 +224,31 @@ func (s *eventConsumptionService) processBulkMessage(ctx context.Context, msg *m
 			continue
 		}
 
+		if scopeConflict(evt.TenantID, tenantID) || scopeConflict(evt.EnvironmentID, environmentID) {
+			dropScopeMismatch(ctx, s.Logger, "events_bulk", "dropping bulk event: scope mismatch",
+				1, evt.TenantID, evt.EnvironmentID,
+				"event_id", evt.ID,
+				"message_uuid", msg.UUID,
+			)
+			continue
+		}
 		if evt.TenantID == "" {
 			evt.TenantID = tenantID
 		}
 		if evt.EnvironmentID == "" {
 			evt.EnvironmentID = environmentID
+		}
+		// The whole batch is held: one Kafka message cannot be part-acknowledged,
+		// and writing the rest would duplicate them on every redelivery.
+		if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(withEventScope(ctx, evt), evt.ExternalCustomerID, evt.Timestamp) {
+			s.Logger.Error(ctx, "holding bulk event batch: a deletion is in progress for this customer and period",
+				"error", types.ErrEventDeletionInProgress,
+				"event_id", evt.ID,
+				"external_customer_id", evt.ExternalCustomerID,
+				"timestamp", evt.Timestamp,
+				"message_uuid", msg.UUID,
+			)
+			return types.ErrEventDeletionInProgress
 		}
 		inserts = append(inserts, evt)
 	}
@@ -330,12 +401,23 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 		return err
 	}
 
+	if scopeConflict(event.TenantID, tenantID) || scopeConflict(event.EnvironmentID, environmentID) {
+		dropScopeMismatch(ctx, s.Logger, "events", "dropping event: scope mismatch",
+			1, event.TenantID, event.EnvironmentID,
+			"event_id", event.ID,
+			"message_uuid", msg.UUID,
+		)
+		return nil
+	}
+
 	if tenantID == "" && event.TenantID != "" {
 		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
 	}
 
 	if environmentID == "" && event.EnvironmentID != "" {
 		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	s.Logger.Debug(ctx, "processing event in event consumption service",
@@ -346,6 +428,16 @@ func (s *eventConsumptionService) processMessage(ctx context.Context, msg *messa
 		"external_customer_id", event.ExternalCustomerID,
 		"timestamp", event.Timestamp,
 	)
+
+	if s.deletionWindow != nil && s.deletionWindow.IsSuppressed(ctx, event.ExternalCustomerID, event.Timestamp) {
+		s.Logger.Error(ctx, "holding event: a deletion is in progress for this customer and period",
+			"error", types.ErrEventDeletionInProgress,
+			"event_id", event.ID,
+			"external_customer_id", event.ExternalCustomerID,
+			"timestamp", event.Timestamp,
+		)
+		return types.ErrEventDeletionInProgress
+	}
 
 	// Prepare events to insert
 	eventsToInsert := []*events.Event{&event}

@@ -4,12 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
+
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
-	"github.com/shopspring/decimal"
 )
 
 // ItemSyncInput holds per-price data needed to create a Zoho item.
@@ -53,12 +56,18 @@ func (s *ItemSyncService) EnsureItemsMapped(ctx context.Context, inputs []ItemSy
 		priceIDs[i] = in.PriceID
 	}
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Single bulk query for all price IDs
 	filter := types.NewEntityIntegrationMappingFilter()
 	filter.Status = lo.ToPtr(types.StatusPublished)
 	filter.EntityType = types.IntegrationEntityTypePrice
 	filter.EntityIDs = priceIDs
 	filter.ProviderTypes = []string{string(types.SecretProviderZohoBooks)}
+	filter.ConnectionID = conn.ID
 
 	mappings, err := s.MappingRepo.List(ctx, filter)
 	if err != nil {
@@ -159,6 +168,11 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 	baseModel := types.GetDefaultBaseModel(ctx)
 	baseModel.TenantID = types.GetTenantID(ctx)
 
+	conn, err := s.Client.GetConnection(ctx)
+	if err != nil {
+		return "", err
+	}
+
 	mapping := &entityintegrationmapping.EntityIntegrationMapping{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITY_INTEGRATION_MAPPING),
 		EntityType:       types.IntegrationEntityTypePrice,
@@ -168,9 +182,10 @@ func (s *ItemSyncService) createAndSaveItem(ctx context.Context, in ItemSyncInpu
 		EnvironmentID:    types.GetEnvironmentID(ctx),
 		BaseModel:        baseModel,
 		Metadata: map[string]interface{}{
-			"synced_at":      time.Now().UTC().Format(time.RFC3339),
+			"synced_at":      clock.Now().Format(time.RFC3339),
 			"zoho_item_name": itemResp.Name,
 		},
+		ConnectionID: lo.ToPtr(conn.ID),
 	}
 
 	if err := s.MappingRepo.Create(ctx, mapping); err != nil {

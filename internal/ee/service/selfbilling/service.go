@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/ee/service"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -179,6 +181,7 @@ func (s *selfBillingService) provision(ctx context.Context, tenantID, name, emai
 			Event:      alertTrialStarted,
 			TenantID:   tenantID,
 			TenantName: name,
+			Email:      email,
 		})
 	}
 	return nil
@@ -190,7 +193,7 @@ func (s *selfBillingService) RunHourly(ctx context.Context) error {
 		return nil
 	}
 
-	pushErr := s.pushUsage(ctx, time.Now())
+	pushErr := s.pushUsage(ctx, clock.Now())
 	syncErr := s.syncStatuses(ctx)
 	return errors.Join(pushErr, syncErr)
 }

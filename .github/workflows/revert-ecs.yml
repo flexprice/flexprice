@@ -59,6 +59,7 @@ jobs:
     needs: [validate, approval-gate]
     if: >-
       ${{ always() &&
+          (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/tags/v')) &&
           needs.validate.result == 'success' &&
           (inputs.dry_run == true || needs.approval-gate.result == 'success') }}
     runs-on: self-hosted

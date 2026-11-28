@@ -2886,7 +2886,7 @@ func TestNextBillingDate_FirstPeriodBounds(t *testing.T) {
 	anchorOffsetsDays := []int{0, 5, 17, 40, 100, 200, 300}
 
 	for _, tz := range zones {
-		loc := loadTimezone(tz)
+		loc := LoadTimezone(tz)
 		for _, period := range periods {
 			for unit := 1; unit <= 3; unit++ {
 				for day := 0; day < 730; day += 5 {
@@ -3048,7 +3048,7 @@ func TestNextBillingDate_ReturnsToAnchorDay(t *testing.T) {
 
 // An anchor before the start only sets the schedule; quarterly and half-yearly stay on the anchor's grid.
 func TestNextBillingDate_AnchorBeforeStart(t *testing.T) {
-	ist := loadTimezone("Asia/Kolkata")
+	ist := LoadTimezone("Asia/Kolkata")
 	utc := func(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 	start := utc(2026, 11, 16)
 	tests := []struct {
@@ -3137,4 +3137,44 @@ func TestNextBillingDate_CalendarLocalMidnights(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBillingPeriodsIn(t *testing.T) {
+	d := func(m time.Month, day int) time.Time { return time.Date(2026, m, day, 0, 0, 0, 0, time.UTC) }
+	monthly, err := NewBillingPeriodGrid(d(time.January, 15), BILLING_PERIOD_MONTHLY, 1, "UTC")
+	require.NoError(t, err)
+	quarterly, err := NewBillingPeriodGrid(d(time.January, 1), BILLING_PERIOD_QUARTER, 1, "UTC")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		grid       *billingPeriodGrid
+		start, end time.Time
+		want       []Period
+	}{
+		{"inside one period", monthly, d(time.October, 20), d(time.October, 25),
+			[]Period{{d(time.October, 15), d(time.November, 15)}}},
+		{"across anchors", monthly, d(time.October, 1), d(time.December, 1),
+			[]Period{{d(time.September, 15), d(time.October, 15)}, {d(time.October, 15), d(time.November, 15)}, {d(time.November, 15), d(time.December, 15)}}},
+		{"ends on an anchor", monthly, d(time.October, 15), d(time.November, 15),
+			[]Period{{d(time.October, 15), d(time.November, 15)}}},
+		{"quarterly", quarterly, d(time.October, 10), d(time.October, 25),
+			[]Period{{d(time.October, 1), time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC)}}},
+		{"empty range", monthly, d(time.October, 20), d(time.October, 20), nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, BillingPeriodsIn(tt.grid, tt.start, tt.end))
+		})
+	}
+}
+
+func TestCalendarDaysBetween(t *testing.T) {
+	late := time.Date(2026, 11, 20, 23, 59, 0, 0, time.UTC)
+	early := time.Date(2026, 11, 21, 0, 1, 0, 0, time.UTC)
+	require.Equal(t, 1, CalendarDaysBetween(late, early), "two minutes apart across midnight is one calendar day")
+	require.Equal(t, -1, CalendarDaysBetween(early, late))
+	require.Equal(t, 0, CalendarDaysBetween(early, early.Add(20*time.Hour)))
+	ist := time.FixedZone("IST", 5*3600+1800)
+	require.Equal(t, 0, CalendarDaysBetween(time.Date(2026, 11, 20, 10, 0, 0, 0, ist), late), "days are counted in UTC")
 }

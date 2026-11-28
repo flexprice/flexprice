@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/auth"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 // CustomerPortalService provides customer portal functionality
@@ -22,7 +25,7 @@ type CustomerPortalService interface {
 	// GetCustomer returns customer info for the portal
 	GetCustomer(ctx context.Context) (*dto.CustomerResponse, error)
 	// UpdateCustomer updates customer info from the portal
-	UpdateCustomer(ctx context.Context, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
+	UpdateCustomer(ctx context.Context, req dto.PortalUpdateCustomerRequest) (*dto.CustomerResponse, error)
 	// GetSubscriptions returns subscriptions for the portal customer
 	GetSubscriptions(ctx context.Context, req dto.PortalPaginatedRequest) (*dto.ListSubscriptionsResponse, error)
 	// GetSubscription returns a specific subscription
@@ -146,13 +149,13 @@ func (s *customerPortalService) GetCustomer(ctx context.Context) (*dto.CustomerR
 }
 
 // UpdateCustomer updates customer info from the portal
-func (s *customerPortalService) UpdateCustomer(ctx context.Context, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error) {
+func (s *customerPortalService) UpdateCustomer(ctx context.Context, req dto.PortalUpdateCustomerRequest) (*dto.CustomerResponse, error) {
 	customerID := types.GetCustomerID(ctx)
 	if customerID == "" {
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	customer, err := s.customerService.UpdateCustomer(ctx, customerID, req)
+	customer, err := s.customerService.UpdateCustomer(ctx, customerID, req.ToUpdateCustomerRequest())
 	if err != nil {
 		return nil, err
 	}
@@ -298,9 +301,32 @@ func (s *customerPortalService) GetWallets(ctx context.Context) ([]*dto.WalletBa
 
 	// Only pass ID - validation requires either ID or LookupKey, not both
 	getWalletsReq := &dto.GetCustomerWalletsRequest{
-		ID: customerID,
+		ID:                     customerID,
+		IncludeRealTimeBalance: true,
 	}
-	return walletService.GetCustomerWallets(ctx, getWalletsReq)
+	wallets, err := walletService.GetCustomerWallets(ctx, getWalletsReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// Graded on the real-time balance, as the alert pipeline grades it; a wallet that cannot be evaluated is listed without a status.
+	for _, w := range wallets {
+		if w == nil || w.Wallet == nil {
+			continue
+		}
+		creditBalance := lo.FromPtrOr(w.RealTimeCreditBalance, w.Wallet.CreditBalance)
+		balance := lo.FromPtrOr(w.RealTimeBalance, w.Wallet.Balance)
+		status, err := walletService.BalanceAlertStatus(ctx, w.Wallet, creditBalance, balance)
+		if err != nil {
+			s.Logger.Info(ctx, "failed to evaluate wallet balance alert status for portal",
+				"error", err,
+				"wallet_id", w.Wallet.ID,
+			)
+			continue
+		}
+		w.BalanceAlertStatus = status
+	}
+	return wallets, nil
 }
 
 // GetWallet returns a specific wallet
@@ -310,22 +336,11 @@ func (s *customerPortalService) GetWallet(ctx context.Context, walletID string) 
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	walletService := NewWalletService(s.ServiceParams)
-
-	// Get the wallet balance
-	wallet, err := walletService.GetWalletBalance(ctx, walletID)
-	if err != nil {
+	if _, err := s.authorizeWallet(ctx, walletID); err != nil {
 		return nil, err
 	}
 
-	// Verify it belongs to this customer
-	if wallet.CustomerID != customerID {
-		return nil, ierr.NewError("wallet not found").
-			WithHint("Wallet does not belong to this customer").
-			Mark(ierr.ErrNotFound)
-	}
-
-	return wallet, nil
+	return NewWalletService(s.ServiceParams).GetWalletBalance(ctx, walletID)
 }
 
 // GetAnalytics returns usage analytics for the portal customer
@@ -517,23 +532,11 @@ func (s *customerPortalService) GetWalletTransactions(ctx context.Context, walle
 		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
 	}
 
-	walletService := NewWalletService(s.ServiceParams)
-
-	// First verify the wallet belongs to this customer by getting the wallet
-	wallet, err := walletService.GetWalletBalance(ctx, walletID)
-	if err != nil {
+	if _, err := s.authorizeWallet(ctx, walletID); err != nil {
 		return nil, err
 	}
 
-	// Verify it belongs to this customer
-	if wallet.CustomerID != customerID {
-		return nil, ierr.NewError("wallet not found").
-			WithHint("Wallet does not belong to this customer").
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Get the transactions
-	return walletService.GetWalletTransactions(ctx, walletID, filter)
+	return NewWalletService(s.ServiceParams).GetWalletTransactions(ctx, walletID, filter)
 }
 
 // validatePropertyKeys rejects property group-by and filter keys hidden from portal users.
@@ -564,7 +567,7 @@ func (s *customerPortalService) validatePropertyKeys(ctx context.Context, req dt
 	}
 	// Same defaults as GetDetailedAnalytics for a request without a window.
 	if lookup.EndTime.IsZero() {
-		lookup.EndTime = time.Now().UTC()
+		lookup.EndTime = clock.Now()
 	}
 	if lookup.StartTime.IsZero() {
 		lookup.StartTime = lookup.EndTime.Add(-6 * time.Hour)

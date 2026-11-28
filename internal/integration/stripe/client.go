@@ -94,29 +94,16 @@ func (c *Client) GetDecryptedStripeConfig(conn *connection.Connection) (*StripeC
 
 	if webhookSecret, exists := decryptedMetadata["webhook_secret"]; exists {
 		stripeConfig.WebhookSecret = webhookSecret
-		c.logger.Info(context.Background(), "webhook secret found in decrypted metadata",
-			"has_webhook_secret", webhookSecret != "",
-			"webhook_secret_length", len(webhookSecret))
 	} else {
 		c.logger.Info(context.Background(), "webhook_secret not found in decrypted metadata",
 			"available_keys", lo.Keys(decryptedMetadata))
 	}
-
-	c.logger.Info(context.Background(), "final stripe config",
-		"has_secret_key", stripeConfig.SecretKey != "",
-		"has_publishable_key", stripeConfig.PublishableKey != "",
-		"has_webhook_secret", stripeConfig.WebhookSecret != "")
 
 	return stripeConfig, nil
 }
 
 // decryptConnectionMetadata decrypts the connection encrypted secret data if it's encrypted
 func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.Metadata, error) {
-	c.logger.Info(context.Background(), "decrypting connection metadata",
-		"connection_id", conn.ID,
-		"has_encrypted_secret_data", conn.EncryptedSecretData.Stripe != nil || conn.EncryptedSecretData.Generic != nil,
-		"metadata_keys", lo.Keys(conn.Metadata))
-
 	// Check if the connection has encrypted secret data
 	if conn.EncryptedSecretData.Stripe == nil && conn.EncryptedSecretData.Generic == nil {
 		c.logger.Info(context.Background(), "no encrypted secret data found", "connection_id", conn.ID)
@@ -155,11 +142,6 @@ func (c *Client) decryptConnectionMetadata(conn *connection.Connection) (types.M
 			"webhook_secret":  webhookSecret,
 			"account_id":      conn.EncryptedSecretData.Stripe.AccountID,
 		}
-
-		c.logger.Info(context.Background(), "successfully decrypted connection metadata",
-			"connection_id", conn.ID,
-			"decrypted_keys", lo.Keys(decryptedMetadata),
-			"has_webhook_secret", webhookSecret != "")
 
 		// Merge with existing non-encrypted metadata
 		merged := make(types.Metadata)

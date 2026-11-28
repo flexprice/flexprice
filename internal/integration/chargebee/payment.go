@@ -4,13 +4,16 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/clock"
+
+	"github.com/samber/lo"
+
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 )
 
 const refundLockTTL = 15 * time.Minute
@@ -55,7 +58,7 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		}
 	}()
 
-	existingPayment, err := paymentService.GetPayment(ctx, flexpricePaymentID)
+	existingPayment, err := paymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
 	if err != nil {
 		return ierr.WithError(err).
 			WithMessage("failed to get payment record for refund").
@@ -67,6 +70,16 @@ func (s *PaymentService) RefundLateCapturedPayment(
 		s.logger.Info(ctx, "payment already refunded, skipping",
 			"payment_id", flexpricePaymentID, "status", existingPayment.PaymentStatus)
 		return nil
+	}
+
+	if err := paymentService.RecordAttempt(ctx, flexpricePaymentID, dto.RecordAttemptRequest{
+		PaymentStatus:    types.PaymentStatusSucceeded,
+		GatewayAttemptID: chargebeeTransactionID,
+	}); err != nil {
+		s.logger.Error(ctx, "failed to record late-captured payment attempt",
+			"error", err,
+			"payment_id", flexpricePaymentID,
+			"chargebee_transaction_id", chargebeeTransactionID)
 	}
 
 	refundID, err := s.ensureRefunded(ctx, chargebeeTransactionID,
@@ -81,9 +94,44 @@ func (s *PaymentService) RefundLateCapturedPayment(
 			Mark(ierr.ErrInternal)
 	}
 
+	// The lifecycle only refunds a settled payment, so an unsettled one is settled first.
+	switch existingPayment.PaymentStatus {
+	case types.PaymentStatusInitiated, types.PaymentStatusPending, types.PaymentStatusProcessing:
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{
+			PaymentStatus:    lo.ToPtr(string(types.PaymentStatusSucceeded)),
+			SucceededAt:      lo.ToPtr(clock.Now()),
+			GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
+		}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Chargebee but failed to record the capture on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":          flexpricePaymentID,
+					"chargebee_refund_id": refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+	case types.PaymentStatusFailed, types.PaymentStatusVoided:
+		// A FAILED or VOIDED payment can't move again, so only the refund is recorded.
+		if refundID == "" {
+			return nil
+		}
+		metadata := lo.Assign(existingPayment.Metadata, types.Metadata{"chargebee_refund_id": refundID})
+		if _, err := paymentService.UpdatePayment(ctx, flexpricePaymentID, dto.UpdatePaymentRequest{Metadata: &metadata}); err != nil {
+			return ierr.WithError(err).
+				WithMessage("refund confirmed at Chargebee but failed to record it on the FlexPrice payment").
+				WithReportableDetails(map[string]interface{}{
+					"payment_id":               flexpricePaymentID,
+					"chargebee_transaction_id": chargebeeTransactionID,
+					"chargebee_refund_id":      refundID,
+				}).
+				Mark(ierr.ErrInternal)
+		}
+		return nil
+	}
+
 	updateReq := dto.UpdatePaymentRequest{
 		PaymentStatus:    lo.ToPtr(string(types.PaymentStatusRefunded)),
-		RefundedAt:       lo.ToPtr(time.Now().UTC()),
+		RefundedAt:       lo.ToPtr(clock.Now()),
 		GatewayPaymentID: lo.ToPtr(chargebeeTransactionID),
 	}
 	if refundID != "" {

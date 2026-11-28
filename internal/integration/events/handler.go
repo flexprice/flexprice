@@ -8,8 +8,11 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
+	"github.com/flexprice/flexprice/internal/domain/creditnote"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
+	"github.com/flexprice/flexprice/internal/domain/refund"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -27,6 +30,9 @@ type Handler interface {
 type Deps struct {
 	ConnectionRepo connection.Repository
 	EIMRepo        entityintegrationmapping.Repository
+	CreditNoteRepo creditnote.Repository
+	RefundRepo     refund.Repository
+	EntityScope    interfaces.BillingEntityScope
 	Logger         *logger.Logger
 	Config         *config.Configuration
 	PubSub         pubsub.PubSub
@@ -96,6 +102,33 @@ func NewHandler(deps Deps) Handler {
 				h.deps.Config,
 				h.deps.ConnectionRepo,
 				h.deps.EIMRepo,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
+		types.WebhookEventCreditNoteUpdated: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchCreditNoteVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.CreditNoteRepo,
+				h.deps.EntityScope,
+				h.deps.Logger,
+				event,
+				msg.UUID,
+			)
+		},
+		types.WebhookEventRefundSucceeded: func(ctx context.Context, event *types.WebhookEvent, msg *message.Message) error {
+			return DispatchRefundVendorSync(
+				ctx,
+				h.deps.Config,
+				h.deps.ConnectionRepo,
+				h.deps.EIMRepo,
+				h.deps.CreditNoteRepo,
+				h.deps.RefundRepo,
+				h.deps.EntityScope,
 				h.deps.Logger,
 				event,
 				msg.UUID,
@@ -185,5 +218,37 @@ func (h *handler) processMessage(ctx context.Context, msg *message.Message) erro
 		"environment_id", event.EnvironmentID,
 	)
 
+	ctx, err := h.scopeEvent(ctx, &event)
+	if err != nil {
+		return h.processIntegrationError(err, &event, msg.UUID, "billing_entity_scope")
+	}
+
 	return h.processIntegrationError(processor(ctx, &event, msg), &event, msg.UUID, "dispatch")
+}
+
+// scopeEvent puts the billing entity of the event's customer, invoice or subscription in ctx.
+func (h *handler) scopeEvent(ctx context.Context, event *types.WebhookEvent) (context.Context, error) {
+	if h.deps.EntityScope == nil {
+		return ctx, nil
+	}
+
+	var ids struct {
+		CustomerID     string `json:"customer_id"`
+		InvoiceID      string `json:"invoice_id"`
+		SubscriptionID string `json:"subscription_id"`
+	}
+	if err := json.Unmarshal(event.Payload, &ids); err != nil {
+		return ctx, nil
+	}
+
+	switch {
+	case ids.CustomerID != "":
+		return h.deps.EntityScope.ScopeToCustomer(ctx, ids.CustomerID)
+	case ids.InvoiceID != "":
+		return h.deps.EntityScope.ScopeToInvoice(ctx, ids.InvoiceID)
+	case ids.SubscriptionID != "":
+		return h.deps.EntityScope.ScopeToSubscription(ctx, ids.SubscriptionID)
+	default:
+		return ctx, nil
+	}
 }

@@ -328,6 +328,20 @@ func (_c *PaymentCreate) SetNillableErrorMessage(v *string) *PaymentCreate {
 	return _c
 }
 
+// SetConnectionID sets the "connection_id" field.
+func (_c *PaymentCreate) SetConnectionID(v string) *PaymentCreate {
+	_c.mutation.SetConnectionID(v)
+	return _c
+}
+
+// SetNillableConnectionID sets the "connection_id" field if the given value is not nil.
+func (_c *PaymentCreate) SetNillableConnectionID(v *string) *PaymentCreate {
+	if v != nil {
+		_c.SetConnectionID(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *PaymentCreate) SetID(v string) *PaymentCreate {
 	_c.mutation.SetID(v)
@@ -620,6 +634,10 @@ func (_c *PaymentCreate) createSpec() (*Payment, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ErrorMessage(); ok {
 		_spec.SetField(payment.FieldErrorMessage, field.TypeString, value)
 		_node.ErrorMessage = &value
+	}
+	if value, ok := _c.mutation.ConnectionID(); ok {
+		_spec.SetField(payment.FieldConnectionID, field.TypeString, value)
+		_node.ConnectionID = &value
 	}
 	if nodes := _c.mutation.AttemptsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

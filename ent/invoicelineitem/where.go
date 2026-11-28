@@ -224,6 +224,11 @@ func CommitmentID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCommitmentID, v))
 }
 
+// BillingInstalmentID applies equality check predicate on the "billing_instalment_id" field. It's identical to BillingInstalmentIDEQ.
+func BillingInstalmentID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldBillingInstalmentID, v))
+}
+
 // AdjustedEntitlementQuantity applies equality check predicate on the "adjusted_entitlement_quantity" field. It's identical to AdjustedEntitlementQuantityEQ.
 func AdjustedEntitlementQuantity(v decimal.Decimal) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldAdjustedEntitlementQuantity, v))
@@ -2275,6 +2280,81 @@ func CommitmentIDEqualFold(v string) predicate.InvoiceLineItem {
 // CommitmentIDContainsFold applies the ContainsFold predicate on the "commitment_id" field.
 func CommitmentIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldCommitmentID, v))
+}
+
+// BillingInstalmentIDEQ applies the EQ predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDNEQ applies the NEQ predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDIn applies the In predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldBillingInstalmentID, vs...))
+}
+
+// BillingInstalmentIDNotIn applies the NotIn predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldBillingInstalmentID, vs...))
+}
+
+// BillingInstalmentIDGT applies the GT predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDGTE applies the GTE predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDLT applies the LT predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDLTE applies the LTE predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDContains applies the Contains predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDHasPrefix applies the HasPrefix predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDHasSuffix applies the HasSuffix predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDIsNil applies the IsNil predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldBillingInstalmentID))
+}
+
+// BillingInstalmentIDNotNil applies the NotNil predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldBillingInstalmentID))
+}
+
+// BillingInstalmentIDEqualFold applies the EqualFold predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldBillingInstalmentID, v))
+}
+
+// BillingInstalmentIDContainsFold applies the ContainsFold predicate on the "billing_instalment_id" field.
+func BillingInstalmentIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldBillingInstalmentID, v))
 }
 
 // AdjustedEntitlementQuantityEQ applies the EQ predicate on the "adjusted_entitlement_quantity" field.
