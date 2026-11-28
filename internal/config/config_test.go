@@ -301,3 +301,39 @@ func TestValidateEmail(t *testing.T) {
 	off.Email.Enabled = true
 	assert.NoError(t, off.validateEmail())
 }
+
+func TestDeduplicationTTL(t *testing.T) {
+	tests := []struct {
+		name string
+		ttl  time.Duration
+		want time.Duration
+	}{
+		{"unset falls back", 0, 24 * time.Hour},
+		{"negative falls back", -time.Minute, 24 * time.Hour},
+		{"override honored", 30 * time.Minute, 30 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, MeterUsageTrackingConfig{RedisDeduplicationTTL: tt.ttl}.DeduplicationTTL())
+			assert.Equal(t, tt.want, BulkMeterUsageTrackingConfig{RedisDeduplicationTTL: tt.ttl}.DeduplicationTTL())
+		})
+	}
+}
+
+func TestDeduplicationTTLFromYAMLAndEnv(t *testing.T) {
+	cfg, err := NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, 24*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
+	assert.Equal(t, 24*time.Hour, cfg.BulkMeterUsageTracking.DeduplicationTTL())
+
+	t.Setenv("FLEXPRICE_BULK_METER_USAGE_TRACKING_REDIS_DEDUPLICATION_TTL", "15m")
+	t.Setenv("FLEXPRICE_METER_USAGE_TRACKING_REDIS_DEDUPLICATION_TTL", "2h")
+	cfg, err = NewConfig()
+	if err != nil {
+		t.Fatalf("NewConfig() error: %v", err)
+	}
+	assert.Equal(t, 15*time.Minute, cfg.BulkMeterUsageTracking.DeduplicationTTL())
+	assert.Equal(t, 2*time.Hour, cfg.MeterUsageTracking.DeduplicationTTL())
+}
