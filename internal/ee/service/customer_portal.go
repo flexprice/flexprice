@@ -471,7 +471,16 @@ func (s *customerPortalService) GetCostAnalytics(ctx context.Context, req dto.Po
 	}
 
 	// Call the revenue analytics service which handles both cost and revenue analytics
-	return s.revenueAnalyticsService.GetDetailedCostAnalytics(ctx, internalReq)
+	response, err := s.revenueAnalyticsService.GetDetailedCostAnalytics(ctx, internalReq)
+	if err != nil {
+		return nil, err
+	}
+
+	// The reason names the tenant's cost sheet meters, which end customers must not see.
+	if response.CostUnavailableReason != "" {
+		response.CostUnavailableReason = "Cost is unavailable."
+	}
+	return response, nil
 }
 
 // GetUsageSummary returns usage summary for the portal customer

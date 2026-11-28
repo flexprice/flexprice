@@ -25983,7 +25983,7 @@ const docTemplate = `{
                     }
                 },
                 "cost_unavailable_reason": {
-                    "description": "CostUnavailableReason says why cost could not be calculated; empty when it was.\nCost, margin and ROI are zero when it is set.",
+                    "description": "CostUnavailableReason is set when cost could not be calculated; cost, margin and ROI are then zero.",
                     "type": "string"
                 },
                 "currency": {

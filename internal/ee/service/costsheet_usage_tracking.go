@@ -59,9 +59,8 @@ func NewCostSheetUsageTrackingService(
 //   - Collects the meters referenced by the costsheet's usage-based prices.
 //   - Calls MeterUsageService.GetDetailedAnalytics scoped to those meters to
 //     get aggregated quantities per (meter, source, properties).
-//   - Multiplies each quantity by its meter's costsheet price in the given
-//     currency using PriceService. A meter with usage and no price in that
-//     currency makes cost unavailable (CostUnavailableReason).
+//   - Multiplies each quantity by its meter's costsheet price in the currency;
+//     a meter with usage and no price in it sets CostUnavailableReason.
 func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	ctx context.Context,
 	req *dto.GetCostAnalyticsRequest,
@@ -99,10 +98,8 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		}
 	}
 
-	// STEP3: Walk the costsheet's prices to get its usage prices and their
-	// meter IDs. Costsheet prices are scoped via PRICE_ENTITY_TYPE_COSTSHEET,
-	// which is distinct from subscription prices — i.e. these are the cost
-	// rates, not the customer-facing rates.
+	// STEP3: Collect the costsheet's usage prices (cost rates, not customer
+	// rates) and their meter IDs.
 	usagePrices := make([]*price.Price, 0, len(costSheet.Prices))
 	meterIDs := make([]string, 0)
 	for _, p := range costSheet.Prices {
@@ -159,18 +156,17 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		return nil, err
 	}
 
-	// STEP6: Pick each meter's costsheet price in the requested currency;
-	// only meters with usage need one. Meters go by their own name: vendor
-	// meters often share one event name and differ only by filter, so the
-	// event name cannot tell them apart.
+	// STEP6: Pick each used meter's costsheet price in the currency. Meters go by
+	// their own name, since vendor meters often share one event name.
 	meterNames := make(map[string]string, len(usageResp.Items))
 	usedMeterIDs := make([]string, 0, len(usageResp.Items))
 	for _, item := range usageResp.Items {
+		m := meterMap[item.MeterID]
 		meterNames[item.MeterID] = item.EventName
-		if m := meterMap[item.MeterID]; m != nil && m.Name != "" {
+		if m != nil && m.Name != "" {
 			meterNames[item.MeterID] = m.Name
 		}
-		if !item.TotalUsage.IsZero() {
+		if hasUsage(item, m) {
 			usedMeterIDs = append(usedMeterIDs, item.MeterID)
 		}
 	}
@@ -181,7 +177,7 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 		return response, nil
 	}
 
-	// STEP7: Re-cost each item using the costsheet price for its meter.
+	// STEP7: Cost each item at its meter's price.
 	priceService := NewPriceService(s.ServiceParams)
 	response := &dto.GetCostAnalyticsResponse{
 		CostsheetID:   costSheet.ID,
@@ -279,9 +275,8 @@ func (s *costsheetUsageTrackingService) GetCostAnalyticsFromMeterUsage(
 	return response, nil
 }
 
-// costPricesInCurrency returns each meter's cost price in the given currency.
-// An empty currency resolves to the one currency the meters with usage are
-// priced in. A non-empty reason means cost cannot be calculated.
+// costPricesInCurrency returns each meter's cost price in the currency, or the reason cost cannot be
+// calculated. An empty currency resolves to the one currency the used meters are priced in.
 func costPricesInCurrency(
 	prices []*price.Price,
 	usedMeterIDs []string,
@@ -328,6 +323,23 @@ func costPricesInCurrency(
 	}
 
 	return meterToPrice, ""
+}
+
+// hasUsage reports whether a usage row needs a cost price. Bucketed meters are costed per bucket, so
+// any non-zero bucket counts even when the buckets net to zero.
+func hasUsage(item dto.UsageAnalyticItem, m *meter.Meter) bool {
+	if !item.TotalUsage.IsZero() {
+		return true
+	}
+	if m == nil || !(priceDomain.IsBucketedMax(nil, m) || priceDomain.IsBucketedSum(nil, m)) {
+		return false
+	}
+	for _, pt := range item.Points {
+		if !pt.Usage.IsZero() {
+			return true
+		}
+	}
+	return false
 }
 
 // safeInt64FromEventCount converts a ClickHouse COUNT(DISTINCT ...) result to

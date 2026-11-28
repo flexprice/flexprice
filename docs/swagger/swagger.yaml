@@ -5458,9 +5458,8 @@ definitions:
           $ref: '#/definitions/CostAnalyticItem'
         type: array
       cost_unavailable_reason:
-        description: |-
-          CostUnavailableReason says why cost could not be calculated; empty when it was.
-          Cost, margin and ROI are zero when it is set.
+        description: CostUnavailableReason is set when cost could not be calculated;
+          cost, margin and ROI are then zero.
         type: string
       currency:
         type: string
