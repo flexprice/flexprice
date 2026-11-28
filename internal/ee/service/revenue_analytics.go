@@ -37,14 +37,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 			Mark(ierr.ErrValidation)
 	}
 
-	// 1. Fetch cost analytics from the meter_usage-backed costsheet path.
-	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req)
-	if err != nil {
-		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
-		costAnalytics = nil
-	}
-
-	// 2. Fetch revenue analytics from meter usage.
+	// 1. Fetch revenue analytics from meter usage.
 	meterUsageService := NewMeterUsageService(s.ServiceParams)
 	revenueAnalytics, err := meterUsageService.GetDetailedAnalytics(ctx, &events.MeterUsageDetailedAnalyticsParams{
 		TenantID:           types.GetTenantID(ctx),
@@ -61,6 +54,24 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		return nil, err
 	}
 
+	// 2. Fetch cost analytics in the revenue currency from the meter_usage-backed costsheet path.
+	var costUnavailableReason string
+	costAnalytics, err := s.costsheetUsageTrackingService.GetCostAnalyticsFromMeterUsage(ctx, req, revenueAnalytics.Currency)
+	switch {
+	case err == nil:
+		if costAnalytics.CostUnavailableReason != "" {
+			costUnavailableReason = costAnalytics.CostUnavailableReason
+			costAnalytics = nil
+		}
+	case ierr.IsNotFound(err):
+		s.Logger.Info(ctx, "failed to fetch cost analytics", "error", err)
+		costAnalytics = nil
+	default:
+		s.Logger.Error(ctx, "failed to calculate cost analytics", "error", err)
+		costUnavailableReason = "Cost could not be calculated."
+		costAnalytics = nil
+	}
+
 	// 3. Build response with derived metrics
 	response := &dto.GetDetailedCostAnalyticsResponse{
 		CostAnalytics: []dto.CostAnalyticItem{},
@@ -73,6 +84,7 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		StartTime:     req.StartTime,
 		EndTime:       req.EndTime,
 	}
+	response.CostUnavailableReason = costUnavailableReason
 
 	// Populate cost analytics if available
 	if costAnalytics != nil {

@@ -25982,6 +25982,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/CostAnalyticItem"
                     }
                 },
+                "cost_unavailable_reason": {
+                    "description": "CostUnavailableReason is set when cost could not be calculated; cost, margin and ROI are then zero.",
+                    "type": "string"
+                },
                 "currency": {
                     "type": "string"
                 },

@@ -126,6 +126,9 @@ type GetCostAnalyticsResponse struct {
 	// Detailed breakdown
 	CostAnalytics []CostAnalyticItem `json:"cost_analytics"`
 
+	// CostUnavailableReason is set when cost could not be calculated.
+	CostUnavailableReason string `json:"cost_unavailable_reason,omitempty"`
+
 	// Time-series (if requested)
 	CostTimeSeries []CostPoint `json:"cost_time_series,omitempty"`
 
@@ -145,6 +148,9 @@ type GetDetailedCostAnalyticsResponse struct {
 	MarginPercent decimal.Decimal `json:"margin_percent" swaggertype:"string"` // (Margin / Revenue) * 100
 	ROI           decimal.Decimal `json:"roi" swaggertype:"string"`            // (Revenue - Cost) / Cost
 	ROIPercent    decimal.Decimal `json:"roi_percent" swaggertype:"string"`    // ROI * 100
+
+	// CostUnavailableReason is set when cost could not be calculated; cost, margin and ROI are then zero.
+	CostUnavailableReason string `json:"cost_unavailable_reason,omitempty"`
 
 	Currency  string    `json:"currency"`
 	StartTime time.Time `json:"start_time"`

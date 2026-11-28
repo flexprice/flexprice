@@ -1276,6 +1276,16 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 
+	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if len(subscriptions) == 0 {
+		// An unknown customer or one without subscriptions has no price to bill against, so report zero instead of
+		// fanning the query out over every meter in the environment.
+		return emptyAnalyticsResponse(params, ""), nil
+	}
+
 	// Resolve FeatureIDs → MeterIDs. Fail closed so an unresolvable feature
 	// list doesn't silently broaden to "all meters".
 	if len(params.FeatureIDs) > 0 && len(params.MeterIDs) == 0 {
@@ -1285,18 +1295,8 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 		params.MeterIDs = meterIDs
 		if len(params.MeterIDs) == 0 {
-			return emptyAnalyticsResponse(params), nil
+			return emptyAnalyticsResponse(params, subscriptions[0].Currency), nil
 		}
-	}
-
-	cust, subscriptions, err := s.resolveCustomerAndSubscriptions(ctx, params.ExternalCustomerID)
-	if err != nil && !ierr.IsNotFound(err) {
-		return nil, err
-	}
-	if len(subscriptions) == 0 {
-		// An unknown customer or one without subscriptions has no price to bill against, so report zero instead of
-		// fanning the query out over every meter in the environment.
-		return emptyAnalyticsResponse(params), nil
 	}
 
 	// Filter to meters on a subscription line item overlapping the query window.
@@ -1341,7 +1341,7 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 		}
 	}
 	if len(params.MeterIDs) == 0 {
-		return emptyAnalyticsResponse(params), nil
+		return emptyAnalyticsResponse(params, subscriptions[0].Currency), nil
 	}
 
 	// Call GetSubscriptionMeterUsage per subscription
@@ -1446,10 +1446,12 @@ func (s *meterUsageService) GetDetailedAnalytics(ctx context.Context, params *ev
 	return response, nil
 }
 
-// emptyAnalyticsResponse returns a response without usage; with no meter queried, it lists no instalments.
-func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams) *dto.GetUsageAnalyticsResponse {
+// emptyAnalyticsResponse returns a response without usage in the customer's currency; with no meter queried, it
+// lists no instalments.
+func emptyAnalyticsResponse(params *events.MeterUsageDetailedAnalyticsParams, currency string) *dto.GetUsageAnalyticsResponse {
 	response := &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
+		Currency:  currency,
 		Items:     []dto.UsageAnalyticItem{},
 	}
 	if lo.Contains(params.Expand, string(types.ExpandInstalments)) {
