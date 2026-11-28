@@ -49,8 +49,8 @@ func NewHandler(
 type ServiceDependencies = interfaces.ServiceDependencies
 
 // HandleWebhookEvent processes a Moyasar webhook event.
-// Never returns an error to the caller — Moyasar must always receive 200 OK.
-// All errors are logged internally.
+// Returns an error only for transient failures that Moyasar should redeliver;
+// everything else is logged internally.
 func (h *Handler) HandleWebhookEvent(ctx context.Context, event *MoyasarWebhookEvent, environmentID string, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "processing Moyasar webhook event",
 		"event_type", event.Type,
@@ -168,21 +168,36 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 		"moyasar_payment_id", payment.ID,
 	)
 
-	flexpricePayment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	flexpricePayment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID, SkipGatewaySync: true})
 	if err != nil {
 		h.logger.Error(ctx, "failed to fetch flexprice payment",
 			"flexprice_payment_id", flexpricePaymentID,
 			"error", err,
 		)
-		return nil
+		if ierr.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
 
-	now := clock.Now()
+	// A paid charge on a card-setup payment a decline marked FAILED (before this fix) is
+	// recorded on a new payment keyed by the Moyasar ID; the FAILED row stays as history.
+	if h.isChargeOnFailedSetup(payment, flexpricePayment) {
+		replacementID, err := h.initiateReplacementSetupPayment(ctx, payment, flexpricePayment)
+		if err != nil {
+			return err
+		}
+		flexpricePayment, err = services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: replacementID, SkipGatewaySync: true})
+		if err != nil {
+			return err
+		}
+		flexpricePaymentID = replacementID
+	}
 
 	if err := h.lifecycle.RecordPaymentSuccess(ctx, payments.RecordPaymentSuccessParams{
 		FlexpricePaymentID: flexpricePaymentID,
 		GatewayPaymentID:   payment.ID,
-		SucceededAt:        now,
+		SucceededAt:        clock.Now(),
 	}); err != nil {
 		h.logger.Error(ctx, "failed to record payment success",
 			"flexprice_payment_id", flexpricePaymentID,
@@ -190,6 +205,20 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 			"error", err,
 		)
 		return nil
+	}
+
+	// Only the webhook that moved the payment to SUCCEEDED records the attempt.
+	if flexpricePayment.PaymentStatus != types.PaymentStatusSucceeded {
+		if err := h.lifecycle.RecordSucceededAttempt(ctx, payments.RecordSucceededAttemptParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   payment.ID,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to record succeeded attempt",
+				"flexprice_payment_id", flexpricePaymentID,
+				"moyasar_payment_id", payment.ID,
+				"error", err,
+			)
+		}
 	}
 
 	switch flexpricePayment.DestinationType {
@@ -214,6 +243,47 @@ func (h *Handler) handlePaymentLifecycle(ctx context.Context, payment *moyasar.M
 	}
 
 	return nil
+}
+
+// isChargeOnFailedSetup reports whether a successful Moyasar charge resolved to a
+// card-setup payment that an earlier decline already marked FAILED.
+func (h *Handler) isChargeOnFailedSetup(payment *moyasar.MoyasarPayment, flexpricePayment *dto.PaymentResponse) bool {
+	if flexpricePayment.DestinationType != types.PaymentDestinationTypeCustomer ||
+		flexpricePayment.PaymentStatus != types.PaymentStatusFailed {
+		return false
+	}
+	return payment.Status == string(moyasar.MoyasarPaymentStatusPaid) ||
+		payment.Status == string(moyasar.MoyasarPaymentStatusCaptured)
+}
+
+// initiateReplacementSetupPayment creates the payment that records a charge which landed
+// on a FAILED card-setup payment, leaving the failed row as history. It is keyed by the
+// Moyasar payment ID, so a redelivered webhook resolves to the same payment.
+func (h *Handler) initiateReplacementSetupPayment(ctx context.Context, payment *moyasar.MoyasarPayment, failedPayment *dto.PaymentResponse) (string, error) {
+	replacementID, err := h.lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
+		DestinationType:   types.PaymentDestinationTypeCustomer,
+		DestinationID:     failedPayment.DestinationID,
+		PaymentMethodType: types.PaymentMethodTypeCard,
+		Gateway:           string(types.PaymentGatewayTypeMoyasar),
+		Amount:            failedPayment.Amount,
+		Currency:          failedPayment.Currency,
+		IdempotencyKey:    payment.ID,
+	})
+	if err != nil {
+		h.logger.Error(ctx, "failed to create replacement payment for charge on failed setup payment",
+			"failed_flexprice_payment_id", failedPayment.ID,
+			"moyasar_payment_id", payment.ID,
+			"error", err,
+		)
+		return "", err
+	}
+
+	h.logger.Info(ctx, "recording charge on failed setup payment against replacement payment",
+		"failed_flexprice_payment_id", failedPayment.ID,
+		"flexprice_payment_id", replacementID,
+		"moyasar_payment_id", payment.ID,
+	)
+	return replacementID, nil
 }
 
 // activatePaymentMethod saves the Moyasar token from the payment source as an ACTIVE PaymentMethod.
@@ -396,9 +466,10 @@ func (h *Handler) handleInvoicePayment(ctx context.Context, payment *moyasar.Moy
 	return nil
 }
 
-// handlePaymentFailed handles payment_failed events.
-// For lifecycle-managed payments, records the failure so the Flexprice payment
-// transitions to FAILED and the invoice remains unpaid for retry/manual action.
+// handlePaymentFailed handles payment_failed events for lifecycle-managed payments.
+// A card-setup (CUSTOMER) decline is recorded as an attempt and leaves the payment open,
+// because every retry on the same checkout page reports back as the same payment.
+// An INVOICE decline marks the payment FAILED so the invoice stays unpaid for retry.
 func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.MoyasarPayment, services *ServiceDependencies) error {
 	h.logger.Info(ctx, "received payment_failed webhook",
 		"moyasar_payment_id", payment.ID,
@@ -418,6 +489,38 @@ func (h *Handler) handlePaymentFailed(ctx context.Context, payment *moyasar.Moya
 	errorMessage := "payment failed"
 	if payment.Source != nil && payment.Source.Message != "" {
 		errorMessage = payment.Source.Message
+	}
+
+	flexpricePayment, err := services.PaymentService.GetPayment(ctx, dto.GetPaymentRequest{ID: flexpricePaymentID})
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			h.logger.Info(ctx, "payment_failed references unknown flexprice payment, skipping",
+				"flexprice_payment_id", flexpricePaymentID,
+				"moyasar_payment_id", payment.ID,
+			)
+			return nil
+		}
+		h.logger.Error(ctx, "failed to fetch flexprice payment for payment_failed",
+			"flexprice_payment_id", flexpricePaymentID,
+			"moyasar_payment_id", payment.ID,
+			"error", err,
+		)
+		return err
+	}
+
+	if flexpricePayment.DestinationType == types.PaymentDestinationTypeCustomer {
+		if err := h.lifecycle.RecordFailedAttempt(ctx, payments.RecordFailedAttemptParams{
+			FlexpricePaymentID: flexpricePaymentID,
+			GatewayPaymentID:   payment.ID,
+			ErrorMessage:       errorMessage,
+		}); err != nil {
+			h.logger.Error(ctx, "failed to record failed card-setup attempt",
+				"flexprice_payment_id", flexpricePaymentID,
+				"moyasar_payment_id", payment.ID,
+				"error", err,
+			)
+		}
+		return nil
 	}
 
 	if err := h.lifecycle.RecordPaymentFailure(ctx, payments.RecordPaymentFailureParams{

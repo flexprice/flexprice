@@ -1013,6 +1013,8 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 		return "", "", ierr.NewError("lifecycle not initialised").Mark(ierr.ErrInternal)
 	}
 
+	// A fresh key per setup gives each payment its own Moyasar given_id, so a payment
+	// closed by an earlier decline or card save is never handed out again.
 	flexpricePaymentID, err = m.Lifecycle.InitiatePayment(ctx, payments.InitiatePaymentParams{
 		DestinationType:   types.PaymentDestinationTypeCustomer,
 		DestinationID:     customerID,
@@ -1020,6 +1022,7 @@ func (m *MoyasarIntegration) InitiateTokenization(ctx context.Context, customerI
 		Gateway:           string(types.SecretProviderMoyasar),
 		Amount:            decimal.NewFromInt(1),
 		Currency:          moyasar.DefaultCurrency,
+		IdempotencyKey:    types.GenerateUUID(),
 	})
 	if err != nil {
 		return "", "", err
