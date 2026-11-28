@@ -11,6 +11,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
@@ -19,6 +21,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
+	"github.com/flexprice/flexprice/internal/tracing"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -102,21 +105,33 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
+	serverSpan := trace.SpanFromContext(ctx)
+	if c.Request.ContentLength > 0 {
+		serverSpan.SetAttributes(attribute.Int64("http.request.body.size", c.Request.ContentLength))
+	}
+
 	var req dto.BulkIngestEventRequest
-	if err := middleware.BindJSONWithLimit(c, &req); err != nil {
-		if isRequestBodyTooLarge(err) {
+	bindCtx, _ := tracing.StartSpan(ctx, "events.bulk.bind_json")
+	bindErr := middleware.BindJSONWithLimit(c, &req)
+	tracing.EndSpan(bindCtx, bindErr)
+	if bindErr != nil {
+		if isRequestBodyTooLarge(bindErr) {
 			c.Error(errRequestBodyTooLarge())
 			return
 		}
-		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
+		h.log.Error(c.Request.Context(), "Failed to bind JSON", "error", bindErr)
+		c.Error(ierr.WithError(bindErr).
 			WithHint("Invalid request payload").
 			Mark(ierr.ErrValidation))
 		return
 	}
+	serverSpan.SetAttributes(attribute.Int("events.count", len(req.Events)))
 
-	if err := req.Validate(); err != nil {
-		c.Error(err)
+	validateCtx, _ := tracing.StartSpan(ctx, "events.bulk.validate")
+	validateErr := req.Validate()
+	tracing.EndSpan(validateCtx, validateErr)
+	if validateErr != nil {
+		c.Error(validateErr)
 		return
 	}
 
