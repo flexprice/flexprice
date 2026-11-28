@@ -40,6 +40,8 @@ const (
 	commitmentOverEventCount    = 550
 	commitmentOverExpectedUsage = 5.75
 	commitmentUsagePollTimeout  = 8 * time.Minute
+	commitmentBaseFee           = 19.99
+	commitmentTotalEpsilon      = 0.01
 )
 
 type CommitmentTrueUpProbe struct {
@@ -48,10 +50,12 @@ type CommitmentTrueUpProbe struct {
 	runID  string
 	lg     *logger.Logger
 	cursor int64
+	// previewSettleTimeout bounds how long the over leg waits for the preview total to settle.
+	previewSettleTimeout time.Duration
 }
 
 func NewCommitmentTrueUpProbe(c e2eprobe.Client, r e2eprobe.Registry, runID string, lg *logger.Logger) *CommitmentTrueUpProbe {
-	return &CommitmentTrueUpProbe{client: c, reg: r, runID: runID, lg: lg}
+	return &CommitmentTrueUpProbe{client: c, reg: r, runID: runID, lg: lg, previewSettleTimeout: commitmentUsagePollTimeout}
 }
 
 func (p *CommitmentTrueUpProbe) Name() string        { return "commitment-true-up-probe" }
@@ -150,14 +154,41 @@ func (p *CommitmentTrueUpProbe) Run(ctx context.Context) error {
 		return err
 	}
 
-	previewResp, err := p.client.Invoices().GetPreview(ctx, types.GetPreviewInvoiceRequest{SubscriptionID: subID})
+	inv, err := p.preview(ctx, subID, ext)
 	if err != nil {
-		return e2eprobe.Errorf(map[string]string{"step": "preview", "external_customer_id": ext, "subscription_id": subID}, "get invoice preview: %w", err)
+		return err
 	}
-	if previewResp.InvoiceResponse == nil {
-		return e2eprobe.Errorf(map[string]string{"step": "assert_preview_present", "external_customer_id": ext, "subscription_id": subID}, "empty preview response")
+	// The usage poll reads meter_usage without FINAL, so it can pass while the
+	// preview (which reads with FINAL) is still short; wait for the preview itself.
+	deadline := time.Now().Add(p.previewSettleTimeout)
+	for overLeg && !overLegSettled(inv) && time.Now().Before(deadline) {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+		if inv, err = p.preview(ctx, subID, ext); err != nil {
+			return err
+		}
 	}
-	return p.assertPreview(previewResp.InvoiceResponse, overLeg, ext, subID)
+	return p.assertPreview(inv, overLeg, ext, subID)
+}
+
+func (p *CommitmentTrueUpProbe) preview(ctx context.Context, subID, ext string) (*types.InvoiceResponse, error) {
+	resp, err := p.client.Invoices().GetPreview(ctx, types.GetPreviewInvoiceRequest{SubscriptionID: subID})
+	if err != nil {
+		return nil, e2eprobe.Errorf(map[string]string{"step": "preview", "external_customer_id": ext, "subscription_id": subID}, "get invoice preview: %w", err)
+	}
+	if resp.InvoiceResponse == nil {
+		return nil, e2eprobe.Errorf(map[string]string{"step": "assert_preview_present", "external_customer_id": ext, "subscription_id": subID}, "empty preview response")
+	}
+	return resp.InvoiceResponse, nil
+}
+
+// overLegSettled reports whether the preview total is within epsilon of the over-leg expected total.
+func overLegSettled(inv *types.InvoiceResponse) bool {
+	expected := decimal.NewFromFloat(commitmentOverExpectedUsage).Add(decimal.NewFromFloat(commitmentBaseFee))
+	return invoiceTotal(inv).Sub(expected).Abs().LessThanOrEqual(decimal.NewFromFloat(commitmentTotalEpsilon))
 }
 
 func (p *CommitmentTrueUpProbe) pollSubUsage(ctx context.Context, subID, ext string, expectedAmount float64) error {
@@ -200,8 +231,8 @@ func (p *CommitmentTrueUpProbe) assertPreview(inv *types.InvoiceResponse, overLe
 	commitment := decimal.NewFromFloat(5.00)
 	// e2eprobe_base_price ($19.99 monthly fixed) is on seeds.PlanIDs[0] and
 	// always appears on the preview, so bake it into the expected totals.
-	baseFee := decimal.NewFromFloat(19.99)
-	epsilon := decimal.NewFromFloat(0.01)
+	baseFee := decimal.NewFromFloat(commitmentBaseFee)
+	epsilon := decimal.NewFromFloat(commitmentTotalEpsilon)
 
 	total := invoiceTotal(inv)
 
@@ -226,7 +257,7 @@ func (p *CommitmentTrueUpProbe) assertPreview(inv *types.InvoiceResponse, overLe
 	// Over leg: total ≈ commitment + (usage_past_commitment × 1.5) + base
 	//         = $5 + $0.50×1.5 + $19.99 = $25.74.
 	expected := decimal.NewFromFloat(commitmentOverExpectedUsage).Add(baseFee)
-	if total.Sub(expected).Abs().GreaterThan(epsilon) {
+	if !overLegSettled(inv) {
 		return e2eprobe.Errorf(map[string]string{
 			"step": "assert_commitment_over", "external_customer_id": ext, "subscription_id": subID,
 			"preview_total": total.String(), "expected": expected.String(),

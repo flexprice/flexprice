@@ -108,6 +108,33 @@ func TestMeterAggregationProbe_FailsWhenSumZero(t *testing.T) {
 	}
 }
 
+// TestMeterAggregationProbe_PassesWhenAnyCustomerHasUsage verifies a meter
+// reading zero for one customer passes as long as another customer has usage.
+func TestMeterAggregationProbe_PassesWhenAnyCustomerHasUsage(t *testing.T) {
+	fc := newFakeClient()
+	eventName := "e2eprobe_sum_filtered"
+	usage := "10.0000"
+	fc.events.analyticsByCustomer = map[string][]types.UsageAnalyticItem{
+		"c1": {{EventName: &eventName, TotalUsage: &usage}},
+	}
+	seedSubWithMeter(fc, "meter_001")
+	reg := e2eprobe.NewRegistry()
+	reg.LoadSeeds(e2eprobe.Seeds{
+		PersistentCustomerIDs: []string{"c0", "c1"},
+		MeterIDs:              map[string]string{eventName: "meter_001"},
+	})
+
+	p := NewMeterAggregationProbe(fc, reg, "run-1", nil)
+	p.startedAt = time.Now().Add(-2 * meterAggLookback) // bypass startup grace
+	p.cursor = -1                                       // first tick starts at c0
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("Run() with usage on c1 only: %v", err)
+	}
+	if fc.events.analytics != 2 {
+		t.Errorf("expected 2 analytics calls (c0 zero, then c1), got %d", fc.events.analytics)
+	}
+}
+
 // TestMeterAggregationProbe_SkipsMeterNotOnSubscription verifies the probe
 // stays silent for a meter the customer's subscription doesn't carry. Usage
 // analytics filters by active-subscription line items, so a meter seeded
