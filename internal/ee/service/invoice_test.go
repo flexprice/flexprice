@@ -3665,6 +3665,10 @@ func (s *InvoiceServiceSuite) TestIsFinalizationDue_AutoFinalize() {
 			due, err := s.service.IsFinalizationDue(ctx, draft.ID)
 			s.Require().NoError(err)
 			s.Equal(tt.wantDue, due)
+
+			enabled, err := s.service.IsAutoProcessingEnabled(ctx)
+			s.Require().NoError(err)
+			s.Equal(tt.autoFinalize, enabled)
 		})
 	}
 }
