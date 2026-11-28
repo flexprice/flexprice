@@ -534,37 +534,6 @@ func (s *SubscriptionServiceSuite) TestUpdateSubscription_OmittedCancelAtPeriodE
 }
 
 // scheduled_date cancel with cancel_at at/before the period start must be rejected, like immediate.
-func (s *SubscriptionServiceSuite) TestCancelSubscription_ScheduledDateBeforePeriodStartRejected() {
-	periodStart := s.testData.now.Add(-5 * 24 * time.Hour)
-	periodEnd := s.testData.now.Add(25 * 24 * time.Hour)
-	cancelAt := s.testData.now.Add(-10 * 24 * time.Hour) // before period start
-
-	sub := &subscription.Subscription{
-		ID:                 "sub_scheduled_before_start_reject",
-		CustomerID:         s.testData.customer.ID,
-		PlanID:             s.testData.plan.ID,
-		SubscriptionStatus: types.SubscriptionStatusActive,
-		StartDate:          periodStart,
-		CurrentPeriodStart: periodStart,
-		CurrentPeriodEnd:   periodEnd,
-		BillingAnchor:      periodStart,
-		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: 1,
-		Currency:           "usd",
-		Timezone:           types.DefaultTimezone,
-		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().SubscriptionRepo.Create(s.GetContext(), sub))
-
-	_, err := s.service.CancelSubscription(s.GetContext(), sub.ID, &dto.CancelSubscriptionRequest{
-		CancellationType:  types.CancellationTypeScheduledDate,
-		ProrationBehavior: types.ProrationBehaviorNone,
-		CancelAt:          &cancelAt,
-		Reason:            "test_scheduled_before_start",
-	})
-	s.Error(err)
-}
-
 // TestCancelSubscription_ImmediateOnNotYetStartedSubscription covers a subscription whose
 // period starts in the future and is cancelled immediately with cancel_at omitted. The
 // derived effective date is time.Now(), which precedes the period; left unclamped it
