@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
+	"github.com/flexprice/flexprice/internal/domain/coupon_application"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
@@ -954,6 +955,105 @@ func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageOn
 		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit or refund the wallet")
 		s.True(stored.CreditBalance.Equal(decimal.NewFromInt(100)))
 	}
+}
+
+// Recurring percentage coupons lower pending usage as it accrues; fixed and one-time coupons wait for the invoice.
+func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_PercentageCouponsReducePendingUsage() {
+	ctx := s.GetContext()
+	now := time.Now().UTC()
+	start, end := now.Add(-24*time.Hour), now.Add(24*time.Hour)
+	sub := s.usageSubscription("subs_wallet_coupons", start, start, end)
+	s.seedGrant("wtxn_wallet_coupons", decimal.NewFromInt(100), start, end.Add(24*time.Hour))
+	s.usage(sub, start.Add(time.Hour), 100)
+
+	lineItemID := "subs_line_" + sub.ID
+	for _, step := range []struct {
+		name               string
+		coupon             coupon.Coupon
+		lineItemID         *string
+		applied            int // invoices that already applied the coupon
+		pending, available string
+	}{
+		{
+			name:       "fixed line coupon waits for the invoice",
+			coupon:     coupon.Coupon{Type: types.CouponTypeFixed, AmountOff: lo.ToPtr(decimal.NewFromInt(30)), Cadence: types.CouponCadenceForever},
+			lineItemID: &lineItemID,
+			pending:    "100", available: "0",
+		},
+		{
+			name:       "one-time 50% line coupon the invoice will apply",
+			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(50)), Cadence: types.CouponCadenceOnce},
+			lineItemID: &lineItemID,
+			pending:    "50", available: "50",
+		},
+		{
+			name:       "forever 20% line coupon also comes off the original amount, as on the invoice",
+			coupon:     coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(20)), Cadence: types.CouponCadenceForever},
+			lineItemID: &lineItemID,
+			pending:    "30", available: "70",
+		},
+		{
+			name:    "repeated coupon at its application limit gives no discount",
+			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(90)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(2)},
+			applied: 2,
+			pending: "30", available: "70",
+		},
+		{
+			name:    "repeated 50% subscription coupon compounds after the line coupons",
+			coupon:  coupon.Coupon{Type: types.CouponTypePercentage, PercentageOff: lo.ToPtr(decimal.NewFromInt(50)), Cadence: types.CouponCadenceRepeated, DurationInPeriods: lo.ToPtr(3)},
+			pending: "15", available: "85",
+		},
+	} {
+		c := step.coupon
+		c.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON)
+		c.Name = step.name
+		c.Currency = sub.Currency
+		c.EnvironmentID = types.GetEnvironmentID(ctx)
+		c.BaseModel = types.GetDefaultBaseModel(ctx)
+		s.NoError(s.GetStores().CouponRepo.Create(ctx, &c))
+		s.NoError(s.GetStores().CouponAssociationRepo.Create(ctx, &coupon_association.CouponAssociation{
+			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
+			CouponID:               c.ID,
+			SubscriptionID:         sub.ID,
+			SubscriptionLineItemID: step.lineItemID,
+			StartDate:              start,
+			EnvironmentID:          types.GetEnvironmentID(ctx),
+			Coupon:                 &c,
+			BaseModel:              types.GetDefaultBaseModel(ctx),
+		}))
+		for i := 0; i < step.applied; i++ {
+			s.NoError(s.GetStores().CouponApplicationRepo.Create(ctx, &coupon_application.CouponApplication{
+				ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_APPLICATION),
+				CouponID:       c.ID,
+				InvoiceID:      fmt.Sprintf("inv_%s_%d", c.ID, i),
+				SubscriptionID: &sub.ID,
+				Currency:       sub.Currency,
+				EnvironmentID:  types.GetEnvironmentID(ctx),
+				BaseModel:      types.GetDefaultBaseModel(ctx),
+			}))
+		}
+
+		resp, err := s.walletService.GetWalletBalanceV2(ctx, s.wallet.ID)
+		s.Require().NoError(err, step.name)
+		s.False(resp.IsCachedFallback, step.name)
+		s.True(decimal.RequireFromString(step.pending).Equal(lo.FromPtr(resp.CurrentPeriodUsage)), "%s: pending %s", step.name, lo.FromPtr(resp.CurrentPeriodUsage))
+		s.True(decimal.RequireFromString(step.available).Equal(lo.FromPtr(resp.RealTimeBalance)), "%s: balance %s", step.name, lo.FromPtr(resp.RealTimeBalance))
+		s.True(decimal.RequireFromString(step.available).Equal(lo.FromPtr(resp.RealTimeCreditBalance)), step.name)
+		stored, err := s.GetStores().WalletRepo.GetWalletByID(ctx, s.wallet.ID)
+		s.Require().NoError(err)
+		s.True(stored.Balance.Equal(decimal.NewFromInt(100)), "balance reads must not debit the wallet")
+	}
+
+	// A commitment can split one item into normal and overage charges. The invoice puts line coupons
+	// on the last one only: 60 gets the 50% subscription coupon (30 off); 40 gets the 50% and 20% line
+	// coupons (28 off), then 50% of the remaining 12 (6 off).
+	split := []dto.CreateInvoiceLineItemRequest{
+		{Amount: decimal.NewFromInt(60), Quantity: decimal.NewFromInt(60), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
+		{Amount: decimal.NewFromInt(40), Quantity: decimal.NewFromInt(40), PriceID: lo.ToPtr("price_" + sub.ID), SubscriptionLineItemID: &lineItemID},
+	}
+	discount, err := s.walletService.(*walletService).usageCouponDiscount(ctx, sub, split, start, end)
+	s.Require().NoError(err)
+	s.True(decimal.NewFromInt(64).Equal(discount), "split charge discount %s", discount)
 }
 
 func (s *CreditExpiryInvoiceRaceSuite) TestRealtimeWalletBalance_NegativeUsageDoesNotRestoreExpiredCredits() {
