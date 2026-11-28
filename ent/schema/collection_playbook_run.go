@@ -87,8 +87,11 @@ func (CollectionPlaybookRun) Indexes() []ent.Index {
 			Unique().
 			StorageKey(CollectionPlaybookRunLiveUniqueConstraint).
 			Annotations(entsql.IndexWhere("(((status)::text = 'published'::text) AND ((state)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying])::text[])))")),
-		index.Fields("tenant_id", "environment_id", "playbook_id", "state"),
-		index.Fields("tenant_id", "environment_id", "customer_id", "state"),
+		// Explicit names: the generated ones pass Postgres's 63-character limit.
+		index.Fields("tenant_id", "environment_id", "playbook_id", "state").
+			StorageKey("idx_collection_playbook_run_playbook_state"),
+		index.Fields("tenant_id", "environment_id", "customer_id", "state").
+			StorageKey("idx_collection_playbook_run_customer_state"),
 		index.Fields("tenant_id", "environment_id", "next_step_at").
 			Annotations(entsql.IndexWhere("((state)::text = 'active'::text)")),
 	}

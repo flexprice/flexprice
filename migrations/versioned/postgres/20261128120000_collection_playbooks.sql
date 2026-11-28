@@ -55,8 +55,8 @@ CREATE TABLE IF NOT EXISTS "collection_playbook_runs" (
 );
 -- An invoice is in at most one live (active or paused) run.
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_collection_playbook_run_live_invoice" ON "collection_playbook_runs" ("tenant_id", "environment_id", "invoice_id") WHERE (((status)::text = 'published'::text) AND ((state)::text = ANY ((ARRAY['active'::character varying, 'paused'::character varying])::text[])));
-CREATE INDEX IF NOT EXISTS "collectionplaybookrun_tenant_id_environment_id_playbook_id_state" ON "collection_playbook_runs" ("tenant_id", "environment_id", "playbook_id", "state");
-CREATE INDEX IF NOT EXISTS "collectionplaybookrun_tenant_id_environment_id_customer_id_state" ON "collection_playbook_runs" ("tenant_id", "environment_id", "customer_id", "state");
+CREATE INDEX IF NOT EXISTS "idx_collection_playbook_run_playbook_state" ON "collection_playbook_runs" ("tenant_id", "environment_id", "playbook_id", "state");
+CREATE INDEX IF NOT EXISTS "idx_collection_playbook_run_customer_state" ON "collection_playbook_runs" ("tenant_id", "environment_id", "customer_id", "state");
 CREATE INDEX IF NOT EXISTS "collectionplaybookrun_tenant_id_environment_id_next_step_at" ON "collection_playbook_runs" ("tenant_id", "environment_id", "next_step_at") WHERE ((state)::text = 'active'::text);
 
 CREATE TABLE IF NOT EXISTS "collection_playbook_step_runs" (
@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS "collection_playbook_step_runs" (
   "executed_at" timestamptz NULL,
   "run_id" varchar(50) NOT NULL,
   PRIMARY KEY ("id"),
-  CONSTRAINT "collection_playbook_step_runs_collection_playbook_runs_step_runs" FOREIGN KEY ("run_id") REFERENCES "collection_playbook_runs" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION
+  -- Ent's name for this foreign key: the natural one passes Postgres's 63-character limit, so Ent hashes it.
+  CONSTRAINT "collection_playbook_step_runs__a6d438a91461570e1f8e8a39f1e3cf20" FOREIGN KEY ("run_id") REFERENCES "collection_playbook_runs" ("id") ON UPDATE NO ACTION ON DELETE NO ACTION
 );
 -- A step runs at most once per run.
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_collection_playbook_step_run_run_step" ON "collection_playbook_step_runs" ("run_id", "step_id");

@@ -574,12 +574,12 @@ var (
 				},
 			},
 			{
-				Name:    "collectionplaybookrun_tenant_id_environment_id_playbook_id_state",
+				Name:    "idx_collection_playbook_run_playbook_state",
 				Unique:  false,
 				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[17], CollectionPlaybookRunsColumns[10]},
 			},
 			{
-				Name:    "collectionplaybookrun_tenant_id_environment_id_customer_id_state",
+				Name:    "idx_collection_playbook_run_customer_state",
 				Unique:  false,
 				Columns: []*schema.Column{CollectionPlaybookRunsColumns[1], CollectionPlaybookRunsColumns[7], CollectionPlaybookRunsColumns[9], CollectionPlaybookRunsColumns[10]},
 			},
