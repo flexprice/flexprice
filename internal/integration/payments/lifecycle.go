@@ -70,6 +70,7 @@ func (l *PaymentLifecycle) InitiatePayment(ctx context.Context, params InitiateP
 		Amount:            params.Amount,
 		Currency:          strings.ToUpper(params.Currency),
 		ProcessPayment:    false,
+		IdempotencyKey:    params.IdempotencyKey,
 	}
 
 	payment, err := l.paymentService.CreatePayment(ctx, req)
@@ -99,6 +100,28 @@ func (l *PaymentLifecycle) InitiatePayment(ctx context.Context, params InitiateP
 	)
 
 	return payment.ID, nil
+}
+
+// LatestInitiatedPayment returns the newest INITIATED payment for the destination on the gateway, or "" when there is none.
+func (l *PaymentLifecycle) LatestInitiatedPayment(ctx context.Context, destinationType types.PaymentDestinationType, destinationID string, gateway types.PaymentGatewayType) (string, error) {
+	found, err := l.paymentService.ListPayments(ctx, &types.PaymentFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit: lo.ToPtr(1),
+			Sort:  lo.ToPtr("created_at"),
+			Order: lo.ToPtr("desc"),
+		},
+		DestinationType: lo.ToPtr(string(destinationType)),
+		DestinationID:   lo.ToPtr(destinationID),
+		PaymentStatus:   lo.ToPtr(string(types.PaymentStatusInitiated)),
+		PaymentGateway:  lo.ToPtr(string(gateway)),
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(found.Items) == 0 {
+		return "", nil
+	}
+	return found.Items[0].ID, nil
 }
 
 // ConfirmGatewayPayment transitions the payment from INITIATED to PENDING.
