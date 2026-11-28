@@ -51,13 +51,196 @@ func newSubscriptionTestRepository(t *testing.T) (context.Context, postgres.ICli
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = client.Close() })
 	ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "trial_test_tenant"), "trial_test_env")
-	table := *migrate.SubscriptionsTable
-	table.ForeignKeys = nil
-	require.NoError(t, migrate.Create(ctx, client.Schema, []*schema.Table{&table}, migrate.WithForeignKeys(false)))
+	tables := make([]*schema.Table, 0, 2)
+	for _, source := range []*schema.Table{migrate.SubscriptionsTable, migrate.CustomersTable} {
+		table := schema.NewTable(source.Name)
+		for _, column := range source.Columns {
+			table.AddColumn(column)
+		}
+		table.PrimaryKey = source.PrimaryKey
+		table.Indexes = source.Indexes
+		table.Annotation = source.Annotation
+		tables = append(tables, table)
+	}
+	require.NoError(t, migrate.Create(ctx, client.Schema, tables, migrate.WithForeignKeys(false)))
 	log := logger.NewNoopLogger()
 	database := postgres.NewClient(&postgres.EntClients{Writer: client, Reader: client}, log, nil)
 	repo := NewSubscriptionRepository(database, log, newFakeRedisCache()).(*subscriptionRepository)
 	return ctx, database, repo
+}
+
+// Capture the production query to check scoping and sort precedence without a database.
+// TestSubscriptionList_CustomerNameSort separately verifies returned rows in PostgreSQL.
+func TestSubscriptionList_CustomerNameSortSQL(t *testing.T) {
+	const nameOrder = `LOWER(COALESCE((SELECT "sort_customer"."name" FROM "customers" AS "sort_customer" WHERE ` +
+		`"sort_customer"."id" = "subscriptions"."customer_id" AND ` +
+		`"sort_customer"."tenant_id" = "subscriptions"."tenant_id" AND ` +
+		`"sort_customer"."environment_id" = "subscriptions"."environment_id"), '')) COLLATE "C"`
+
+	for _, tt := range []struct {
+		name        string
+		sort        []*types.SortCondition
+		legacyOrder string
+		wantOrder   string
+		wantInvalid bool
+	}{
+		{
+			name: "ascending with ID tie-breaker and nil condition",
+			sort: []*types.SortCondition{
+				nil,
+				{Field: "customer_name", Direction: types.SortDirectionAsc},
+				{Field: "id", Direction: types.SortDirectionAsc},
+			},
+			wantOrder: nameOrder + ` ASC, "id" ASC`,
+		},
+		{
+			name: "descending with ID tie-breaker",
+			sort: []*types.SortCondition{
+				{Field: "customer_name", Direction: types.SortDirectionDesc},
+				{Field: "id", Direction: types.SortDirectionDesc},
+			},
+			wantOrder: nameOrder + ` DESC, "id" DESC`,
+		},
+		{
+			name:      "default customer name direction",
+			sort:      []*types.SortCondition{{Field: "customer_name"}},
+			wantOrder: nameOrder + ` ASC`,
+		},
+		{
+			name: "customer name preserves earlier sort priority",
+			sort: []*types.SortCondition{
+				{Field: "id", Direction: types.SortDirectionDesc},
+				{Field: "customer_name", Direction: types.SortDirectionAsc},
+			},
+			wantOrder: `"id" DESC, ` + nameOrder + ` ASC`,
+		},
+		{
+			name:        "legacy ascending",
+			legacyOrder: "asc",
+			wantOrder:   nameOrder + ` ASC`,
+		},
+		{
+			name:        "legacy descending",
+			legacyOrder: "desc",
+			wantOrder:   nameOrder + ` DESC`,
+		},
+		{
+			name: "invalid secondary field is rejected before querying",
+			sort: []*types.SortCondition{
+				{Field: "customer_name", Direction: types.SortDirectionAsc},
+				{Field: "no_such_column", Direction: types.SortDirectionAsc},
+			},
+			wantInvalid: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			driver := &sqlCaptureDriver{}
+			client := ent.NewClient(ent.Driver(driver))
+			t.Cleanup(func() { _ = client.Close() })
+			log := logger.NewNoopLogger()
+			database := postgres.NewClient(&postgres.EntClients{Writer: client, Reader: client}, log, nil)
+			repo := NewSubscriptionRepository(database, log, newFakeRedisCache())
+			ctx := types.SetEnvironmentID(types.SetTenantID(context.Background(), "tenant_sort"), "env_sort")
+			filter := types.NewSubscriptionFilter()
+			filter.Sort = tt.sort
+			filter.Offset = lo.ToPtr(2)
+			if tt.legacyOrder != "" {
+				filter.QueryFilter.Sort = lo.ToPtr("customer_name")
+				filter.Order = lo.ToPtr(tt.legacyOrder)
+			}
+			_, err := repo.List(ctx, filter)
+			if tt.wantInvalid {
+				require.ErrorContains(t, err, "unknown field name 'no_such_column'")
+				require.Empty(t, driver.queries)
+				return
+			}
+			require.ErrorIs(t, err, errQueryCaptured)
+			require.Len(t, driver.queries, 1)
+			query := driver.queries[0]
+			require.Contains(t, query, `"subscriptions"."tenant_id" = $`)
+			require.Contains(t, query, `"subscriptions"."environment_id" = $`)
+			require.Contains(t, query, "ORDER BY "+tt.wantOrder)
+			require.Regexp(t, ` LIMIT 50 OFFSET 2$`, query)
+			require.NotContains(t, query, " JOIN ", "missing customers must not eliminate subscriptions")
+		})
+	}
+}
+
+func TestSubscriptionList_CustomerNameSort(t *testing.T) {
+	ctx, database, repo := newSubscriptionTestRepository(t)
+	client := database.Writer(ctx)
+	otherTenant := types.SetTenantID(ctx, "other_tenant")
+	otherEnvironment := types.SetEnvironmentID(ctx, "other_environment")
+	for _, c := range []struct {
+		id, name string
+		ctx      context.Context
+	}{
+		{"alpha", "Alpha", ctx},
+		{"alpha_upper", "ALPHA", ctx},
+		{"beta", "beta", ctx},
+		{"zulu", "Zulu", ctx},
+		{"cross_tenant", "Aardvark", otherTenant},
+		{"cross_env", "Aardvark", otherEnvironment},
+	} {
+		_, err := client.Customer.Create().SetID(c.id).SetExternalID(c.id).SetName(c.name).
+			SetTenantID(types.GetTenantID(c.ctx)).SetEnvironmentID(types.GetEnvironmentID(c.ctx)).
+			SetCreatedBy("test").SetUpdatedBy("test").Save(ctx)
+		require.NoError(t, err)
+	}
+	for _, row := range []struct {
+		id, customer string
+		ctx          context.Context
+	}{
+		{"sub_a", "zulu", ctx},
+		{"sub_b", "beta", ctx},
+		{"sub_c", "alpha", ctx},
+		{"sub_d", "alpha", ctx},
+		{"sub_e", "alpha_upper", ctx},
+		{"sub_missing", "missing", ctx},
+		{"sub_cross_tenant", "cross_tenant", ctx},
+		{"sub_cross_env", "cross_env", ctx},
+		{"hidden_tenant", "zulu", otherTenant},
+		{"hidden_env", "zulu", otherEnvironment},
+	} {
+		sub := subscriptionTestFixture(row.ctx, row.id, types.SubscriptionStatusActive, nil, nil)
+		sub.CustomerID = row.customer
+		require.NoError(t, repo.Create(row.ctx, sub))
+	}
+	for _, tc := range []struct {
+		name      string
+		direction types.SortDirection
+		want      []string
+	}{
+		{"ascending", types.SortDirectionAsc, []string{"sub_cross_env", "sub_cross_tenant", "sub_missing", "sub_c", "sub_d", "sub_e", "sub_b", "sub_a"}},
+		{"descending", types.SortDirectionDesc, []string{"sub_a", "sub_b", "sub_e", "sub_d", "sub_c", "sub_missing", "sub_cross_tenant", "sub_cross_env"}},
+		{"default direction", "", []string{"sub_cross_env", "sub_cross_tenant", "sub_missing", "sub_c", "sub_d", "sub_e", "sub_b", "sub_a"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			idDirection := tc.direction
+			if idDirection == "" {
+				idDirection = types.SortDirectionAsc
+			}
+			filter := types.NewSubscriptionFilter()
+			filter.Limit = lo.ToPtr(2)
+			filter.Sort = []*types.SortCondition{
+				{Field: "customer_name", Direction: tc.direction},
+				{Field: "id", Direction: idDirection},
+			}
+			var ids []string
+			for offset := 0; offset < len(tc.want); offset += 2 {
+				filter.Offset = lo.ToPtr(offset)
+				page, err := repo.List(ctx, filter)
+				require.NoError(t, err)
+				for _, sub := range page {
+					ids = append(ids, sub.ID)
+				}
+			}
+			require.Equal(t, tc.want, ids)
+			count, err := repo.Count(ctx, filter)
+			require.NoError(t, err)
+			require.Equal(t, len(tc.want), count)
+		})
+	}
 }
 
 func TestSubscriptionUpdate_PersistsTrialBounds(t *testing.T) {
