@@ -299,8 +299,6 @@ func (s *invoiceService) convertToBillingCurrency(ctx context.Context, inv *invo
 	return s.retaxConvertedInvoice(ctx, inv)
 }
 
-// retaxConvertedInvoice re-taxes a converted invoice: subscription invoices from their
-// tax associations, others from the rates recorded on their tax_applied rows.
 func (s *invoiceService) retaxConvertedInvoice(ctx context.Context, inv *invoice.Invoice) error {
 	if inv.InvoiceType == types.InvoiceTypeSubscription && inv.SubscriptionID != nil {
 		_, err := s.RecalculateTaxesOnInvoice(ctx, inv)
@@ -313,10 +311,6 @@ func (s *invoiceService) retaxConvertedInvoice(ctx context.Context, inv *invoice
 		return err
 	}
 
-	result, err := taxService.ApplyTaxesOnInvoice(ctx, inv, taxRates)
-	if err != nil {
-		return err
-	}
-	applyTaxResultToInvoice(inv, result)
-	return s.InvoiceRepo.Update(ctx, inv)
+	_, err = s.recalculateTaxes(ctx, inv, dto.InvoiceComputeRequest{PreparedTaxRates: taxRates})
+	return err
 }
