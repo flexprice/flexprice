@@ -21,8 +21,10 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/usagerollup"
 	"github.com/flexprice/flexprice/internal/ee/analytics"
 	"github.com/flexprice/flexprice/internal/expression"
+	"github.com/flexprice/flexprice/internal/metrics"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -298,6 +300,7 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 
 	records := make([]*events.MeterUsage, 0, len(batch.Events))
 	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
+	metersByID := make(map[string]*meter.Meter)
 	for _, evt := range batch.Events {
 		if evt == nil {
 			continue
@@ -373,12 +376,14 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 			if qty.IsNegative() && m.Aggregation.Type != types.AggregationSum {
 				qty = decimal.Zero
 			}
-			records = append(records, &events.MeterUsage{
+			record := &events.MeterUsage{
 				Event:      *evt,
 				MeterID:    m.ID,
 				QtyTotal:   qty,
 				UniqueHash: s.generateUniqueHash(evt, m),
-			})
+			}
+			records = append(records, record)
+			metersByID[m.ID] = m
 			eventProducedRecord = true
 		}
 		if eventProducedRecord {
@@ -407,6 +412,8 @@ func (s *meterUsageTrackingService) processBulkMessage(ctx context.Context, msg 
 	if s.analyticsPublisher != nil {
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
+
+	s.recordUsageRollup(ctx, records, metersByID)
 
 	s.Logger.Debug(ctx, "bulk meter usage batch inserted",
 		"record_count", len(records),
@@ -510,7 +517,6 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 				s.Logger.Info(ctx, "event already processed, skipping", "event_id", eventId)
 				return nil
 			}
-
 			// Release the dedup lock on any processing failure below so retries
 			// aren't dedup-skipped until TTL. `err` here is the named return —
 			// it captures failures from further processing, not just the AcquireLock result.
@@ -594,6 +600,8 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 		s.analyticsPublisher.PublishMeterUsage(ctx, records)
 	}
 
+	s.recordUsageRollup(ctx, records, lo.KeyBy(meters, func(m *meter.Meter) string { return m.ID }))
+
 	s.Logger.Debug(ctx, "meter usage records inserted",
 		"event_id", event.ID,
 		"count", len(records),
@@ -607,6 +615,58 @@ func (s *meterUsageTrackingService) processEvent(ctx context.Context, event *eve
 	s.runMeterUsagePostInsertSideEffects(ctx, event, records)
 
 	return nil
+}
+
+// recordUsageRollup adds inserted usage to the Redis hourly usage for enabled tenants. A redelivery the
+// dedup lock misses counts twice until the checkpoint job passes that hour. Failures are logged and counted
+// and never fail the message.
+func (s *meterUsageTrackingService) recordUsageRollup(
+	ctx context.Context,
+	records []*events.MeterUsage,
+	metersByID map[string]*meter.Meter,
+) {
+	if s.HourlyUsageRepo == nil || !s.Config.UsageRollup.IsEnabledForTenant(types.GetTenantID(ctx)) {
+		return
+	}
+	cutoff := usagerollup.Cutoff(clock.Now())
+	usage := make([]usagerollup.HourlyUsage, 0, len(records))
+	tooOld := 0
+	for _, r := range records {
+		m, ok := metersByID[r.MeterID]
+		if !ok || r.ExternalCustomerID == "" || !usagerollup.SupportsAggregation(m.Aggregation.Type) {
+			continue
+		}
+		if r.Timestamp.Before(cutoff) {
+			tooOld++
+			continue
+		}
+		quantity := r.QtyTotal
+		if m.Aggregation.Type == types.AggregationCount {
+			// One per event, matching ClickHouse's COUNT(DISTINCT id).
+			quantity = decimal.NewFromInt(1)
+		}
+		usage = append(usage, usagerollup.HourlyUsage{
+			ExternalCustomerID: r.ExternalCustomerID,
+			Hour:               r.Timestamp.UTC().Truncate(time.Hour),
+			MeterID:            r.MeterID,
+			Aggregation:        m.Aggregation.Type,
+			Quantity:           quantity,
+		})
+	}
+
+	if tooOld > 0 {
+		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(tooOld), metrics.L(metrics.KeyOutcome, "too_old"))
+	}
+	rowCount := len(usage)
+	if rowCount == 0 {
+		return
+	}
+	if err := s.HourlyUsageRepo.Increment(ctx, usage); err != nil {
+		s.Logger.Error(ctx, "failed to write usage rollup", "error", err, "row_count", rowCount)
+		metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "error"))
+		return
+	}
+	metrics.RecordCounter(ctx, metrics.UsageRollupRows, int64(rowCount), metrics.L(metrics.KeyOutcome, "written"))
 }
 
 // publishRejectedEventWebhook fires the event.rejected webhook when an event

@@ -62,6 +62,7 @@ type Configuration struct {
 	BulkEventConsumption   BulkEventConsumptionConfig   `mapstructure:"bulk_event_consumption" validate:"required"`
 	BulkMeterUsageTracking BulkMeterUsageTrackingConfig `mapstructure:"bulk_meter_usage_tracking" validate:"required"`
 	UsageAlerts            UsageAlertsConfig            `mapstructure:"usage_alerts" validate:"omitempty"`
+	UsageRollup            UsageRollupConfig            `mapstructure:"usage_rollup" validate:"omitempty"`
 	EntitlementGrants      EntitlementGrantsConfig      `mapstructure:"entitlement_grants" validate:"omitempty"`
 	EnvAccess              EnvAccessConfig              `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	Email                  EmailConfig                  `mapstructure:"email" validate:"required"`
@@ -1031,6 +1032,35 @@ type MeterUsageTrackingConfig struct {
 	RejectedEventWebhookEnabled bool `mapstructure:"rejected_event_webhook_enabled" default:"false"`
 	// throttle: at most once per window per (tenant, env, event_name); needs Redis.
 	RejectedEventWebhookWindow time.Duration `mapstructure:"rejected_event_webhook_window" default:"10m"`
+}
+
+// UsageRollupConfig gates writing hourly per-customer meter quantities to Redis on ingest.
+type UsageRollupConfig struct {
+	// Enabled is the master switch; usage rollup runs only for the tenants in EnabledTenants.
+	Enabled        bool     `mapstructure:"enabled" default:"false"`
+	EnabledTenants []string `mapstructure:"enabled_tenants"`
+}
+
+// IsEnabledForTenant reports whether ingestion writes usage rollup for tenantID.
+func (c UsageRollupConfig) IsEnabledForTenant(tenantID string) bool {
+	return c.Enabled && slices.Contains(c.EnabledTenants, tenantID)
+}
+
+// IsEnabledForAnyTenant reports whether usage rollup is on for at least one tenant.
+func (c UsageRollupConfig) IsEnabledForAnyTenant() bool {
+	return c.Enabled && len(c.EnabledTenants) > 0
+}
+
+// ValidateUsageRollup rejects an enabled usage rollup without Redis event dedup on both meter
+// usage consumers: without it a redelivered batch would be counted twice in real time.
+func (c *Configuration) ValidateUsageRollup() error {
+	if !c.UsageRollup.IsEnabledForAnyTenant() {
+		return nil
+	}
+	if !c.MeterUsageTracking.RedisDeduplicationEnabled || !c.BulkMeterUsageTracking.RedisDeduplicationEnabled {
+		return fmt.Errorf("usage_rollup is enabled but Redis event dedup is off: set meter_usage_tracking.redis_deduplication_enabled=true and bulk_meter_usage_tracking.redis_deduplication_enabled=true, or disable usage_rollup")
+	}
+	return nil
 }
 
 // EntitlementGrantsConfig controls entitlement grant behaviour outside billing.
