@@ -2563,32 +2563,39 @@ func (s *meterUsageService) ConvertToBillingCharges(
 			continue
 		}
 
+		// Later re-pricing (entitlements, grants, commitments) reads charge.Price, so it carries the proration.
+		p, err := prorateUsageFlatFees(usage.Subscription, lu.LineItem, lu.Price, lu.Meter,
+			types.Period{Start: lu.PeriodStart, End: lu.PeriodEnd})
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+
 		var cost decimal.Decimal
 		var quantity decimal.Decimal
 
 		if lu.BucketedResult != nil && lu.Meter != nil {
 			// Bucketed meter: use calculateBucketedMeterCost
-			hasGroupBy := price.BucketedGroupBy(lu.Price, lu.Meter) != ""
-			bucketedCost := calculateBucketedMeterCost(ctx, priceService, lu.Price, lu.BucketedResult, hasGroupBy)
+			hasGroupBy := price.BucketedGroupBy(p, lu.Meter) != ""
+			bucketedCost := calculateBucketedMeterCost(ctx, priceService, p, lu.BucketedResult, hasGroupBy)
 			cost = bucketedCost.Amount
 			quantity = bucketedCost.Quantity
 		} else {
 			// Standard meter: use CalculateCost
 			quantity = lu.Usage
-			cost = priceService.CalculateCost(ctx, lu.Price, quantity)
+			cost = priceService.CalculateCost(ctx, p, quantity)
 		}
 		totalCost = totalCost.Add(cost)
 
 		charge := &dto.SubscriptionUsageByMetersResponse{
 			SubscriptionLineItemID: lu.LineItem.ID,
-			Currency:               lu.Price.Currency,
-			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, lu.Price.Currency),
+			Currency:               p.Currency,
+			DisplayAmount:          price.GetDisplayAmountWithPrecision(cost, p.Currency),
 			FilterValues:           make(price.JSONBFilters),
 			MeterID:                lu.MeterID,
-			Price:                  lu.Price,
+			Price:                  p,
 			BucketedUsageResult:    lu.BucketedResult,
 		}
-		charge.SetAmountWithCurrencyPrecision(cost, lu.Price.Currency)
+		charge.SetAmountWithCurrencyPrecision(cost, p.Currency)
 		charge.SetQuantityDecimal(quantity)
 
 		if lu.Meter != nil {
@@ -2768,6 +2775,14 @@ func (s *meterUsageService) calculateCosts(ctx context.Context, data *AnalyticsD
 		p, hasPricing := data.Prices[item.PriceID]
 		if !hasPricing {
 			continue
+		}
+		if line, sub := data.SubscriptionLineItems[item.SubLineItemID], data.SubscriptionsMap[item.SubscriptionID]; line != nil && sub != nil {
+			var err error
+			p, err = prorateUsageFlatFees(sub, line, p, m,
+				types.Period{Start: line.GetPeriodStart(data.Params.StartTime), End: line.GetPeriodEnd(data.Params.EndTime)})
+			if err != nil {
+				return err
+			}
 		}
 
 		if price.IsBucketedMax(p, m) || price.IsBucketedSum(p, m) {
@@ -3197,8 +3212,12 @@ func (s *meterUsageService) collectLineItemCharges(
 	chargesByLine := make(map[string]*dto.SubscriptionUsageByMetersResponse, len(groupsByLine))
 	var linesToFetch []*subscription.SubscriptionLineItem
 	for lineID, groups := range groupsByLine {
-		linePrice := groups[0].Price
 		lineMeter := groups[0].Meter
+		linePrice, err := prorateUsageFlatFees(usage.Subscription, groups[0].LineItem, groups[0].Price, lineMeter,
+			types.Period{Start: groups[0].PeriodStart, End: groups[0].PeriodEnd})
+		if err != nil {
+			return nil, err
+		}
 		charge := &dto.SubscriptionUsageByMetersResponse{
 			SubscriptionLineItemID: lineID,
 			MeterID:                lineMeter.ID,
@@ -3295,7 +3314,11 @@ func (s *meterUsageService) fetchLineItemCharges(
 			if meterUsage == nil {
 				meterUsage = &events.MeterUsageAggregationResult{}
 			}
-			linePrice := usage.PriceMap[item.PriceID]
+			linePrice, err := prorateUsageFlatFees(usage.Subscription, item, usage.PriceMap[item.PriceID], usage.MeterMap[item.MeterID],
+				types.Period{Start: batchKey.Start, End: batchKey.End})
+			if err != nil {
+				return nil, err
+			}
 			charge := &dto.SubscriptionUsageByMetersResponse{
 				SubscriptionLineItemID: item.ID,
 				MeterID:                item.MeterID,

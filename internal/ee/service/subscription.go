@@ -3095,6 +3095,7 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 			PriceID:             lineItem.PriceID,
 			Price:               priceMap[lineItem.PriceID],
 			Meter:               meter.ToMeter(),
+			LineItem:            lineItem,
 			ExternalCustomerIDs: externalCustomerIDs,
 			StartTime:           lineItem.GetPeriodStart(usageStartTime),
 			EndTime:             lineItem.GetPeriodEnd(usageEndTime),
@@ -3168,6 +3169,11 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 
 		// Get meter info
 		meterInfo := meterMap[meterID]
+		priceObj, err = prorateUsageFlatFees(subscription, request.LineItem, priceObj, meterInfo.ToMeter(),
+			types.Period{Start: request.StartTime, End: request.EndTime})
+		if err != nil {
+			return nil, err
+		}
 		if priceObj.MeterID != "" && meterInfo != nil && (price.IsBucketedMax(priceObj, meterInfo.ToMeter()) || price.IsBucketedSum(priceObj, meterInfo.ToMeter())) {
 			// For bucketed max, use the array of values
 			bucketedValues := make([]decimal.Decimal, len(usage.Results))

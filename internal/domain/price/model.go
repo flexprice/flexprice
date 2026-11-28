@@ -318,6 +318,36 @@ func (pt *PriceTier) CalculateTierAmount(quantity decimal.Decimal, currency stri
 	return tierCost
 }
 
+// HasTierFlatAmount reports whether any tier charges a non-zero flat amount.
+func (p *Price) HasTierFlatAmount() bool {
+	return lo.SomeBy(p.Tiers, func(t PriceTier) bool {
+		return t.FlatAmount != nil && !t.FlatAmount.IsZero()
+	})
+}
+
+// WithTierFlatAmountsScaled returns a copy of p whose tier flat amounts are multiplied by fraction.
+func (p *Price) WithTierFlatAmountsScaled(fraction decimal.Decimal) *Price {
+	scaled := *p
+	scaled.Tiers = p.Tiers.withFlatAmountsScaled(fraction)
+	scaled.PriceUnitTiers = p.PriceUnitTiers.withFlatAmountsScaled(fraction)
+	return &scaled
+}
+
+func (j JSONBTiers) withFlatAmountsScaled(fraction decimal.Decimal) JSONBTiers {
+	if j == nil {
+		return nil
+	}
+
+	scaled := make(JSONBTiers, len(j))
+	for i, tier := range j {
+		scaled[i] = tier
+		if tier.FlatAmount != nil {
+			scaled[i].FlatAmount = lo.ToPtr(tier.FlatAmount.Mul(fraction))
+		}
+	}
+	return scaled
+}
+
 // GetPerUnitCost returns the tier's rate per unit; a package tier spreads unit_amount over divide_by.
 func (pt *PriceTier) GetPerUnitCost() decimal.Decimal {
 	if tq := pt.TransformQuantity; tq != nil && tq.DivideBy > 0 {
