@@ -735,16 +735,28 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 		if skipped || !invResp.AmountDue.GreaterThan(decimal.Zero) {
 			if !skipped {
-				invSvc := NewInvoiceService(s.ServiceParams)
-
-				if err := invSvc.FinalizeInvoice(ctx, invResp.ID, dto.FinalizeInvoiceRequest{}); err != nil {
+				settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+				invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+				if err != nil {
 					if archErr := s.archiveDraftCheckoutSubscription(ctx, response.ID); archErr != nil {
 						s.Logger.Error(ctx, "failed to archive draft checkout subscription", "error", archErr, "subscription_id", response.ID)
 					}
 					return nil, err
 				}
-				if refreshed, err := invSvc.GetInvoice(ctx, invResp.ID); err == nil {
-					invResp = refreshed
+
+				// Without auto finalization the opening invoice stays a draft for the user to finalize.
+				if invoiceConfig.AutoFinalize {
+					invSvc := NewInvoiceService(s.ServiceParams)
+
+					if err := invSvc.FinalizeInvoice(ctx, invResp.ID, dto.FinalizeInvoiceRequest{}); err != nil {
+						if archErr := s.archiveDraftCheckoutSubscription(ctx, response.ID); archErr != nil {
+							s.Logger.Error(ctx, "failed to archive draft checkout subscription", "error", archErr, "subscription_id", response.ID)
+						}
+						return nil, err
+					}
+					if refreshed, err := invSvc.GetInvoice(ctx, invResp.ID); err == nil {
+						invResp = refreshed
+					}
 				}
 				response.LatestInvoice = invResp
 			}

@@ -2101,6 +2101,18 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		return nil
 	}
 
+	// Without auto finalization a subscription invoice stays a draft for the user to finalize.
+	if inv.InvoiceType == types.InvoiceTypeSubscription {
+		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+		invoiceConfig, err := GetSetting[types.InvoiceConfig](settingsSvc, ctx, types.SettingKeyInvoiceConfig)
+		if err != nil {
+			return err
+		}
+		if !invoiceConfig.AutoFinalize {
+			return nil
+		}
+	}
+
 	// try to finalize the invoice
 	if err := s.performFinalizeInvoiceActions(ctx, inv, ""); err != nil {
 		return err
