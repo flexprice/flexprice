@@ -4,11 +4,13 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/ee/service"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/activities/billingentity"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // InvoiceSyncActivities handles Stripe invoice sync activities.
@@ -48,6 +50,10 @@ func (a *InvoiceSyncActivities) SyncInvoiceToStripe(ctx context.Context, input m
 			"error", err,
 			"invoice_id", input.InvoiceID,
 			"customer_id", input.CustomerID)
+		// The provider rejected the invoice itself; retrying the same request cannot succeed.
+		if ierr.IsValidation(err) {
+			return temporal.NewNonRetryableApplicationError(err.Error(), "InvoiceSyncRejected", err)
+		}
 		return err
 	}
 

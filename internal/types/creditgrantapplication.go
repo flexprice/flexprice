@@ -202,3 +202,6 @@ func (f *CreditGrantApplicationFilter) IsUnlimited() bool {
 	}
 	return f.QueryFilter.IsUnlimited()
 }
+
+// CreditGrantMaxFailedRetries caps how often the scheduler retries a failed application before it is left failed.
+const CreditGrantMaxFailedRetries = 10

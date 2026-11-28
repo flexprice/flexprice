@@ -1622,13 +1622,7 @@ func (s *PaymentService) HandleExternalStripePaymentFromWebhook(ctx context.Cont
 
 	// Process external Stripe payment
 	if err := s.ProcessExternalStripePayment(ctx, paymentIntent, stripeInvoiceID, paymentService, invoiceService); err != nil {
-		s.logger.Error(ctx, "failed to process external Stripe payment",
-			"error", err,
-			"payment_intent_id", paymentIntent.ID,
-			"stripe_invoice_id", stripeInvoiceID)
-		return ierr.WithError(err).
-			WithHint("Failed to process external payment").
-			Mark(ierr.ErrSystem)
+		return err
 	}
 
 	s.logger.Info(ctx, "successfully processed external Stripe payment",
@@ -1652,9 +1646,6 @@ func (s *PaymentService) ProcessExternalStripePayment(ctx context.Context, payme
 	// Get FlexPrice invoice ID from Stripe invoice
 	flexpriceInvoiceID, err := s.invoiceSyncSvc.GetFlexPriceInvoiceID(ctx, stripeInvoiceID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get FlexPrice invoice ID",
-			"error", err,
-			"stripe_invoice_id", stripeInvoiceID)
 		return err
 	}
 

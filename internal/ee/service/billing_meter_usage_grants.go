@@ -187,7 +187,7 @@ func (s *billingService) adjustMeterUsageGrants(
 	}
 
 	if guardErr := GrantPricingGuard(measure, item, matchingCharge.Price, m); guardErr != nil {
-		s.Logger.Error(ctx, "entitlement grant overage: line item rejected, skipping grants",
+		s.Logger.Info(ctx, "entitlement grant overage: line item rejected, skipping grants",
 			"meter_id", item.MeterID,
 			"line_item_id", item.ID,
 			"measure", measure,

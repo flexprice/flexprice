@@ -314,7 +314,6 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	// Always use the enhanced cancellation method with proration support
 	response, err := h.service.CancelSubscription(c.Request.Context(), id, &req)
 	if err != nil {
-		h.log.Error(c.Request.Context(), "Failed to cancel subscription", "error", err)
 		c.Error(err)
 		return
 	}

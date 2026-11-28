@@ -338,12 +338,13 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*doma
 	r.log.Debug(ctx, "getting price unit by code", "code", code)
 
 	// Non-ID lookups are not cached (cache is keyed only by ID); go straight to DB.
+	// Archived units are returned too: prices and line items keep billing in a unit after it
+	// is retired, and callers that only accept live units check the status themselves.
 	entPriceUnit, err := r.client.Reader(ctx).PriceUnit.Query().
 		Where(
 			priceunit.Code(code),
 			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
 			priceunit.TenantID(types.GetTenantID(ctx)),
-			priceunit.Status(string(types.StatusPublished)),
 		).
 		Only(ctx)
 

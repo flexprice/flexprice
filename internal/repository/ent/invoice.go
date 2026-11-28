@@ -115,7 +115,6 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 	if err != nil {
 		SetSpanError(span, err)
 
-		r.logger.Error(ctx, "failed to create invoice", "error", err)
 		if ent.IsConstraintError(err) {
 			var pqErr *pq.Error
 			if errors.As(err, &pqErr) {
@@ -146,6 +145,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
+		r.logger.Error(ctx, "failed to create invoice", "error", err)
 		return ierr.WithError(err).WithHint("invoice creation failed").Mark(ierr.ErrDatabase)
 	}
 

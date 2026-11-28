@@ -985,3 +985,58 @@ func TestStripeFieldsChanged(t *testing.T) {
 		})
 	}
 }
+
+func TestRazorpayFieldsChanged(t *testing.T) {
+	base := domainCustomer.Customer{
+		Name:    "Acme",
+		Email:   "billing@acme.test",
+		Contact: lo.ToPtr("+919999999999"),
+	}
+
+	tests := []struct {
+		name   string
+		change func(c *domainCustomer.Customer)
+		want   bool
+	}{
+		{
+			name:   "nothing changed",
+			change: func(c *domainCustomer.Customer) {},
+			want:   false,
+		},
+		{
+			name:   "only metadata changed, as when the Razorpay link itself is saved",
+			change: func(c *domainCustomer.Customer) { c.Metadata = map[string]string{"razorpay_customer_id": "cust_1"} },
+			want:   false,
+		},
+		{
+			name:   "a field Razorpay does not mirror changed",
+			change: func(c *domainCustomer.Customer) { c.AddressCity = "Austin" },
+			want:   false,
+		},
+		{
+			name:   "name",
+			change: func(c *domainCustomer.Customer) { c.Name = "Acme Inc" },
+			want:   true,
+		},
+		{
+			name:   "email",
+			change: func(c *domainCustomer.Customer) { c.Email = "ap@acme.test" },
+			want:   true,
+		},
+		{
+			name:   "contact",
+			change: func(c *domainCustomer.Customer) { c.Contact = lo.ToPtr("+918888888888") },
+			want:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := base
+			after := base
+			tt.change(&after)
+
+			assert.Equal(t, tt.want, razorpayFieldsChanged(&before, &after))
+		})
+	}
+}

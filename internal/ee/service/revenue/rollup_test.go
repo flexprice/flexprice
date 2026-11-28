@@ -2305,3 +2305,54 @@ func (s *RevenueRollupSuite) seedZeroRevenueSubscription(ctx context.Context) *s
 	sub.LineItems = lineItems
 	return sub
 }
+
+// TestFinalizeSubscriptionPeriod_SkipsCommitmentLines covers the commitments-v2
+// guardrail: their lines carry no stable price id and no decomposition yet, so an
+// invoice holding one is left alone instead of failing the flip on an empty price.
+func (s *RevenueRollupSuite) TestFinalizeSubscriptionPeriod_SkipsCommitmentLines() {
+	s.enableRevenueAnalytics(s.ctx)
+	subscriptionID := "sub_final_commitment"
+	periodStart := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	periodEndExclusive := periodStart.AddDate(0, 0, 30)
+	periodEnd := periodEndExclusive.AddDate(0, 0, -1)
+
+	inv := &invoice.Invoice{
+		ID:              "inv_final_commitment",
+		CustomerID:      "cust_final_1",
+		SubscriptionID:  lo.ToPtr(subscriptionID),
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromInt(5),
+		Subtotal:        decimal.NewFromInt(5),
+		TotalDiscount:   decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(5),
+		BillingReason:   string(types.InvoiceBillingReasonSubscriptionCycle),
+		BaseModel:       types.GetDefaultBaseModel(s.ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:             "li_final_commitment_trueup",
+				InvoiceID:      "inv_final_commitment",
+				CustomerID:     "cust_final_1",
+				SubscriptionID: lo.ToPtr(subscriptionID),
+				// A commitments-v2 true-up line: no price and no subscription line item behind it.
+				PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				Amount:      decimal.NewFromInt(5),
+				Quantity:    decimal.NewFromInt(1),
+				Currency:    "usd",
+				PeriodStart: lo.ToPtr(periodStart),
+				PeriodEnd:   lo.ToPtr(periodEndExclusive),
+				Metadata:    types.Metadata{types.MetadataKeyCommitmentLineKind: "true_up"},
+				BaseModel:   types.GetDefaultBaseModel(s.ctx),
+			},
+		},
+	}
+	s.NoError(s.GetStores().InvoiceRepo.CreateWithLineItems(s.ctx, inv))
+
+	s.NoError(s.svc.FinalizeSubscriptionPeriod(s.ctx, inv.ID))
+
+	rows, err := s.store.ListBySubscriptionPeriod(s.ctx, subscriptionID, periodStart, periodEnd, types.FactFinal)
+	s.NoError(err)
+	s.Empty(rows)
+}

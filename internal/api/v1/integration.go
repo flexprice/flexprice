@@ -44,11 +44,6 @@ func (h *IntegrationHandler) Sync(c *gin.Context) {
 	}
 
 	if err := h.syncService.SyncEntity(c.Request.Context(), req); err != nil {
-		h.logger.Error(c.Request.Context(), "failed to trigger integration sync",
-			"error", err,
-			"entity_type", req.EntityType,
-			"entity_id", req.EntityID,
-		)
 		c.Error(err)
 		return
 	}

@@ -102,12 +102,14 @@ func (s *taxService) CreateTaxRate(ctx context.Context, req dto.CreateTaxRateReq
 
 	// Create the tax rate in the repository
 	if err := s.TaxRateRepo.Create(ctx, taxRate); err != nil {
-		s.Logger.Error(ctx, "failed to create tax rate",
-			"error", err,
-			"tax_rate_id", taxRate.ID,
-			"name", taxRate.Name,
-			"code", taxRate.Code,
-		)
+		if !ierr.IsAlreadyExists(err) {
+			s.Logger.Error(ctx, "failed to create tax rate",
+				"error", err,
+				"tax_rate_id", taxRate.ID,
+				"name", taxRate.Name,
+				"code", taxRate.Code,
+			)
+		}
 		return nil, err
 	}
 

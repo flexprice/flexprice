@@ -56,7 +56,6 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 
 	invoice, err := h.invoiceService.CreateOneOffInvoice(c.Request.Context(), req)
 	if err != nil {
-		h.logger.Error(c.Request.Context(), "failed to create invoice", "error", err)
 		c.Error(err)
 		return
 	}
@@ -213,7 +212,6 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 			// Synchronous: execute workflow and wait for result
 			_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, nil)
 			if err != nil {
-				h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 				c.Error(err)
 				return
 			}
@@ -266,7 +264,6 @@ func (h *InvoiceHandler) ComputeInvoice(c *gin.Context) {
 
 	_, skipped, err := h.invoiceService.ComputeInvoice(ctx, id, reqPtr)
 	if err != nil {
-		h.logger.Error(c.Request.Context(), "failed to compute invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}

@@ -425,7 +425,6 @@ func (c *Client) ListTransactions(ctx context.Context, req *paddle.ListTransacti
 	}
 	result, err := client.ListTransactions(ctx, req)
 	if err != nil {
-		c.logger.Error(ctx, "failed to list transactions in Paddle", "error", err)
 		return nil, ierr.NewError("failed to list transactions in Paddle").
 			WithHint("Unable to list transactions in Paddle").
 			WithReportableDetails(map[string]interface{}{"error": err.Error()}).

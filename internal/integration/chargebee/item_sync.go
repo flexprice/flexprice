@@ -2,10 +2,12 @@ package chargebee
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
 
+	"github.com/chargebee/chargebee-go/v3"
 	"github.com/chargebee/chargebee-go/v3/enum"
 	"github.com/chargebee/chargebee-go/v3/models/item"
 	itemEnum "github.com/chargebee/chargebee-go/v3/models/item/enum"
@@ -384,6 +386,12 @@ func (s *ItemService) RetrieveItem(ctx context.Context, itemID string) (*ItemRes
 // Item Price Operations
 // =============================================================================
 
+// isDuplicateEntry reports whether Chargebee refused a create because the id is already taken.
+func isDuplicateEntry(err error) bool {
+	var cbErr *chargebee.Error
+	return errors.As(err, &cbErr) && cbErr.APIErrorCode == "duplicate_entry"
+}
+
 // CreateItemPrice creates a new item price in Chargebee
 func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCreateRequest) (*ItemPriceResponse, error) {
 	s.Logger.Info(ctx, "creating item price in Chargebee",
@@ -440,11 +448,15 @@ func (s *ItemPriceService) CreateItemPrice(ctx context.Context, req *ItemPriceCr
 
 	// Create item price using client wrapper
 	result, err := s.Client.CreateItemPrice(ctx, createParams)
-	if err != nil {
-		s.Logger.Error(ctx, "failed to create item price in Chargebee",
+	if err != nil && isDuplicateEntry(err) {
+		// The item price exists in Chargebee but is not mapped here (a reconnected site, for
+		// example); adopt it rather than fail every invoice that uses the price.
+		s.Logger.Info(ctx, "item price already exists in Chargebee, reusing it",
 			"item_price_id", req.ID,
-			"item_id", req.ItemID,
-			"error", err)
+			"item_id", req.ItemID)
+		result, err = s.Client.RetrieveItemPrice(ctx, req.ID)
+	}
+	if err != nil {
 		return nil, ierr.NewError("failed to create item price in Chargebee").
 			WithReportableDetails(map[string]interface{}{
 				"error":         err.Error(),

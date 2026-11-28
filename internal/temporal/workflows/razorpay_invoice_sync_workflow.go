@@ -39,8 +39,11 @@ func RazorpayInvoiceSyncWorkflow(ctx workflow.Context, input models.RazorpayInvo
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
+		// Razorpay rate-limits a burst of invoice creates; a longer first pause outlasts the window.
 		RetryPolicy: &temporal.RetryPolicy{
-			MaximumAttempts: 3,
+			InitialInterval:    5 * time.Second,
+			BackoffCoefficient: 2,
+			MaximumAttempts:    3,
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)

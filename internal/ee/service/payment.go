@@ -1112,14 +1112,6 @@ func (s *paymentService) syncPaymentStatusFromGateway(ctx context.Context, p *pa
 	}
 
 	if err != nil {
-		s.Logger.Error(ctx,
-			"failed to fetch payment status from gateway",
-			"payment_id", p.ID,
-			"gateway", gateway,
-			"gateway_payment_id", gatewayPaymentID,
-			"gateway_tracking_id", gatewayTrackingID,
-			"error", err,
-		)
 		return p, err
 	}
 
@@ -1405,8 +1397,11 @@ func (s *paymentService) readSavedMethods(
 
 	methods, err := provider.ListSavedMethods(ctx, customerID)
 	if err != nil {
-		s.Logger.Error(ctx, "failed to list saved payment methods",
-			"error", err, "customer_id", customerID, "provider", gw)
+		// A caller that hung up is not a provider failure.
+		if ctx.Err() == nil {
+			s.Logger.Error(ctx, "failed to list saved payment methods",
+				"error", err, "customer_id", customerID, "provider", gw)
+		}
 		group.Error = &dto.ProviderError{Message: "Could not read saved payment methods from this provider"}
 		return group
 	}

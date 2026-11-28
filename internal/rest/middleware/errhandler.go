@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 
@@ -11,6 +12,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// statusClientClosedRequest is the nginx convention for a client that disconnected mid-request.
+const statusClientClosedRequest = 499
+
 // ErrorHandler middleware handles error responses
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -18,6 +22,12 @@ func ErrorHandler() gin.HandlerFunc {
 
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last().Err
+
+			// The caller hung up, so the failure is the cancelled request, not the server.
+			if errors.Is(c.Request.Context().Err(), context.Canceled) {
+				c.Status(statusClientClosedRequest)
+				return
+			}
 
 			// Single call resolves both HTTP status and machine-readable code
 			status, code := ierr.ResolveError(err)

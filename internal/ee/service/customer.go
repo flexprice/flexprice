@@ -340,26 +340,32 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 	// TODO: Move these async via Temporal
 	s.syncCustomerUpdateToZoho(syncCtx, cust)
 	s.syncCustomerUpdateToStripe(syncCtx, &before, cust)
-	s.syncCustomerUpdateToRazorpay(syncCtx, cust)
+	s.syncCustomerUpdateToRazorpay(syncCtx, &before, cust)
 
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
-// syncCustomerUpdateToRazorpay pushes the updated customer to its Razorpay customer. A Razorpay failure
-// never fails the update; the next registration link reports a mismatch.
-func (s *customerService) syncCustomerUpdateToRazorpay(ctx context.Context, cust *customer.Customer) {
-	if cust.Metadata["razorpay_customer_id"] == "" || s.IntegrationFactory == nil {
+// syncCustomerUpdateToRazorpay pushes the updated customer to its Razorpay customer when a field Razorpay
+// holds changed. A Razorpay failure never fails the update; the next registration link reports a mismatch.
+func (s *customerService) syncCustomerUpdateToRazorpay(ctx context.Context, before, after *customer.Customer) {
+	if after.Metadata["razorpay_customer_id"] == "" || !razorpayFieldsChanged(before, after) || s.IntegrationFactory == nil {
 		return
 	}
 
 	razorpayIntegration, err := s.IntegrationFactory.GetRazorpayIntegration(ctx)
 	if err != nil {
-		s.Logger.Info(ctx, "razorpay integration unavailable, customer update not pushed to Razorpay", "customer_id", cust.ID, "error", err)
+		s.Logger.Info(ctx, "razorpay integration unavailable, customer update not pushed to Razorpay", "customer_id", after.ID, "error", err)
 		return
 	}
-	if err := razorpayIntegration.CustomerSvc.UpdateCustomerInRazorpay(ctx, cust); err != nil {
-		s.Logger.Error(ctx, "failed to push customer update to Razorpay", "error", err, "customer_id", cust.ID)
+	if err := razorpayIntegration.CustomerSvc.UpdateCustomerInRazorpay(ctx, after); err != nil {
+		s.Logger.Info(ctx, "failed to push customer update to Razorpay", "error", err, "customer_id", after.ID)
 	}
+}
+
+func razorpayFieldsChanged(before, after *customer.Customer) bool {
+	return before.Name != after.Name ||
+		before.Email != after.Email ||
+		lo.FromPtr(before.Contact) != lo.FromPtr(after.Contact)
 }
 
 // syncCustomerUpdateToStripe runs in the request rather than async: a checkout taxed against the

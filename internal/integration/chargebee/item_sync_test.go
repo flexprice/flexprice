@@ -4,11 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/chargebee/chargebee-go/v3"
+	"github.com/chargebee/chargebee-go/v3/models/itemprice"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -308,4 +311,69 @@ func mustTestLogger(t *testing.T) *logger.Logger {
 	log, err := logger.NewLogger(cfg)
 	require.NoError(t, err)
 	return log
+}
+
+// duplicateItemPriceClient refuses every create as a duplicate and serves the existing item price on retrieve.
+type duplicateItemPriceClient struct {
+	ChargebeeClient
+	retrieved []string
+}
+
+func (c *duplicateItemPriceClient) CreateItemPrice(_ context.Context, params *itemprice.CreateRequestParams) (*chargebee.Result, error) {
+	return nil, ierr.WithError(&chargebee.Error{
+		HTTPStatusCode: 400,
+		APIErrorCode:   "duplicate_entry",
+		Msg:            "name resource with identifier " + params.Id + " already exists.",
+	}).Mark(ierr.ErrValidation)
+}
+
+func (c *duplicateItemPriceClient) RetrieveItemPrice(_ context.Context, itemPriceID string) (*chargebee.Result, error) {
+	c.retrieved = append(c.retrieved, itemPriceID)
+	return &chargebee.Result{ItemPrice: &itemprice.ItemPrice{
+		Id:           itemPriceID,
+		ItemId:       "item_existing",
+		PricingModel: "flat_fee",
+		Price:        1999,
+		CurrencyCode: "USD",
+	}}, nil
+}
+
+func TestCreateItemPrice_AdoptsExistingItemPrice(t *testing.T) {
+	t.Parallel()
+
+	client := &duplicateItemPriceClient{}
+	svc := &ItemPriceService{ItemPriceServiceParams: ItemPriceServiceParams{Client: client, Logger: mustTestLogger(t)}}
+
+	got, err := svc.CreateItemPrice(context.Background(), &ItemPriceCreateRequest{
+		ID:           "price_existing",
+		ItemID:       "item_existing",
+		PricingModel: "flat_fee",
+		Price:        1999,
+		CurrencyCode: "USD",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "price_existing", got.ID)
+	require.Equal(t, "item_existing", got.ItemID)
+	require.Equal(t, []string{"price_existing"}, client.retrieved)
+}
+
+func TestIsDuplicateEntry(t *testing.T) {
+	t.Parallel()
+
+	duplicate := &chargebee.Error{APIErrorCode: "duplicate_entry"}
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "raw duplicate", err: duplicate, want: true},
+		{name: "wrapped duplicate", err: ierr.WithError(duplicate).Mark(ierr.ErrValidation), want: true},
+		{name: "other chargebee error", err: &chargebee.Error{APIErrorCode: "resource_not_found"}, want: false},
+		{name: "not a chargebee error", err: ierr.NewError("boom").Mark(ierr.ErrInternal), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, isDuplicateEntry(tt.err))
+		})
+	}
 }
